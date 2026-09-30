@@ -88,12 +88,11 @@ def sagatavot_vienoto_tabulu(df):
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
 
-# CSS stils, lai paslēptu radio pogu apļus sānjoslā un izveidotu tīru sarakstu
+# CSS stils, lai pills pogas sānjoslā izkārtotos vertikāli un izskatītos glīti
 st.markdown("""
     <style>
-    div.row-widget.stRadio > div {flex-direction: column;}
-    div.row-widget.stRadio label[data-baseweb="radio"] {background-color: transparent; padding: 4px 0px;}
-    div.row-widget.stRadio div[role="radiogroup"] input {display: none;}
+    div[data-testid="stSidebar"] [data-baseweb="tag"] {display: none;}
+    div[data-testid="stSidebar"] div[class*="row-widget"] {display: flex; flex-direction: column;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -106,8 +105,8 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-# Sānjoslas navigācija vertikāli viens zem otra
-rezims = st.sidebar.radio(
+# Sānjoslas navigācija ar pills elementiem (tīras pogas bez punktiņiem)
+rezims = st.sidebar.pills(
     "Sadaļas", 
     [
         "1. Periods", 
@@ -119,6 +118,7 @@ rezims = st.sidebar.radio(
         "Komandas Statistika", 
         "Kalendārs"
     ],
+    default="1. Periods",
     label_visibility="collapsed"
 )
 
