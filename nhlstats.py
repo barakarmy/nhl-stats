@@ -3,7 +3,7 @@ import csv
 import os
 from datetime import datetime, timedelta
 
-CSV_FAILS = r"C:\Skripti\NHL\nhl_sezona.csv"
+CSV_FAILS = "nhl_sezona.csv"
 VAKAR = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 
 def iegut_nakts_speles(datums):
