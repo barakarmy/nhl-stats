@@ -87,7 +87,7 @@ def sagatavot_vienoto_tabulu(df):
     return combined
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
-st.title("🏒 NHL Analītiskais Panelis")
+st.title("🏒 NHL statistika")
 
 raw_df = ielasit_datus()
 if raw_df is None:
@@ -100,7 +100,7 @@ df = sagatavot_vienoto_tabulu(raw_df)
 st.sidebar.header("Navigācija")
 rezims = st.sidebar.radio("Izvēlies sadaļu", [
     "🏆 Globālie Reitingi", 
-    "📊 Komandas Specifiskā Statistika",
+    "📊 Komandas individualie stats",
     "📅 Kalendārs (Tuvākās 3 dienas)"
 ])
 
