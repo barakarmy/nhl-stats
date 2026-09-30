@@ -87,6 +87,16 @@ def sagatavot_vienoto_tabulu(df):
     return combined
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
+
+# CSS stils, lai paslēptu radio pogu apļus sānjoslā un izveidotu tīru sarakstu
+st.markdown("""
+    <style>
+    div.row-widget.stRadio > div {flex-direction: column;}
+    div.row-widget.stRadio label[data-baseweb="radio"] {background-color: transparent; padding: 4px 0px;}
+    div.row-widget.stRadio div[role="radiogroup"] input {display: none;}
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("🏒 NHL Analītiskais Panelis")
 
 raw_df = ielasit_datus()
@@ -96,8 +106,8 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-# Navigācijas pogas sānjoslā (pills)
-rezims = st.sidebar.pills(
+# Sānjoslas navigācija vertikāli viens zem otra
+rezims = st.sidebar.radio(
     "Sadaļas", 
     [
         "1. Periods", 
@@ -108,8 +118,7 @@ rezims = st.sidebar.pills(
         "Noraidījumi", 
         "Komandas Statistika", 
         "Kalendārs"
-    ], 
-    default="1. Periods",
+    ],
     label_visibility="collapsed"
 )
 
