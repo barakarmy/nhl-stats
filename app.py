@@ -88,6 +88,7 @@ def sagatavot_vienoto_tabulu(df):
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
 
+# CSS stils sānjoslas pogām
 st.markdown("""
     <style>
     div[data-testid="stSidebar"] button {
@@ -224,7 +225,7 @@ elif rezims == "2. Periods":
 
 # 3. PERIODS
 elif rezims == "3. Periods":
-    st.subheader("⏱ 3. Perioda Statistika")
+    st.subheader("⏱️ 3. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "3. perioda vārtu starpība (Visas spēles)",
         "3. perioda vārtu starpība (Mājas spēles)",
@@ -501,4 +502,3 @@ elif rezims == "Kalendārs":
                     st.divider()
         except Exception as e:
             st.error(f"Kļūda nolasot kalendāru: {e}")
-
