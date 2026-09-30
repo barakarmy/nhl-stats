@@ -501,3 +501,4 @@ elif rezims == "Kalendārs":
                     st.divider()
         except Exception as e:
             st.error(f"Kļūda nolasot kalendāru: {e}")
+
