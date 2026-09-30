@@ -96,11 +96,12 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
+# Sānjoslas navigācija ar redzamām pogām (radio), kur kalendārs ir apakšā
 st.sidebar.header("Navigācija")
-rezims = st.sidebar.selectbox("Izvēlies sadaļu", [
-    "📅 Kalendārs (Tuvākās 3 dienas)", 
+rezims = st.sidebar.radio("Izvēlies sadaļu", [
     "🏆 Globālie Reitingi", 
-    "📊 Komandas Specifiskā Statistika"
+    "📊 Komandas Specifiskā Statistika",
+    "📅 Kalendārs (Tuvākās 3 dienas)"
 ])
 
 def sagatavot_tabulu_izvadei(res_df):
@@ -109,44 +110,14 @@ def sagatavot_tabulu_izvadei(res_df):
         res_df['Komanda'] = res_df['komanda'].apply(pilns_nosaukums)
         res_df = res_df.drop(columns=['komanda'])
     
-    # Sakārtojam rindas no jauna, lai Vieta sākas ar 1, 2, 3...
     res_df = res_df.reset_index(drop=True)
     res_df.insert(0, 'Vieta', range(1, len(res_df) + 1))
     
     cols = ['Vieta', 'Komanda'] + [c for c in res_df.columns if c not in ['Vieta', 'Komanda']]
     return res_df[cols]
 
-# 1. KALENDĀRS
-if rezims == "📅 Kalendārs (Tuvākās 3 dienas)":
-    st.subheader("📅 Tuvāko 3 dienu NHL spēļu grafiks")
-    if not os.path.exists(CSV_KALENDARS):
-        st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts.")
-    else:
-        try:
-            df_k = pd.read_csv(CSV_KALENDARS)
-            sodiena = datetime.now().date()
-            beigu_diena = sodiena + pd.Timedelta(days=3)
-            df_k['datums_dt'] = pd.to_datetime(df_k['datums']).dt.date
-            tuvakas_speles = df_k[(df_k['datums_dt'] >= sodiena) & (df_k['datums_dt'] < beigu_diena)]
-            
-            if tuvakas_speles.empty:
-                st.info("Tuvākajās 3 dienās nav paredzētu spēļu.")
-            else:
-                dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
-                for datums, grupa in tuvakas_speles.groupby('datums'):
-                    dt_obj = datetime.strptime(datums, '%Y-%m-%d')
-                    diena_lv = dienu_tulkojums.get(dt_obj.strftime('%A'), dt_obj.strftime('%A'))
-                    st.markdown(f"**📌 Datums: {datums} ({diena_lv})**")
-                    for _, r in grupa.iterrows():
-                        viesis = pilns_nosaukums(r['viesu_komanda'])
-                        majas = pilns_nosaukums(r['majas_komanda'])
-                        st.text(f"    • {viesis} ({r['viesu_komanda']}) @ {majas} ({r['majas_komanda']})")
-                    st.divider()
-        except Exception as e:
-            st.error(f"Kļūda nolasot kalendāru: {e}")
-
-# 2. GLOBĀLIE REITINGI
-elif rezims == "🏆 Globālie Reitingi":
+# 1. GLOBĀLIE REITINGI (Galvenā lapa)
+if rezims == "🏆 Globālie Reitingi":
     st.subheader("🏆 Globālie Reitingi (Pamatlaiks)")
     
     reit_opcijas = {
@@ -242,7 +213,7 @@ elif rezims == "🏆 Globālie Reitingi":
         res = res.drop(columns=['_sort'])
         st.dataframe(sagatavot_tabulu_izvadei(res), use_container_width=True, hide_index=True)
 
-# 3. KOMANDAS SPECIFISKĀ STATISTIKA
+# 2. KOMANDAS SPECIFISKĀ STATISTIKA
 elif rezims == "📊 Komandas Specifiskā Statistika":
     st.subheader("📊 Komandas Analīze")
     
@@ -324,3 +295,32 @@ elif rezims == "📊 Komandas Specifiskā Statistika":
                 d_str = pd.to_datetime(r['datums']).strftime('%Y-%m-%d')
                 pret_viss = pilns_nosaukums(r['pretinieks'])
                 st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
+
+# 3. KALENDĀRS (Pašā apakšā)
+elif rezims == "📅 Kalendārs (Tuvākās 3 dienas)":
+    st.subheader("📅 Tuvāko 3 dienu NHL spēļu grafiks")
+    if not os.path.exists(CSV_KALENDARS):
+        st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts.")
+    else:
+        try:
+            df_k = pd.read_csv(CSV_KALENDARS)
+            sodiena = datetime.now().date()
+            beigu_diena = sodiena + pd.Timedelta(days=3)
+            df_k['datums_dt'] = pd.to_datetime(df_k['datums']).dt.date
+            tuvakas_speles = df_k[(df_k['datums_dt'] >= sodiena) & (df_k['datums_dt'] < beigu_diena)]
+            
+            if tuvakas_speles.empty:
+                st.info("Tuvākajās 3 dienās nav paredzētu spēļu.")
+            else:
+                dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
+                for datums, grupa in tuvakas_speles.groupby('datums'):
+                    dt_obj = datetime.strptime(datums, '%Y-%m-%d')
+                    diena_lv = dienu_tulkojums.get(dt_obj.strftime('%A'), dt_obj.strftime('%A'))
+                    st.markdown(f"**📌 Datums: {datums} ({diena_lv})**")
+                    for _, r in grupa.iterrows():
+                        viesis = pilns_nosaukums(r['viesu_komanda'])
+                        majas = pilns_nosaukums(r['majas_komanda'])
+                        st.text(f"    • {viesis} ({r['viesu_komanda']}) @ {majas} ({r['majas_komanda']})")
+                    st.divider()
+        except Exception as e:
+            st.error(f"Kļūda nolasot kalendāru: {e}")
