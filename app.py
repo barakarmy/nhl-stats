@@ -224,7 +224,7 @@ elif rezims == "2. Periods":
 
 # 3. PERIODS
 elif rezims == "3. Periods":
-    st.subheader("⏱️️ 3. Perioda Statistika")
+    st.subheader("⏱ 3. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "3. perioda vārtu starpība (Visas spēles)",
         "3. perioda vārtu starpība (Mājas spēles)",
@@ -349,24 +349,27 @@ elif rezims == "Over / Under":
 elif rezims == "Noraidījumi":
     st.subheader("❌ Noraidījumu (PIM) Līderi")
     filtrs = st.selectbox("Izvēlies skatu:", [
-        "Kopējie noraidījumi (Visas spēles)",
+        "Vidējie noraidījumi (Visas spēles)",
+        "Vidējie noraidījumi pēdējajās 10 spēlēs",
         "Vidējie noraidījumi mājās (PIM H)",
         "Vidējie noraidījumi izbraukumā (PIM A)"
     ])
     
-    if "Visas" in filtrs:
-        res = df.groupby('komanda').agg(Kopā=('pim_count', 'sum'), Vidēji=('pim_count', 'mean')).reset_index()
-        res['Rādītājs'] = res.apply(lambda r: f"{int(r['Kopā'])} (vid. {r['Vidēji']:.1f})", axis=1)
-        res = res[['komanda', 'Rādītājs', 'Kopā']].sort_values(by='Kopā', ascending=False)
-        res.columns = ['komanda', 'Noraidījumi (Kopā un vidēji)', '_sort']
-        res = res.drop(columns=['_sort'])
-        st.dataframe(sagatavot_tabulu_izvadei(res), use_container_width=True, hide_index=True)
+    if "10 spēlēs" in filtrs:
+        res = df.groupby('komanda').tail(10).groupby('komanda')['pim_count'].mean().reset_index()
+        res.columns = ['komanda', 'Vidējais noraidījumu skaits (pēd. 10)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vidējais noraidījumu skaits (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Visas" in filtrs:
+        res = df.groupby('komanda')['pim_count'].mean().reset_index()
+        res.columns = ['komanda', 'Vidējais noraidījumu skaits (Visas)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vidējais noraidījumu skaits (Visas)', ascending=False)), use_container_width=True, hide_index=True)
     else:
         is_home = 1 if "mājās" in filtrs else 0
         sub = df[df['majas'] == is_home]
         res = sub.groupby('komanda')['pim_count'].mean().reset_index()
-        res.columns = ['komanda', 'Vidējais noraidījumu skaits']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vidējais noraidījumu skaits', ascending=False)), use_container_width=True, hide_index=True)
+        loc_text = "mājās" if is_home else "izbraukumā"
+        res.columns = ['komanda', f'Vidējais noraidījumu skaits ({loc_text})']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=f'Vidējais noraidījumu skaits ({loc_text})', ascending=False)), use_container_width=True, hide_index=True)
 
 # KOMANDAS STATISTIKA
 elif rezims == "Komandas Statistika":
