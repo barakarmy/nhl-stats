@@ -1,0 +1,321 @@
+import pandas as pd
+import streamlit as st
+import os
+from datetime import datetime
+
+# Failu nosaukumi (jābūt vienā mapē ar app.py uz GitHub)
+CSV_FAILS = "nhl_sezona.csv"
+CSV_KALENDARS = "nhl_kalendars.csv"
+
+# Oficiālā NHL komandu vārdnīca (Saīsinājums -> Pilns nosaukums)
+NHL_KOMANDAS = {
+    "ANA": "Anaheim Ducks", "BOS": "Boston Bruins", "BUF": "Buffalo Sabres",
+    "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes", "CHI": "Chicago Blackhawks",
+    "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets", "DAL": "Dallas Stars",
+    "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers", "FLA": "Florida Panthers",
+    "LAK": "Los Angeles Kings", "MIN": "Minnesota Wild", "MTL": "Montreal Canadiens",
+    "NSH": "Nashville Predators", "NJD": "New Jersey Devils", "NYI": "New York Islanders",
+    "NYR": "New York Rangers", "OTT": "Ottawa Senators", "PHI": "Philadelphia Flyers",
+    "PIT": "Pittsburgh Penguins", "SJS": "San Jose Sharks", "SEA": "Seattle Kraken",
+    "STL": "St. Louis Blues", "TBL": "Tampa Bay Lightning", "TOR": "Toronto Maple Leafs",
+    "UTA": "Utah Hockey Club", "VAN": "Vancouver Canucks", "VGK": "Vegas Golden Knights",
+    "WSH": "Washington Capitals", "WPG": "Winnipeg Jets"
+}
+
+def pilns_nosaukums(saisinajums):
+    return NHL_KOMANDAS.get(saisinajums.upper(), saisinajums.upper())
+
+@st.cache_data
+def ielasit_datus():
+    try:
+        if not os.path.exists(CSV_FAILS):
+            return None
+        df = pd.read_csv(CSV_FAILS)
+        if 'datums' in df.columns:
+            df['datums'] = pd.to_datetime(df['datums'])
+            df = df.sort_values('datums')
+        return df
+    except Exception:
+        return None
+
+def sagatavot_vienoto_tabulu(df):
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    h = df[['datums', 'game_id', 'home_team', 'away_team', 
+            'home_p1', 'away_p1', 'home_sog_p1', 'home_pim_p1',
+            'home_p2', 'away_p2', 'home_sog_p2', 'home_pim_p2',
+            'home_p3', 'away_p3', 'home_sog_p3', 'home_pim_p3',
+            'home_ppg', 'home_pim_total']].copy()
+    
+    h.columns = ['datums', 'game_id', 'komanda', 'pretinieks', 
+                 'g_p1', 'z_p1', 'sog_p1', 'pim_p1',
+                 'g_p2', 'z_p2', 'sog_p2', 'pim_p2',
+                 'g_p3', 'z_p3', 'sog_p3', 'pim_p3',
+                 'ppg', 'pim_tot']
+    h['majas'] = 1
+
+    a = df[['datums', 'game_id', 'away_team', 'home_team', 
+            'away_p1', 'home_p1', 'away_sog_p1', 'away_pim_p1',
+            'away_p2', 'home_p2', 'away_sog_p2', 'away_pim_p2',
+            'away_p3', 'home_p3', 'away_sog_p3', 'away_pim_p3',
+            'away_ppg', 'away_pim_total']].copy()
+    
+    a.columns = ['datums', 'game_id', 'komanda', 'pretinieks', 
+                 'g_p1', 'z_p1', 'sog_p1', 'pim_p1',
+                 'g_p2', 'z_p2', 'sog_p2', 'pim_p2',
+                 'g_p3', 'z_p3', 'sog_p3', 'pim_p3',
+                 'ppg', 'pim_tot']
+    a['majas'] = 0
+
+    combined = pd.concat([h, a]).sort_values(['komanda', 'datums'])
+    
+    combined['diff_p1'] = combined['g_p1'] - combined['z_p1']
+    combined['diff_p2'] = combined['g_p2'] - combined['z_p2']
+    combined['diff_p3'] = combined['g_p3'] - combined['z_p3']
+    
+    combined['g_reg'] = combined['g_p1'] + combined['g_p2'] + combined['g_p3']
+    combined['z_reg'] = combined['z_p1'] + combined['z_p2'] + combined['z_p3']
+    combined['tot_reg_goals'] = combined['g_reg'] + combined['z_reg']
+    
+    combined['sog_reg'] = combined['sog_p1'] + combined['sog_p2'] + combined['sog_p3']
+    combined['pim_reg'] = combined['pim_p1'] + combined['pim_p2'] + combined['pim_p3']
+    combined['pim_count'] = (combined['pim_tot'] / 2).round().astype(int)
+
+    team_game_ppg = combined[['game_id', 'komanda', 'ppg']].rename(columns={'komanda': 'pretinieks', 'ppg': 'ppg_allowed'})
+    combined = pd.merge(combined, team_game_ppg, on=['game_id', 'pretinieks'], how='left')
+    combined['pilns_nosaukums'] = combined['komanda'].apply(pilns_nosaukums)
+
+    return combined
+
+# Streamlit Interfeiss
+st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
+st.title("🏒 NHL Analītiskais Panelis")
+
+raw_df = ielasit_datus()
+if raw_df is None:
+    st.error("CSV fails ('nhl_sezona.csv') nav atrasts! Lūdzu, augšupielādējiet to savā GitHub repozitorijā.")
+    st.stop()
+
+df = sagatavot_vienoto_tabulu(raw_df)
+
+# Sānjoslas izvēlne
+st.sidebar.header("Navigācija")
+rezims = st.sidebar.selectbox("Izvēlies sadaļu", [
+    "📅 Kalendārs (Tuvākās 3 dienas)", 
+    "🏆 Globālie Reitingi", 
+    "📊 Komandas Specifiskā Statistika", 
+    "📋 Palīdzība un Info",
+    "🏒 Komandu Saraksts"
+])
+
+def sagatavot_tabulu_izvadei(res_df):
+    res_df = res_df.copy()
+    if 'komanda' in res_df.columns:
+        res_df['Komanda'] = res_df['komanda'].apply(pilns_nosaukums)
+        res_df = res_df.drop(columns=['komanda'])
+    cols = ['Komanda'] + [c for c in res_df.columns if c != 'Komanda']
+    return res_df[cols]
+
+# 1. KALENDĀRS
+if rezims == "📅 Kalendārs (Tuvākās 3 dienas)":
+    st.subheader("📅 Tuvāko 3 dienu NHL spēļu grafiks")
+    if not os.path.exists(CSV_KALENDARS):
+        st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts.")
+    else:
+        try:
+            df_k = pd.read_csv(CSV_KALENDARS)
+            sodiena = datetime.now().date()
+            beigu_diena = sodiena + pd.Timedelta(days=3)
+            df_k['datums_dt'] = pd.to_datetime(df_k['datums']).dt.date
+            tuvakas_speles = df_k[(df_k['datums_dt'] >= sodiena) & (df_k['datums_dt'] < beigu_diena)]
+            
+            if tuvakas_speles.empty:
+                st.info("Tuvākajās 3 dienās nav paredzētu spēļu.")
+            else:
+                dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
+                for datums, grupa in tuvakas_speles.groupby('datums'):
+                    dt_obj = datetime.strptime(datums, '%Y-%m-%d')
+                    diena_lv = dienu_tulkojums.get(dt_obj.strftime('%A'), dt_obj.strftime('%A'))
+                    st.markdown(f"**📌 Datums: {datums} ({diena_lv})**")
+                    for _, r in grupa.iterrows():
+                        viesis = pilns_nosaukums(r['viesu_komanda'])
+                        majas = pilns_nosaukums(r['majas_komanda'])
+                        st.text(f"    • {viesis} ({r['viesu_komanda']}) @ {majas} ({r['majas_komanda']})")
+                    st.divider()
+        except Exception as e:
+            st.error(f"Kļūda nolasot kalendāru: {e}")
+
+# 2. GLOBĀLIE REITINGI
+elif rezims == "🏆 Globālie Reitingi":
+    st.subheader("🏆 Globālie Reitingi (Pamatlaiks)")
+    reit_izvele = st.selectbox("Izvēlies reitinga filtru:", [
+        "1 (1.P vārtu attiecība - Visas)", "1h (1.P vārtu attiecība - Mājās)", "1a (1.P vārtu attiecība - Izbraukumā)",
+        "2 (2.P vārtu attiecība - Visas)", "3 (3.P vārtu attiecība - Visas)",
+        "1sog", "2sog", "3sog",
+        "hot5", "hot10", "cold5", "cold10",
+        "5goalsgood", "5goalsbad",
+        "over5", "over10", "under5", "under10",
+        "ppleaders", "ppleaders5", "pimleaders"
+    ])
+    
+    cmd_lower = reit_izvele.split()[0].lower()
+    
+    if cmd_lower in ["1", "1h", "1a"]:
+        sub = df
+        if "h" in cmd_lower: sub = sub[sub['majas'] == 1]
+        elif "a" in cmd_lower: sub = sub[sub['majas'] == 0]
+        res = sub.groupby('komanda')['diff_p1'].sum().reset_index()
+        res.columns = ['komanda', '1.P Vārtu Starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1.P Vārtu Starpība', ascending=False)), use_container_width=True)
+
+    elif cmd_lower == "2":
+        res = df.groupby('komanda')['diff_p2'].sum().reset_index()
+        res.columns = ['komanda', '2.P Vārtu Starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2.P Vārtu Starpība', ascending=False)), use_container_width=True)
+
+    elif cmd_lower == "3":
+        res = df.groupby('komanda')['diff_p3'].sum().reset_index()
+        res.columns = ['komanda', '3.P Vārtu Starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3.P Vārtu Starpība', ascending=False)), use_container_width=True)
+
+    elif cmd_lower in ["1sog", "2sog", "3sog"]:
+        p_num = cmd_lower[0]
+        col = f"sog_p{p_num}"
+        res = df.groupby('komanda')[col].mean().reset_index()
+        res.columns = ['komanda', f'Vidējie SOG {p_num}.P']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True)
+
+    elif cmd_lower in ["hot10", "hot5"]:
+        n = 10 if "10" in cmd_lower else 5
+        res = df.groupby('komanda').tail(n).groupby('komanda')['g_reg'].sum().reset_index()
+        res.columns = ['komanda', f'Gūtie vārti pēd. {n}']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True)
+
+    elif cmd_lower in ["cold10", "cold5"]:
+        n = 10 if "10" in cmd_lower else 5
+        res = df.groupby('komanda').tail(n).groupby('komanda')['g_reg'].sum().reset_index()
+        res.columns = ['komanda', f'Gūtie vārti pēd. {n}']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=True)), use_container_width=True)
+
+    elif cmd_lower in ["5goalsbad", "5goalsgood"]:
+        col_to_sum = 'z_reg' if cmd_lower == "5goalsbad" else 'g_reg'
+        res = df.groupby('komanda').apply(lambda g: g.tail(5)[col_to_sum].sum()).reset_index(name='Vārtu skaits')
+        res.columns = ['komanda', 'Vārtu skaits pēd. 5']
+        asc = False if cmd_lower == "5goalsgood" else True
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu skaits pēd. 5', ascending=asc)), use_container_width=True)
+
+    elif cmd_lower in ["over10", "over5", "under10", "under5"]:
+        n = 10 if "10" in cmd_lower else 5
+        is_over = "over" in cmd_lower
+        def calc_ou(group):
+            tail_group = group.tail(n)
+            return (tail_group['tot_reg_goals'] > 6.5).sum() if is_over else (tail_group['tot_reg_goals'] < 6.5).sum()
+        res = df.groupby('komanda').apply(calc_ou).reset_index(name='Spēļu skaits')
+        res.columns = ['komanda', 'Spēļu skaits']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Spēļu skaits', ascending=False)), use_container_width=True)
+
+    elif cmd_lower == "ppleaders":
+        res = df.groupby('komanda')['ppg'].sum().reset_index()
+        res.columns = ['komanda', 'Vairākumā gūtie vārti']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vairākumā gūtie vārti', ascending=False)), use_container_width=True)
+
+    elif cmd_lower == "pimleaders":
+        res = df.groupby('komanda').agg(Kopā=('pim_count', 'sum'), Vidēji=('pim_count', 'mean')).reset_index()
+        res['Rādītājs'] = res.apply(lambda r: f"{int(r['Kopā'])} (vid. {r['Vidēji']:.1f})", axis=1)
+        res = res[['komanda', 'Rādītājs', 'Kopā']].sort_values(by='Kopā', ascending=False)
+        res.columns = ['komanda', 'Noraidījumi (Kopā un vidēji)', '_sort']
+        res = res.drop(columns=['_sort'])
+        st.dataframe(sagatavot_tabulu_izvadei(res), use_container_width=True)
+
+# 3. KOMANDAS SPECIFISKĀ STATISTIKA
+elif rezims == "📊 Komandas Specifiskā Statistika":
+    st.subheader("📊 Komandas Analīze")
+    
+    selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
+    stat_mode = st.selectbox("Izvēlies parametru:", ["stats (Kopējā stat + nākotne)", "h (Mājas vidējie)", "a (Izbraukuma vidējie)", "last5 (Pēdējās 5 spēles)", "pimlast5 (Noraidījumu vēsture pēd. 5)"])
+    
+    team_df = df[df['komanda'] == selected_team]
+    pilns_n = pilns_nosaukums(selected_team)
+    
+    if team_df.empty:
+        st.warning("Šai komandai nav datu bāzē.")
+    else:
+        mode_key = stat_mode.split()[0]
+        st.markdown(choice_txt := f"### Statistika komandai: {pilns_n} ({selected_team})")
+        
+        if mode_key == 'stats':
+            total_games = len(team_df)
+            home_df = team_df[team_df['majas'] == 1]
+            away_df = team_df[team_df['majas'] == 0]
+            
+            st.metric("Apskatītās spēles", total_games)
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write(f"**Vidēji vārti:** {team_df['g_reg'].mean():.2f}")
+                st.write(f"Mājās: {home_df['g_reg'].mean():.2f} | Izbr: {away_df['g_reg'].mean():.2f}")
+            with col2:
+                st.write(f"**Vairākuma vārti:** {team_df['ppg'].mean():.2f}")
+                st.write(f"Mājās: {home_df['ppg'].mean():.2f} | Izbr: {away_df['ppg'].mean():.2f}")
+            with col3:
+                st.write(f"**Noraidījumi:** {team_df['pim_count'].mean():.1f}")
+                st.write(f"Mājās: {home_df['pim_count'].mean():.1f} | Izbr: {away_df['pim_count'].mean():.1f}")
+            
+            # Turpmākās 5 spēles
+            if os.path.exists(CSV_KALENDARS):
+                st.markdown("---")
+                st.markdown("#### 📅 Turpmākās spēles:")
+                df_k = pd.read_csv(CSV_KALENDARS)
+                komandas_speles = df_k[(df_k['majas_komanda'] == selected_team) | (df_k['viesu_komanda'] == selected_team)]
+                sodiena_str = datetime.now().strftime('%Y-%m-%d')
+                nakotnes_speles = komandas_speles[komandas_speles['datums'] >= sodiena_str].head(5)
+                
+                if not nakotnes_speles.empty:
+                    for _, r in nakotnes_speles.iterrows():
+                        is_home = r['majas_komanda'] == selected_team
+                        H_vai_A = "H" if is_home else "A"
+                        pretinieka_kods = r['viesu_komanda'] if is_home else r['majas_komanda']
+                        pretinieka_viss = pilns_nosaukums(pretinieka_kods)
+                        st.text(f"• {r['datums']} vs {pretinieka_viss} ({pretinieka_kods}) [{H_vai_A}]")
+                else:
+                    st.info("Kalendārā nav atrastu nākamo spēļu.")
+
+        elif mode_key in ['h', 'a']:
+            is_home = 1 if mode_key == 'h' else 0
+            sub_df = team_df[team_df['majas'] == is_home]
+            loc_txt = "mājas spēlēs" if is_home else "izbraukuma spēlēs"
+            st.write(f"Apskatīto spēļu skaits: {len(sub_df)}")
+            st.write(f"Vidēji iemestie vārti: {sub_df['g_reg'].mean():.2f}")
+            st.write(f"Vidēji ielaistie vārti: {sub_df['z_reg'].mean():.2f}")
+            st.write(f"Vidējās soda minūtes (PIM): {sub_df['pim_tot'].mean():.2f}")
+
+        elif mode_key == 'last5':
+            sub_5 = team_df.tail(5)
+            st.write(f"Vārtu guvumi (vidēji): {sub_5['g_reg'].mean():.2f}")
+            st.write(f"Ielaistie vārti (vidēji): {sub_5['z_reg'].mean():.2f}")
+            st.write(f"Vairākumā iemestie vārti (vidēji): {sub_5['ppg'].mean():.2f}")
+            st.write(f"Noraidījumi (vidēji): {sub_5['pim_count'].mean():.1f} ({sub_5['pim_tot'].mean():.1f} min)")
+
+        elif mode_key == 'pimlast5':
+            sub_df = team_df.tail(5)
+            for _, r in sub_df.iterrows():
+                viesi_majas = "H" if r['majas'] == 1 else "A"
+                d_str = pd.to_datetime(r['datums']).strftime('%Y-%m-%d')
+                pret_viss = pilns_nosaukums(r['pretinieks'])
+                st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
+
+# 4. PALĪDZĪBA
+elif rezims == "📋 Palīdzība un Info":
+    st.subheader("📋 Lietošanas Ceļvedis")
+    st.markdown("""
+    Šis rīks analizē NHL komandu sniegumu, balstoties uz oficiālajiem API datiem (tikai pamatlaiks).
+    * **Kalendārs:** Parāda tuvāko 3 dienu spēļu sarakstu ar dienām latviešu valodā.
+    * **Globālie Reitingi:** Ļauj filtrēt līgas komandas pēc periodu vārtu starpības, metieniem, formas un vairākuma rādītājiem.
+    * **Komandas Statistika:** Izvēlies konkrētu komandu, lai redzētu tās vispārējos rādītājus, noraidījumus un nākamo 5 spēļu kalendāru.
+    """)
+
+# 5. KOMANDU SARAKSTS
+elif rezims == "🏒 Komandu Saraksts":
+    st.subheader("🏒 NHL Komandu Saīsinājumi")
+    komandu_df = pd.DataFrame(list(NHL_KOMANDAS.items()), columns=["Saīsinājums", "Pilns Nosaukums"])
+    st.dataframe(komandu_df, use_container_width=True)
