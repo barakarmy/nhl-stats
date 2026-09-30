@@ -96,13 +96,28 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-# Sānjoslas navigācija ar tīrām pogām (bez teksta "Navigācija" un bez punktiem)
-rezims = st.sidebar.pills(
-    "Sadaļas", 
-    ["🏆 Globālie Reitingi", "📊 Komandas Statistika", "📅 Kalendārs"], 
-    default="🏆 Globālie Reitingi",
-    label_visibility="collapsed"
-)
+# Horizontālās pogas lapas augšpusē kā tīra navigācija
+col1, col2, col3 = st.columns(3)
+with col1:
+    btn_reitingi = st.button("🏆 Globālie Reitingi", use_container_width=True)
+with col2:
+    btn_stats = st.button("📊 Komandas Statistika", use_container_width=True)
+with col3:
+    btn_kalendars = st.button("📅 Kalendārs", use_container_width=True)
+
+# Saglabājam izvēlēto sadaļu sesijas atmiņā (session_state)
+if 'rezims' not in st.session_state:
+    st.session_state.rezims = "Globālie Reitingi"
+
+if btn_reitingi:
+    st.session_state.rezims = "Globālie Reitingi"
+elif btn_stats:
+    st.session_state.rezims = "Komandas Statistika"
+elif btn_kalendars:
+    st.session_state.rezims = "Kalendārs"
+
+rezims = st.session_state.rezims
+st.divider()
 
 def sagatavot_tabulu_izvadei(res_df):
     res_df = res_df.copy()
@@ -117,7 +132,7 @@ def sagatavot_tabulu_izvadei(res_df):
     return res_df[cols]
 
 # 1. GLOBĀLIE REITINGI
-if rezims == "🏆 Globālie Reitingi":
+if rezims == "Globālie Reitingi":
     st.subheader("🏆 Globālie Reitingi (Pamatlaiks)")
     
     reit_opcijas = {
@@ -214,7 +229,7 @@ if rezims == "🏆 Globālie Reitingi":
         st.dataframe(sagatavot_tabulu_izvadei(res), use_container_width=True, hide_index=True)
 
 # 2. KOMANDAS SPECIFISKĀ STATISTIKA
-elif rezims == "📊 Komandas Statistika":
+elif rezims == "Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
     
     selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
@@ -296,8 +311,8 @@ elif rezims == "📊 Komandas Statistika":
                 pret_viss = pilns_nosaukums(r['pretinieks'])
                 st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
 
-# 3. KALENDĀRS (Apakšā)
-elif rezims == "📅 Kalendārs":
+# 3. KALENDĀRS
+elif rezims == "Kalendārs":
     st.subheader("📅 Tuvāko 3 dienu NHL spēļu grafiks")
     if not os.path.exists(CSV_KALENDARS):
         st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts.")
