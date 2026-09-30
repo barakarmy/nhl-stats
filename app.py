@@ -125,6 +125,7 @@ if st.sidebar.button("2. Periods", use_container_width=True): st.session_state.r
 if st.sidebar.button("3. Periods", use_container_width=True): st.session_state.rezims = "3. Periods"
 if st.sidebar.button("Forma un Vārti", use_container_width=True): st.session_state.rezims = "Forma un Vārti"
 if st.sidebar.button("Over / Under", use_container_width=True): st.session_state.rezims = "Over / Under"
+if st.sidebar.button("Powerplay", use_container_width=True): st.session_state.rezims = "Powerplay"
 if st.sidebar.button("Noraidījumi", use_container_width=True): st.session_state.rezims = "Noraidījumi"
 st.sidebar.markdown("---")
 if st.sidebar.button("Komandas Statistika", use_container_width=True): st.session_state.rezims = "Komandas Statistika"
@@ -223,7 +224,7 @@ elif rezims == "2. Periods":
 
 # 3. PERIODS
 elif rezims == "3. Periods":
-    st.subheader("⏱️ 3. Perioda Statistika")
+    st.subheader("⏱️️ 3. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "3. perioda vārtu starpība (Visas spēles)",
         "3. perioda vārtu starpība (Mājas spēles)",
@@ -268,12 +269,7 @@ elif rezims == "Forma un Vārti":
         "Aukstākās komandas (pēd. 5 spēlēs)",
         "Aukstākās komandas (pēd. 10 spēlēs)",
         "Visvairāk iemet (pēd. 5 spēlēs)",
-        "Visvairāk ielaiž (pēd. 5 spēlēs)",
-        "Vairākuma vārtu līderi (Visas spēles)",
-        "Vairākuma vārtu līderi (Mājās - pēd. 5)",
-        "Vairākuma vārtu līderi (Mājās - pēd. 10)",
-        "Vairākuma vārtu līderi (Izbraukumā - pēd. 5)",
-        "Vairākuma vārtu līderi (Izbraukumā - pēd. 10)"
+        "Visvairāk ielaiž (pēd. 5 spēlēs)"
     ])
     
     if "Karstākās" in filtrs:
@@ -294,20 +290,31 @@ elif rezims == "Forma un Vārti":
         res = df.groupby('komanda').apply(lambda g: g.tail(5)['z_reg'].sum()).reset_index(name='Vārtu skaits')
         res.columns = ['komanda', 'Ielaistie vārti pēd. 5 spēlēs']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Ielaistie vārti pēd. 5 spēlēs', ascending=False)), use_container_width=True, hide_index=True)
+
+# POWERPLAY
+elif rezims == "Powerplay":
+    st.subheader("⚡ Vairākuma (Powerplay) Līderi")
+    filtrs = st.selectbox("Izvēlies skatu:", [
+        "Vairākuma vārtu līderi (Visas spēles)",
+        "Vairākuma vārtu līderi (Mājās - pēd. 5)",
+        "Vairākuma vārtu līderi (Mājās - pēd. 10)",
+        "Vairākuma vārtu līderi (Izbraukumā - pēd. 5)",
+        "Vairākuma vārtu līderi (Izbraukumā - pēd. 10)"
+    ])
+    
+    sub = df
+    if "Mājās" in filtrs: sub = df[df['majas'] == 1]
+    elif "Izbraukumā" in filtrs: sub = df[df['majas'] == 0]
+    
+    if "5" in filtrs:
+        res = sub.groupby('komanda').tail(5).groupby('komanda')['ppg'].sum().reset_index()
+    elif "10" in filtrs:
+        res = sub.groupby('komanda').tail(10).groupby('komanda')['ppg'].sum().reset_index()
     else:
-        sub = df
-        if "Mājās" in filtrs: sub = df[df['majas'] == 1]
-        elif "Izbraukumā" in filtrs: sub = df[df['majas'] == 0]
+        res = sub.groupby('komanda')['ppg'].sum().reset_index()
         
-        if "5" in filtrs:
-            res = sub.groupby('komanda').tail(5).groupby('komanda')['ppg'].sum().reset_index()
-        elif "10" in filtrs:
-            res = sub.groupby('komanda').tail(10).groupby('komanda')['ppg'].sum().reset_index()
-        else:
-            res = sub.groupby('komanda')['ppg'].sum().reset_index()
-            
-        res.columns = ['komanda', 'Vairākumā gūtie vārti']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vairākumā gūtie vārti', ascending=False)), use_container_width=True, hide_index=True)
+    res.columns = ['komanda', 'Vairākumā gūtie vārti']
+    st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vairākumā gūtie vārti', ascending=False)), use_container_width=True, hide_index=True)
 
 # OVER / UNDER
 elif rezims == "Over / Under":
