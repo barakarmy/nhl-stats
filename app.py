@@ -3,9 +3,6 @@ import streamlit as st
 import os
 from datetime import datetime
 
-# 1. Konfigurācija jāliek pašā sākumā
-st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
-
 CSV_FAILS = "nhl_sezona.csv"
 CSV_KALENDARS = "nhl_kalendars.csv"
 
@@ -89,6 +86,53 @@ def sagatavot_vienoto_tabulu(df):
 
     return combined
 
+st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
+
+st.markdown("""
+    <style>
+    div[data-testid="stSidebar"] button {
+        border: none !important;
+        background-color: transparent !important;
+        text-align: left !important;
+        padding: 5px 15px !important;
+        font-size: 16px !important;
+        font-weight: 500 !important;
+        color: inherit !important;
+        justify-content: flex-start !important;
+    }
+    div[data-testid="stSidebar"] button:hover {
+        background-color: rgba(150, 150, 150, 0.1) !important;
+        color: #ff4b4b !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🏒 NHL Analītiskais Panelis")
+
+raw_df = ielasit_datus()
+if raw_df is None:
+    st.error("CSV fails ('nhl_sezona.csv') nav atrasts!")
+    st.stop()
+
+df = sagatavot_vienoto_tabulu(raw_df)
+
+if 'rezims' not in st.session_state:
+    st.session_state.rezims = "1. Periods"
+
+st.sidebar.markdown("### Sadaļas")
+if st.sidebar.button("1. Periods", use_container_width=True): st.session_state.rezims = "1. Periods"
+if st.sidebar.button("2. Periods", use_container_width=True): st.session_state.rezims = "2. Periods"
+if st.sidebar.button("3. Periods", use_container_width=True): st.session_state.rezims = "3. Periods"
+if st.sidebar.button("Forma un Vārti", use_container_width=True): st.session_state.rezims = "Forma un Vārti"
+if st.sidebar.button("Over / Under", use_container_width=True): st.session_state.rezims = "Over / Under"
+if st.sidebar.button("Powerplay", use_container_width=True): st.session_state.rezims = "Powerplay"
+if st.sidebar.button("Noraidījumi", use_container_width=True): st.session_state.rezims = "Noraidījumi"
+st.sidebar.markdown("---")
+if st.sidebar.button("Komandas Statistika", use_container_width=True): st.session_state.rezims = "Komandas Statistika"
+if st.sidebar.button("Kalendārs", use_container_width=True): st.session_state.rezims = "Kalendārs"
+
+rezims = st.session_state.rezims
+
 def sagatavot_tabulu_izvadei(res_df):
     res_df = res_df.copy()
     if 'komanda' in res_df.columns:
@@ -101,10 +145,9 @@ def sagatavot_tabulu_izvadei(res_df):
     cols = ['Vieta', 'Komanda'] + [c for c in res_df.columns if c not in ['Vieta', 'Komanda']]
     return res_df[cols]
 
-# === LAPU FUNKCIJAS (Ar atgrieztām st.selectbox izvēlnēm) ===
-
-def page_1_periods():
-    st.subheader("⏱️️ 1. Perioda Statistika")
+# 1. PERIODS
+if rezims == "1. Periods":
+    st.subheader("⏱️ 1. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "1. perioda vārtu starpība (Visas spēles)", 
         "1. perioda vārtu starpība (Mājas spēles)", 
@@ -141,8 +184,9 @@ def page_1_periods():
         res.columns = ['komanda', '1. perioda vidējie metieni (SOG)']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
 
-def page_2_periods():
-    st.subheader("⏱️️ 2. Perioda Statistika")
+# 2. PERIODS
+elif rezims == "2. Periods":
+    st.subheader("⏱️ 2. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "2. perioda vārtu starpība (Visas spēles)",
         "2. perioda vārtu starpība (Mājas spēles)",
@@ -178,7 +222,8 @@ def page_2_periods():
         res.columns = ['komanda', '2. perioda vidējie metieni (SOG)']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
 
-def page_3_periods():
+# 3. PERIODS
+elif rezims == "3. Periods":
     st.subheader("⏱ 3. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "3. perioda vārtu starpība (Visas spēles)",
@@ -215,7 +260,8 @@ def page_3_periods():
         res.columns = ['komanda', '3. perioda vidējie metieni (SOG)']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
 
-def page_forma():
+# FORMA UN VĀRTI
+elif rezims == "Forma un Vārti":
     st.subheader("🔥 Komandu Forma un Vārtu Guvumi")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "Karstākās komandas (pēd. 5 spēlēs)",
@@ -245,7 +291,8 @@ def page_forma():
         res.columns = ['komanda', 'Ielaistie vārti pēd. 5 spēlēs']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Ielaistie vārti pēd. 5 spēlēs', ascending=False)), use_container_width=True, hide_index=True)
 
-def page_powerplay():
+# POWERPLAY
+elif rezims == "Powerplay":
     st.subheader("⚡ Vairākuma (Powerplay) Līderi")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "Vairākuma vārtu līderi (Visas spēles)",
@@ -269,7 +316,8 @@ def page_powerplay():
     res.columns = ['komanda', 'Vairākumā gūtie vārti']
     st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vairākumā gūtie vārti', ascending=False)), use_container_width=True, hide_index=True)
 
-def page_over_under():
+# OVER / UNDER
+elif rezims == "Over / Under":
     st.subheader("📈 Spēļu Kopējā Vārtu Summa (Over / Under 6.5)")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "Over 6.5 (Visas - pēd. 5)",
@@ -297,7 +345,8 @@ def page_over_under():
     res.columns = ['komanda', 'Atbilstošo spēļu skaits']
     st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Atbilstošo spēļu skaits', ascending=False)), use_container_width=True, hide_index=True)
 
-def page_noraidijumi():
+# NORAIDĪJUMI
+elif rezims == "Noraidījumi":
     st.subheader("❌ Noraidījumu (PIM) Līderi")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "Vidējie noraidījumi (Visas spēles)",
@@ -322,7 +371,8 @@ def page_noraidijumi():
         res.columns = ['komanda', f'Vidējais noraidījumu skaits ({loc_text})']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=f'Vidējais noraidījumu skaits ({loc_text})', ascending=False)), use_container_width=True, hide_index=True)
 
-def page_stats():
+# KOMANDAS STATISTIKA
+elif rezims == "Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
     
     selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
@@ -423,7 +473,8 @@ def page_stats():
                 pret_viss = pilns_nosaukums(r['pretinieks'])
                 st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
 
-def page_kalendars():
+# KALENDĀRS
+elif rezims == "Kalendārs":
     st.subheader("📅 Tuvāko 3 dienu spēļu grafiks")
     if not os.path.exists(CSV_KALENDARS):
         st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts.")
@@ -450,32 +501,3 @@ def page_kalendars():
                     st.divider()
         except Exception as e:
             st.error(f"Kļūda nolasot kalendāru: {e}")
-
-# === LAPAS IELĀDE ===
-st.title("🏒 NHL Analītiskais Panelis")
-
-raw_df = ielasit_datus()
-if raw_df is None:
-    st.error("CSV fails ('nhl_sezona.csv') nav atrasts!")
-    st.stop()
-
-df = sagatavot_vienoto_tabulu(raw_df)
-
-# Modernā Streamlit NATIVE navigācija (Automātiski aizvērsies telefonos!)
-pg = st.navigation({
-    "Datu Filtri": [
-        st.Page(page_1_periods, title="1. Periods", icon="⏱️"),
-        st.Page(page_2_periods, title="2. Periods", icon="⏱️"),
-        st.Page(page_3_periods, title="3. Periods", icon="⏱️"),
-        st.Page(page_forma, title="Forma un Vārti", icon="🔥"),
-        st.Page(page_over_under, title="Over / Under", icon="📈"),
-        st.Page(page_powerplay, title="Powerplay", icon="⚡"),
-        st.Page(page_noraidijumi, title="Noraidījumi", icon="❌"),
-    ],
-    "Komandas": [
-        st.Page(page_stats, title="Komandas Statistika", icon="📊"),
-        st.Page(page_kalendars, title="Kalendārs", icon="📅")
-    ]
-})
-
-pg.run()
