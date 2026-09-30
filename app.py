@@ -3,6 +3,9 @@ import streamlit as st
 import os
 from datetime import datetime
 
+# 1. Konfigurācija jāliek pašā sākumā
+st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
+
 CSV_FAILS = "nhl_sezona.csv"
 CSV_KALENDARS = "nhl_kalendars.csv"
 
@@ -86,53 +89,6 @@ def sagatavot_vienoto_tabulu(df):
 
     return combined
 
-st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
-
-st.markdown("""
-    <style>
-    div[data-testid="stSidebar"] button {
-        border: none !important;
-        background-color: transparent !important;
-        text-align: left !important;
-        padding: 5px 15px !important;
-        font-size: 16px !important;
-        font-weight: 500 !important;
-        color: inherit !important;
-        justify-content: flex-start !important;
-    }
-    div[data-testid="stSidebar"] button:hover {
-        background-color: rgba(150, 150, 150, 0.1) !important;
-        color: #ff4b4b !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-st.title("🏒 NHL Analītiskais Panelis")
-
-raw_df = ielasit_datus()
-if raw_df is None:
-    st.error("CSV fails ('nhl_sezona.csv') nav atrasts!")
-    st.stop()
-
-df = sagatavot_vienoto_tabulu(raw_df)
-
-if 'rezims' not in st.session_state:
-    st.session_state.rezims = "1. Periods"
-
-st.sidebar.markdown("### Sadaļas")
-if st.sidebar.button("1. Periods", use_container_width=True): st.session_state.rezims = "1. Periods"
-if st.sidebar.button("2. Periods", use_container_width=True): st.session_state.rezims = "2. Periods"
-if st.sidebar.button("3. Periods", use_container_width=True): st.session_state.rezims = "3. Periods"
-if st.sidebar.button("Forma un Vārti", use_container_width=True): st.session_state.rezims = "Forma un Vārti"
-if st.sidebar.button("Over / Under", use_container_width=True): st.session_state.rezims = "Over / Under"
-if st.sidebar.button("Powerplay", use_container_width=True): st.session_state.rezims = "Powerplay"
-if st.sidebar.button("Noraidījumi", use_container_width=True): st.session_state.rezims = "Noraidījumi"
-st.sidebar.markdown("---")
-if st.sidebar.button("Komandas Statistika", use_container_width=True): st.session_state.rezims = "Komandas Statistika"
-if st.sidebar.button("Kalendārs", use_container_width=True): st.session_state.rezims = "Kalendārs"
-
-rezims = st.session_state.rezims
-
 def sagatavot_tabulu_izvadei(res_df):
     res_df = res_df.copy()
     if 'komanda' in res_df.columns:
@@ -145,10 +101,11 @@ def sagatavot_tabulu_izvadei(res_df):
     cols = ['Vieta', 'Komanda'] + [c for c in res_df.columns if c not in ['Vieta', 'Komanda']]
     return res_df[cols]
 
-# 1. PERIODS
-if rezims == "1. Periods":
+# === LAPU FUNKCIJAS (Sagatavotas mobilajai versijai ar radio pogām) ===
+
+def page_1_periods():
     st.subheader("⏱️ 1. Perioda Statistika")
-    filtrs = st.selectbox("Izvēlies skatu:", [
+    filtrs = st.radio("Izvēlies skatu:", [
         "1. perioda vārtu starpība (Visas spēles)", 
         "1. perioda vārtu starpība (Mājas spēles)", 
         "1. perioda vārtu starpība (Izbraukuma spēles)",
@@ -184,10 +141,9 @@ if rezims == "1. Periods":
         res.columns = ['komanda', '1. perioda vidējie metieni (SOG)']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
 
-# 2. PERIODS
-elif rezims == "2. Periods":
+def page_2_periods():
     st.subheader("⏱️ 2. Perioda Statistika")
-    filtrs = st.selectbox("Izvēlies skatu:", [
+    filtrs = st.radio("Izvēlies skatu:", [
         "2. perioda vārtu starpība (Visas spēles)",
         "2. perioda vārtu starpība (Mājas spēles)",
         "2. perioda vārtu starpība (Izbraukuma spēles)",
@@ -222,10 +178,9 @@ elif rezims == "2. Periods":
         res.columns = ['komanda', '2. perioda vidējie metieni (SOG)']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
 
-# 3. PERIODS
-elif rezims == "3. Periods":
+def page_3_periods():
     st.subheader("⏱ 3. Perioda Statistika")
-    filtrs = st.selectbox("Izvēlies skatu:", [
+    filtrs = st.radio("Izvēlies skatu:", [
         "3. perioda vārtu starpība (Visas spēles)",
         "3. perioda vārtu starpība (Mājas spēles)",
         "3. perioda vārtu starpība (Izbraukuma spēles)",
@@ -260,10 +215,9 @@ elif rezims == "3. Periods":
         res.columns = ['komanda', '3. perioda vidējie metieni (SOG)']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
 
-# FORMA UN VĀRTI
-elif rezims == "Forma un Vārti":
+def page_forma():
     st.subheader("🔥 Komandu Forma un Vārtu Guvumi")
-    filtrs = st.selectbox("Izvēlies skatu:", [
+    filtrs = st.radio("Izvēlies skatu:", [
         "Karstākās komandas (pēd. 5 spēlēs)",
         "Karstākās komandas (pēd. 10 spēlēs)",
         "Aukstākās komandas (pēd. 5 spēlēs)",
@@ -291,10 +245,9 @@ elif rezims == "Forma un Vārti":
         res.columns = ['komanda', 'Ielaistie vārti pēd. 5 spēlēs']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Ielaistie vārti pēd. 5 spēlēs', ascending=False)), use_container_width=True, hide_index=True)
 
-# POWERPLAY
-elif rezims == "Powerplay":
+def page_powerplay():
     st.subheader("⚡ Vairākuma (Powerplay) Līderi")
-    filtrs = st.selectbox("Izvēlies skatu:", [
+    filtrs = st.radio("Izvēlies skatu:", [
         "Vairākuma vārtu līderi (Visas spēles)",
         "Vairākuma vārtu līderi (Mājās - pēd. 5)",
         "Vairākuma vārtu līderi (Mājās - pēd. 10)",
@@ -316,10 +269,9 @@ elif rezims == "Powerplay":
     res.columns = ['komanda', 'Vairākumā gūtie vārti']
     st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vairākumā gūtie vārti', ascending=False)), use_container_width=True, hide_index=True)
 
-# OVER / UNDER
-elif rezims == "Over / Under":
+def page_over_under():
     st.subheader("📈 Spēļu Kopējā Vārtu Summa (Over / Under 6.5)")
-    filtrs = st.selectbox("Izvēlies skatu:", [
+    filtrs = st.radio("Izvēlies skatu:", [
         "Over 6.5 (Visas - pēd. 5)",
         "Over 6.5 (Visas - pēd. 10)",
         "Over 6.5 (Mājās - pēd. 10)",
@@ -345,10 +297,9 @@ elif rezims == "Over / Under":
     res.columns = ['komanda', 'Atbilstošo spēļu skaits']
     st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Atbilstošo spēļu skaits', ascending=False)), use_container_width=True, hide_index=True)
 
-# NORAIDĪJUMI
-elif rezims == "Noraidījumi":
+def page_noraidijumi():
     st.subheader("❌ Noraidījumu (PIM) Līderi")
-    filtrs = st.selectbox("Izvēlies skatu:", [
+    filtrs = st.radio("Izvēlies skatu:", [
         "Vidējie noraidījumi (Visas spēles)",
         "Vidējie noraidījumi pēdējajās 10 spēlēs",
         "Vidējie noraidījumi mājās (PIM H)",
@@ -371,10 +322,10 @@ elif rezims == "Noraidījumi":
         res.columns = ['komanda', f'Vidējais noraidījumu skaits ({loc_text})']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=f'Vidējais noraidījumu skaits ({loc_text})', ascending=False)), use_container_width=True, hide_index=True)
 
-# KOMANDAS STATISTIKA
-elif rezims == "Komandas Statistika":
+def page_stats():
     st.subheader("📊 Komandas Analīze")
     
+    # Nolaižamais saraksts paliek komandām (lai telefonā ar tastatūru varētu viegli meklēt)
     selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
     
     parametru_opcijas = {
@@ -387,7 +338,8 @@ elif rezims == "Komandas Statistika":
         "Noraidījumu vēsture pēdējajās 5 spēlēs": "pimlast5"
     }
     
-    stat_izvele = st.selectbox("Izvēlies parametru:", list(parametru_opcijas.keys()))
+    # Šeit gan izmantojam radio, lai nelec ārā tastatūra izvēloties parametru
+    stat_izvele = st.radio("Izvēlies parametru:", list(parametru_opcijas.keys()))
     mode_key = parametru_opcijas[stat_izvele]
     
     team_df = df[df['komanda'] == selected_team]
@@ -473,8 +425,7 @@ elif rezims == "Komandas Statistika":
                 pret_viss = pilns_nosaukums(r['pretinieks'])
                 st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
 
-# KALENDĀRS
-elif rezims == "Kalendārs":
+def page_kalendars():
     st.subheader("📅 Tuvāko 3 dienu spēļu grafiks")
     if not os.path.exists(CSV_KALENDARS):
         st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts.")
@@ -501,3 +452,32 @@ elif rezims == "Kalendārs":
                     st.divider()
         except Exception as e:
             st.error(f"Kļūda nolasot kalendāru: {e}")
+
+# === LAPAS IELĀDE ===
+st.title("🏒 NHL Analītiskais Panelis")
+
+raw_df = ielasit_datus()
+if raw_df is None:
+    st.error("CSV fails ('nhl_sezona.csv') nav atrasts!")
+    st.stop()
+
+df = sagatavot_vienoto_tabulu(raw_df)
+
+# Modernā Streamlit NATIVE navigācija (Automātiski aizvērsies telefonos!)
+pg = st.navigation({
+    "Datu Filtri": [
+        st.Page(page_1_periods, title="1. Periods", icon="⏱️"),
+        st.Page(page_2_periods, title="2. Periods", icon="⏱️"),
+        st.Page(page_3_periods, title="3. Periods", icon="⏱️"),
+        st.Page(page_forma, title="Forma un Vārti", icon="🔥"),
+        st.Page(page_over_under, title="Over / Under", icon="📈"),
+        st.Page(page_powerplay, title="Powerplay", icon="⚡"),
+        st.Page(page_noraidijumi, title="Noraidījumi", icon="❌"),
+    ],
+    "Komandas": [
+        st.Page(page_stats, title="Komandas Statistika", icon="📊"),
+        st.Page(page_kalendars, title="Kalendārs", icon="📅")
+    ]
+})
+
+pg.run()
