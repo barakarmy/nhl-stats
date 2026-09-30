@@ -88,10 +88,26 @@ def sagatavot_vienoto_tabulu(df):
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
 
+# CSS stils, kas pilnībā paslēpj radio apļus un izveido vertikālas, tīras pogas sānjoslā
 st.markdown("""
     <style>
-    div[data-testid="stSidebar"] [data-baseweb="tag"] {display: none;}
-    div[data-testid="stSidebar"] div[class*="row-widget"] {display: flex; flex-direction: column;}
+    div[data-testid="stSidebar"] div.row-widget.stRadio > div {
+        flex-direction: column;
+        gap: 0px;
+    }
+    div[data-testid="stSidebar"] div.row-widget.stRadio label {
+        background-color: transparent;
+        padding: 6px 10px;
+        border-radius: 5px;
+        width: 100%;
+        margin-bottom: 2px;
+    }
+    div[data-testid="stSidebar"] div.row-widget.stRadio label:hover {
+        background-color: rgba(150, 150, 150, 0.1);
+    }
+    div[data-testid="stSidebar"] div.row-widget.stRadio input[type="radio"] {
+        display: none;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -104,7 +120,7 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-rezims = st.sidebar.pills(
+rezims = st.sidebar.radio(
     "Sadaļas", 
     [
         "1. Periods", 
@@ -116,7 +132,6 @@ rezims = st.sidebar.pills(
         "Komandas Statistika", 
         "Kalendārs"
     ],
-    default="1. Periods",
     label_visibility="collapsed"
 )
 
@@ -434,7 +449,7 @@ elif rezims == "Komandas Statistika":
 
 # KALENDĀRS
 elif rezims == "Kalendārs":
-    st.subheader("📅 Tuvāko 3 dienu NHL spēļu grafiks")
+    st.subheader("📅 Tuvāko 3 dienu spēļu grafiks")
     if not os.path.exists(CSV_KALENDARS):
         st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts.")
     else:
