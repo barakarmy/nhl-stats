@@ -3,7 +3,7 @@ import csv
 import os
 from datetime import datetime, timedelta
 
-CSV_KALENDARS = r"C:\Skripti\NHL\nhl_kalendars.csv"
+CSV_KALENDARS = "nhl_kalendars.csv"
 
 def atjaunot_kalendaru():
     sodiena = datetime.now()
