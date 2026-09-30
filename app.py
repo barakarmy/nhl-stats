@@ -88,25 +88,22 @@ def sagatavot_vienoto_tabulu(df):
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
 
-# CSS stils, kas pilnībā paslēpj radio apļus un izveido vertikālas, tīras pogas sānjoslā
+# CSS stils, kas pārveido sānjoslas pogas par parastu tekstu bez rāmjiem
 st.markdown("""
     <style>
-    div[data-testid="stSidebar"] div.row-widget.stRadio > div {
-        flex-direction: column;
-        gap: 0px;
+    div[data-testid="stSidebar"] button {
+        border: none !important;
+        background-color: transparent !important;
+        text-align: left !important;
+        padding: 5px 15px !important;
+        font-size: 16px !important;
+        font-weight: 500 !important;
+        color: inherit !important;
+        justify-content: flex-start !important;
     }
-    div[data-testid="stSidebar"] div.row-widget.stRadio label {
-        background-color: transparent;
-        padding: 6px 10px;
-        border-radius: 5px;
-        width: 100%;
-        margin-bottom: 2px;
-    }
-    div[data-testid="stSidebar"] div.row-widget.stRadio label:hover {
-        background-color: rgba(150, 150, 150, 0.1);
-    }
-    div[data-testid="stSidebar"] div.row-widget.stRadio input[type="radio"] {
-        display: none;
+    div[data-testid="stSidebar"] button:hover {
+        background-color: rgba(150, 150, 150, 0.1) !important;
+        color: #ff4b4b !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -120,20 +117,23 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-rezims = st.sidebar.radio(
-    "Sadaļas", 
-    [
-        "1. Periods", 
-        "2. Periods", 
-        "3. Periods", 
-        "Forma un Vārti", 
-        "Over / Under", 
-        "Noraidījumi", 
-        "Komandas Statistika", 
-        "Kalendārs"
-    ],
-    label_visibility="collapsed"
-)
+# Sesijas atmiņa, lai saglabātu izvēlēto lapu
+if 'rezims' not in st.session_state:
+    st.session_state.rezims = "1. Periods"
+
+# Navigācijas pogas kā uzspiežams teksts
+st.sidebar.markdown("### Sadaļas")
+if st.sidebar.button("1. Periods", use_container_width=True): st.session_state.rezims = "1. Periods"
+if st.sidebar.button("2. Periods", use_container_width=True): st.session_state.rezims = "2. Periods"
+if st.sidebar.button("3. Periods", use_container_width=True): st.session_state.rezims = "3. Periods"
+if st.sidebar.button("Forma un Vārti", use_container_width=True): st.session_state.rezims = "Forma un Vārti"
+if st.sidebar.button("Over / Under", use_container_width=True): st.session_state.rezims = "Over / Under"
+if st.sidebar.button("Noraidījumi", use_container_width=True): st.session_state.rezims = "Noraidījumi"
+st.sidebar.markdown("---")
+if st.sidebar.button("Komandas Statistika", use_container_width=True): st.session_state.rezims = "Komandas Statistika"
+if st.sidebar.button("Kalendārs", use_container_width=True): st.session_state.rezims = "Kalendārs"
+
+rezims = st.session_state.rezims
 
 def sagatavot_tabulu_izvadei(res_df):
     res_df = res_df.copy()
