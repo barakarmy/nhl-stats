@@ -2,7 +2,7 @@ name: NHL Daily Update
 
 on:
   schedule:
-    - cron: '0 7 * * *'  # 7:00 UTC ir tieši 10:00 pēc Latvijas laika (vasaras laikā)
+    - cron: '0 7 * * *'
   workflow_dispatch:
 
 jobs:
