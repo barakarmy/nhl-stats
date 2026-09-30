@@ -3,11 +3,9 @@ import streamlit as st
 import os
 from datetime import datetime
 
-# Failu nosaukumi
 CSV_FAILS = "nhl_sezona.csv"
 CSV_KALENDARS = "nhl_kalendars.csv"
 
-# Oficiālā NHL komandu vārdnīca
 NHL_KOMANDAS = {
     "ANA": "Anaheim Ducks", "BOS": "Boston Bruins", "BUF": "Buffalo Sabres",
     "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes", "CHI": "Chicago Blackhawks",
@@ -88,18 +86,16 @@ def sagatavot_vienoto_tabulu(df):
 
     return combined
 
-# Streamlit Interfeiss
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
 st.title("🏒 NHL Analītiskais Panelis")
 
 raw_df = ielasit_datus()
 if raw_df is None:
-    st.error("CSV fails ('nhl_sezona.csv') nav atrasts! Lūdzu, augšupielādējiet to savā GitHub repozitorijā.")
+    st.error("CSV fails ('nhl_sezona.csv') nav atrasts!")
     st.stop()
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-# Sānjoslas izvēlne - saglabātas tikai vajadzīgās sadaļas
 st.sidebar.header("Navigācija")
 rezims = st.sidebar.selectbox("Izvēlies sadaļu", [
     "📅 Kalendārs (Tuvākās 3 dienas)", 
@@ -112,7 +108,12 @@ def sagatavot_tabulu_izvadei(res_df):
     if 'komanda' in res_df.columns:
         res_df['Komanda'] = res_df['komanda'].apply(pilns_nosaukums)
         res_df = res_df.drop(columns=['komanda'])
-    cols = ['Komanda'] + [c for c in res_df.columns if c != 'Komanda']
+    
+    # Sakārtojam rindas no jauna, lai Vieta sākas ar 1, 2, 3...
+    res_df = res_df.reset_index(drop=True)
+    res_df.insert(0, 'Vieta', range(1, len(res_df) + 1))
+    
+    cols = ['Vieta', 'Komanda'] + [c for c in res_df.columns if c not in ['Vieta', 'Komanda']]
     return res_df[cols]
 
 # 1. KALENDĀRS
@@ -148,7 +149,6 @@ if rezims == "📅 Kalendārs (Tuvākās 3 dienas)":
 elif rezims == "🏆 Globālie Reitingi":
     st.subheader("🏆 Globālie Reitingi (Pamatlaiks)")
     
-    # Sakārtotas izvēlnes opcijas ar skaidriem tekstiem latviski
     reit_opcijas = {
         "1. perioda vārtu attiecība (Visas spēles)": "1",
         "1. perioda vārtu attiecība (Mājas spēles)": "1h",
@@ -180,44 +180,44 @@ elif rezims == "🏆 Globālie Reitingi":
         if "h" in cmd_lower: sub = sub[sub['majas'] == 1]
         elif "a" in cmd_lower: sub = sub[sub['majas'] == 0]
         res = sub.groupby('komanda')['diff_p1'].sum().reset_index()
-        res.columns = ['komanda', '1.P Vārtu Starpība']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1.P Vārtu Starpība', ascending=False)), use_container_width=True)
+        res.columns = ['komanda', '1. perioda vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
 
     elif cmd_lower == "2":
         res = df.groupby('komanda')['diff_p2'].sum().reset_index()
-        res.columns = ['komanda', '2.P Vārtu Starpība']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2.P Vārtu Starpība', ascending=False)), use_container_width=True)
+        res.columns = ['komanda', '2. perioda vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
 
     elif cmd_lower == "3":
         res = df.groupby('komanda')['diff_p3'].sum().reset_index()
-        res.columns = ['komanda', '3.P Vārtu Starpība']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3.P Vārtu Starpība', ascending=False)), use_container_width=True)
+        res.columns = ['komanda', '3. perioda vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
 
     elif cmd_lower in ["1sog", "2sog", "3sog"]:
         p_num = cmd_lower[0]
         col = f"sog_p{p_num}"
         res = df.groupby('komanda')[col].mean().reset_index()
-        res.columns = ['komanda', f'Vidējie SOG {p_num}.P']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True)
+        res.columns = ['komanda', f'{p_num}. perioda vidējie metieni (SOG)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True, hide_index=True)
 
     elif cmd_lower in ["hot10", "hot5"]:
         n = 10 if "10" in cmd_lower else 5
         res = df.groupby('komanda').tail(n).groupby('komanda')['g_reg'].sum().reset_index()
-        res.columns = ['komanda', f'Gūtie vārti pēd. {n}']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True)
+        res.columns = ['komanda', f'Gūtie vārti pēd. {n} spēlēs']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True, hide_index=True)
 
     elif cmd_lower in ["cold10", "cold5"]:
         n = 10 if "10" in cmd_lower else 5
         res = df.groupby('komanda').tail(n).groupby('komanda')['g_reg'].sum().reset_index()
-        res.columns = ['komanda', f'Gūtie vārti pēd. {n}']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=True)), use_container_width=True)
+        res.columns = ['komanda', f'Gūtie vārti pēd. {n} spēlēs']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=True)), use_container_width=True, hide_index=True)
 
     elif cmd_lower in ["5goalsbad", "5goalsgood"]:
         col_to_sum = 'z_reg' if cmd_lower == "5goalsbad" else 'g_reg'
         res = df.groupby('komanda').apply(lambda g: g.tail(5)[col_to_sum].sum()).reset_index(name='Vārtu skaits')
-        res.columns = ['komanda', 'Vārtu skaits pēd. 5']
+        res.columns = ['komanda', 'Vārtu skaits pēd. 5 spēlēs']
         asc = False if cmd_lower == "5goalsgood" else True
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu skaits pēd. 5', ascending=asc)), use_container_width=True)
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu skaits pēd. 5 spēlēs', ascending=asc)), use_container_width=True, hide_index=True)
 
     elif cmd_lower in ["over10", "over5", "under10", "under5"]:
         n = 10 if "10" in cmd_lower else 5
@@ -226,13 +226,13 @@ elif rezims == "🏆 Globālie Reitingi":
             tail_group = group.tail(n)
             return (tail_group['tot_reg_goals'] > 6.5).sum() if is_over else (tail_group['tot_reg_goals'] < 6.5).sum()
         res = df.groupby('komanda').apply(calc_ou).reset_index(name='Spēļu skaits')
-        res.columns = ['komanda', 'Spēļu skaits']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Spēļu skaits', ascending=False)), use_container_width=True)
+        res.columns = ['komanda', 'Atbilstošo spēļu skaits']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Atbilstošo spēļu skaits', ascending=False)), use_container_width=True, hide_index=True)
 
     elif cmd_lower == "ppleaders":
         res = df.groupby('komanda')['ppg'].sum().reset_index()
         res.columns = ['komanda', 'Vairākumā gūtie vārti']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vairākumā gūtie vārti', ascending=False)), use_container_width=True)
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vairākumā gūtie vārti', ascending=False)), use_container_width=True, hide_index=True)
 
     elif cmd_lower == "pimleaders":
         res = df.groupby('komanda').agg(Kopā=('pim_count', 'sum'), Vidēji=('pim_count', 'mean')).reset_index()
@@ -240,7 +240,7 @@ elif rezims == "🏆 Globālie Reitingi":
         res = res[['komanda', 'Rādītājs', 'Kopā']].sort_values(by='Kopā', ascending=False)
         res.columns = ['komanda', 'Noraidījumi (Kopā un vidēji)', '_sort']
         res = res.drop(columns=['_sort'])
-        st.dataframe(sagatavot_tabulu_izvadei(res), use_container_width=True)
+        st.dataframe(sagatavot_tabulu_izvadei(res), use_container_width=True, hide_index=True)
 
 # 3. KOMANDAS SPECIFISKĀ STATISTIKA
 elif rezims == "📊 Komandas Specifiskā Statistika":
@@ -248,7 +248,6 @@ elif rezims == "📊 Komandas Specifiskā Statistika":
     
     selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
     
-    # Skaidri un saprotami teksti latviski bez tehniskiem saīsinājumiem
     parametru_opcijas = {
         "Kopējā statistika un nākamās spēles": "stats",
         "Mājas spēļu vidējie rādītāji": "h",
@@ -285,7 +284,6 @@ elif rezims == "📊 Komandas Specifiskā Statistika":
                 st.write(f"**Noraidījumi:** {team_df['pim_count'].mean():.1f}")
                 st.write(f"Mājās: {home_df['pim_count'].mean():.1f} | Izbr: {away_df['pim_count'].mean():.1f}")
             
-            # Turpmākās 5 spēles
             if os.path.exists(CSV_KALENDARS):
                 st.markdown("---")
                 st.markdown("#### 📅 Turpmākās spēles:")
@@ -307,7 +305,6 @@ elif rezims == "📊 Komandas Specifiskā Statistika":
         elif mode_key in ['h', 'a']:
             is_home = 1 if mode_key == 'h' else 0
             sub_df = team_df[team_df['majas'] == is_home]
-            loc_txt = "mājas spēlēs" if is_home else "izbraukuma spēlēs"
             st.write(f"**Apskatīto spēļu skaits:** {len(sub_df)}")
             st.write(f"**Vidēji iemestie vārti:** {sub_df['g_reg'].mean():.2f}")
             st.write(f"**Vidēji ielaistie vārti:** {sub_df['z_reg'].mean():.2f}")
