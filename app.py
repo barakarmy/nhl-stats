@@ -101,11 +101,11 @@ def sagatavot_tabulu_izvadei(res_df):
     cols = ['Vieta', 'Komanda'] + [c for c in res_df.columns if c not in ['Vieta', 'Komanda']]
     return res_df[cols]
 
-# === LAPU FUNKCIJAS (Sagatavotas mobilajai versijai ar radio pogām) ===
+# === LAPU FUNKCIJAS (Ar atgrieztām st.selectbox izvēlnēm) ===
 
 def page_1_periods():
-    st.subheader("⏱️ 1. Perioda Statistika")
-    filtrs = st.radio("Izvēlies skatu:", [
+    st.subheader("⏱️️ 1. Perioda Statistika")
+    filtrs = st.selectbox("Izvēlies skatu:", [
         "1. perioda vārtu starpība (Visas spēles)", 
         "1. perioda vārtu starpība (Mājas spēles)", 
         "1. perioda vārtu starpība (Izbraukuma spēles)",
@@ -142,8 +142,8 @@ def page_1_periods():
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
 
 def page_2_periods():
-    st.subheader("⏱️ 2. Perioda Statistika")
-    filtrs = st.radio("Izvēlies skatu:", [
+    st.subheader("⏱️️ 2. Perioda Statistika")
+    filtrs = st.selectbox("Izvēlies skatu:", [
         "2. perioda vārtu starpība (Visas spēles)",
         "2. perioda vārtu starpība (Mājas spēles)",
         "2. perioda vārtu starpība (Izbraukuma spēles)",
@@ -180,7 +180,7 @@ def page_2_periods():
 
 def page_3_periods():
     st.subheader("⏱ 3. Perioda Statistika")
-    filtrs = st.radio("Izvēlies skatu:", [
+    filtrs = st.selectbox("Izvēlies skatu:", [
         "3. perioda vārtu starpība (Visas spēles)",
         "3. perioda vārtu starpība (Mājas spēles)",
         "3. perioda vārtu starpība (Izbraukuma spēles)",
@@ -217,7 +217,7 @@ def page_3_periods():
 
 def page_forma():
     st.subheader("🔥 Komandu Forma un Vārtu Guvumi")
-    filtrs = st.radio("Izvēlies skatu:", [
+    filtrs = st.selectbox("Izvēlies skatu:", [
         "Karstākās komandas (pēd. 5 spēlēs)",
         "Karstākās komandas (pēd. 10 spēlēs)",
         "Aukstākās komandas (pēd. 5 spēlēs)",
@@ -247,7 +247,7 @@ def page_forma():
 
 def page_powerplay():
     st.subheader("⚡ Vairākuma (Powerplay) Līderi")
-    filtrs = st.radio("Izvēlies skatu:", [
+    filtrs = st.selectbox("Izvēlies skatu:", [
         "Vairākuma vārtu līderi (Visas spēles)",
         "Vairākuma vārtu līderi (Mājās - pēd. 5)",
         "Vairākuma vārtu līderi (Mājās - pēd. 10)",
@@ -271,7 +271,7 @@ def page_powerplay():
 
 def page_over_under():
     st.subheader("📈 Spēļu Kopējā Vārtu Summa (Over / Under 6.5)")
-    filtrs = st.radio("Izvēlies skatu:", [
+    filtrs = st.selectbox("Izvēlies skatu:", [
         "Over 6.5 (Visas - pēd. 5)",
         "Over 6.5 (Visas - pēd. 10)",
         "Over 6.5 (Mājās - pēd. 10)",
@@ -299,7 +299,7 @@ def page_over_under():
 
 def page_noraidijumi():
     st.subheader("❌ Noraidījumu (PIM) Līderi")
-    filtrs = st.radio("Izvēlies skatu:", [
+    filtrs = st.selectbox("Izvēlies skatu:", [
         "Vidējie noraidījumi (Visas spēles)",
         "Vidējie noraidījumi pēdējajās 10 spēlēs",
         "Vidējie noraidījumi mājās (PIM H)",
@@ -325,7 +325,6 @@ def page_noraidijumi():
 def page_stats():
     st.subheader("📊 Komandas Analīze")
     
-    # Nolaižamais saraksts paliek komandām (lai telefonā ar tastatūru varētu viegli meklēt)
     selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
     
     parametru_opcijas = {
@@ -338,8 +337,7 @@ def page_stats():
         "Noraidījumu vēsture pēdējajās 5 spēlēs": "pimlast5"
     }
     
-    # Šeit gan izmantojam radio, lai nelec ārā tastatūra izvēloties parametru
-    stat_izvele = st.radio("Izvēlies parametru:", list(parametru_opcijas.keys()))
+    stat_izvele = st.selectbox("Izvēlies parametru:", list(parametru_opcijas.keys()))
     mode_key = parametru_opcijas[stat_izvele]
     
     team_df = df[df['komanda'] == selected_team]
