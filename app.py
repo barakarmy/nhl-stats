@@ -3,11 +3,11 @@ import streamlit as st
 import os
 from datetime import datetime
 
-# Failu nosaukumi (jābūt vienā mapē ar app.py uz GitHub)
+# Failu nosaukumi
 CSV_FAILS = "nhl_sezona.csv"
 CSV_KALENDARS = "nhl_kalendars.csv"
 
-# Oficiālā NHL komandu vārdnīca (Saīsinājums -> Pilns nosaukums)
+# Oficiālā NHL komandu vārdnīca
 NHL_KOMANDAS = {
     "ANA": "Anaheim Ducks", "BOS": "Boston Bruins", "BUF": "Buffalo Sabres",
     "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes", "CHI": "Chicago Blackhawks",
@@ -99,14 +99,12 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-# Sānjoslas izvēlne
+# Sānjoslas izvēlne - saglabātas tikai vajadzīgās sadaļas
 st.sidebar.header("Navigācija")
 rezims = st.sidebar.selectbox("Izvēlies sadaļu", [
     "📅 Kalendārs (Tuvākās 3 dienas)", 
     "🏆 Globālie Reitingi", 
-    "📊 Komandas Specifiskā Statistika", 
-    "📋 Palīdzība un Info",
-    "🏒 Komandu Saraksts"
+    "📊 Komandas Specifiskā Statistika"
 ])
 
 def sagatavot_tabulu_izvadei(res_df):
@@ -149,17 +147,33 @@ if rezims == "📅 Kalendārs (Tuvākās 3 dienas)":
 # 2. GLOBĀLIE REITINGI
 elif rezims == "🏆 Globālie Reitingi":
     st.subheader("🏆 Globālie Reitingi (Pamatlaiks)")
-    reit_izvele = st.selectbox("Izvēlies reitinga filtru:", [
-        "1 (1.P vārtu attiecība - Visas)", "1h (1.P vārtu attiecība - Mājās)", "1a (1.P vārtu attiecība - Izbraukumā)",
-        "2 (2.P vārtu attiecība - Visas)", "3 (3.P vārtu attiecība - Visas)",
-        "1sog", "2sog", "3sog",
-        "hot5", "hot10", "cold5", "cold10",
-        "5goalsgood", "5goalsbad",
-        "over5", "over10", "under5", "under10",
-        "ppleaders", "ppleaders5", "pimleaders"
-    ])
     
-    cmd_lower = reit_izvele.split()[0].lower()
+    # Sakārtotas izvēlnes opcijas ar skaidriem tekstiem latviski
+    reit_opcijas = {
+        "1. perioda vārtu attiecība (Visas spēles)": "1",
+        "1. perioda vārtu attiecība (Mājas spēles)": "1h",
+        "1. perioda vārtu attiecība (Izbraukuma spēles)": "1a",
+        "2. perioda vārtu attiecība (Visas spēles)": "2",
+        "3. perioda vārtu attiecība (Visas spēles)": "3",
+        "1. perioda vidējie metieni (SOG)": "1sog",
+        "2. perioda vidējie metieni (SOG)": "2sog",
+        "3. perioda vidējie metieni (SOG)": "3sog",
+        "Karstākās komandas (gūtie vārti pēd. 5)": "hot5",
+        "Karstākās komandas (gūtie vārti pēd. 10)": "hot10",
+        "Aukstākās komandas (pēd. 5)": "cold5",
+        "Aukstākās komandas (pēd. 10)": "cold10",
+        "Visvairāk ielaiž (pēd. 5 spēlēs)": "5goalsbad",
+        "Visvairāk iemet (pēd. 5 spēlēs)": "5goalsgood",
+        "Over 6.5 biežāk (pēd. 5 spēlēs)": "over5",
+        "Over 6.5 biežāk (pēd. 10 spēlēs)": "over10",
+        "Under 6.5 biežāk (pēd. 5 spēlēs)": "under5",
+        "Under 6.5 biežāk (pēd. 10 spēlēs)": "under10",
+        "Vairākuma vārtu līderi (PPG)": "ppleaders",
+        "Noraidījumu līderi (PIM)": "pimleaders"
+    }
+    
+    izveletais_teksts = st.selectbox("Izvēlies reitinga filtru:", list(reit_opcijas.keys()))
+    cmd_lower = reit_opcijas[izveletais_teksts]
     
     if cmd_lower in ["1", "1h", "1a"]:
         sub = df
@@ -233,7 +247,18 @@ elif rezims == "📊 Komandas Specifiskā Statistika":
     st.subheader("📊 Komandas Analīze")
     
     selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
-    stat_mode = st.selectbox("Izvēlies parametru:", ["stats (Kopējā stat + nākotne)", "h (Mājas vidējie)", "a (Izbraukuma vidējie)", "last5 (Pēdējās 5 spēles)", "pimlast5 (Noraidījumu vēsture pēd. 5)"])
+    
+    # Skaidri un saprotami teksti latviski bez tehniskiem saīsinājumiem
+    parametru_opcijas = {
+        "Kopējā statistika un nākamās spēles": "stats",
+        "Mājas spēļu vidējie rādītāji": "h",
+        "Izbraukuma spēļu vidējie rādītāji": "a",
+        "Pēdējo 5 spēļu statistika": "last5",
+        "Noraidījumu vēsture pēdējajās 5 spēlēs": "pimlast5"
+    }
+    
+    stat_izvele = st.selectbox("Izvēlies parametru:", list(parametru_opcijas.keys()))
+    mode_key = parametru_opcijas[stat_izvele]
     
     team_df = df[df['komanda'] == selected_team]
     pilns_n = pilns_nosaukums(selected_team)
@@ -241,8 +266,7 @@ elif rezims == "📊 Komandas Specifiskā Statistika":
     if team_df.empty:
         st.warning("Šai komandai nav datu bāzē.")
     else:
-        mode_key = stat_mode.split()[0]
-        st.markdown(choice_txt := f"### Statistika komandai: {pilns_n} ({selected_team})")
+        st.markdown(f"### Komanda: {pilns_n} ({selected_team})")
         
         if mode_key == 'stats':
             total_games = len(team_df)
@@ -273,7 +297,7 @@ elif rezims == "📊 Komandas Specifiskā Statistika":
                 if not nakotnes_speles.empty:
                     for _, r in nakotnes_speles.iterrows():
                         is_home = r['majas_komanda'] == selected_team
-                        H_vai_A = "H" if is_home else "A"
+                        H_vai_A = "Mājās" if is_home else "Izbraukumā"
                         pretinieka_kods = r['viesu_komanda'] if is_home else r['majas_komanda']
                         pretinieka_viss = pilns_nosaukums(pretinieka_kods)
                         st.text(f"• {r['datums']} vs {pretinieka_viss} ({pretinieka_kods}) [{H_vai_A}]")
@@ -284,38 +308,22 @@ elif rezims == "📊 Komandas Specifiskā Statistika":
             is_home = 1 if mode_key == 'h' else 0
             sub_df = team_df[team_df['majas'] == is_home]
             loc_txt = "mājas spēlēs" if is_home else "izbraukuma spēlēs"
-            st.write(f"Apskatīto spēļu skaits: {len(sub_df)}")
-            st.write(f"Vidēji iemestie vārti: {sub_df['g_reg'].mean():.2f}")
-            st.write(f"Vidēji ielaistie vārti: {sub_df['z_reg'].mean():.2f}")
-            st.write(f"Vidējās soda minūtes (PIM): {sub_df['pim_tot'].mean():.2f}")
+            st.write(f"**Apskatīto spēļu skaits:** {len(sub_df)}")
+            st.write(f"**Vidēji iemestie vārti:** {sub_df['g_reg'].mean():.2f}")
+            st.write(f"**Vidēji ielaistie vārti:** {sub_df['z_reg'].mean():.2f}")
+            st.write(f"**Vidējās soda minūtes (PIM):** {sub_df['pim_tot'].mean():.2f}")
 
         elif mode_key == 'last5':
             sub_5 = team_df.tail(5)
-            st.write(f"Vārtu guvumi (vidēji): {sub_5['g_reg'].mean():.2f}")
-            st.write(f"Ielaistie vārti (vidēji): {sub_5['z_reg'].mean():.2f}")
-            st.write(f"Vairākumā iemestie vārti (vidēji): {sub_5['ppg'].mean():.2f}")
-            st.write(f"Noraidījumi (vidēji): {sub_5['pim_count'].mean():.1f} ({sub_5['pim_tot'].mean():.1f} min)")
+            st.write(f"**Vārtu guvumi (vidēji):** {sub_5['g_reg'].mean():.2f}")
+            st.write(f"**Ielaistie vārti (vidēji):** {sub_5['z_reg'].mean():.2f}")
+            st.write(f"**Vairākumā iemestie vārti (vidēji):** {sub_5['ppg'].mean():.2f}")
+            st.write(f"**Noraidījumi (vidēji):** {sub_5['pim_count'].mean():.1f} ({sub_5['pim_tot'].mean():.1f} minūtes)")
 
         elif mode_key == 'pimlast5':
             sub_df = team_df.tail(5)
             for _, r in sub_df.iterrows():
-                viesi_majas = "H" if r['majas'] == 1 else "A"
+                viesi_majas = "Mājās" if r['majas'] == 1 else "Izbraukumā"
                 d_str = pd.to_datetime(r['datums']).strftime('%Y-%m-%d')
                 pret_viss = pilns_nosaukums(r['pretinieks'])
                 st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
-
-# 4. PALĪDZĪBA
-elif rezims == "📋 Palīdzība un Info":
-    st.subheader("📋 Lietošanas Ceļvedis")
-    st.markdown("""
-    Šis rīks analizē NHL komandu sniegumu, balstoties uz oficiālajiem API datiem (tikai pamatlaiks).
-    * **Kalendārs:** Parāda tuvāko 3 dienu spēļu sarakstu ar dienām latviešu valodā.
-    * **Globālie Reitingi:** Ļauj filtrēt līgas komandas pēc periodu vārtu starpības, metieniem, formas un vairākuma rādītājiem.
-    * **Komandas Statistika:** Izvēlies konkrētu komandu, lai redzētu tās vispārējos rādītājus, noraidījumus un nākamo 5 spēļu kalendāru.
-    """)
-
-# 5. KOMANDU SARAKSTS
-elif rezims == "🏒 Komandu Saraksts":
-    st.subheader("🏒 NHL Komandu Saīsinājumi")
-    komandu_df = pd.DataFrame(list(NHL_KOMANDAS.items()), columns=["Saīsinājums", "Pilns Nosaukums"])
-    st.dataframe(komandu_df, use_container_width=True)
