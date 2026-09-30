@@ -88,7 +88,6 @@ def sagatavot_vienoto_tabulu(df):
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
 
-# CSS stils, kas pārveido sānjoslas pogas par parastu tekstu bez rāmjiem
 st.markdown("""
     <style>
     div[data-testid="stSidebar"] button {
@@ -117,11 +116,9 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-# Sesijas atmiņa, lai saglabātu izvēlēto lapu
 if 'rezims' not in st.session_state:
     st.session_state.rezims = "1. Periods"
 
-# Navigācijas pogas kā uzspiežams teksts
 st.sidebar.markdown("### Sadaļas")
 if st.sidebar.button("1. Periods", use_container_width=True): st.session_state.rezims = "1. Periods"
 if st.sidebar.button("2. Periods", use_container_width=True): st.session_state.rezims = "2. Periods"
@@ -374,7 +371,9 @@ elif rezims == "Komandas Statistika":
         "Kopējā statistika un nākamās spēles": "stats",
         "Mājas spēļu vidējie rādītāji": "h",
         "Izbraukuma spēļu vidējie rādītāji": "a",
-        "Pēdējo 5 spēļu statistika": "last5",
+        "Pēdējo 5 spēļu statistika (Visas)": "last5",
+        "Pēdējo 5 mājas spēļu statistika": "last5h",
+        "Pēdējo 5 izbraukuma spēļu statistika": "last5a",
         "Noraidījumu vēsture pēdējajās 5 spēlēs": "pimlast5"
     }
     
@@ -437,7 +436,24 @@ elif rezims == "Komandas Statistika":
             st.write(f"**Vārtu guvumi (vidēji):** {sub_5['g_reg'].mean():.2f}")
             st.write(f"**Ielaistie vārti (vidēji):** {sub_5['z_reg'].mean():.2f}")
             st.write(f"**Vairākumā iemestie vārti (vidēji):** {sub_5['ppg'].mean():.2f}")
+            if 'ppg_allowed' in sub_5.columns:
+                st.write(f"**Vairākumā ielaistie vārti (vidēji):** {sub_5['ppg_allowed'].mean():.2f}")
             st.write(f"**Noraidījumi (vidēji):** {sub_5['pim_count'].mean():.1f} ({sub_5['pim_tot'].mean():.1f} minūtes)")
+
+        elif mode_key in ['last5h', 'last5a']:
+            is_home = 1 if mode_key == 'last5h' else 0
+            sub_5 = team_df[team_df['majas'] == is_home].tail(5)
+            loc_text = "mājas" if is_home else "izbraukuma"
+            
+            if sub_5.empty:
+                st.info(f"Nav atrastas {loc_text} spēles šai komandai.")
+            else:
+                st.write(f"**Vārtu guvumi (vidēji):** {sub_5['g_reg'].mean():.2f}")
+                st.write(f"**Ielaistie vārti (vidēji):** {sub_5['z_reg'].mean():.2f}")
+                st.write(f"**Vairākumā iemestie vārti (vidēji):** {sub_5['ppg'].mean():.2f}")
+                if 'ppg_allowed' in sub_5.columns:
+                    st.write(f"**Vairākumā ielaistie vārti (vidēji):** {sub_5['ppg_allowed'].mean():.2f}")
+                st.write(f"**Noraidījumi (vidēji):** {sub_5['pim_count'].mean():.1f} ({sub_5['pim_tot'].mean():.1f} minūtes)")
 
         elif mode_key == 'pimlast5':
             sub_df = team_df.tail(5)
