@@ -4,7 +4,11 @@ import os
 from datetime import datetime
 import modelis  # Importējam mūsu prognožu modeli
 
-st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
+st.set_page_config(
+    page_title="NHL Analītiskais Terminālis", 
+    layout="wide", 
+    initial_sidebar_state="collapsed"  # <--- Šis automātiski paslēpj sānjoslu malā!
+)
 
 CSV_FAILS = "nhl_sezona.csv"
 CSV_KALENDARS = "nhl_kalendars.csv"
