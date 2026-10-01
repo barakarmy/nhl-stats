@@ -106,6 +106,39 @@ if raw_df is None:
 df = sagatavot_vienoto_tabulu(raw_df)
 
 # --- HORIZONTĀLĀ NAVIGĀCIJA LAPAS AUGŠPUSĒ ---
+st.markdown("""
+    <style>
+    /* Noņemam atstarpes starp kolonnām un pogām, lai tās veidotu vienotu joslu */
+    div[data-testid="stHorizontalBlock"] {
+        gap: 0px !important;
+    }
+    div[data-testid="column"] {
+        margin: 0px !important;
+        padding: 0px !important;
+    }
+    div[data-testid="stColumn"] button {
+        border-radius: 0 !important;
+        width: 100% !important;
+        border-right: 0px !important;
+        white-space: nowrap !important; 
+        line-height: 1.2 !important;
+        text-align: center !important;
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+        font-size: 14px !important;
+    }
+    div[data-testid="stColumn"]:first-child button { 
+        border-top-left-radius: 6px !important; 
+        border-bottom-left-radius: 6px !important; 
+    }
+    div[data-testid="stColumn"]:last-child button {
+        border-top-right-radius: 6px !important;
+        border-bottom-right-radius: 6px !important;
+        border-right: 1px solid rgba(49, 51, 63, 0.2) !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 menu_options = [
     "🎯 Prognozes", 
     "1. Periods", 
@@ -120,23 +153,29 @@ menu_options = [
     "Rezultāti"
 ]
 
-# Izmantojam st.radio ar horizontal=True, lai izveidotu glītas pogas augšpusē
-rezims = st.radio("Izvēlies sadaļu:", menu_options, horizontal=True, label_visibility="collapsed")
+if 'rezims' not in st.session_state:
+    st.session_state.rezims = "🎯 Prognozes"
+
+def iestatit_rezimu(r):
+    st.session_state.rezims = r
+
+# Sadalām ekrānu tik kolonnās, cik mums ir sadaļas (11 kolonnas)
+nav_cols = st.columns(len(menu_options))
+
+for idx, opcija in enumerate(menu_options):
+    btn_type = "primary" if st.session_state.rezims == opcija else "secondary"
+    nav_cols[idx].button(
+        opcija, 
+        key=f"nav_{idx}", 
+        type=btn_type, 
+        on_click=iestatit_rezimu, 
+        args=(opcija,), 
+        width='stretch'
+    )
+
+rezims = st.session_state.rezims
 
 st.markdown("---")
-
-def sagatavot_tabulu_izvadei(res_df):
-    res_df = res_df.copy()
-    if 'komanda' in res_df.columns:
-        res_df['Komanda'] = res_df['komanda'].apply(pilns_nosaukums)
-        res_df = res_df.drop(columns=['komanda'])
-    
-    res_df = res_df.reset_index(drop=True)
-    res_df.insert(0, 'Vieta', range(1, len(res_df) + 1))
-    
-    cols = ['Vieta', 'Komanda'] + [c for c in res_df.columns if c not in ['Vieta', 'Komanda']]
-    return res_df[cols]
-
 # === LAPU SATURS ===
 
 if rezims == "🎯 Prognozes":
