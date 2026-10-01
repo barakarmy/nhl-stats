@@ -242,9 +242,9 @@ elif rezims == "1. Periods":
         "1. perioda vārtu starpība (Visas spēles)", 
         "1. perioda vārtu starpība (Mājas spēles)", 
         "1. perioda vārtu starpība (Izbraukuma spēles)",
-        "1. perioda vārtu starpība pēdējajās 10 spēlēs (Visas)",
-        "1. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
-        "1. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
+        "1. perioda vārtu starpība pēdējās 10 spēlēs (Visas)",
+        "1. perioda vārtu starpība pēdējās 10 spēlēs (Mājās)",
+        "1. perioda vārtu starpība pēdējās 10 spēlēs (Izbraukumā)",
         "1. perioda vidējie metieni (SOG)"
     ], label_visibility="collapsed")
     
@@ -280,9 +280,9 @@ elif rezims == "2. Periods":
         "2. perioda vārtu starpība (Visas spēles)",
         "2. perioda vārtu starpība (Mājas spēles)",
         "2. perioda vārtu starpība (Izbraukuma spēles)",
-        "2. perioda vārtu starpība pēdējajās 10 spēlēs (Visas)",
-        "2. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
-        "2. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
+        "2. perioda vārtu starpība pēdējās 10 spēlēs (Visas)",
+        "2. perioda vārtu starpība pēdējās 10 spēlēs (Mājās)",
+        "2. perioda vārtu starpība pēdējās 10 spēlēs (Izbraukumā)",
         "2. perioda vidējie metieni (SOG)"
     ], label_visibility="collapsed")
     if "pēdējajās 10 spēlēs" in filtrs:
@@ -317,9 +317,9 @@ elif rezims == "3. Periods":
         "3. perioda vārtu starpība (Visas spēles)",
         "3. perioda vārtu starpība (Mājas spēles)",
         "3. perioda vārtu starpība (Izbraukuma spēles)",
-        "3. perioda vārtu starpība pēdējajās 10 spēlēs (Visas)",
-        "3. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
-        "3. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
+        "3. perioda vārtu starpība pēdējās 10 spēlēs (Visas)",
+        "3. perioda vārtu starpība pēdējās 10 spēlēs (Mājās)",
+        "3. perioda vārtu starpība pēdējās 10 spēlēs (Izbraukumā)",
         "3. perioda vidējie metieni (SOG)"
     ], label_visibility="collapsed")
     if "pēdējajās 10 spēlēs" in filtrs:
@@ -351,12 +351,12 @@ elif rezims == "3. Periods":
 elif rezims == "Forma un Vārti":
     st.subheader("🔥 Komandu Forma un Vārtu Guvumi")
     filtrs = st.selectbox("Izvēlies skatu:", [
-        "Karstākās komandas (pēd. 5 spēlēs)",
-        "Karstākās komandas (pēd. 10 spēlēs)",
-        "Aukstākās komandas (pēd. 5 spēlēs)",
-        "Aukstākās komandas (pēd. 10 spēlēs)",
-        "Visvairāk iemet (pēd. 5 spēlēs)",
-        "Visvairāk ielaiž (pēd. 5 spēlēs)"
+        "Karstākās komandas pēdējās 5 spēlēs",
+        "Karstākās komandas pēdējās 10 spēlēs",
+        "Aukstākās komandas pēdējās 5 spēlēs",
+        "Aukstākās komandas pēdējās 10 spēlēs",
+        "Visvairāk iemet pēdējās 5 spēlēs",
+        "Visvairāk ielaiž pēdējās 5 spēlēs"
     ], label_visibility="collapsed")
     
     if "Karstākās" in filtrs:
@@ -382,10 +382,10 @@ elif rezims == "Powerplay":
     st.subheader("⚡ Vairākuma (Powerplay) Līderi")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "Vairākuma vārtu līderi (Visas spēles)",
-        "Vairākuma vārtu līderi (Mājās - pēd. 5)",
-        "Vairākuma vārtu līderi (Mājās - pēd. 10)",
-        "Vairākuma vārtu līderi (Izbraukumā - pēd. 5)",
-        "Vairākuma vārtu līderi (Izbraukumā - pēd. 10)"
+        "Vairākuma vārtu līderi pēdējās 5 spēles (Mājās)",
+        "Vairākuma vārtu līderi pēdējās 10 spēles (Mājās)",
+        "Vairākuma vārtu līderi pēdējās 5 spēles (Izbraukumā)",
+        "Vairākuma vārtu līderi pēdējās 10 spēles (Izbraukumā)"
     ], label_visibility="collapsed")
     
     sub = df
@@ -405,14 +405,14 @@ elif rezims == "Powerplay":
 elif rezims == "Over / Under":
     st.subheader("📈 Spēļu Kopējā Vārtu Summa (Over / Under 6.5)")
     filtrs = st.selectbox("Izvēlies skatu:", [
-        "Over 6.5 (Visas - pēd. 5)",
-        "Over 6.5 (Visas - pēd. 10)",
-        "Over 6.5 (Mājās - pēd. 10)",
-        "Over 6.5 (Izbraukumā - pēd. 10)",
-        "Under 6.5 (Visas - pēd. 5)",
-        "Under 6.5 (Visas - pēd. 10)",
-        "Under 6.5 (Mājās - pēd. 10)",
-        "Under 6.5 (Izbraukumā - pēd. 10)"
+        "Over 6.5 pēdējās 5 spēles (Visas)",
+        "Over 6.5 pēdējās 10 spēles (Visas)",
+        "Over 6.5 pēdējās 10 spēles (Mājās)",
+        "Over 6.5 pēdējās 10 spēles (Izbraukumā)",
+        "Under 6.5 pēdējās 5 spēles (Visas)",
+        "Under 6.5 pēdējās 10 spēles (Visas)",
+        "Under 6.5 pēdējās 10 spēles (Mājās)",
+        "Under 6.5 pēdējās 10 spēles (Izbraukumā)"
     ], label_visibility="collapsed")
     
     n = 10 if "10" in filtrs else 5
@@ -434,9 +434,9 @@ elif rezims == "Noraidījumi":
     st.subheader("❌ Noraidījumu Līderi")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "Vidējie noraidījumi (Visas spēles)",
-        "Vidējie noraidījumi pēdējajās 10 spēlēs",
-        "Vidējie noraidījumi mājās",
-        "Vidējie noraidījumi izbraukumā"
+        "Vidējie noraidījumi pēdējās 10 spēles",
+        "Vidējie noraidījumi Mājās",
+        "Vidējie noraidījumi Izbraukumā"
     ], label_visibility="collapsed")
     
     if "10 spēlēs" in filtrs:
