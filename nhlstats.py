@@ -122,13 +122,13 @@ def main():
                     continue
 
                 if kom == home_team:
-                    speles_dati["home_pim_total"] += ilgums
-                    if p_num in [1, 2, 3]: speles_dati[f"home_pim_p{p_num}"] += ilgums
-                    elif p_num > 3: speles_dati["home_pim_ot"] += ilgums
+                    speles_dati["home_pim_total"] += 1
+                    if p_num in [1, 2, 3]: speles_dati[f"home_pim_p{p_num}"] += 1
+                    elif p_num > 3: speles_dati["home_pim_ot"] += 1
                 elif kom == away_team:
-                    speles_dati["away_pim_total"] += ilgums
-                    if p_num in [1, 2, 3]: speles_dati[f"away_pim_p{p_num}"] += ilgums
-                    elif p_num > 3: speles_dati["away_pim_ot"] += ilgums
+                    speles_dati["away_pim_total"] += 1
+                    if p_num in [1, 2, 3]: speles_dati[f"away_pim_p{p_num}"] += 1
+                    elif p_num > 3: speles_dati["away_pim_ot"] += 1
 
         # 3. METIENI PA PERIODIEM
         plays = d_pbp.get("plays", [])
