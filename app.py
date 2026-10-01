@@ -25,7 +25,7 @@ NHL_KOMANDAS = {
 def pilns_nosaukums(saisinajums):
     return NHL_KOMANDAS.get(saisinajums.upper(), saisinajums.upper())
 
-# Funkcija, kas automātiski atjauno datus, ja CSV fails ir mainīts
+# Funkcija sezona datiem ar automātisku laika maiņu
 @st.cache_data
 def ielasit_datus(file_mtime):
     try:
@@ -431,9 +431,10 @@ elif rezims == "Komandas Statistika":
                 st.markdown("---")
                 st.markdown("#### 📅 Turpmākās spēles:")
                 df_k = pd.read_csv(CSV_KALENDARS)
+                df_k['datums_dt'] = pd.to_datetime(df_k['datums']) + pd.Timedelta(days=1)
                 komandas_speles = df_k[(df_k['majas_komanda'] == selected_team) | (df_k['viesu_komanda'] == selected_team)]
                 sodiena_str = datetime.now().strftime('%Y-%m-%d')
-                nakotnes_speles = komandas_speles[komandas_speles['datums'] >= sodiena_str].head(5)
+                nakotnes_speles = komandas_speles[komandas_speles['datums_dt'].dt.strftime('%Y-%m-%d') >= sodiena_str].head(5)
                 
                 if not nakotnes_speles.empty:
                     for _, r in nakotnes_speles.iterrows():
@@ -441,7 +442,8 @@ elif rezims == "Komandas Statistika":
                         H_vai_A = "Mājās" if is_home else "Izbraukumā"
                         pretinieka_kods = r['viesu_komanda'] if is_home else r['majas_komanda']
                         pretinieka_viss = pilns_nosaukums(pretinieka_kods)
-                        st.text(f"• {r['datums']} vs {pretinieka_viss} ({pretinieka_kods}) [{H_vai_A}]")
+                        d_fmt = r['datums_dt'].strftime('%d-%m-%Y')
+                        st.text(f"• {d_fmt} vs {pretinieka_viss} ({pretinieka_kods}) [{H_vai_A}]")
                 else:
                     st.info("Kalendārā nav atrastu nākamo spēļu.")
 
@@ -481,7 +483,7 @@ elif rezims == "Komandas Statistika":
             sub_df = team_df.tail(5)
             for _, r in sub_df.iterrows():
                 viesi_majas = "Mājās" if r['majas'] == 1 else "Izbraukumā"
-                d_str = pd.to_datetime(r['datums']).strftime('%Y-%m-%d')
+                d_str = pd.to_datetime(r['datums']).strftime('%d-%m-%Y')
                 pret_viss = pilns_nosaukums(r['pretinieks'])
                 st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
 
@@ -494,17 +496,20 @@ elif rezims == "Kalendārs":
             df_k = pd.read_csv(CSV_KALENDARS)
             sodiena = datetime.now().date()
             beigu_diena = sodiena + pd.Timedelta(days=3)
-            df_k['datums_dt'] = pd.to_datetime(df_k['datums']).dt.date
-            tuvakas_speles = df_k[(df_k['datums_dt'] >= sodiena) & (df_k['datums_dt'] < beigu_diena)]
+            # Pieliekam +1 dienu arī kalendāram, lai sakristu ar Latvijas laiku
+            df_k['datums_dt'] = pd.to_datetime(df_k['datums']) + pd.Timedelta(days=1)
+            df_k['datums_val'] = df_k['datums_dt'].dt.date
+            
+            tuvakas_speles = df_k[(df_k['datums_val'] >= sodiena) & (df_k['datums_val'] < beigu_diena)]
             
             if tuvakas_speles.empty:
                 st.info("Tuvākajās 3 dienās nav paredzētu spēļu.")
             else:
                 dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
-                for datums, grupa in tuvakas_speles.groupby('datums'):
-                    dt_obj = datetime.strptime(datums, '%Y-%m-%d')
-                    diena_lv = dienu_tulkojums.get(dt_obj.strftime('%A'), dt_obj.strftime('%A'))
-                    st.markdown(f"**📌 Datums: {datums} ({diena_lv})**")
+                for datums_obj, grupa in tuvakas_speles.groupby('datums_val'):
+                    dt_str_lv = datums_obj.strftime('%d-%m-%Y')
+                    diena_lv = dienu_tulkojums.get(datums_obj.strftime('%A'), datums_obj.strftime('%A'))
+                    st.markdown(f"**📌 Datums: {dt_str_lv} ({diena_lv})**")
                     for _, r in grupa.iterrows():
                         viesis = pilns_nosaukums(r['viesu_komanda'])
                         majas = pilns_nosaukums(r['majas_komanda'])
@@ -559,7 +564,6 @@ elif rezims == "Rezultāti":
     
     dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
     
-    # Automātiski nosakām centrālo datumu (šodiena vai pēdējā diena CSV failā ar +1 dienas korekciju)
     if raw_df is not None and not raw_df.empty:
         max_date_in_csv = raw_df['datums'].max().date()
         today = datetime.today().date()
@@ -571,8 +575,6 @@ elif rezims == "Rezultāti":
         st.session_state.res_date_offset = 0
         
     center_date = base_center_date + pd.Timedelta(days=st.session_state.res_date_offset)
-    
-    # 7 dienu logs: 3 dienas pa kreisi, centrs, 3 dienas pa labi
     dates = [center_date + pd.Timedelta(days=i) for i in range(-3, 4)]
     
     if 'selected_res_date' not in st.session_state:
@@ -598,7 +600,7 @@ elif rezims == "Rezultāti":
     cols[8].button("❯", on_click=change_offset, args=(7,), key="next_w", use_container_width=True)
     
     st.markdown("---")
-    st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d.%m.%Y')} ({dienu_tulkojums.get(st.session_state.selected_res_date.strftime('%A'), '')})")
+    st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d-%m-%Y')} ({dienu_tulkojums.get(st.session_state.selected_res_date.strftime('%A'), '')})")
 
     if raw_df is not None and not raw_df.empty:
         dienas_speles = raw_df[raw_df['datums'].dt.date == st.session_state.selected_res_date]
