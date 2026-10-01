@@ -14,6 +14,31 @@ NHL_KOMANDAS = {
     "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets", "DAL": "Dallas Stars",
     "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers", "FLA": "Florida Panthers",
     "LAK": "Los Angeles Kings", "MIN": "Minnesota Wild", "MTL": "Montreal Canadiens",
+    "NSH": "Nashville Predators", "NJD": "New JerseyŠis paziņojums konsolē nav saistīts ar pogu izkārtojumu vai kalendāru, bet gan ar to, ka nesenajā Streamlit atjauninājumā ir mainījies sintakses standarts. 
+
+Paziņojums norāda, ka parametrs `use_container_width=True` pogām (un citiem elementiem) tiek pakāpeniski aizstāts ar vienkāršāku parametru `width='stretch'`. Tāpēc konsole izmet šo brīdinājumu, lai tu laicīgi to nomainītu.
+
+Mēs varam uzreiz visās pogās nomainīt veco parametru pret jauno, kas arī reizē sakārtos pogu kodu un novērsīs šos paziņojumus konsolē.
+
+Lūk, atjauninātais `app.py` kods, kurā pogām ir nomainīts `use_container_width=True` uz `width='stretch'`:
+
+```python
+import pandas as pd
+import streamlit as st
+import os
+from datetime import datetime
+
+st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
+
+CSV_FAILS = "nhl_sezona.csv"
+CSV_KALENDARS = "nhl_kalendars.csv"
+
+NHL_KOMANDAS = {
+    "ANA": "Anaheim Ducks", "BOS": "Boston Bruins", "BUF": "Buffalo Sabres",
+    "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes", "CHI": "Chicago Blackhawks",
+    "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets", "DAL": "Dallas Stars",
+    "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers", "FLA": "Florida Panthers",
+    "LAK": "Los Angeles Kings", "MIN": "Minnesota Wild", "MTL": "Montreal Canadiens",
     "NSH": "Nashville Predators", "NJD": "New Jersey Devils", "NYI": "New York Islanders",
     "NYR": "New York Rangers", "OTT": "Ottawa Senators", "PHI": "Philadelphia Flyers",
     "PIT": "Pittsburgh Penguins", "SJS": "San Jose Sharks", "SEA": "Seattle Kraken",
@@ -126,23 +151,23 @@ if 'rezims' not in st.session_state:
 
 # --- SĀNJOSLAS NAVIGĀCIJA ---
 st.sidebar.markdown("### 🏠 Sākumlapa")
-if st.sidebar.button("🎯 Prognozes", use_container_width=True): st.session_state.rezims = "Prognozes"
+if st.sidebar.button("🎯 Prognozes", width='stretch'): st.session_state.rezims = "Prognozes"
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Datu Filtri")
-if st.sidebar.button("1. Periods", use_container_width=True): st.session_state.rezims = "1. Periods"
-if st.sidebar.button("2. Periods", use_container_width=True): st.session_state.rezims = "2. Periods"
-if st.sidebar.button("3. Periods", use_container_width=True): st.session_state.rezims = "3. Periods"
-if st.sidebar.button("Forma un Vārti", use_container_width=True): st.session_state.rezims = "Forma un Vārti"
-if st.sidebar.button("Over / Under", use_container_width=True): st.session_state.rezims = "Over / Under"
-if st.sidebar.button("Powerplay", use_container_width=True): st.session_state.rezims = "Powerplay"
-if st.sidebar.button("Noraidījumi", use_container_width=True): st.session_state.rezims = "Noraidījumi"
+if st.sidebar.button("1. Periods", width='stretch'): st.session_state.rezims = "1. Periods"
+if st.sidebar.button("2. Periods", width='stretch'): st.session_state.rezims = "2. Periods"
+if st.sidebar.button("3. Periods", width='stretch'): st.session_state.rezims = "3. Periods"
+if st.sidebar.button("Forma un Vārti", width='stretch'): st.session_state.rezims = "Forma un Vārti"
+if st.sidebar.button("Over / Under", width='stretch'): st.session_state.rezims = "Over / Under"
+if st.sidebar.button("Powerplay", width='stretch'): st.session_state.rezims = "Powerplay"
+if st.sidebar.button("Noraidījumi", width='stretch'): st.session_state.rezims = "Noraidījumi"
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Komandas un Spēles")
-if st.sidebar.button("Komandas Statistika", use_container_width=True): st.session_state.rezims = "Komandas Statistika"
-if st.sidebar.button("Kalendārs", use_container_width=True): st.session_state.rezims = "Kalendārs"
-if st.sidebar.button("Rezultāti", use_container_width=True): st.session_state.rezims = "Rezultāti"
+if st.sidebar.button("Komandas Statistika", width='stretch'): st.session_state.rezims = "Komandas Statistika"
+if st.sidebar.button("Kalendārs", width='stretch'): st.session_state.rezims = "Kalendārs"
+if st.sidebar.button("Rezultāti", width='stretch'): st.session_state.rezims = "Rezultāti"
 
 rezims = st.session_state.rezims
 
@@ -586,7 +611,7 @@ elif rezims == "Rezultāti":
         st.session_state.selected_res_date = d
 
     cols = st.columns(9)
-    cols[0].button("❮", on_click=change_offset, args=(-7,), key="prev_w", use_container_width=True)
+    cols[0].button("❮", on_click=change_offset, args=(-7,), width='stretch')
     
     for idx, d in enumerate(dates):
         d_str = d.strftime("%d.%m")
@@ -594,9 +619,9 @@ elif rezims == "Rezultāti":
         btn_label = f"{d_str}\n{d_weekday}"
         
         btn_style = "primary" if d == st.session_state.selected_res_date else "secondary"
-        cols[idx+1].button(btn_label, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,), use_container_width=True)
+        cols[idx+1].button(btn_label, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,), width='stretch')
         
-    cols[8].button("❯", on_click=change_offset, args=(-7,), key="next_w", use_container_width=True)
+    cols[8].button("❯", on_click=change_offset, args=(-7,), width='stretch')
     
     st.markdown("---")
     st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d-%m-%Y')} ({dienu_tulkojums.get(st.session_state.selected_res_date.strftime('%A'), '')})")
@@ -638,7 +663,6 @@ elif rezims == "Rezultāti":
                 score_str = f"{ag}-{hg}{winner}".strip()
                 periods_str = f"({ap1}:{hp1};{ap2}:{hp2};{ap3}:{hp3})"
                 
-                # Aprēķinām noraidījumu skaitu atsevišķi viesiem un mājiniekiem
                 h_pim_tot = r['home_pim_total'] if 'home_pim_total' in r and pd.notna(r['home_pim_total']) else 0
                 a_pim_tot = r['away_pim_total'] if 'away_pim_total' in r and pd.notna(r['away_pim_total']) else 0
                 
@@ -646,10 +670,8 @@ elif rezims == "Rezultāti":
                 a_penalties = int(round(a_pim_tot / 2))
                 total_penalties = h_penalties + a_penalties
                 
-                # Izveidojam iekavas formātā (ViesuKods;MājasKods) vai otrādi, atbilstoši komandu secībai
                 penalties_breakdown = f"({a_penalties};{h_penalties})"
                 
-                # Oficiālais rezultāts ar Penalties skaitu un komandu sadalījumu iekavās
                 match_str = f"**{away_full} ({away}) @ {home_full} ({home})** / <span class='rez-highlight'>Rezultāts - {score_str} {periods_str} - Penalties - {total_penalties} {penalties_breakdown}</span>"
                 
                 # --- PAGAIDU SIMULĒTO PROGNOŽU BLOKS ---
@@ -676,22 +698,4 @@ elif rezims == "Rezultāti":
                 
                 p3_val, p3_type = 3.5, "under"
                 p3_tot = ap3 + hp3
-                p3_hit = (p3_tot < p3_val) if p3_type == "under" else (p3_tot > p3_val)
-                
-                def ic(hit): return "✅" if hit else "❌"
-                
-                prog_html = f"""
-                <div class='prognozes-bloks'>
-                    Prognoze rezultāts - {pred_rez} {ic(rez_hit)}<br>
-                    Prognoze over/under - {ou_type} {ou_val} {ic(tot_hit)}<br>
-                    Prognoze noraidījumi - {pim_type} {pim_val} {ic(pim_hit)}<br>
-                    Prognoze periodi - <br>
-                    &nbsp;&nbsp;1. {p1_type} {p1_val} {ic(p1_hit)}<br>
-                    &nbsp;&nbsp;2. {p2_type} {p2_val} {ic(p2_hit)}<br>
-                    &nbsp;&nbsp;3. {p3_type} {p3_val} {ic(p3_hit)}
-                </div>
-                """
-                
-                st.markdown(match_str, unsafe_allow_html=True)
-                st.markdown(prog_html, unsafe_allow_html=True)
-                st.divider()
+                p3_hit = (p3
