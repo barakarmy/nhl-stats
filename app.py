@@ -7,7 +7,7 @@ import modelis  # Importējam mūsu prognožu modeli
 st.set_page_config(
     page_title="NHL Analītiskais Terminālis", 
     layout="wide", 
-    initial_sidebar_state="collapsed"  # <--- Šis automātiski paslēpj sānjoslu malā!
+    initial_sidebar_state="collapsed"
 )
 
 CSV_FAILS = "nhl_sezona.csv"
@@ -97,26 +97,6 @@ def sagatavot_vienoto_tabulu(df):
 
     return combined
 
-# CSS stils sānjoslas pogām
-st.markdown("""
-    <style>
-    div[data-testid="stSidebar"] button {
-        border: none !important;
-        background-color: transparent !important;
-        text-align: left !important;
-        padding: 5px 15px !important;
-        font-size: 16px !important;
-        font-weight: 500 !important;
-        color: inherit !important;
-        justify-content: flex-start !important;
-    }
-    div[data-testid="stSidebar"] button:hover {
-        background-color: rgba(150, 150, 150, 0.1) !important;
-        color: #ff4b4b !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 st.title("🏒 NHL Analītiskais Panelis")
 
 raw_df = iegut_datus()
@@ -127,29 +107,57 @@ if raw_df is None:
 df = sagatavot_vienoto_tabulu(raw_df)
 
 if 'rezims' not in st.session_state:
-    st.session_state.rezims = "Prognozes"
+    st.session_state.rezims = "🎯 Prognozes"
+if 'selected_team' not in st.session_state:
+    st.session_state.selected_team = list(NHL_KOMANDAS.keys())[0]
 
-# --- SĀNJOSLAS NAVIGĀCIJA ---
-st.sidebar.markdown("### 🏠 Sākumlapa")
-if st.sidebar.button("🎯 Prognozes", width='stretch'): st.session_state.rezims = "Prognozes"
+# --- AUGŠĒJĀS GRUPĒTĀS IZVĒLNES JOSLA ---
+st.markdown("### 📂 Galvenā Izvēlne")
+col_m1, col_m2, col_m3, col_m4, col_m5, col_m6 = st.columns(6)
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### Datu Filtri")
-if st.sidebar.button("1. Periods", width='stretch'): st.session_state.rezims = "1. Periods"
-if st.sidebar.button("2. Periods", width='stretch'): st.session_state.rezims = "2. Periods"
-if st.sidebar.button("3. Periods", width='stretch'): st.session_state.rezims = "3. Periods"
-if st.sidebar.button("Forma un Vārti", width='stretch'): st.session_state.rezims = "Forma un Vārti"
-if st.sidebar.button("Over / Under", width='stretch'): st.session_state.rezims = "Over / Under"
-if st.sidebar.button("Powerplay", width='stretch'): st.session_state.rezims = "Powerplay"
-if st.sidebar.button("Noraidījumi", width='stretch'): st.session_state.rezims = "Noraidījumi"
+with col_m1:
+    if st.button("🎯 Prognozes", use_container_width=True):
+        st.session_state.rezims = "🎯 Prognozes"
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### Komandas un Spēles")
-if st.sidebar.button("Komandas Statistika", width='stretch'): st.session_state.rezims = "Komandas Statistika"
-if st.sidebar.button("Kalendārs", width='stretch'): st.session_state.rezims = "Kalendārs"
-if st.sidebar.button("Rezultāti", width='stretch'): st.session_state.rezims = "Rezultāti"
+with col_m2:
+    periodu_izvele = st.selectbox(
+        "⏱️ Periodi", 
+        ["Izvēlies periodu...", "1. Periods", "2. Periods", "3. Periods"],
+        label_visibility="collapsed"
+    )
+    if periodu_izvele != "Izvēlies periodu...":
+        st.session_state.rezims = periodu_izvele
+
+with col_m3:
+    komandas_izvele = st.selectbox(
+        "📊 Komandas Statistika", 
+        ["Komandu saraksts..."] + sorted(list(NHL_KOMANDAS.keys())),
+        format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}" if x in NHL_KOMANDAS else x,
+        label_visibility="collapsed"
+    )
+    if komandas_izvele != "Komandu saraksts...":
+        st.session_state.selected_team = komandas_izvele
+        st.session_state.rezims = "Komandas Statistika"
+
+with col_m4:
+    stat_izvele = st.selectbox(
+        "📈 Analīze un Līderi", 
+        ["Citas sadaļas...", "Forma un Vārti", "Over / Under", "Powerplay", "Noraidījumi"],
+        label_visibility="collapsed"
+    )
+    if stat_izvele != "Citas sadaļas...":
+        st.session_state.rezims = stat_izvele
+
+with col_m5:
+    if st.button("📅 Kalendārs", use_container_width=True):
+        st.session_state.rezims = "Kalendārs"
+
+with col_m6:
+    if st.button("✅ Rezultāti", use_container_width=True):
+        st.session_state.rezims = "Rezultāti"
 
 rezims = st.session_state.rezims
+st.markdown("---")
 
 def sagatavot_tabulu_izvadei(res_df):
     res_df = res_df.copy()
@@ -165,7 +173,7 @@ def sagatavot_tabulu_izvadei(res_df):
 
 # === LAPU SATURS ===
 
-if rezims == "Prognozes":
+if rezims == "🎯 Prognozes":
     st.subheader("🎯 Spēļu Prognozes")
     st.info("ℹ️ Datu vākšana no NHL API notiek plkst. 10:00 (LV laiks). Modeļa un Streamlit paneļa prognožu ģenerācija izsauc šos svaigos datus no plkst. 11:00.")
     
@@ -211,117 +219,47 @@ if rezims == "Prognozes":
         else:
             st.warning("Nav atrasts 'nhl_kalendars.csv' fails kalendāra ielādei.")
 
-elif rezims == "1. Periods":
-    st.subheader("⏱️ 1. Perioda Statistika")
+elif rezims in ["1. Periods", "2. Periods", "3. Periods"]:
+    p_num = rezims[0] # "1", "2" vai "3"
+    st.subheader(f"⏱️ {rezims} Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
-        "1. perioda vārtu starpība (Visas spēles)", 
-        "1. perioda vārtu starpība (Mājas spēles)", 
-        "1. perioda vārtu starpība (Izbraukuma spēles)",
-        "1. perioda vārtu starpība pēdējajās 10 spēlēs (Visas)",
-        "1. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
-        "1. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
-        "1. perioda vidējie metieni (SOG)"
+        f"{p_num}. perioda vārtu starpība (Visas spēles)", 
+        f"{p_num}. perioda vārtu starpība (Mājas spēles)", 
+        f"{p_num}. perioda vārtu starpība (Izbraukuma spēles)",
+        f"{p_num}. perioda vārtu starpība pēdējajās 10 spēlēs (Visas)",
+        f"{p_num}. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
+        f"{p_num}. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
+        f"{p_num}. perioda vidējie metieni (SOG)"
     ])
     
-    if "pēdējajās 10 spēlēs" in filtrs:
-        sub = df
-        if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
-        elif "Izbraukumā" in filtrs: sub = sub[sub['majas'] == 0]
-        res = sub.groupby('komanda').tail(10).groupby('komanda')['diff_p1'].sum().reset_index()
-        res.columns = ['komanda', '1.P Vārtu Starpība (pēd. 10)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1.P Vārtu Starpība (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
-    elif "Visas" in filtrs:
-        res = df.groupby('komanda')['diff_p1'].sum().reset_index()
-        res.columns = ['komanda', '1. perioda vārtu starpība']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
-    elif "Mājas" in filtrs:
-        sub = df[df['majas'] == 1]
-        res = sub.groupby('komanda')['diff_p1'].sum().reset_index()
-        res.columns = ['komanda', '1. perioda vārtu starpība (Mājās)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vārtu starpība (Mājās)', ascending=False)), use_container_width=True, hide_index=True)
-    elif "Izbraukuma" in filtrs:
-        sub = df[df['majas'] == 0]
-        res = sub.groupby('komanda')['diff_p1'].sum().reset_index()
-        res.columns = ['komanda', '1. perioda vārtu starpība (Izbraukumā)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vārtu starpība (Izbraukumā)', ascending=False)), use_container_width=True, hide_index=True)
-    else:
-        res = df.groupby('komanda')['sog_p1'].mean().reset_index()
-        res.columns = ['komanda', '1. perioda vidējie metieni (SOG)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
+    diff_col = f"diff_p{p_num}"
+    sog_col = f"sog_p{p_num}"
 
-elif rezims == "2. Periods":
-    st.subheader("⏱️ 2. Perioda Statistika")
-    filtrs = st.selectbox("Izvēlies skatu:", [
-        "2. perioda vārtu starpība (Visas spēles)",
-        "2. perioda vārtu starpība (Mājas spēles)",
-        "2. perioda vārtu starpība (Izbraukuma spēles)",
-        "2. perioda vārtu starpība pēdējajās 10 spēlēs (Visas)",
-        "2. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
-        "2. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
-        "2. perioda vidējie metieni (SOG)"
-    ])
     if "pēdējajās 10 spēlēs" in filtrs:
         sub = df
         if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
         elif "Izbraukumā" in filtrs: sub = sub[sub['majas'] == 0]
-        res = sub.groupby('komanda').tail(10).groupby('komanda')['diff_p2'].sum().reset_index()
-        res.columns = ['komanda', '2.P Vārtu Starpība (pēd. 10)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2.P Vārtu Starpība (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
+        res = sub.groupby('komanda').tail(10).groupby('komanda')[diff_col].sum().reset_index()
+        res.columns = ['komanda', f'{p_num}.P Vārtu Starpība (pēd. 10)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True, hide_index=True)
     elif "Visas" in filtrs:
-        res = df.groupby('komanda')['diff_p2'].sum().reset_index()
-        res.columns = ['komanda', '2. perioda vārtu starpība']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
+        res = df.groupby('komanda')[diff_col].sum().reset_index()
+        res.columns = ['komanda', f'{p_num}. perioda vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True, hide_index=True)
     elif "Mājas" in filtrs:
         sub = df[df['majas'] == 1]
-        res = sub.groupby('komanda')['diff_p2'].sum().reset_index()
-        res.columns = ['komanda', '2. perioda vārtu starpība (Mājās)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vārtu starpība (Mājās)', ascending=False)), use_container_width=True, hide_index=True)
+        res = sub.groupby('komanda')[diff_col].sum().reset_index()
+        res.columns = ['komanda', f'{p_num}. perioda vārtu starpība (Mājās)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True, hide_index=True)
     elif "Izbraukuma" in filtrs:
         sub = df[df['majas'] == 0]
-        res = sub.groupby('komanda')['diff_p2'].sum().reset_index()
-        res.columns = ['komanda', '2. perioda vārtu starpība (Izbraukumā)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vārtu starpība (Izbraukumā)', ascending=False)), use_container_width=True, hide_index=True)
+        res = sub.groupby('komanda')[diff_col].sum().reset_index()
+        res.columns = ['komanda', f'{p_num}. perioda vārtu starpība (Izbraukumā)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True, hide_index=True)
     else:
-        res = df.groupby('komanda')['sog_p2'].mean().reset_index()
-        res.columns = ['komanda', '2. perioda vidējie metieni (SOG)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
-
-elif rezims == "3. Periods":
-    st.subheader("⏱ 3. Perioda Statistika")
-    filtrs = st.selectbox("Izvēlies skatu:", [
-        "3. perioda vārtu starpība (Visas spēles)",
-        "3. perioda vārtu starpība (Mājas spēles)",
-        "3. perioda vārtu starpība (Izbraukuma spēles)",
-        "3. perioda vārtu starpība pēdējajās 10 spēlēs (Visas)",
-        "3. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
-        "3. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
-        "3. perioda vidējie metieni (SOG)"
-    ])
-    if "pēdējajās 10 spēlēs" in filtrs:
-        sub = df
-        if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
-        elif "Izbraukumā" in filtrs: sub = sub[sub['majas'] == 0]
-        res = sub.groupby('komanda').tail(10).groupby('komanda')['diff_p3'].sum().reset_index()
-        res.columns = ['komanda', '3.P Vārtu Starpība (pēd. 10)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3.P Vārtu Starpība (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
-    elif "Visas" in filtrs:
-        res = df.groupby('komanda')['diff_p3'].sum().reset_index()
-        res.columns = ['komanda', '3. perioda vārtu starpība']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
-    elif "Mājas" in filtrs:
-        sub = df[df['majas'] == 1]
-        res = sub.groupby('komanda')['diff_p3'].sum().reset_index()
-        res.columns = ['komanda', '3. perioda vārtu starpība (Mājās)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vārtu starpība (Mājās)', ascending=False)), use_container_width=True, hide_index=True)
-    elif "Izbraukuma" in filtrs:
-        sub = df[df['majas'] == 0]
-        res = sub.groupby('komanda')['diff_p3'].sum().reset_index()
-        res.columns = ['komanda', '3. perioda vārtu starpība (Izbraukumā)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vārtu starpība (Izbraukumā)', ascending=False)), use_container_width=True, hide_index=True)
-    else:
-        res = df.groupby('komanda')['sog_p3'].mean().reset_index()
-        res.columns = ['komanda', '3. perioda vidējie metieni (SOG)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
+        res = df.groupby('komanda')[sog_col].mean().reset_index()
+        res.columns = ['komanda', f'{p_num}. perioda vidējie metieni (SOG)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True, hide_index=True)
 
 elif rezims == "Forma un Vārti":
     st.subheader("🔥 Komandu Forma un Vārtu Guvumi")
@@ -433,7 +371,14 @@ elif rezims == "Noraidījumi":
 elif rezims == "Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
     
-    selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
+    # Izmantojam saglabāto komandu no sesijas stāvokļa
+    selected_team = st.selectbox(
+        "Izvēlies komandu:", 
+        sorted(list(NHL_KOMANDAS.keys())), 
+        index=list(sorted(list(NHL_KOMANDAS.keys()))).index(st.session_state.selected_team) if st.session_state.selected_team in NHL_KOMANDAS else 0,
+        format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}"
+    )
+    st.session_state.selected_team = selected_team
     
     parametru_opcijas = {
         "Kopējā statistika un nākamās spēles": "stats",
