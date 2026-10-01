@@ -517,11 +517,16 @@ elif rezims == "Kalendārs":
         except Exception as e:
             st.error(f"Kļūda nolasot kalendāru: {e}")
 
-elif rezims == "Rezultāti":
-    st.markdown("""
+st.markdown("""
         <style>
-        div[data-testid="stColumns"] { gap: 0rem !important; }
-        div[data-testid="stColumn"] { padding-left: 0 !important; padding-right: 0 !important; }
+        /* Pilnībā likvidējam atstarpes starp kolonnām un pogām */
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0px !important;
+        }
+        div[data-testid="column"] {
+            margin: 0px !important;
+            padding: 0px !important;
+        }
         div[data-testid="stColumn"] button {
             border-radius: 0 !important;
             width: 100% !important;
@@ -532,14 +537,19 @@ elif rezims == "Rezultāti":
             padding-top: 6px !important;
             padding-bottom: 6px !important;
         }
-        div[data-testid="stColumn"]:first-child button { border-top-left-radius: 5px !important; border-bottom-left-radius: 5px !important; }
+        div[data-testid="stColumn"]:first-child button { 
+            border-top-left-radius: 6px !important; 
+            border-bottom-left-radius: 6px !important; 
+        }
         div[data-testid="stColumn"]:last-child button {
-            border-top-right-radius: 5px !important;
-            border-bottom-right-radius: 5px !important;
+            border-top-right-radius: 6px !important;
+            border-bottom-right-radius: 6px !important;
             border-right: 1px solid rgba(49, 51, 63, 0.2) !important;
         }
         @media (prefers-color-scheme: dark) {
-            div[data-testid="stColumn"]:last-child button { border-right: 1px solid rgba(250, 250, 250, 0.2) !important; }
+            div[data-testid="stColumn"]:last-child button { 
+                border-right: 1px solid rgba(250, 250, 250, 0.2) !important; 
+            }
         }
         .rez-highlight {
             background-color: #2b4c7e;
