@@ -458,6 +458,8 @@ elif rezims == "Komandas Statistika":
             away_df = team_df[team_df['majas'] == 0]
             
             st.metric("Apskatītās spēles", total_games)
+            
+            # --- Esošā kopējā statistika ---
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.write(f"**Vidēji vārti:** {team_df['g_reg'].mean():.2f}")
@@ -469,6 +471,25 @@ elif rezims == "Komandas Statistika":
                 st.write(f"**Noraidījumi:** {team_df['pim_count'].mean():.1f}")
                 st.write(f"Mājās: {home_df['pim_count'].mean():.1f} | Izbr: {away_df['pim_count'].mean():.1f}")
             
+            st.markdown("---")
+            
+            # --- JAUNA SADAĻA: xG un Vārtu Sadalījums Pa Periodiem ---
+            st.markdown(f"#### 🎯 {selected_team} Sagaidāmo Vārtu (xG) Sadalījums")
+            # Tā kā mūsu xG modelis balstās uz pēdējo 10 spēļu vidējiem gūtajiem vārtiem, attēlosim to.
+            # Ja nav 10 spēļu, ņemsim visu pieejamo vidējo.
+            sub_10 = team_df.tail(10)
+            
+            p1_xg = sub_10['g_p1'].mean()
+            p2_xg = sub_10['g_p2'].mean()
+            p3_xg = sub_10['g_p3'].mean()
+            tot_xg = sub_10['g_reg'].mean()
+            
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Kopējais xG (vid. pēd. 10 spēles)", f"{tot_xg:.2f}")
+            c2.metric("1. Perioda xG", f"{p1_xg:.2f}")
+            c3.metric("2. Perioda xG", f"{p2_xg:.2f}")
+            c4.metric("3. Perioda xG", f"{p3_xg:.2f}")
+
             if os.path.exists(CSV_KALENDARS):
                 st.markdown("---")
                 st.markdown("#### 📅 Turpmākās spēles:")
