@@ -4,6 +4,15 @@ import os
 from datetime import datetime
 import modelis  # Importējam mūsu prognožu modeli
 
+st.markdown("""
+    <style>
+    /* Padara datu tabulas kompaktākas un neļauj tām izplesties visā ekrānā */
+    div[data-testid="stDataFrame"] {
+        max-width: 700px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.set_page_config(
     page_title="NHL stats&predictions", 
     layout="wide", 
