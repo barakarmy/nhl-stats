@@ -17,7 +17,7 @@ NHL_KOMANDAS = {
     "ANA": "Anaheim Ducks", "BOS": "Boston Bruins", "BUF": "Buffalo Sabres",
     "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes", "CHI": "Chicago Blackhawks",
     "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets", "DAL": "Dallas Stars",
-    "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers", "FLA": "Florida Panthers",
+    "DET": "Detroit Red Wings", "EDM": "Oilers", "FLA": "Florida Panthers",
     "LAK": "Los Angeles Kings", "MIN": "Minnesota Wild", "MTL": "Montreal Canadiens",
     "NSH": "Nashville Predators", "NJD": "New Jersey Devils", "NYI": "New York Islanders",
     "NYR": "New York Rangers", "OTT": "Ottawa Senators", "PHI": "Philadelphia Flyers",
@@ -111,124 +111,58 @@ if 'rezims' not in st.session_state:
 if 'selected_team' not in st.session_state:
     st.session_state.selected_team = list(NHL_KOMANDAS.keys())[0]
 
-# --- HTML/CSS HOVER DROPDOWN IZVĒLNE AR PAREIZU RENDERĒŠANU ---
+# --- CSS STILI GLĪTAI UN CIEŠI SABĪDĪTAI NAVIGĀCIJAS JOSLAI ---
 st.markdown("""
     <style>
-    .navbar {
-        display: flex;
-        background-color: #f0f2f6;
-        border-radius: 8px;
-        padding: 4px;
-        gap: 4px;
-        align-items: center;
-        width: 100%;
+    div[data-testid="stHorizontalBlock"] {
+        gap: 2px !important;
     }
-    .dropdown {
-        position: relative;
-        display: inline-block;
-        flex: 1;
+    div[data-testid="stColumn"] {
+        margin: 0px !important;
+        padding: 0px !important;
     }
-    .dropbtn {
-        background-color: #ffffff;
-        color: #31333F;
-        padding: 10px 15px;
-        font-size: 14px;
-        font-weight: 600;
-        border: 1px solid rgba(49, 51, 63, 0.2);
-        border-radius: 6px;
-        cursor: pointer;
-        width: 100%;
-        text-align: center;
-        white-space: nowrap;
-    }
-    .dropdown:hover .dropbtn {
-        background-color: #e2e8f0;
-        border-color: #cbd5e1;
-    }
-    .dropdown-content {
-        display: none;
-        position: absolute;
-        background-color: #ffffff;
-        min-width: 200px;
-        box-shadow: 0px 8px 16px rgba(0,0,0,0.15);
-        border-radius: 6px;
-        z-index: 1000;
-        border: 1px solid rgba(49, 51, 63, 0.1);
-        padding: 6px 0;
-    }
-    .dropdown-content a {
-        color: #31333F;
-        padding: 8px 16px;
-        text-decoration: none;
-        display: block;
-        font-size: 14px;
-    }
-    .dropdown-content a:hover {
-        background-color: #f1f5f9;
-        color: #ff4b4b;
-    }
-    .dropdown:hover .dropdown-content {
-        display: block;
+    div[data-testid="stColumn"] button {
+        border-radius: 4px !important;
+        width: 100% !important;
+        font-size: 13px !important;
+        padding-top: 6px !important;
+        padding-bottom: 6px !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-query_params = st.query_params
-if "nav" in query_params:
-    izveletais = query_params["nav"]
-    if izveletais in ["🎯 Prognozes", "📅 Kalendārs", "✅ Rezultāti"]:
-        st.session_state.rezims = izveletais
-    elif izveletais in ["1. Periods", "2. Periods", "3. Periods"]:
-        st.session_state.rezims = izveletais
-    elif izveletais in ["Forma un Vārti", "Over / Under", "Powerplay", "Noraidījumi"]:
-        st.session_state.rezims = izveletais
-    elif izveletais in NHL_KOMANDAS.keys():
-        st.session_state.selected_team = izveletais
-        st.session_state.rezims = "Komandas Statistika"
+# --- HORIZONTĀLĀS IZVĒLNES POGAS LAPAS AUGŠPUSĒ ---
+menu_options = [
+    "🎯 Prognozes", 
+    "1. Periods", 
+    "2. Periods", 
+    "3. Periods", 
+    "Forma un Vārti", 
+    "Over / Under", 
+    "Powerplay", 
+    "Noraidījumi", 
+    "Komandas Statistika", 
+    "Kalendārs", 
+    "Rezultāti"
+]
 
-komandas_html = ""
-for k, v in sorted(NHL_KOMANDAS.items(), key=lambda item: item[1]):
-    komandas_html += f'<a href="?nav={k}">{v} ({k})</a>'
+def iestatit_rezimu(r):
+    st.session_state.rezims = r
 
-nav_html = f"""
-<div class="navbar">
-    <div class="dropdown"><button class="dropbtn" onclick="window.location.href='?nav=🎯 Prognozes'">🎯 Prognozes</button></div>
-    
-    <div class="dropdown">
-        <button class="dropbtn">⏱️ Periodi ▾</button>
-        <div class="dropdown-content">
-            <a href="?nav=1. Periods">1. Periods</a>
-            <a href="?nav=2. Periods">2. Periods</a>
-            <a href="?nav=3. Periods">3. Periods</a>
-        </div>
-    </div>
-    
-    <div class="dropdown">
-        <button class="dropbtn">📊 Komandas Statistika ▾</button>
-        <div class="dropdown-content" style="max-height: 350px; overflow-y: auto;">
-            {komandas_html}
-        </div>
-    </div>
-    
-    <div class="dropdown">
-        <button class="dropbtn">📈 Analīze un Līderi ▾</button>
-        <div class="dropdown-content">
-            <a href="?nav=Forma un Vārti">Forma un Vārti</a>
-            <a href="?nav=Over / Under">Over / Under</a>
-            <a href="?nav=Powerplay">Powerplay</a>
-            <a href="?nav=Noraidījumi">Noraidījumi</a>
-        </div>
-    </div>
-    
-    <div class="dropdown"><button class="dropbtn" onclick="window.location.href='?nav=📅 Kalendārs'">📅 Kalendārs</button></div>
-    <div class="dropdown"><button class="dropbtn" onclick="window.location.href='?nav=✅ Rezultāti'">✅ Rezultāti</button></div>
-</div>
-"""
+nav_cols = st.columns(len(menu_options))
 
-# Pievienots unsafe_allow_html=True, lai HTML kods nostrādātu pareizi
-st.markdown(nav_html, unsafe_allow_html=True)
+for idx, opcija in enumerate(menu_options):
+    btn_type = "primary" if st.session_state.rezims == opcija else "secondary"
+    nav_cols[idx].button(
+        opcija, 
+        key=f"nav_btn_{idx}", 
+        type=btn_type, 
+        on_click=iestatit_rezimu, 
+        args=(opcija,), 
+        use_container_width=True
+    )
+
 rezims = st.session_state.rezims
-
 st.markdown("---")
 
 def sagatavot_tabulu_izvadei(res_df):
@@ -443,7 +377,7 @@ elif rezims == "Noraidījumi":
 elif rezims == "Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
     
-    selected_team = st.session_state.selected_team
+    selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
     
     parametru_opcijas = {
         "Kopējā statistika un nākamās spēles": "stats",
