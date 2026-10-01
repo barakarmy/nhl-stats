@@ -238,7 +238,7 @@ if rezims == "Prognozes":
 
 elif rezims == "1. Periods":
     st.subheader("⏱️ 1. Perioda Statistika")
-    filtrs = st.selectbox("Izvēlies skatu:", [
+    filtrs = st.selectbox(, [
         "1. perioda vārtu starpība (Visas spēles)", 
         "1. perioda vārtu starpība (Mājas spēles)", 
         "1. perioda vārtu starpība (Izbraukuma spēles)",
