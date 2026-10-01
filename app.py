@@ -111,52 +111,127 @@ if 'rezims' not in st.session_state:
 if 'selected_team' not in st.session_state:
     st.session_state.selected_team = list(NHL_KOMANDAS.keys())[0]
 
-# --- AUGŠĒJĀS GRUPĒTĀS IZVĒLNES JOSLA ---
-st.markdown("### 📂 Galvenā Izvēlne")
-col_m1, col_m2, col_m3, col_m4, col_m5, col_m6 = st.columns(6)
+# --- HTML/CSS HOVER DROPDOWN IZVĒLNE (Bez mapēm, cieši sabīdīta) ---
+st.markdown("""
+    <style>
+    .navbar {
+        display: flex;
+        background-color: #f0f2f6;
+        border-radius: 8px;
+        padding: 4px;
+        gap: 4px;
+        align-items: center;
+        width: 100%;
+    }
+    .dropdown {
+        position: relative;
+        display: inline-block;
+        flex: 1;
+    }
+    .dropbtn {
+        background-color: #ffffff;
+        color: #31333F;
+        padding: 10px 15px;
+        font-size: 14px;
+        font-weight: 600;
+        border: 1px solid rgba(49, 51, 63, 0.2);
+        border-radius: 6px;
+        cursor: pointer;
+        width: 100%;
+        text-align: center;
+        white-space: nowrap;
+    }
+    .dropdown:hover .dropbtn {
+        background-color: #e2e8f0;
+        border-color: #cbd5e1;
+    }
+    .dropdown-content {
+        display: none;
+        position: absolute;
+        background-color: #ffffff;
+        min-width: 200px;
+        box-shadow: 0px 8px 16px rgba(0,0,0,0.15);
+        border-radius: 6px;
+        z-index: 1000;
+        border: 1px solid rgba(49, 51, 63, 0.1);
+        padding: 6px 0;
+    }
+    .dropdown-content a {
+        color: #31333F;
+        padding: 8px 16px;
+        text-decoration: none;
+        display: block;
+        font-size: 14px;
+    }
+    .dropdown-content a:hover {
+        background-color: #f1f5f9;
+        color: #ff4b4b;
+    }
+    /* Maģiskā rinda: uzejot ar peli, parādās izvēlne automātiski */
+    .dropdown:hover .dropdown-content {
+        display: block;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-with col_m1:
-    if st.button("🎯 Prognozes", use_container_width=True):
-        st.session_state.rezims = "🎯 Prognozes"
-
-with col_m2:
-    periodu_izvele = st.selectbox(
-        "⏱️ Periodi", 
-        ["Izvēlies periodu...", "1. Periods", "2. Periods", "3. Periods"],
-        label_visibility="collapsed"
-    )
-    if periodu_izvele != "Izvēlies periodu...":
-        st.session_state.rezims = periodu_izvele
-
-with col_m3:
-    komandas_izvele = st.selectbox(
-        "📊 Komandas Statistika", 
-        ["Komandu saraksts..."] + sorted(list(NHL_KOMANDAS.keys())),
-        format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}" if x in NHL_KOMANDAS else x,
-        label_visibility="collapsed"
-    )
-    if komandas_izvele != "Komandu saraksts...":
-        st.session_state.selected_team = komandas_izvele
+# Uztveram klikšķus no HTML izvēlnes caur query parametriem
+query_params = st.query_params
+if "nav" in query_params:
+    izveletais = query_params["nav"]
+    if izveletais in ["🎯 Prognozes", "📅 Kalendārs", "✅ Rezultāti"]:
+        st.session_state.rezims = izveletais
+    elif izveletais in ["1. Periods", "2. Periods", "3. Periods"]:
+        st.session_state.rezims = izveletais
+    elif izveletais in ["Forma un Vārti", "Over / Under", "Powerplay", "Noraidījumi"]:
+        st.session_state.rezims = izveletais
+    elif izveletais in NHL_KOMANDAS.keys():
+        st.session_state.selected_team = izveletais
         st.session_state.rezims = "Komandas Statistika"
 
-with col_m4:
-    stat_izvele = st.selectbox(
-        "📈 Analīze un Līderi", 
-        ["Citas sadaļas...", "Forma un Vārti", "Over / Under", "Powerplay", "Noraidījumi"],
-        label_visibility="collapsed"
-    )
-    if stat_izvele != "Citas sadaļas...":
-        st.session_state.rezims = stat_izvele
+# Generējam komandu sarakstu HTML izvēlnei
+komandas_html = ""
+for k, v in sorted(NHL_KOMANDAS.items(), key=lambda item: item[1]):
+    komandas_html += f'<a href="?nav={k}">{v} ({k})</a>'
 
-with col_m5:
-    if st.button("📅 Kalendārs", use_container_width=True):
-        st.session_state.rezims = "Kalendārs"
+# HTML struktūra augšējai navigācijai
+nav_html = f"""
+<div class="navbar">
+    <div class="dropdown"><button class="dropbtn" onclick="window.location.href='?nav=🎯 Prognozes'">🎯 Prognozes</button></div>
+    
+    <div class="dropdown">
+        <button class="dropbtn">⏱️ Periodi ▾</button>
+        <div class="dropdown-content">
+            <a href="?nav=1. Periods">1. Periods</a>
+            <a href="?nav=2. Periods">2. Periods</a>
+            <a href="?nav=3. Periods">3. Periods</a>
+        </div>
+    </div>
+    
+    <div class="dropdown">
+        <button class="dropbtn">📊 Komandas Statistika ▾</button>
+        <div class="dropdown-content" style="max-height: 350px; overflow-y: auto;">
+            {komandas_html}
+        </div>
+    </div>
+    
+    <div class="dropdown">
+        <button class="dropbtn">📈 Analīze un Līderi ▾</button>
+        <div class="dropdown-content">
+            <a href="?nav=Forma un Vārti">Forma un Vārti</a>
+            <a href="?nav=Over / Under">Over / Under</a>
+            <a href="?nav=Powerplay">Powerplay</a>
+            <a href="?nav=Noraidījumi">Noraidījumi</a>
+        </div>
+    </div>
+    
+    <div class="dropdown"><button class="dropbtn" onclick="window.location.href='?nav=📅 Kalendārs'">📅 Kalendārs</button></div>
+    <div class="dropdown"><button class="dropbtn" onclick="window.location.href='?nav=✅ Rezultāti'">✅ Rezultāti</button></div>
+</div>
+"""
 
-with col_m6:
-    if st.button("✅ Rezultāti", use_container_width=True):
-        st.session_state.rezims = "Rezultāti"
-
+st.markdown(nav_html, unsafe_allow_html=True)
 rezims = st.session_state.rezims
+
 st.markdown("---")
 
 def sagatavot_tabulu_izvadei(res_df):
@@ -220,7 +295,7 @@ if rezims == "🎯 Prognozes":
             st.warning("Nav atrasts 'nhl_kalendars.csv' fails kalendāra ielādei.")
 
 elif rezims in ["1. Periods", "2. Periods", "3. Periods"]:
-    p_num = rezims[0] # "1", "2" vai "3"
+    p_num = rezims[0]
     st.subheader(f"⏱️ {rezims} Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
         f"{p_num}. perioda vārtu starpība (Visas spēles)", 
@@ -371,7 +446,6 @@ elif rezims == "Noraidījumi":
 elif rezims == "Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
     
-    # Izmantojam saglabāto komandu no sesijas stāvokļa
     selected_team = st.selectbox(
         "Izvēlies komandu:", 
         sorted(list(NHL_KOMANDAS.keys())), 
