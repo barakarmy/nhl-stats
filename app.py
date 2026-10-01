@@ -88,7 +88,7 @@ def sagatavot_vienoto_tabulu(df):
 
     return combined
 
-# CSS stils sānjoslas pogām un noformējumam
+# CSS stils sānjoslas pogām
 st.markdown("""
     <style>
     div[data-testid="stSidebar"] button {
@@ -511,32 +511,33 @@ elif rezims == "Kalendārs":
 elif rezims == "Rezultāti":
     st.markdown("""
         <style>
-        /* Padarīt kalendāra pogas kā vienotu bloku bez atstarpēm - optimizēts jaunajam Streamlit */
-        div[data-testid="stColumns"] {
-            gap: 0rem !important;
-        }
-        div[data-testid="stColumn"] {
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-        }
+        /* Pogas stils, kas ļauj tekstu dalīt 2 rindās un nocentrēt */
+        div[data-testid="stColumns"] { gap: 0rem !important; }
+        div[data-testid="stColumn"] { padding-left: 0 !important; padding-right: 0 !important; }
         div[data-testid="stColumn"] button {
             border-radius: 0 !important;
             width: 100% !important;
             border-right: 0px !important;
+            white-space: pre-line !important; 
+            line-height: 1.2 !important;
+            text-align: center !important;
         }
-        div[data-testid="stColumn"]:first-child button {
-            border-top-left-radius: 5px !important;
-            border-bottom-left-radius: 5px !important;
-        }
+        div[data-testid="stColumn"]:first-child button { border-top-left-radius: 5px !important; border-bottom-left-radius: 5px !important; }
         div[data-testid="stColumn"]:last-child button {
             border-top-right-radius: 5px !important;
             border-bottom-right-radius: 5px !important;
             border-right: 1px solid rgba(49, 51, 63, 0.2) !important;
         }
         @media (prefers-color-scheme: dark) {
-            div[data-testid="stColumn"]:last-child button {
-                border-right: 1px solid rgba(250, 250, 250, 0.2) !important;
-            }
+            div[data-testid="stColumn"]:last-child button { border-right: 1px solid rgba(250, 250, 250, 0.2) !important; }
+        }
+        /* Rezultāta izcēlums - zils bloks */
+        .rez-highlight {
+            background-color: #3b5998;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
         }
         .prognozes-bloks {
             line-height: 1.6;
@@ -550,20 +551,28 @@ elif rezims == "Rezultāti":
     
     st.subheader("✅ Spēļu Rezultāti")
     
+    dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
+    
+    # 1. Atrodam centrālo datumu: "šodiena" vai "pēdējais datums csv failā"
+    if raw_df is not None and not raw_df.empty:
+        max_date_in_csv = raw_df['datums'].max().date()
+        today = datetime.today().date()
+        
+        # Ja CSV failā ir dati par šodienu (vai ļoti tuviem datumiem), izmantojam šodienu. Citādi ņemam vēlāko no faila.
+        base_center_date = today if today <= max_date_in_csv + pd.Timedelta(days=1) else max_date_in_csv
+    else:
+        base_center_date = datetime.today().date()
+
     if 'res_date_offset' not in st.session_state:
         st.session_state.res_date_offset = 0
         
-    if raw_df is not None and not raw_df.empty:
-        max_date = raw_df['datums'].max().date()
-    else:
-        max_date = datetime.today().date()
-        
-    base_date = max_date + pd.Timedelta(days=st.session_state.res_date_offset)
-    start_date = base_date - pd.Timedelta(days=6)
-    dates = [start_date + pd.Timedelta(days=i) for i in range(7)]
+    center_date = base_center_date + pd.Timedelta(days=st.session_state.res_date_offset)
+    
+    # Izveidojam 7 dienu sarakstu (centrālais datums ir indekss 3)
+    dates = [center_date + pd.Timedelta(days=i) for i in range(-3, 4)]
     
     if 'selected_res_date' not in st.session_state:
-        st.session_state.selected_res_date = dates[-1]
+        st.session_state.selected_res_date = center_date
 
     def change_offset(delta):
         st.session_state.res_date_offset += delta
@@ -571,20 +580,25 @@ elif rezims == "Rezultāti":
     def set_date(d):
         st.session_state.selected_res_date = d
 
-    # Datumu navigācijas pogu rinda (izmantojot use_container_width=True un jauno CSS)
+    # Datumu pogu rinda
     cols = st.columns(9)
     cols[0].button("❮", on_click=change_offset, args=(-7,), key="prev_w", use_container_width=True)
     
     for idx, d in enumerate(dates):
+        # Formatējam tekstu divās rindās: Datums \n Nedēļas diena
         d_str = d.strftime("%d.%m")
+        d_weekday = dienu_tulkojums.get(d.strftime('%A'), d.strftime('%A'))
+        btn_label = f"{d_str}\n{d_weekday}"
+        
         btn_style = "primary" if d == st.session_state.selected_res_date else "secondary"
-        cols[idx+1].button(d_str, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,), use_container_width=True)
+        cols[idx+1].button(btn_label, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,), use_container_width=True)
         
     cols[8].button("❯", on_click=change_offset, args=(7,), key="next_w", use_container_width=True)
     
     st.markdown("---")
     st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d.%m.%Y')}")
 
+    # Spēļu attēlošana
     if raw_df is not None and not raw_df.empty:
         dienas_speles = raw_df[raw_df['datums'].dt.date == st.session_state.selected_res_date]
         seen_games = set()
@@ -602,9 +616,12 @@ elif rezims == "Rezultāti":
                 away_full = pilns_nosaukums(away)
                 home_full = pilns_nosaukums(home)
                 
-                ap1, hp1 = int(r['away_p1']), int(r['home_p1'])
-                ap2, hp2 = int(r['away_p2']), int(r['home_p2'])
-                ap3, hp3 = int(r['away_p3']), int(r['home_p3'])
+                ap1 = int(r['away_p1']) if pd.notna(r['away_p1']) else 0
+                hp1 = int(r['home_p1']) if pd.notna(r['home_p1']) else 0
+                ap2 = int(r['away_p2']) if pd.notna(r['away_p2']) else 0
+                hp2 = int(r['home_p2']) if pd.notna(r['home_p2']) else 0
+                ap3 = int(r['away_p3']) if pd.notna(r['away_p3']) else 0
+                hp3 = int(r['home_p3']) if pd.notna(r['home_p3']) else 0
                 
                 ag = ap1 + ap2 + ap3
                 hg = hp1 + hp2 + hp3
@@ -619,7 +636,8 @@ elif rezims == "Rezultāti":
                 score_str = f"{ag}-{hg}{winner}".strip()
                 periods_str = f"({ap1}:{hp1};{ap2}:{hp2};{ap3}:{hp3})"
                 
-                match_str = f"**{away_full} ({away}) @ {home_full} ({home}) / Rezultāts - {score_str} {periods_str}**"
+                # HTML struktūra, kas izceļ oficiālo rezultātu "zilā fonā"
+                match_str = f"**{away_full} ({away}) @ {home_full} ({home})** / <span class='rez-highlight'>Rezultāts - {score_str} {periods_str}</span>"
                 
                 # --- PAGAIDU SIMULĒTO PROGNOŽU BLOKS ---
                 pred_ag = ag 
@@ -631,12 +649,11 @@ elif rezims == "Rezultāti":
                 ou_type = "over"
                 tot_hit = (ag+hg > ou_val) if ou_type == "over" else (ag+hg < ou_val)
                 
-                # KĻŪDAS LABOJUMS NORAIDĪJUMIEM: Izmanto drošus atsevišķos laukus no raw_df
                 pim_val = 5.5
                 pim_type = "over"
-                h_pim = int(r.get('home_pim_total', 0)) if pd.notna(r.get('home_pim_total', 0)) else 0
-                a_pim = int(r.get('away_pim_total', 0)) if pd.notna(r.get('away_pim_total', 0)) else 0
-                pim_tot = h_pim + a_pim
+                h_pim = r['home_pim_total'] if 'home_pim_total' in r and pd.notna(r['home_pim_total']) else 0
+                a_pim = r['away_pim_total'] if 'away_pim_total' in r and pd.notna(r['away_pim_total']) else 0
+                pim_tot = int(h_pim) + int(a_pim)
                 pim_hit = (pim_tot > pim_val) if pim_type == "over" else (pim_tot < pim_val)
                 
                 p1_val, p1_type = 1.5, "over"
@@ -664,8 +681,7 @@ elif rezims == "Rezultāti":
                     &nbsp;&nbsp;3. {p3_type} {p3_val} {ic(p3_hit)}
                 </div>
                 """
-                # ----------------------------------------
                 
-                st.markdown(match_str)
+                st.markdown(match_str, unsafe_allow_html=True)
                 st.markdown(prog_html, unsafe_allow_html=True)
                 st.divider()
