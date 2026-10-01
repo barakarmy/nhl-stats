@@ -25,19 +25,23 @@ NHL_KOMANDAS = {
 def pilns_nosaukums(saisinajums):
     return NHL_KOMANDAS.get(saisinajums.upper(), saisinajums.upper())
 
+# Funkcija, kas automātiski atjauno datus, ja CSV fails ir mainīts
 @st.cache_data
-def ielasit_datus():
+def ielasit_datus(file_mtime):
     try:
         if not os.path.exists(CSV_FAILS):
             return None
         df = pd.read_csv(CSV_FAILS)
         if 'datums' in df.columns:
-            # Pārvēršam datumus un pieskaitām +1 dienu, lai sakristu ar Latvijas rītu pēc nakts spēlēm
             df['datums'] = pd.to_datetime(df['datums']) + pd.Timedelta(days=1)
             df = df.sort_values('datums')
         return df
     except Exception:
         return None
+
+def iegut_datus():
+    mtime = os.path.getmtime(CSV_FAILS) if os.path.exists(CSV_FAILS) else 0
+    return ielasit_datus(mtime)
 
 def sagatavot_vienoto_tabulu(df):
     if df is None or df.empty:
@@ -111,7 +115,7 @@ st.markdown("""
 
 st.title("🏒 NHL Analītiskais Panelis")
 
-raw_df = ielasit_datus()
+raw_df = iegut_datus()
 if raw_df is None:
     st.error("CSV fails ('nhl_sezona.csv') nav atrasts!")
     st.stop()
@@ -555,7 +559,7 @@ elif rezims == "Rezultāti":
     
     dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
     
-    # Nosakām centrālo datumu (šodiena vai pēdējā diena CSV failā ar +1 dienas korekciju)
+    # Automātiski nosakām centrālo datumu (šodiena vai pēdējā diena CSV failā ar +1 dienas korekciju)
     if raw_df is not None and not raw_df.empty:
         max_date_in_csv = raw_df['datums'].max().date()
         today = datetime.today().date()
