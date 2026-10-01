@@ -6,13 +6,24 @@ import modelis  # Importējam prognožu modeli
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
 
-# --- MODERNS TUMŠS GRADIENTA FONS UN STILI ---
+# --- MODERNS TUMŠS GRADIENTA FONS UN TĪRA TEKSTA/SĀNJOSLAS STILEŠANA ---
 st.markdown("""
     <style>
-    /* Tumšs gradienta fons visai aplikācijai */
+    /* Tumšs gradienta fons visai aplikācijai un pamata teksta krāsa */
     .stApp {
         background: linear-gradient(135deg, #0b132b 0%, #1c2541 50%, #3a506b 100%);
-        color: #f8fafc;
+        color: #f8fafc !important;
+    }
+
+    /* Pielāgojam sānjoslas (sidebar) fonu, lai tas sakrīt ar kopējo stilu */
+    section[data-testid="stSidebar"] {
+        background-color: #0f172a !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Sānjoslas virsraksti un teksti */
+    section[data-testid="stSidebar"] h3 {
+        color: #f8fafc !important;
     }
     
     /* Sānjoslas pogu stils */
@@ -20,15 +31,21 @@ st.markdown("""
         border: none !important;
         background-color: transparent !important;
         text-align: left !important;
-        padding: 5px 15px !important;
+        padding: 6px 15px !important;
         font-size: 16px !important;
         font-weight: 500 !important;
-        color: inherit !important;
+        color: #cbd5e1 !important;
         justify-content: flex-start !important;
+        width: 100% !important;
     }
     div[data-testid="stSidebar"] button:hover {
         background-color: rgba(255, 255, 255, 0.1) !important;
         color: #ff4b4b !important;
+    }
+
+    /* Izvēlņu (Selectbox) un datu tabulu teksta salasāmība uz tumšā fona */
+    .stSelectbox label, .stMarkdown, p, span {
+        color: #f8fafc !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -200,7 +217,7 @@ if rezims == "Prognozes":
                     st.markdown(f"**{datums_fmt} | {pilns_nosaukums(away)} ({away}) @ {pilns_nosaukums(home)} ({home})**")
                     if prognoze:
                         st.markdown(f"""
-                        <div style='background-color:rgba(255, 255, 255, 0.05); padding:10px; border-radius:8px; margin-bottom:15px; border: 1px solid rgba(255, 255, 255, 0.1);'>
+                        <div style='background-color:rgba(255, 255, 255, 0.05); padding:10px; border-radius:8px; margin-bottom:15px; border: 1px solid rgba(255, 255, 255, 0.1); color: #f8fafc;'>
                             <b>Rezultāts:</b> {prognoze['rezultats']}<br>
                             <b>Over/Under (Vārti):</b> {prognoze['over_under']}<br>
                             <b>Noraidījumi:</b> {prognoze['noraidījumi']}<br>
