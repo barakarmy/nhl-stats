@@ -435,8 +435,8 @@ elif rezims == "Noraidījumi":
     filtrs = st.selectbox("Izvēlies skatu:", [
         "Vidējie noraidījumi (Visas spēles)",
         "Vidējie noraidījumi pēdējajās 10 spēlēs",
-        "Vidējie noraidījumi mājās (PIM H)",
-        "Vidējie noraidījumi izbraukumā (PIM A)"
+        "Vidējie noraidījumi mājās",
+        "Vidējie noraidījumi izbraukumā"
     ], label_visibility="collapsed")
     
     if "10 spēlēs" in filtrs:
