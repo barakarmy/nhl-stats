@@ -362,21 +362,21 @@ elif rezims == "Forma un Vārti":
     if "Karstākās" in filtrs:
         n = 10 if "10" in filtrs else 5
         res = df.groupby('komanda').tail(n).groupby('komanda')['g_reg'].sum().reset_index()
-        res.columns = ['komanda', f'Gūtie vārti pēd. {n} spēlēs']
+        res.columns = ['komanda', 'Gūtie vārti']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True, hide_index=True)
     elif "Aukstākās" in filtrs:
         n = 10 if "10" in filtrs else 5
         res = df.groupby('komanda').tail(n).groupby('komanda')['g_reg'].sum().reset_index()
-        res.columns = ['komanda', f'Gūtie vārti pēd. {n} spēlēs']
+        res.columns = ['komanda', f'Gūtie vārti']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=True)), use_container_width=True, hide_index=True)
     elif "Visvairāk iemet" in filtrs:
         res = df.groupby('komanda').apply(lambda g: g.tail(5)['g_reg'].sum()).reset_index(name='Vārtu skaits')
-        res.columns = ['komanda', 'Gūtie vārti pēd. 5 spēlēs']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Gūtie vārti pēd. 5 spēlēs', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Gūtie vārti']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Gūtie vārti', ascending=False)), use_container_width=True, hide_index=True)
     elif "Visvairāk ielaiž" in filtrs:
         res = df.groupby('komanda').apply(lambda g: g.tail(5)['z_reg'].sum()).reset_index(name='Vārtu skaits')
-        res.columns = ['komanda', 'Ielaistie vārti pēd. 5 spēlēs']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Ielaistie vārti pēd. 5 spēlēs', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Ielaistie vārti']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Ielaistie vārti', ascending=False)), use_container_width=True, hide_index=True)
 
 elif rezims == "Powerplay":
     st.subheader("⚡ Vairākuma (Powerplay) Līderi")
@@ -399,8 +399,8 @@ elif rezims == "Powerplay":
     else:
         res = sub.groupby('komanda')['ppg'].sum().reset_index()
         
-    res.columns = ['komanda', 'Vairākumā gūtie vārti']
-    st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vairākumā gūtie vārti', ascending=False)), use_container_width=True, hide_index=True)
+    res.columns = ['komanda', 'Gūtie vārti']
+    st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Gūtie vārti', ascending=False)), use_container_width=True, hide_index=True)
 
 elif rezims == "Over / Under":
     st.subheader("📈 Spēļu Kopējā Vārtu Summa (Over / Under 6.5)")
