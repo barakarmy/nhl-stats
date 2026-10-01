@@ -431,7 +431,7 @@ elif rezims == "Over / Under":
     st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Atbilstošo spēļu skaits', ascending=False)), use_container_width=True, hide_index=True)
 
 elif rezims == "Noraidījumi":
-    st.subheader("❌ Noraidījumu (PIM) Līderi")
+    st.subheader("❌ Noraidījumu Līderi")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "Vidējie noraidījumi (Visas spēles)",
         "Vidējie noraidījumi pēdējajās 10 spēlēs",
