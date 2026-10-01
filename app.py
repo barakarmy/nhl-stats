@@ -459,7 +459,7 @@ elif rezims == "Komandas Statistika":
             
             st.metric("Apskatītās spēles", total_games)
             
-            # --- Esošā kopējā statistika ---
+            # --- Esošā kopējā statistika (sezonas vidējie) ---
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.write(f"**Vidēji vārti:** {team_df['g_reg'].mean():.2f}")
@@ -473,22 +473,39 @@ elif rezims == "Komandas Statistika":
             
             st.markdown("---")
             
-            # --- JAUNA SADAĻA: xG un Vārtu Sadalījums Pa Periodiem ---
+            # --- JAUNA SADAĻA: xG (Mājas, Izbraukuma un Periodi) ---
             st.markdown(f"#### 🎯 {selected_team} Sagaidāmo Vārtu (xG) Sadalījums")
-            # Tā kā mūsu xG modelis balstās uz pēdējo 10 spēļu vidējiem gūtajiem vārtiem, attēlosim to.
-            # Ja nav 10 spēļu, ņemsim visu pieejamo vidējo.
+            
+            # 1. Kopējās pēdējās 10 spēles un periodi
             sub_10 = team_df.tail(10)
+            tot_xg = sub_10['g_reg'].mean() if not sub_10.empty else 0.0
+            p1_xg = sub_10['g_p1'].mean() if not sub_10.empty else 0.0
+            p2_xg = sub_10['g_p2'].mean() if not sub_10.empty else 0.0
+            p3_xg = sub_10['g_p3'].mean() if not sub_10.empty else 0.0
             
-            p1_xg = sub_10['g_p1'].mean()
-            p2_xg = sub_10['g_p2'].mean()
-            p3_xg = sub_10['g_p3'].mean()
-            tot_xg = sub_10['g_reg'].mean()
+            # 2. Pēdējās 10 MĀJAS spēles
+            home_10 = team_df[team_df['majas'] == 1].tail(10)
+            home_xg = home_10['g_reg'].mean() if not home_10.empty else 0.0
             
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Kopējais xG (vid. pēd. 10 spēles)", f"{tot_xg:.2f}")
-            c2.metric("1. Perioda xG", f"{p1_xg:.2f}")
-            c3.metric("2. Perioda xG", f"{p2_xg:.2f}")
-            c4.metric("3. Perioda xG", f"{p3_xg:.2f}")
+            # 3. Pēdējās 10 IZBRAUKUMA spēles
+            away_10 = team_df[team_df['majas'] == 0].tail(10)
+            away_xg = away_10['g_reg'].mean() if not away_10.empty else 0.0
+            
+            # Attēlojam lokācijas xG
+            st.markdown("<span style='font-size: 0.9em; color: gray;'>Balstīts uz pēdējām 10 attiecīgā tipa spēlēm</span>", unsafe_allow_html=True)
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Kopējais xG", f"{tot_xg:.2f}")
+            c2.metric("Mājas xG", f"{home_xg:.2f}")
+            c3.metric("Izbraukuma xG", f"{away_xg:.2f}")
+
+            st.write("") # Atstarpe
+
+            # Attēlojam periodu xG
+            st.markdown("<span style='font-size: 0.9em; color: gray;'>Periodu sadalījums no kopējām pēdējām 10 spēlēm</span>", unsafe_allow_html=True)
+            cp1, cp2, cp3 = st.columns(3)
+            cp1.metric("1. Perioda xG", f"{p1_xg:.2f}")
+            cp2.metric("2. Perioda xG", f"{p2_xg:.2f}")
+            cp3.metric("3. Perioda xG", f"{p3_xg:.2f}")
 
             if os.path.exists(CSV_KALENDARS):
                 st.markdown("---")
@@ -509,46 +526,6 @@ elif rezims == "Komandas Statistika":
                         st.text(f"• {d_fmt} vs {pretinieka_viss} ({pretinieka_kods}) [{H_vai_A}]")
                 else:
                     st.info("Kalendārā nav atrastu nākamo spēļu.")
-
-        elif mode_key in ['h', 'a']:
-            is_home = 1 if mode_key == 'h' else 0
-            sub_df = team_df[team_df['majas'] == is_home]
-            st.write(f"**Apskatīto spēļu skaits:** {len(sub_df)}")
-            st.write(f"**Vidēji iemestie vārti:** {sub_df['g_reg'].mean():.2f}")
-            st.write(f"**Vidēji ielaistie vārti:** {sub_df['z_reg'].mean():.2f}")
-            st.write(f"**Vidējās soda minūtes (PIM):** {sub_df['pim_tot'].mean():.2f}")
-
-        elif mode_key == 'last5':
-            sub_5 = team_df.tail(5)
-            st.write(f"**Vārtu guvumi (vidēji):** {sub_5['g_reg'].mean():.2f}")
-            st.write(f"**Ielaistie vārti (vidēji):** {sub_5['z_reg'].mean():.2f}")
-            st.write(f"**Vairākumā iemestie vārti (vidēji):** {sub_5['ppg'].mean():.2f}")
-            if 'ppg_allowed' in sub_5.columns:
-                st.write(f"**Vairākumā ielaistie vārti (vidēji):** {sub_5['ppg_allowed'].mean():.2f}")
-            st.write(f"**Noraidījumi (vidēji):** {sub_5['pim_count'].mean():.1f} ({sub_5['pim_tot'].mean():.1f} minūtes)")
-
-        elif mode_key in ['last5h', 'last5a']:
-            is_home = 1 if mode_key == 'last5h' else 0
-            sub_5 = team_df[team_df['majas'] == is_home].tail(5)
-            loc_text = "mājas" if is_home else "izbraukuma"
-            
-            if sub_5.empty:
-                st.info(f"Nav atrastas {loc_text} spēles šai komandai.")
-            else:
-                st.write(f"**Vārtu guvumi (vidēji):** {sub_5['g_reg'].mean():.2f}")
-                st.write(f"**Ielaistie vārti (vidēji):** {sub_5['z_reg'].mean():.2f}")
-                st.write(f"**Vairākumā iemestie vārti (vidēji):** {sub_5['ppg'].mean():.2f}")
-                if 'ppg_allowed' in sub_5.columns:
-                    st.write(f"**Vairākumā ielaistie vārti (vidēji):** {sub_5['ppg_allowed'].mean():.2f}")
-                st.write(f"**Noraidījumi (vidēji):** {sub_5['pim_count'].mean():.1f} ({sub_5['pim_tot'].mean():.1f} minūtes)")
-
-        elif mode_key == 'pimlast5':
-            sub_df = team_df.tail(5)
-            for _, r in sub_df.iterrows():
-                viesi_majas = "Mājās" if r['majas'] == 1 else "Izbraukumā"
-                d_str = pd.to_datetime(r['datums']).strftime('%d-%m-%Y')
-                pret_viss = pilns_nosaukums(r['pretinieks'])
-                st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
 
 elif rezims == "Kalendārs":
     st.subheader("📅 Tuvāko 5 dienu spēļu grafiks")
