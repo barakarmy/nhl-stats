@@ -17,7 +17,7 @@ NHL_KOMANDAS = {
     "ANA": "Anaheim Ducks", "BOS": "Boston Bruins", "BUF": "Buffalo Sabres",
     "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes", "CHI": "Chicago Blackhawks",
     "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets", "DAL": "Dallas Stars",
-    "DET": "Detroit Red Wings", "EDM": "Oilers", "FLA": "Florida Panthers",
+    "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers", "FLA": "Florida Panthers",
     "LAK": "Los Angeles Kings", "MIN": "Minnesota Wild", "MTL": "Montreal Canadiens",
     "NSH": "Nashville Predators", "NJD": "New Jersey Devils", "NYI": "New York Islanders",
     "NYR": "New York Rangers", "OTT": "Ottawa Senators", "PHI": "Philadelphia Flyers",
@@ -111,7 +111,7 @@ if 'rezims' not in st.session_state:
 if 'selected_team' not in st.session_state:
     st.session_state.selected_team = list(NHL_KOMANDAS.keys())[0]
 
-# --- CSS STILI GLĪTAI UN CIEŠI SABĪDĪTAI NAVIGĀCIJAS JOSLAI ---
+# --- CSS STILI CIEŠI SABĪDĪTAI NAVIGĀCIJAS JOSLAI ---
 st.markdown("""
     <style>
     div[data-testid="stHorizontalBlock"] {
@@ -131,19 +131,17 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- HORIZONTĀLĀS IZVĒLNES POGAS LAPAS AUGŠPUSĒ ---
+# Sagrupētas galvenās izvēlnes pogas
 menu_options = [
     "🎯 Prognozes", 
-    "1. Periods", 
-    "2. Periods", 
-    "3. Periods", 
-    "Forma un Vārti", 
-    "Over / Under", 
-    "Powerplay", 
-    "Noraidījumi", 
-    "Komandas Statistika", 
-    "Kalendārs", 
-    "Rezultāti"
+    "⏱️ Periodi", 
+    "📊 Komandas Statistika", 
+    "🔥 Forma un Vārti", 
+    "📈 Over / Under", 
+    "⚡ Powerplay", 
+    "❌ Noraidījumi", 
+    "📅 Kalendārs", 
+    "✅ Rezultāti"
 ]
 
 def iestatit_rezimu(r):
@@ -225,9 +223,13 @@ if rezims == "🎯 Prognozes":
         else:
             st.warning("Nav atrasts 'nhl_kalendars.csv' fails kalendāra ielādei.")
 
-elif rezims in ["1. Periods", "2. Periods", "3. Periods"]:
-    p_num = rezims[0]
-    st.subheader(f"⏱️ {rezims} Statistika")
+elif rezims == "⏱️ Periodi":
+    st.subheader("⏱️ Periodu Statistika")
+    
+    # Apakšizvēlne periodiem
+    perioda_izvele = st.selectbox("Izvēlies periodu:", ["1. Periods", "2. Periods", "3. Periods"])
+    p_num = perioda_izvele[0]
+    
     filtrs = st.selectbox("Izvēlies skatu:", [
         f"{p_num}. perioda vārtu starpība (Visas spēles)", 
         f"{p_num}. perioda vārtu starpība (Mājas spēles)", 
@@ -374,10 +376,15 @@ elif rezims == "Noraidījumi":
         res.columns = ['komanda', f'Vidējais noraidījumu skaits ({loc_text})']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=f'Vidējais noraidījumu skaits ({loc_text})', ascending=False)), use_container_width=True, hide_index=True)
 
-elif rezims == "Komandas Statistika":
+elif rezims == "📊 Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
     
-    selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
+    # Tiešā komandu izvēlne uzreiz lapas augšpusē
+    selected_team = st.selectbox(
+        "Izvēlies komandu:", 
+        sorted(list(NHL_KOMANDAS.keys())), 
+        format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}"
+    )
     
     parametru_opcijas = {
         "Kopējā statistika un nākamās spēles": "stats",
