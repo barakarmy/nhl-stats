@@ -284,7 +284,7 @@ elif rezims == "2. Periods":
         "2. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
         "2. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
         "2. perioda vidējie metieni (SOG)"
-    ])
+    ], label_visibility="collapsed")
     if "pēdējajās 10 spēlēs" in filtrs:
         sub = df
         if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
@@ -321,7 +321,7 @@ elif rezims == "3. Periods":
         "3. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
         "3. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
         "3. perioda vidējie metieni (SOG)"
-    ])
+    ], label_visibility="collapsed")
     if "pēdējajās 10 spēlēs" in filtrs:
         sub = df
         if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
@@ -357,7 +357,7 @@ elif rezims == "Forma un Vārti":
         "Aukstākās komandas (pēd. 10 spēlēs)",
         "Visvairāk iemet (pēd. 5 spēlēs)",
         "Visvairāk ielaiž (pēd. 5 spēlēs)"
-    ])
+    ], label_visibility="collapsed")
     
     if "Karstākās" in filtrs:
         n = 10 if "10" in filtrs else 5
@@ -386,7 +386,7 @@ elif rezims == "Powerplay":
         "Vairākuma vārtu līderi (Mājās - pēd. 10)",
         "Vairākuma vārtu līderi (Izbraukumā - pēd. 5)",
         "Vairākuma vārtu līderi (Izbraukumā - pēd. 10)"
-    ])
+    ], label_visibility="collapsed")
     
     sub = df
     if "Mājās" in filtrs: sub = df[df['majas'] == 1]
@@ -413,7 +413,7 @@ elif rezims == "Over / Under":
         "Under 6.5 (Visas - pēd. 10)",
         "Under 6.5 (Mājās - pēd. 10)",
         "Under 6.5 (Izbraukumā - pēd. 10)"
-    ])
+    ], label_visibility="collapsed")
     
     n = 10 if "10" in filtrs else 5
     is_over = "Over" in filtrs
@@ -437,7 +437,7 @@ elif rezims == "Noraidījumi":
         "Vidējie noraidījumi pēdējajās 10 spēlēs",
         "Vidējie noraidījumi mājās (PIM H)",
         "Vidējie noraidījumi izbraukumā (PIM A)"
-    ])
+    ], label_visibility="collapsed")
     
     if "10 spēlēs" in filtrs:
         res = df.groupby('komanda').tail(10).groupby('komanda')['pim_count'].mean().reset_index()
