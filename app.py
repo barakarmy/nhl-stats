@@ -111,7 +111,7 @@ if 'rezims' not in st.session_state:
 if 'selected_team' not in st.session_state:
     st.session_state.selected_team = list(NHL_KOMANDAS.keys())[0]
 
-# --- HTML/CSS HOVER DROPDOWN IZVĒLNE (Bez mapēm, cieši sabīdīta) ---
+# --- HTML/CSS HOVER DROPDOWN IZVĒLNE AR PAREIZU RENDERĒŠANU ---
 st.markdown("""
     <style>
     .navbar {
@@ -167,14 +167,12 @@ st.markdown("""
         background-color: #f1f5f9;
         color: #ff4b4b;
     }
-    /* Maģiskā rinda: uzejot ar peli, parādās izvēlne automātiski */
     .dropdown:hover .dropdown-content {
         display: block;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Uztveram klikšķus no HTML izvēlnes caur query parametriem
 query_params = st.query_params
 if "nav" in query_params:
     izveletais = query_params["nav"]
@@ -188,12 +186,10 @@ if "nav" in query_params:
         st.session_state.selected_team = izveletais
         st.session_state.rezims = "Komandas Statistika"
 
-# Generējam komandu sarakstu HTML izvēlnei
 komandas_html = ""
 for k, v in sorted(NHL_KOMANDAS.items(), key=lambda item: item[1]):
     komandas_html += f'<a href="?nav={k}">{v} ({k})</a>'
 
-# HTML struktūra augšējai navigācijai
 nav_html = f"""
 <div class="navbar">
     <div class="dropdown"><button class="dropbtn" onclick="window.location.href='?nav=🎯 Prognozes'">🎯 Prognozes</button></div>
@@ -229,6 +225,7 @@ nav_html = f"""
 </div>
 """
 
+# Pievienots unsafe_allow_html=True, lai HTML kods nostrādātu pareizi
 st.markdown(nav_html, unsafe_allow_html=True)
 rezims = st.session_state.rezims
 
@@ -446,13 +443,7 @@ elif rezims == "Noraidījumi":
 elif rezims == "Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
     
-    selected_team = st.selectbox(
-        "Izvēlies komandu:", 
-        sorted(list(NHL_KOMANDAS.keys())), 
-        index=list(sorted(list(NHL_KOMANDAS.keys()))).index(st.session_state.selected_team) if st.session_state.selected_team in NHL_KOMANDAS else 0,
-        format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}"
-    )
-    st.session_state.selected_team = selected_team
+    selected_team = st.session_state.selected_team
     
     parametru_opcijas = {
         "Kopējā statistika un nākamās spēles": "stats",
