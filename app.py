@@ -163,26 +163,22 @@ def sagatavot_tabulu_izvadei(res_df):
 
 if rezims == "Prognozes":
     st.subheader("🎯 Spēļu Prognozes")
-    st.caption("ℹ️ Dati tiek atjaunināti automātiski katru rītu plkst. 10:00, bet prognožu modelis tiek izsaukts plkst. 11:00.")
+    st.caption("ℹ️ Dati atjaunojas katru rītu plkst. 10:00, modelis izsauc prognozes plkst. 11:00.")
     
-    # Pārbaudām gatavību (vai visas komandas ir sasniegušas 5 spēļu slieksni)
     gatavs, gatavas_sk, kopa_sk = modelis.parbaudit_gatavibu(df)
     
     if not gatavs:
         st.warning(f"⏳ Sezonas ievads: Visas komandas vēl nav aizvadījušas vismaz 5 spēles.")
         st.progress(gatavas_sk / kopa_sk)
-        st.info(f"Pašreizējais statuss: {gatavas_sk} no {kopa_sk} komandām ir sasniegušas 5 spēļu slieksni.")
+        st.info(f"Pašreizējais statuss: {gatavas_sk} no {kopa_sk} komandām sasniegušas 5 spēļu slieksni.")
     else:
         st.success("✅ Modelis ir pilnībā aktīvs! Tiek rēķinātas Puasona prognozes tuvākajām spēlēm.")
         
-        # Šeit mēs vēlāk pieslēgsim kalendāru, kas ņem šodienas/tuvākās dienas spēles 
-        # un katrai spēlei izsauc modelis.aprekinat_prognozi_speles(home, away, df)
         if os.path.exists(CSV_KALENDARS):
             df_k = pd.read_csv(CSV_KALENDARS)
             df_k['datums_dt'] = pd.to_datetime(df_k['datums']) + pd.Timedelta(days=1)
             sodiena_str = datetime.now().strftime('%Y-%m-%d')
             
-            # Paņemam tuvākās dienas spēles
             tuvakas_speles = df_k[df_k['datums_dt'].dt.strftime('%Y-%m-%d') >= sodiena_str].head(5)
             
             if not tuvakas_speles.empty:
@@ -191,7 +187,6 @@ if rezims == "Prognozes":
                     home = r['majas_komanda']
                     away = r['viesu_komanda']
                     
-                    # Izsaucam Puasona modeli no modelis.py
                     prognoze = modelis.aprekinat_prognozi_speles(home, away, df)
                     
                     st.markdown(f"**{pilns_nosaukums(away)} ({away}) @ {pilns_nosaukums(home)} ({home})**")
@@ -212,7 +207,500 @@ if rezims == "Prognozes":
         else:
             st.warning("Nav atrasts 'nhl_kalendars.csv' fails.")
 
-# (Pārējās lapas: 1. Periods, 2. Periods, 3. Periods, Forma un Vārti, Powerplay, Over / Under, Noraidījumi, Komandas Statistika, Kalendārs, Rezultāti paliek nemainīgas, bet bez vecā simulācijas bloka Rezultātu sadaļā)
-
 elif rezims == "1. Periods":
-    # ... (saglabājas viss iepriekšējais kods)
+    st.subheader("⏱️ 1. Perioda Statistika")
+    filtrs = st.selectbox("Izvēlies skatu:", [
+        "1. perioda vārtu starpība (Visas spēles)", 
+        "1. perioda vārtu starpība (Mājas spēles)", 
+        "1. perioda vārtu starpība (Izbraukuma spēles)",
+        "1. perioda vārtu starpība pēdējajās 10 spēlēs (Visas)",
+        "1. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
+        "1. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
+        "1. perioda vidējie metieni (SOG)"
+    ])
+    
+    if "pēdējajās 10 spēlēs" in filtrs:
+        sub = df
+        if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
+        elif "Izbraukumā" in filtrs: sub = sub[sub['majas'] == 0]
+        res = sub.groupby('komanda').tail(10).groupby('komanda')['diff_p1'].sum().reset_index()
+        res.columns = ['komanda', '1.P Vārtu Starpība (pēd. 10)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1.P Vārtu Starpība (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Visas" in filtrs:
+        res = df.groupby('komanda')['diff_p1'].sum().reset_index()
+        res.columns = ['komanda', '1. perioda vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Mājas" in filtrs:
+        sub = df[df['majas'] == 1]
+        res = sub.groupby('komanda')['diff_p1'].sum().reset_index()
+        res.columns = ['komanda', '1. perioda vārtu starpība (Mājās)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vārtu starpība (Mājās)', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Izbraukuma" in filtrs:
+        sub = df[df['majas'] == 0]
+        res = sub.groupby('komanda')['diff_p1'].sum().reset_index()
+        res.columns = ['komanda', '1. perioda vārtu starpība (Izbraukumā)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vārtu starpība (Izbraukumā)', ascending=False)), use_container_width=True, hide_index=True)
+    else:
+        res = df.groupby('komanda')['sog_p1'].mean().reset_index()
+        res.columns = ['komanda', '1. perioda vidējie metieni (SOG)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
+
+elif rezims == "2. Periods":
+    st.subheader("⏱️️ 2. Perioda Statistika")
+    filtrs = st.selectbox("Izvēlies skatu:", [
+        "2. perioda vārtu starpība (Visas spēles)",
+        "2. perioda vārtu starpība (Mājas spēles)",
+        "2. perioda vārtu starpība (Izbraukuma spēles)",
+        "2. perioda vārtu starpība pēdējajās 10 spēlēs (Visas)",
+        "2. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
+        "2. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
+        "2. perioda vidējie metieni (SOG)"
+    ])
+    if "pēdējajās 10 spēlēs" in filtrs:
+        sub = df
+        if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
+        elif "Izbraukumā" in filtrs: sub = sub[sub['majas'] == 0]
+        res = sub.groupby('komanda').tail(10).groupby('komanda')['diff_p2'].sum().reset_index()
+        res.columns = ['komanda', '2.P Vārtu Starpība (pēd. 10)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2.P Vārtu Starpība (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Visas" in filtrs:
+        res = df.groupby('komanda')['diff_p2'].sum().reset_index()
+        res.columns = ['komanda', '2. perioda vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Mājas" in filtrs:
+        sub = df[df['majas'] == 1]
+        res = sub.groupby('komanda')['diff_p2'].sum().reset_index()
+        res.columns = ['komanda', '2. perioda vārtu starpība (Mājās)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vārtu starpība (Mājās)', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Izbraukuma" in filtrs:
+        sub = df[df['majas'] == 0]
+        res = sub.groupby('komanda')['diff_p2'].sum().reset_index()
+        res.columns = ['komanda', '2. perioda vārtu starpība (Izbraukumā)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vārtu starpība (Izbraukumā)', ascending=False)), use_container_width=True, hide_index=True)
+    else:
+        res = df.groupby('komanda')['sog_p2'].mean().reset_index()
+        res.columns = ['komanda', '2. perioda vidējie metieni (SOG)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
+
+elif rezims == "3. Periods":
+    st.subheader("⏱ 3. Perioda Statistika")
+    filtrs = st.selectbox("Izvēlies skatu:", [
+        "3. perioda vārtu starpība (Visas spēles)",
+        "3. perioda vārtu starpība (Mājas spēles)",
+        "3. perioda vārtu starpība (Izbraukuma spēles)",
+        "3. perioda vārtu starpība pēdējajās 10 spēlēs (Visas)",
+        "3. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
+        "3. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
+        "3. perioda vidējie metieni (SOG)"
+    ])
+    if "pēdējajās 10 spēlēs" in filtrs:
+        sub = df
+        if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
+        elif "Izbraukumā" in filtrs: sub = sub[sub['majas'] == 0]
+        res = sub.groupby('komanda').tail(10).groupby('komanda')['diff_p3'].sum().reset_index()
+        res.columns = ['komanda', '3.P Vārtu Starpība (pēd. 10)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3.P Vārtu Starpība (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Visas" in filtrs:
+        res = df.groupby('komanda')['diff_p3'].sum().reset_index()
+        res.columns = ['komanda', '3. perioda vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Mājas" in filtrs:
+        sub = df[df['majas'] == 1]
+        res = sub.groupby('komanda')['diff_p3'].sum().reset_index()
+        res.columns = ['komanda', '3. perioda vārtu starpība (Mājās)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vārtu starpība (Mājās)', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Izbraukuma" in filtrs:
+        sub = df[df['majas'] == 0]
+        res = sub.groupby('komanda')['diff_p3'].sum().reset_index()
+        res.columns = ['komanda', '3. perioda vārtu starpība (Izbraukumā)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vārtu starpība (Izbraukumā)', ascending=False)), use_container_width=True, hide_index=True)
+    else:
+        res = df.groupby('komanda')['sog_p3'].mean().reset_index()
+        res.columns = ['komanda', '3. perioda vidējie metieni (SOG)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
+
+elif rezims == "Forma un Vārti":
+    st.subheader("🔥 Komandu Forma un Vārtu Guvumi")
+    filtrs = st.selectbox("Izvēlies skatu:", [
+        "Karstākās komandas (pēd. 5 spēlēs)",
+        "Karstākās komandas (pēd. 10 spēlēs)",
+        "Aukstākās komandas (pēd. 5 spēlēs)",
+        "Aukstākās komandas (pēd. 10 spēlēs)",
+        "Visvairāk iemet (pēd. 5 spēlēs)",
+        "Visvairāk ielaiž (pēd. 5 spēlēs)"
+    ])
+    
+    if "Karstākās" in filtrs:
+        n = 10 if "10" in filtrs else 5
+        res = df.groupby('komanda').tail(n).groupby('komanda')['g_reg'].sum().reset_index()
+        res.columns = ['komanda', f'Gūtie vārti pēd. {n} spēlēs']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=False)), use_container_width=True, hide_index=True)
+    elif "Aukstākās" in filtrs:
+        n = 10 if "10" in filtrs else 5
+        res = df.groupby('komanda').tail(n).groupby('komanda')['g_reg'].sum().reset_index()
+        res.columns = ['komanda', f'Gūtie vārti pēd. {n} spēlēs']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=res.columns[1], ascending=True)), use_container_width=True, hide_index=True)
+    elif "Visvairāk iemet" in filtrs:
+        res = df.groupby('komanda').apply(lambda g: g.tail(5)['g_reg'].sum()).reset_index(name='Vārtu skaits')
+        res.columns = ['komanda', 'Gūtie vārti pēd. 5 spēlēs']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Gūtie vārti pēd. 5 spēlēs', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Visvairāk ielaiž" in filtrs:
+        res = df.groupby('komanda').apply(lambda g: g.tail(5)['z_reg'].sum()).reset_index(name='Vārtu skaits')
+        res.columns = ['komanda', 'Ielaistie vārti pēd. 5 spēlēs']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Ielaistie vārti pēd. 5 spēlēs', ascending=False)), use_container_width=True, hide_index=True)
+
+elif rezims == "Powerplay":
+    st.subheader("⚡ Vairākuma (Powerplay) Līderi")
+    filtrs = st.selectbox("Izvēlies skatu:", [
+        "Vairākuma vārtu līderi (Visas spēles)",
+        "Vairākuma vārtu līderi (Mājās - pēd. 5)",
+        "Vairākuma vārtu līderi (Mājās - pēd. 10)",
+        "Vairākuma vārtu līderi (Izbraukumā - pēd. 5)",
+        "Vairākuma vārtu līderi (Izbraukumā - pēd. 10)"
+    ])
+    
+    sub = df
+    if "Mājās" in filtrs: sub = df[df['majas'] == 1]
+    elif "Izbraukumā" in filtrs: sub = df[df['majas'] == 0]
+    
+    if "5" in filtrs:
+        res = sub.groupby('komanda').tail(5).groupby('komanda')['ppg'].sum().reset_index()
+    elif "10" in filtrs:
+        res = sub.groupby('komanda').tail(10).groupby('komanda')['ppg'].sum().reset_index()
+    else:
+        res = sub.groupby('komanda')['ppg'].sum().reset_index()
+        
+    res.columns = ['komanda', 'Vairākumā gūtie vārti']
+    st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vairākumā gūtie vārti', ascending=False)), use_container_width=True, hide_index=True)
+
+elif rezims == "Over / Under":
+    st.subheader("📈 Spēļu Kopējā Vārtu Summa (Over / Under 6.5)")
+    filtrs = st.selectbox("Izvēlies skatu:", [
+        "Over 6.5 (Visas - pēd. 5)",
+        "Over 6.5 (Visas - pēd. 10)",
+        "Over 6.5 (Mājās - pēd. 10)",
+        "Over 6.5 (Izbraukumā - pēd. 10)",
+        "Under 6.5 (Visas - pēd. 5)",
+        "Under 6.5 (Visas - pēd. 10)",
+        "Under 6.5 (Mājās - pēd. 10)",
+        "Under 6.5 (Izbraukumā - pēd. 10)"
+    ])
+    
+    n = 10 if "10" in filtrs else 5
+    is_over = "Over" in filtrs
+    
+    sub = df
+    if "Mājās" in filtrs: sub = df[df['majas'] == 1]
+    elif "Izbraukumā" in filtrs: sub = df[df['majas'] == 0]
+    
+    def calc_ou(group):
+        tail_group = group.tail(n)
+        return (tail_group['tot_reg_goals'] > 6.5).sum() if is_over else (tail_group['tot_reg_goals'] < 6.5).sum()
+        
+    res = sub.groupby('komanda').apply(calc_ou).reset_index(name='Spēļu skaits')
+    res.columns = ['komanda', 'Atbilstošo spēļu skaits']
+    st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Atbilstošo spēļu skaits', ascending=False)), use_container_width=True, hide_index=True)
+
+elif rezims == "Noraidījumi":
+    st.subheader("❌ Noraidījumu (PIM) Līderi")
+    filtrs = st.selectbox("Izvēlies skatu:", [
+        "Vidējie noraidījumi (Visas spēles)",
+        "Vidējie noraidījumi pēdējajās 10 spēlēs",
+        "Vidējie noraidījumi mājās (PIM H)",
+        "Vidējie noraidījumi izbraukumā (PIM A)"
+    ])
+    
+    if "10 spēlēs" in filtrs:
+        res = df.groupby('komanda').tail(10).groupby('komanda')['pim_count'].mean().reset_index()
+        res.columns = ['komanda', 'Vidējais noraidījumu skaits (pēd. 10)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vidējais noraidījumu skaits (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
+    elif "Visas" in filtrs:
+        res = df.groupby('komanda')['pim_count'].mean().reset_index()
+        res.columns = ['komanda', 'Vidējais noraidījumu skaits (Visas)']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vidējais noraidījumu skaits (Visas)', ascending=False)), use_container_width=True, hide_index=True)
+    else:
+        is_home = 1 if "mājās" in filtrs else 0
+        sub = df[df['majas'] == is_home]
+        res = sub.groupby('komanda')['pim_count'].mean().reset_index()
+        loc_text = "mājās" if is_home else "izbraukumā"
+        res.columns = ['komanda', f'Vidējais noraidījumu skaits ({loc_text})']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=f'Vidējais noraidījumu skaits ({loc_text})', ascending=False)), use_container_width=True, hide_index=True)
+
+elif rezims == "Komandas Statistika":
+    st.subheader("📊 Komandas Analīze")
+    
+    selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
+    
+    parametru_opcijas = {
+        "Kopējā statistika un nākamās spēles": "stats",
+        "Mājas spēļu vidējie rādītāji": "h",
+        "Izbraukuma spēļu vidējie rādītāji": "a",
+        "Pēdējo 5 spēļu statistika (Visas)": "last5",
+        "Pēdējo 5 mājas spēļu statistika": "last5h",
+        "Pēdējo 5 izbraukuma spēļu statistika": "last5a",
+        "Noraidījumu vēsture pēdējajās 5 spēlēs": "pimlast5"
+    }
+    
+    stat_izvele = st.selectbox("Izvēlies parametru:", list(parametru_opcijas.keys()))
+    mode_key = parametru_opcijas[stat_izvele]
+    
+    team_df = df[df['komanda'] == selected_team]
+    pilns_n = pilns_nosaukums(selected_team)
+    
+    if team_df.empty:
+        st.warning("Šai komandai nav datu bāzē.")
+    else:
+        st.markdown(f"### Komanda: {pilns_n} ({selected_team})")
+        
+        if mode_key == 'stats':
+            total_games = len(team_df)
+            home_df = team_df[team_df['majas'] == 1]
+            away_df = team_df[team_df['majas'] == 0]
+            
+            st.metric("Apskatītās spēles", total_games)
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write(f"**Vidēji vārti:** {team_df['g_reg'].mean():.2f}")
+                st.write(f"Mājās: {home_df['g_reg'].mean():.2f} | Izbr: {away_df['g_reg'].mean():.2f}")
+            with col2:
+                st.write(f"**Vairākuma vārti:** {team_df['ppg'].mean():.2f}")
+                st.write(f"Mājās: {home_df['ppg'].mean():.2f} | Izbr: {away_df['ppg'].mean():.2f}")
+            with col3:
+                st.write(f"**Noraidījumi:** {team_df['pim_count'].mean():.1f}")
+                st.write(f"Mājās: {home_df['pim_count'].mean():.1f} | Izbr: {away_df['pim_count'].mean():.1f}")
+            
+            if os.path.exists(CSV_KALENDARS):
+                st.markdown("---")
+                st.markdown("#### 📅 Turpmākās spēles:")
+                df_k = pd.read_csv(CSV_KALENDARS)
+                df_k['datums_dt'] = pd.to_datetime(df_k['datums']) + pd.Timedelta(days=1)
+                komandas_speles = df_k[(df_k['majas_komanda'] == selected_team) | (df_k['viesu_komanda'] == selected_team)]
+                sodiena_str = datetime.now().strftime('%Y-%m-%d')
+                nakotnes_speles = komandas_speles[komandas_speles['datums_dt'].dt.strftime('%Y-%m-%d') >= sodiena_str].head(5)
+                
+                if not nakotnes_speles.empty:
+                    for _, r in nakotnes_speles.iterrows():
+                        is_home = r['majas_komanda'] == selected_team
+                        H_vai_A = "Mājās" if is_home else "Izbraukumā"
+                        pretinieka_kods = r['viesu_komanda'] if is_home else r['majas_komanda']
+                        pretinieka_viss = pilns_nosaukums(pretinieka_kods)
+                        d_fmt = r['datums_dt'].strftime('%d-%m-%Y')
+                        st.text(f"• {d_fmt} vs {pretinieka_viss} ({pretinieka_kods}) [{H_vai_A}]")
+                else:
+                    st.info("Kalendārā nav atrastu nākamo spēļu.")
+
+        elif mode_key in ['h', 'a']:
+            is_home = 1 if mode_key == 'h' else 0
+            sub_df = team_df[team_df['majas'] == is_home]
+            st.write(f"**Apskatīto spēļu skaits:** {len(sub_df)}")
+            st.write(f"**Vidēji iemestie vārti:** {sub_df['g_reg'].mean():.2f}")
+            st.write(f"**Vidēji ielaistie vārti:** {sub_df['z_reg'].mean():.2f}")
+            st.write(f"**Vidējās soda minūtes (PIM):** {sub_df['pim_tot'].mean():.2f}")
+
+        elif mode_key == 'last5':
+            sub_5 = team_df.tail(5)
+            st.write(f"**Vārtu guvumi (vidēji):** {sub_5['g_reg'].mean():.2f}")
+            st.write(f"**Ielaistie vārti (vidēji):** {sub_5['z_reg'].mean():.2f}")
+            st.write(f"**Vairākumā iemestie vārti (vidēji):** {sub_5['ppg'].mean():.2f}")
+            if 'ppg_allowed' in sub_5.columns:
+                st.write(f"**Vairākumā ielaistie vārti (vidēji):** {sub_5['ppg_allowed'].mean():.2f}")
+            st.write(f"**Noraidījumi (vidēji):** {sub_5['pim_count'].mean():.1f} ({sub_5['pim_tot'].mean():.1f} minūtes)")
+
+        elif mode_key in ['last5h', 'last5a']:
+            is_home = 1 if mode_key == 'last5h' else 0
+            sub_5 = team_df[team_df['majas'] == is_home].tail(5)
+            loc_text = "mājas" if is_home else "izbraukuma"
+            
+            if sub_5.empty:
+                st.info(f"Nav atrastas {loc_text} spēles šai komandai.")
+            else:
+                st.write(f"**Vārtu guvumi (vidēji):** {sub_5['g_reg'].mean():.2f}")
+                st.write(f"**Ielaistie vārti (vidēji):** {sub_5['z_reg'].mean():.2f}")
+                st.write(f"**Vairākumā iemestie vārti (vidēji):** {sub_5['ppg'].mean():.2f}")
+                if 'ppg_allowed' in sub_5.columns:
+                    st.write(f"**Vairākumā ielaistie vārti (vidēji):** {sub_5['ppg_allowed'].mean():.2f}")
+                st.write(f"**Noraidījumi (vidēji):** {sub_5['pim_count'].mean():.1f} ({sub_5['pim_tot'].mean():.1f} minūtes)")
+
+        elif mode_key == 'pimlast5':
+            sub_df = team_df.tail(5)
+            for _, r in sub_df.iterrows():
+                viesi_majas = "Mājās" if r['majas'] == 1 else "Izbraukumā"
+                d_str = pd.to_datetime(r['datums']).strftime('%d-%m-%Y')
+                pret_viss = pilns_nosaukums(r['pretinieks'])
+                st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
+
+elif rezims == "Kalendārs":
+    st.subheader("📅 Tuvāko 5 dienu spēļu grafiks")
+    if not os.path.exists(CSV_KALENDARS):
+        st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts.")
+    else:
+        try:
+            df_k = pd.read_csv(CSV_KALENDARS)
+            sodiena = datetime.now().date()
+            beigu_diena = sodiena + pd.Timedelta(days=5)
+            
+            df_k['datums_dt'] = pd.to_datetime(df_k['datums']) + pd.Timedelta(days=1)
+            df_k['datums_val'] = df_k['datums_dt'].dt.date
+            
+            tuvakas_speles = df_k[(df_k['datums_val'] >= sodiena) & (df_k['datums_val'] <= beigu_diena)]
+            
+            if tuvakas_speles.empty:
+                st.info("Tuvākajās 5 dienās nav paredzētu spēļu.")
+            else:
+                dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
+                for datums_obj, grupa in tuvakas_speles.groupby('datums_val'):
+                    dt_str_lv = datums_obj.strftime('%d-%m-%Y')
+                    diena_lv = dienu_tulkojums.get(datums_obj.strftime('%A'), datums_obj.strftime('%A'))
+                    st.markdown(f"**📌 Datums: {dt_str_lv} ({diena_lv})**")
+                    for _, r in grupa.iterrows():
+                        viesis = pilns_nosaukums(r['viesu_komanda'])
+                        majas = pilns_nosaukums(r['majas_komanda'])
+                        st.text(f"    • {viesis} ({r['viesu_komanda']}) @ {majas} ({r['majas_komanda']})")
+                    st.divider()
+        except Exception as e:
+            st.error(f"Kļūda nolasot kalendāru: {e}")
+
+elif rezims == "Rezultāti":
+    st.markdown("""
+        <style>
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0px !important;
+        }
+        div[data-testid="column"] {
+            margin: 0px !important;
+            padding: 0px !important;
+        }
+        div[data-testid="stColumn"] button {
+            border-radius: 0 !important;
+            width: 100% !important;
+            border-right: 0px !important;
+            white-space: pre-line !important; 
+            line-height: 1.3 !important;
+            text-align: center !important;
+            padding-top: 6px !important;
+            padding-bottom: 6px !important;
+        }
+        div[data-testid="stColumn"]:first-child button { 
+            border-top-left-radius: 6px !important; 
+            border-bottom-left-radius: 6px !important; 
+        }
+        div[data-testid="stColumn"]:last-child button {
+            border-top-right-radius: 6px !important;
+            border-bottom-right-radius: 6px !important;
+            border-right: 1px solid rgba(49, 51, 63, 0.2) !important;
+        }
+        @media (prefers-color-scheme: dark) {
+            div[data-testid="stColumn"]:last-child button { 
+                border-right: 1px solid rgba(250, 250, 250, 0.2) !important; 
+            }
+        }
+        .rez-highlight {
+            background-color: #2b4c7e;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .prognozes-bloks {
+            line-height: 1.6;
+            margin-top: 8px;
+            margin-bottom: 25px;
+            font-size: 15px;
+            color: inherit;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    st.subheader("✅ Spēļu Rezultāti")
+    
+    dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
+    
+    if raw_df is not None and not raw_df.empty:
+        max_date_in_csv = raw_df['datums'].max().date()
+        today = datetime.today().date()
+        base_center_date = today if today <= max_date_in_csv + pd.Timedelta(days=1) else max_date_in_csv
+    else:
+        base_center_date = datetime.today().date()
+
+    if 'res_date_offset' not in st.session_state:
+        st.session_state.res_date_offset = 0
+        
+    center_date = base_center_date + pd.Timedelta(days=st.session_state.res_date_offset)
+    dates = [center_date + pd.Timedelta(days=i) for i in range(-3, 4)]
+    
+    if 'selected_res_date' not in st.session_state:
+        st.session_state.selected_res_date = center_date
+
+    def change_offset(delta):
+        st.session_state.res_date_offset += delta
+
+    def set_date(d):
+        st.session_state.selected_res_date = d
+
+    cols = st.columns(9)
+    cols[0].button("❮", on_click=change_offset, args=(-7,), width='stretch')
+    
+    for idx, d in enumerate(dates):
+        d_str = d.strftime("%d.%m")
+        d_weekday = dienu_tulkojums.get(d.strftime('%A'), d.strftime('%A'))
+        btn_label = f"{d_str}\n{d_weekday}"
+        
+        btn_style = "primary" if d == st.session_state.selected_res_date else "secondary"
+        cols[idx+1].button(btn_label, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,), width='stretch')
+        
+    cols[8].button("❯", on_click=change_offset, args=(-7,), width='stretch')
+    
+    st.markdown("---")
+    st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d-%m-%Y')} ({dienu_tulkojums.get(st.session_state.selected_res_date.strftime('%A'), '')})")
+
+    if raw_df is not None and not raw_df.empty:
+        dienas_speles = raw_df[raw_df['datums'].dt.date == st.session_state.selected_res_date]
+        seen_games = set()
+        
+        if dienas_speles.empty:
+            st.info("Šajā datumā nav atrastu noslēgušos spēļu rezultātu.")
+        else:
+            for _, r in dienas_speles.iterrows():
+                if r['game_id'] in seen_games:
+                    continue
+                seen_games.add(r['game_id'])
+                
+                away = r['away_team']
+                home = r['home_team']
+                away_full = pilns_nosaukums(away)
+                home_full = pilns_nosaukums(home)
+                
+                ap1 = int(r['away_p1']) if pd.notna(r['away_p1']) else 0
+                hp1 = int(r['home_p1']) if pd.notna(r['home_p1']) else 0
+                ap2 = int(r['away_p2']) if pd.notna(r['away_p2']) else 0
+                hp2 = int(r['home_p2']) if pd.notna(r['home_p2']) else 0
+                ap3 = int(r['away_p3']) if pd.notna(r['away_p3']) else 0
+                hp3 = int(r['home_p3']) if pd.notna(r['home_p3']) else 0
+                
+                ag = ap1 + ap2 + ap3
+                hg = hp1 + hp2 + hp3
+                
+                if ag > hg:
+                    winner = f" {away}"
+                elif hg > ag:
+                    winner = f" {home}"
+                else:
+                    winner = ""
+                    
+                score_str = f"{ag}-{hg}{winner}".strip()
+                periods_str = f"({ap1}:{hp1};{ap2}:{hp2};{ap3}:{hp3})"
+                
+                h_pim_tot = r['home_pim_total'] if 'home_pim_total' in r and pd.notna(r['home_pim_total']) else 0
+                a_pim_tot = r['away_pim_total'] if 'away_pim_total' in r and pd.notna(r['away_pim_total']) else 0
+                
+                h_penalties = int(round(h_pim_tot / 2))
+                a_penalties = int(round(a_pim_tot / 2))
+                total_penalties = h_penalties + a_penalties
+                
+                penalties_breakdown = f"({a_penalties};{h_penalties})"
+                
+                match_str = f"**{away_full} ({away}) @ {home_full} ({home})** / <span class='rez-highlight'>Rezultāts - {score_str} {periods_str} - Penalties - {total_penalties} {penalties_breakdown}</span>"
+                
+                st.markdown(match_str, unsafe_allow_html=True)
+                st.divider()
