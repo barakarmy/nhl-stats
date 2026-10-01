@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 import os
 from datetime import datetime
-import modelis  # Importējam prognožu modeli no blakus esošā modelis.py faila
+import modelis  # Importējam prognožu modeli
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
 
