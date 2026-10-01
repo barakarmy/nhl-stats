@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 import os
 from datetime import datetime
+import modelis  # Importējam mūsu izveidoto prognožu modeļa failu
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
 
@@ -162,7 +163,17 @@ def sagatavot_tabulu_izvadei(res_df):
 
 if rezims == "Prognozes":
     st.subheader("🎯 Spēļu Prognozes")
-    st.info("Šeit drīzumā tiks integrēts matemātiskais prognožu modelis, kas rādīs vārtu un noraidījumu predikcijas nākamajām spēlēm.")
+    
+    # Izmantojam funkciju no modelis.py, lai pārbaudītu, vai komandas ir aizvadījušas 5 spēles
+    gatavs, gatavas_sk, kopa_sk = modelis.parbaudit_gatavibu(df)
+    
+    if not gatavs:
+        st.warning(f"⏳ Modelis vēl krāj datus sezonas ievadā! Visas NHL komandas vēl nav aizvadījušas vismaz 5 spēles.")
+        st.progress(gatavas_sk / kopa_sk)
+        st.info(f"Pašreizējais gatavības statuss: {gatavas_sk} no {kopa_sk} komandām ir sasniegušas 5 spēļu slieksni.")
+    else:
+        st.success("✅ Visas komandas ir aizvadījušas vismaz 5 spēles! Modelis ir gatavs un aktīvs.")
+        st.info("Šeit drīzumā tiks attēlotas matemātiski aprēķinātās prognozes nākamajām spēlēm.")
 
 elif rezims == "1. Periods":
     st.subheader("⏱️ 1. Perioda Statistika")
@@ -520,7 +531,6 @@ elif rezims == "Kalendārs":
 elif rezims == "Rezultāti":
     st.markdown("""
         <style>
-        /* Pilnībā likvidējam atstarpes starp kolonnām un pogām */
         div[data-testid="stHorizontalBlock"] {
             gap: 0px !important;
         }
