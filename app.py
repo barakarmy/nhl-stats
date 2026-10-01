@@ -192,8 +192,7 @@ def sagatavot_tabulu_izvadei(res_df):
 # === LAPU SATURS ===
 
 if rezims == "Prognozes":
-    st.subheader("🎯 Spēļu Prognozes")
-    st.info("ℹ️ Datu vākšana no NHL API notiek plkst. 10:00 (LV laiks). Modeļa un Streamlit paneļa prognožu ģenerācija izsauc šos svaigos datus no plkst. 11:00.")
+    st.subheader("Predictions")
     
     gatavs, gatavas_sk, kopa_sk = modelis.parbaudit_gatavibu(df)
     
