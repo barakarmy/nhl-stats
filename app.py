@@ -253,26 +253,26 @@ elif rezims == "1. Periods":
         if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
         elif "Izbraukumā" in filtrs: sub = sub[sub['majas'] == 0]
         res = sub.groupby('komanda').tail(10).groupby('komanda')['diff_p1'].sum().reset_index()
-        res.columns = ['komanda', '1.P Vārtu Starpība (pēd. 10)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1.P Vārtu Starpība (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     elif "Visas" in filtrs:
         res = df.groupby('komanda')['diff_p1'].sum().reset_index()
-        res.columns = ['komanda', '1. perioda vārtu starpība']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     elif "Mājas" in filtrs:
         sub = df[df['majas'] == 1]
         res = sub.groupby('komanda')['diff_p1'].sum().reset_index()
-        res.columns = ['komanda', '1. perioda vārtu starpība (Mājās)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vārtu starpība (Mājās)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     elif "Izbraukuma" in filtrs:
         sub = df[df['majas'] == 0]
         res = sub.groupby('komanda')['diff_p1'].sum().reset_index()
-        res.columns = ['komanda', '1. perioda vārtu starpība (Izbraukumā)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vārtu starpība (Izbraukumā)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     else:
         res = df.groupby('komanda')['sog_p1'].mean().reset_index()
-        res.columns = ['komanda', '1. perioda vidējie metieni (SOG)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Metienu vidējais skaits']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Metienu vidējais skaits', ascending=False)), use_container_width=True, hide_index=True)
 
 elif rezims == "2. Periods":
     st.subheader("⏱️ 2. Perioda Statistika")
@@ -290,26 +290,26 @@ elif rezims == "2. Periods":
         if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
         elif "Izbraukumā" in filtrs: sub = sub[sub['majas'] == 0]
         res = sub.groupby('komanda').tail(10).groupby('komanda')['diff_p2'].sum().reset_index()
-        res.columns = ['komanda', '2.P Vārtu Starpība (pēd. 10)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2.P Vārtu Starpība (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     elif "Visas" in filtrs:
         res = df.groupby('komanda')['diff_p2'].sum().reset_index()
-        res.columns = ['komanda', '2. perioda vārtu starpība']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     elif "Mājas" in filtrs:
         sub = df[df['majas'] == 1]
         res = sub.groupby('komanda')['diff_p2'].sum().reset_index()
-        res.columns = ['komanda', '2. perioda vārtu starpība (Mājās)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vārtu starpība (Mājās)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     elif "Izbraukuma" in filtrs:
         sub = df[df['majas'] == 0]
         res = sub.groupby('komanda')['diff_p2'].sum().reset_index()
-        res.columns = ['komanda', '2. perioda vārtu starpība (Izbraukumā)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vārtu starpība (Izbraukumā)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     else:
         res = df.groupby('komanda')['sog_p2'].mean().reset_index()
-        res.columns = ['komanda', '2. perioda vidējie metieni (SOG)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Metienu vidējais skaits']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Metienu vidējais skaits', ascending=False)), use_container_width=True, hide_index=True)
 
 elif rezims == "3. Periods":
     st.subheader("⏱️ 3. Perioda Statistika")
@@ -327,8 +327,8 @@ elif rezims == "3. Periods":
         if "Mājās" in filtrs: sub = sub[sub['majas'] == 1]
         elif "Izbraukumā" in filtrs: sub = sub[sub['majas'] == 0]
         res = sub.groupby('komanda').tail(10).groupby('komanda')['diff_p3'].sum().reset_index()
-        res.columns = ['komanda', '3.P Vārtu Starpība (pēd. 10)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3.P Vārtu Starpība (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     elif "Visas" in filtrs:
         res = df.groupby('komanda')['diff_p3'].sum().reset_index()
         res.columns = ['komanda', 'Vārtu starpība']
@@ -341,12 +341,12 @@ elif rezims == "3. Periods":
     elif "Izbraukuma" in filtrs:
         sub = df[df['majas'] == 0]
         res = sub.groupby('komanda')['diff_p3'].sum().reset_index()
-        res.columns = ['komanda', '3. perioda vārtu starpība (Izbraukumā)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vārtu starpība (Izbraukumā)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Vārtu starpība']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     else:
         res = df.groupby('komanda')['sog_p3'].mean().reset_index()
-        res.columns = ['komanda', '3. perioda vidējie metieni (SOG)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Metienu vidējais skaits']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Metienu vidējais skaits', ascending=False)), use_container_width=True, hide_index=True)
 
 elif rezims == "Forma un Vārti":
     st.subheader("🔥 Komandu Forma un Vārtu Guvumi")
