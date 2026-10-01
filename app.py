@@ -452,8 +452,8 @@ elif rezims == "Noraidījumi":
         sub = df[df['majas'] == is_home]
         res = sub.groupby('komanda')['pim_count'].mean().reset_index()
         loc_text = "mājās" if is_home else "izbraukumā"
-        res.columns = ['komanda', f'Vidējais noraidījumu skaits ({loc_text})']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=f'Vidējais noraidījumu skaits ({loc_text})', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Noraidījumu skaits']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Noraidījumu skaits', ascending=False)), use_container_width=True, hide_index=True)
 
 elif rezims == "Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
