@@ -472,7 +472,7 @@ elif rezims == "Komandas Statistika":
         "Periodu detalizēta statistika": "periods"
     }
     
-    stat_izvele = st.selectbox("Izvēlies parametru:", list(parametru_opcijas.keys())
+    stat_izvele = st.selectbox("Izvēlies parametru:", list(parametru_opcijas.keys()),
      label_visibility="collapsed"
     )
     mode_key = parametru_opcijas[stat_izvele]
