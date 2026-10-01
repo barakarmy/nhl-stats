@@ -14,31 +14,6 @@ NHL_KOMANDAS = {
     "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets", "DAL": "Dallas Stars",
     "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers", "FLA": "Florida Panthers",
     "LAK": "Los Angeles Kings", "MIN": "Minnesota Wild", "MTL": "Montreal Canadiens",
-    "NSH": "Nashville Predators", "NJD": "New JerseyŠis paziņojums konsolē nav saistīts ar pogu izkārtojumu vai kalendāru, bet gan ar to, ka nesenajā Streamlit atjauninājumā ir mainījies sintakses standarts. 
-
-Paziņojums norāda, ka parametrs `use_container_width=True` pogām (un citiem elementiem) tiek pakāpeniski aizstāts ar vienkāršāku parametru `width='stretch'`. Tāpēc konsole izmet šo brīdinājumu, lai tu laicīgi to nomainītu.
-
-Mēs varam uzreiz visās pogās nomainīt veco parametru pret jauno, kas arī reizē sakārtos pogu kodu un novērsīs šos paziņojumus konsolē.
-
-Lūk, atjauninātais `app.py` kods, kurā pogām ir nomainīts `use_container_width=True` uz `width='stretch'`:
-
-```python
-import pandas as pd
-import streamlit as st
-import os
-from datetime import datetime
-
-st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
-
-CSV_FAILS = "nhl_sezona.csv"
-CSV_KALENDARS = "nhl_kalendars.csv"
-
-NHL_KOMANDAS = {
-    "ANA": "Anaheim Ducks", "BOS": "Boston Bruins", "BUF": "Buffalo Sabres",
-    "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes", "CHI": "Chicago Blackhawks",
-    "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets", "DAL": "Dallas Stars",
-    "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers", "FLA": "Florida Panthers",
-    "LAK": "Los Angeles Kings", "MIN": "Minnesota Wild", "MTL": "Montreal Canadiens",
     "NSH": "Nashville Predators", "NJD": "New Jersey Devils", "NYI": "New York Islanders",
     "NYR": "New York Rangers", "OTT": "Ottawa Senators", "PHI": "Philadelphia Flyers",
     "PIT": "Pittsburgh Penguins", "SJS": "San Jose Sharks", "SEA": "Seattle Kraken",
@@ -698,4 +673,22 @@ elif rezims == "Rezultāti":
                 
                 p3_val, p3_type = 3.5, "under"
                 p3_tot = ap3 + hp3
-                p3_hit = (p3
+                p3_hit = (p3_tot < p3_val) if p3_type == "under" else (p3_tot > p3_val)
+                
+                def ic(hit): return "✅" if hit else "❌"
+                
+                prog_html = f"""
+                <div class='prognozes-bloks'>
+                    Prognoze rezultāts - {pred_rez} {ic(rez_hit)}<br>
+                    Prognoze over/under - {ou_type} {ou_val} {ic(tot_hit)}<br>
+                    Prognoze noraidījumi - {pim_type} {pim_val} {ic(pim_hit)}<br>
+                    Prognoze periodi - <br>
+                    &nbsp;&nbsp;1. {p1_type} {p1_val} {ic(p1_hit)}<br>
+                    &nbsp;&nbsp;2. {p2_type} {p2_val} {ic(p2_hit)}<br>
+                    &nbsp;&nbsp;3. {p3_type} {p3_val} {ic(p3_hit)}
+                </div>
+                """
+                
+                st.markdown(match_str, unsafe_allow_html=True)
+                st.markdown(prog_html, unsafe_allow_html=True)
+                st.divider()
