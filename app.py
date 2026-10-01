@@ -145,19 +145,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🏒 NHL stats&prediction")
-
-st.markdown("""
-    <style>
-    /* Nocentrē tekstu un datus visās datu tabulas šūnās */
-    div[data-testid="stDataFrame"] th {
-        text-align: center !important;
-    }
-    div[data-testid="stDataFrame"] td {
-        text-align: center !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 raw_df = iegut_datus()
 if raw_df is None:
     st.error("CSV fails ('nhl_sezona.csv') nav atrasts!")
