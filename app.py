@@ -246,7 +246,7 @@ elif rezims == "1. Periods":
         "1. perioda vārtu starpība pēdējajās 10 spēlēs (Mājās)",
         "1. perioda vārtu starpība pēdējajās 10 spēlēs (Izbraukumā)",
         "1. perioda vidējie metieni (SOG)"
-    ] label_visibility="collapsed")
+    ], label_visibility="collapsed")
     
     if "pēdējajās 10 spēlēs" in filtrs:
         sub = df
