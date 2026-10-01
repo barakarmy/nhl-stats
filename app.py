@@ -122,7 +122,6 @@ if 'rezims' not in st.session_state:
 
 # --- SĀNJOSLAS NAVIGĀCIJA ---
 st.sidebar.markdown("### 🏠 Sākumlapa")
-# ŠEIT vēlāk ievietosim logo pogu. Pagaidām tas ir parasts teksts.
 if st.sidebar.button("🎯 Prognozes", use_container_width=True): st.session_state.rezims = "Prognozes"
 
 st.sidebar.markdown("---")
@@ -241,7 +240,7 @@ elif rezims == "2. Periods":
 
 # 3. PERIODS
 elif rezims == "3. Periods":
-    st.subheader("⏱️️ 3. Perioda Statistika")
+    st.subheader("⏱ 3. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "3. perioda vārtu starpība (Visas spēles)",
         "3. perioda vārtu starpība (Mājas spēles)",
@@ -521,9 +520,46 @@ elif rezims == "Kalendārs":
 
 # REZULTĀTI
 elif rezims == "Rezultāti":
+    st.markdown("""
+        <style>
+        /* Padarīt kalendāra pogas kā vienotu bloku bez atstarpēm */
+        div.date-row-wrapper + div[data-testid="stHorizontalBlock"] {
+            gap: 0px !important;
+        }
+        div.date-row-wrapper + div[data-testid="stHorizontalBlock"] div[data-testid="column"] div[data-testid="stButton"] button {
+            width: 100%;
+            border-radius: 0px !important;
+            border-right: 0px !important;
+            padding: 5px 0px !important;
+        }
+        div.date-row-wrapper + div[data-testid="stHorizontalBlock"] div[data-testid="column"]:last-child div[data-testid="stButton"] button {
+            border-right: 1px solid rgba(49, 51, 63, 0.2) !important;
+            border-top-right-radius: 5px !important;
+            border-bottom-right-radius: 5px !important;
+        }
+        div.date-row-wrapper + div[data-testid="stHorizontalBlock"] div[data-testid="column"]:first-child div[data-testid="stButton"] button {
+            border-top-left-radius: 5px !important;
+            border-bottom-left-radius: 5px !important;
+        }
+        @media (prefers-color-scheme: dark) {
+            div.date-row-wrapper + div[data-testid="stHorizontalBlock"] div[data-testid="column"]:last-child div[data-testid="stButton"] button {
+                border-right: 1px solid rgba(250, 250, 250, 0.2) !important;
+            }
+        }
+        /* Prognožu bloka noformējums */
+        .prognozes-bloks {
+            line-height: 1.6;
+            margin-top: 5px;
+            margin-bottom: 20px;
+            font-size: 15px;
+            color: inherit;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     st.subheader("✅ Spēļu Rezultāti")
     
-    # 1. Atmiņa un datumu aprēķins
+    # Atmiņa un datumu aprēķins
     if 'res_date_offset' not in st.session_state:
         st.session_state.res_date_offset = 0
         
@@ -539,32 +575,30 @@ elif rezims == "Rezultāti":
     if 'selected_res_date' not in st.session_state:
         st.session_state.selected_res_date = dates[-1]
 
-    # Atmiņas funkcijas pogu darbībām
     def change_offset(delta):
         st.session_state.res_date_offset += delta
 
     def set_date(d):
         st.session_state.selected_res_date = d
 
-    # 2. Datumu navigācijas pogu rinda
-    cols = st.columns([1, 2, 2, 2, 2, 2, 2, 2, 1])
-    cols[0].button("⬅️", on_click=change_offset, args=(-7,), key="prev_w")
+    # Datumu navigācijas pogu rinda ar pielāgotu klasi
+    st.markdown('<div class="date-row-wrapper"></div>', unsafe_allow_html=True)
+    cols = st.columns(9)
+    cols[0].button("❮", on_click=change_offset, args=(-7,), key="prev_w")
     
     for idx, d in enumerate(dates):
         d_str = d.strftime("%d.%m")
         btn_style = "primary" if d == st.session_state.selected_res_date else "secondary"
         cols[idx+1].button(d_str, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,))
         
-    cols[8].button("➡️", on_click=change_offset, args=(7,), key="next_w")
+    cols[8].button("❯", on_click=change_offset, args=(7,), key="next_w")
     
     st.markdown("---")
     st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d.%m.%Y')}")
 
-    # 3. Spēļu attēlošana un "simulēto" prognožu ielāde
+    # Spēļu attēlošana
     if raw_df is not None and not raw_df.empty:
         dienas_speles = raw_df[raw_df['datums'].dt.date == st.session_state.selected_res_date]
-        
-        # Mēs sagatavojam unikalizētu sarakstu, lai katra spēle neparādītos 2 reizes (jo df dati ir dublēti mājas/izbraukuma dēļ)
         seen_games = set()
         
         if dienas_speles.empty:
@@ -580,7 +614,6 @@ elif rezims == "Rezultāti":
                 away_full = pilns_nosaukums(away)
                 home_full = pilns_nosaukums(home)
                 
-                # Drošai nolasīšanai pārvēršam par veselu skaitli
                 ap1, hp1 = int(r['away_p1']), int(r['home_p1'])
                 ap2, hp2 = int(r['away_p2']), int(r['home_p2'])
                 ap3, hp3 = int(r['away_p3']), int(r['home_p3'])
@@ -589,31 +622,59 @@ elif rezims == "Rezultāti":
                 hg = hp1 + hp2 + hp3
                 
                 if ag > hg:
-                    winner = away
+                    winner = f" {away}"
                 elif hg > ag:
-                    winner = home
+                    winner = f" {home}"
                 else:
-                    winner = "" # Ja spēle vēl procesā vai dati nepilnīgi
+                    winner = ""
                     
-                score_str = f"{ag}-{hg} {winner}".strip()
+                score_str = f"{ag}-{hg}{winner}".strip()
                 periods_str = f"({ap1}:{hp1};{ap2}:{hp2};{ap3}:{hp3})"
                 
-                # Spēles pilnais nosaukums (precīzi lūgtajā formātā)
-                match_str = f"**{away_full} ({away}) @ {home_full} ({home}) {score_str} {periods_str}**"
+                match_str = f"**{away_full} ({away}) @ {home_full} ({home}) / Rezultāts - {score_str} {periods_str}**"
                 
                 # --- PAGAIDU SIMULĒTO PROGNOŽU BLOKS ---
-                # Vēlāk šos datus ņemsim pa tiešo no prognožu moduļa
-                pred_ag = ag # Bieži uzmin viesu vārtus
-                pred_hg = hg - 1 # Nedaudz kļūdās ar mājas vārtiem simulācijā
-                pred_total = 4.5
-                real_total = ag + hg
+                pred_ag = ag 
+                pred_hg = max(0, hg - 1) 
+                pred_rez = f"{pred_ag}-{pred_hg}"
+                rez_hit = (pred_ag == ag and pred_hg == hg)
                 
-                # Krāsu loģika: zaļš, ja precīzs, vai zaļš, ja īstais cipars ir LIELĀKS par doto slieksni (Over)
-                rez_color = "🟢" if (pred_ag == ag and pred_hg == hg) else "🔴"
-                tot_color = "🟢" if real_total > pred_total else "🔴"
+                ou_val = 4.5
+                ou_type = "over"
+                tot_hit = (ag+hg > ou_val) if ou_type == "over" else (ag+hg < ou_val)
                 
-                prog_str = f" — *Prognoze:* Rezultāts {pred_ag}-{pred_hg} {rez_color} | Vārti > {pred_total} {tot_color}"
+                pim_val = 5.5
+                pim_type = "over"
+                pim_tot = int(r['pim_tot']) if pd.notna(r['pim_tot']) else 0
+                pim_hit = (pim_tot > pim_val) if pim_type == "over" else (pim_tot < pim_val)
+                
+                p1_val, p1_type = 1.5, "over"
+                p1_tot = ap1 + hp1
+                p1_hit = (p1_tot > p1_val) if p1_type == "over" else (p1_tot < p1_val)
+
+                p2_val, p2_type = 2.5, "over"
+                p2_tot = ap2 + hp2
+                p2_hit = (p2_tot > p2_val) if p2_type == "over" else (p2_tot < p2_val)
+                
+                p3_val, p3_type = 3.5, "under"
+                p3_tot = ap3 + hp3
+                p3_hit = (p3_tot < p3_val) if p3_type == "under" else (p3_tot > p3_val)
+                
+                def ic(hit): return "✅" if hit else "❌"
+                
+                prog_html = f"""
+                <div class='prognozes-bloks'>
+                    Prognoze rezultāts - {pred_rez} {ic(rez_hit)}<br>
+                    Prognoze over/under - {ou_type} {ou_val} {ic(tot_hit)}<br>
+                    Prognoze noraidījumi - {pim_type} {pim_val} {ic(pim_hit)}<br>
+                    Prognoze periodi - <br>
+                    &nbsp;&nbsp;1. {p1_type} {p1_val} {ic(p1_hit)}<br>
+                    &nbsp;&nbsp;2. {p2_type} {p2_val} {ic(p2_hit)}<br>
+                    &nbsp;&nbsp;3. {p3_type} {p3_val} {ic(p3_hit)}
+                </div>
+                """
                 # ----------------------------------------
                 
-                st.markdown(match_str + prog_str)
+                st.markdown(match_str)
+                st.markdown(prog_html, unsafe_allow_html=True)
                 st.divider()
