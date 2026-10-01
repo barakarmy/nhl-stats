@@ -459,7 +459,8 @@ elif rezims == "Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
     
     selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}")
-    
+    label_visibility="collapsed"
+    )
     parametru_opcijas = {
         "Kopējā statistika un nākamās spēles": "stats",
         "Mājas spēļu vidējie rādītāji": "h",
@@ -471,7 +472,9 @@ elif rezims == "Komandas Statistika":
         "Periodu detalizēta statistika": "periods"
     }
     
-    stat_izvele = st.selectbox("Izvēlies parametru:", list(parametru_opcijas.keys()))
+    stat_izvele = st.selectbox("Izvēlies parametru:", list(parametru_opcijas.keys())
+     label_visibility="collapsed"
+    )
     mode_key = parametru_opcijas[stat_izvele]
     
     team_df = df[df['komanda'] == selected_team]
