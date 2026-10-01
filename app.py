@@ -6,7 +6,8 @@ import modelis  # Importējam mūsu prognožu modeli
 
 st.set_page_config(
     page_title="NHL Analītiskais Terminālis", 
-    layout="wide"
+    layout="wide", 
+    initial_sidebar_state="collapsed"  # <--- Šis automātiski paslēpj sānjoslu malā!
 )
 
 CSV_FAILS = "nhl_sezona.csv"
@@ -96,6 +97,26 @@ def sagatavot_vienoto_tabulu(df):
 
     return combined
 
+# CSS stils sānjoslas pogām
+st.markdown("""
+    <style>
+    div[data-testid="stSidebar"] button {
+        border: none !important;
+        background-color: transparent !important;
+        text-align: left !important;
+        padding: 5px 15px !important;
+        font-size: 16px !important;
+        font-weight: 500 !important;
+        color: inherit !important;
+        justify-content: flex-start !important;
+    }
+    div[data-testid="stSidebar"] button:hover {
+        background-color: rgba(150, 150, 150, 0.1) !important;
+        color: #ff4b4b !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("🏒 NHL Analītiskais Panelis")
 
 raw_df = iegut_datus()
@@ -105,80 +126,46 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-# --- HORIZONTĀLĀ NAVIGĀCIJA LAPAS AUGŠPUSĒ ---
-st.markdown("""
-    <style>
-    /* Noņemam atstarpes starp kolonnām un pogām, lai tās veidotu vienotu joslu */
-    div[data-testid="stHorizontalBlock"] {
-        gap: 0px !important;
-    }
-    div[data-testid="column"] {
-        margin: 0px !important;
-        padding: 0px !important;
-    }
-    div[data-testid="stColumn"] button {
-        border-radius: 0 !important;
-        width: 100% !important;
-        border-right: 0px !important;
-        white-space: nowrap !important; 
-        line-height: 1.2 !important;
-        text-align: center !important;
-        padding-top: 8px !important;
-        padding-bottom: 8px !important;
-        font-size: 14px !important;
-    }
-    div[data-testid="stColumn"]:first-child button { 
-        border-top-left-radius: 6px !important; 
-        border-bottom-left-radius: 6px !important; 
-    }
-    div[data-testid="stColumn"]:last-child button {
-        border-top-right-radius: 6px !important;
-        border-bottom-right-radius: 6px !important;
-        border-right: 1px solid rgba(49, 51, 63, 0.2) !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-menu_options = [
-    "🎯 Prognozes", 
-    "1. Periods", 
-    "2. Periods", 
-    "3. Periods", 
-    "Forma un Vārti", 
-    "Over / Under", 
-    "Powerplay", 
-    "Noraidījumi", 
-    "Komandas Statistika", 
-    "Kalendārs", 
-    "Rezultāti"
-]
-
 if 'rezims' not in st.session_state:
-    st.session_state.rezims = "🎯 Prognozes"
+    st.session_state.rezims = "Prognozes"
 
-def iestatit_rezimu(r):
-    st.session_state.rezims = r
+# --- SĀNJOSLAS NAVIGĀCIJA ---
+st.sidebar.markdown("### 🏠 Sākumlapa")
+if st.sidebar.button("🎯 Prognozes", width='stretch'): st.session_state.rezims = "Prognozes"
 
-# Sadalām ekrānu tik kolonnās, cik mums ir sadaļas (11 kolonnas)
-nav_cols = st.columns(len(menu_options))
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Datu Filtri")
+if st.sidebar.button("1. Periods", width='stretch'): st.session_state.rezims = "1. Periods"
+if st.sidebar.button("2. Periods", width='stretch'): st.session_state.rezims = "2. Periods"
+if st.sidebar.button("3. Periods", width='stretch'): st.session_state.rezims = "3. Periods"
+if st.sidebar.button("Forma un Vārti", width='stretch'): st.session_state.rezims = "Forma un Vārti"
+if st.sidebar.button("Over / Under", width='stretch'): st.session_state.rezims = "Over / Under"
+if st.sidebar.button("Powerplay", width='stretch'): st.session_state.rezims = "Powerplay"
+if st.sidebar.button("Noraidījumi", width='stretch'): st.session_state.rezims = "Noraidījumi"
 
-for idx, opcija in enumerate(menu_options):
-    btn_type = "primary" if st.session_state.rezims == opcija else "secondary"
-    nav_cols[idx].button(
-        opcija, 
-        key=f"nav_{idx}", 
-        type=btn_type, 
-        on_click=iestatit_rezimu, 
-        args=(opcija,), 
-        width='stretch'
-    )
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Komandas un Spēles")
+if st.sidebar.button("Komandas Statistika", width='stretch'): st.session_state.rezims = "Komandas Statistika"
+if st.sidebar.button("Kalendārs", width='stretch'): st.session_state.rezims = "Kalendārs"
+if st.sidebar.button("Rezultāti", width='stretch'): st.session_state.rezims = "Rezultāti"
 
 rezims = st.session_state.rezims
 
-st.markdown("---")
+def sagatavot_tabulu_izvadei(res_df):
+    res_df = res_df.copy()
+    if 'komanda' in res_df.columns:
+        res_df['Komanda'] = res_df['komanda'].apply(pilns_nosaukums)
+        res_df = res_df.drop(columns=['komanda'])
+    
+    res_df = res_df.reset_index(drop=True)
+    res_df.insert(0, 'Vieta', range(1, len(res_df) + 1))
+    
+    cols = ['Vieta', 'Komanda'] + [c for c in res_df.columns if c not in ['Vieta', 'Komanda']]
+    return res_df[cols]
+
 # === LAPU SATURS ===
 
-if rezims == "🎯 Prognozes":
+if rezims == "Prognozes":
     st.subheader("🎯 Spēļu Prognozes")
     st.info("ℹ️ Datu vākšana no NHL API notiek plkst. 10:00 (LV laiks). Modeļa un Streamlit paneļa prognožu ģenerācija izsauc šos svaigos datus no plkst. 11:00.")
     
