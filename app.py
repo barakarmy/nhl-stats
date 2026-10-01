@@ -3,6 +3,8 @@ import streamlit as st
 import os
 from datetime import datetime
 
+st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
+
 CSV_FAILS = "nhl_sezona.csv"
 CSV_KALENDARS = "nhl_kalendars.csv"
 
@@ -86,8 +88,6 @@ def sagatavot_vienoto_tabulu(df):
 
     return combined
 
-st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
-
 # CSS stils sānjoslas pogām
 st.markdown("""
     <style>
@@ -117,10 +117,17 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
+# Iestatām "Prognozes" kā noklusējuma sākumlapu
 if 'rezims' not in st.session_state:
-    st.session_state.rezims = "1. Periods"
+    st.session_state.rezims = "Prognozes"
 
-st.sidebar.markdown("### Sadaļas")
+# --- SĀNJOSLAS NAVIGĀCIJA ---
+st.sidebar.markdown("### 🏠 Sākumlapa")
+# ŠEIT vēlāk ievietosim logo pogu. Pagaidām tas ir parasts teksts.
+if st.sidebar.button("🎯 Prognozes", use_container_width=True): st.session_state.rezims = "Prognozes"
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Datu Filtri")
 if st.sidebar.button("1. Periods", use_container_width=True): st.session_state.rezims = "1. Periods"
 if st.sidebar.button("2. Periods", use_container_width=True): st.session_state.rezims = "2. Periods"
 if st.sidebar.button("3. Periods", use_container_width=True): st.session_state.rezims = "3. Periods"
@@ -128,9 +135,12 @@ if st.sidebar.button("Forma un Vārti", use_container_width=True): st.session_st
 if st.sidebar.button("Over / Under", use_container_width=True): st.session_state.rezims = "Over / Under"
 if st.sidebar.button("Powerplay", use_container_width=True): st.session_state.rezims = "Powerplay"
 if st.sidebar.button("Noraidījumi", use_container_width=True): st.session_state.rezims = "Noraidījumi"
+
 st.sidebar.markdown("---")
+st.sidebar.markdown("### Komandas un Spēles")
 if st.sidebar.button("Komandas Statistika", use_container_width=True): st.session_state.rezims = "Komandas Statistika"
 if st.sidebar.button("Kalendārs", use_container_width=True): st.session_state.rezims = "Kalendārs"
+if st.sidebar.button("Rezultāti", use_container_width=True): st.session_state.rezims = "Rezultāti"
 
 rezims = st.session_state.rezims
 
@@ -146,8 +156,15 @@ def sagatavot_tabulu_izvadei(res_df):
     cols = ['Vieta', 'Komanda'] + [c for c in res_df.columns if c not in ['Vieta', 'Komanda']]
     return res_df[cols]
 
+# === LAPU SATURS ===
+
+# PROGNOZES (Sākumlapa)
+if rezims == "Prognozes":
+    st.subheader("🎯 Spēļu Prognozes")
+    st.info("Šeit drīzumā tiks integrēts matemātiskais prognožu modelis, kas rādīs vārtu un noraidījumu predikcijas nākamajām spēlēm.")
+
 # 1. PERIODS
-if rezims == "1. Periods":
+elif rezims == "1. Periods":
     st.subheader("⏱️ 1. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "1. perioda vārtu starpība (Visas spēles)", 
@@ -502,3 +519,8 @@ elif rezims == "Kalendārs":
                     st.divider()
         except Exception as e:
             st.error(f"Kļūda nolasot kalendāru: {e}")
+
+# REZULTĀTI
+elif rezims == "Rezultāti":
+    st.subheader("✅ Spēļu Rezultāti")
+    st.info("Šeit drīzumā parādīsies pēdējo spēļu gala rezultāti un periodu statistika salīdzinājumā ar kalendāru.")
