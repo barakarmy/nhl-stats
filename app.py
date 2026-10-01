@@ -331,7 +331,7 @@ elif rezims == "3. Periods":
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3.P Vārtu Starpība (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
     elif "Visas" in filtrs:
         res = df.groupby('komanda')['diff_p3'].sum().reset_index()
-        res.columns = ['komanda', '3. perioda vārtu starpība']
+        res.columns = ['komanda', 'Vārtu starpība']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vārtu starpība', ascending=False)), use_container_width=True, hide_index=True)
     elif "Mājas" in filtrs:
         sub = df[df['majas'] == 1]
