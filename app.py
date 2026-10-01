@@ -458,7 +458,7 @@ elif rezims == "Noraidījumi":
 elif rezims == "Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
     
-    selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}"
+    selected_team = st.selectbox("Izvēlies komandu:", sorted(list(NHL_KOMANDAS.keys())), format_func=lambda x: f"{x} - {NHL_KOMANDAS[x]}",
     label_visibility="collapsed"
     )
     parametru_opcijas = {
