@@ -5,7 +5,7 @@ from datetime import datetime
 import modelis  # Importējam mūsu prognožu modeli
 
 st.set_page_config(
-    page_title="NHL Analītiskais Terminālis", 
+    page_title="NHL stats&predictions", 
     layout="wide", 
     initial_sidebar_state="collapsed"  # <--- Šis automātiski paslēpj sānjoslu malā!
 )
