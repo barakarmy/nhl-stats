@@ -25,7 +25,6 @@ NHL_KOMANDAS = {
 def pilns_nosaukums(saisinajums):
     return NHL_KOMANDAS.get(saisinajums.upper(), saisinajums.upper())
 
-# Funkcija sezona datiem ar automātisku laika maiņu
 @st.cache_data
 def ielasit_datus(file_mtime):
     try:
@@ -488,22 +487,25 @@ elif rezims == "Komandas Statistika":
                 st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
 
 elif rezims == "Kalendārs":
-    st.subheader("📅 Tuvāko 3 dienu spēļu grafiks")
+    st.subheader("📅 Tuvāko 5 dienu spēļu grafiks")
     if not os.path.exists(CSV_KALENDARS):
         st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts.")
     else:
         try:
             df_k = pd.read_csv(CSV_KALENDARS)
             sodiena = datetime.now().date()
-            beigu_diena = sodiena + pd.Timedelta(days=3)
+            # Uzstādām uz turpmākajām 5 dienām (ieskaitot šodienu un nākamo 4 dienu ciklu)
+            beigu_diena = sodiena + pd.Timedelta(days=5)
+            
             # Pieliekam +1 dienu arī kalendāram, lai sakristu ar Latvijas laiku
             df_k['datums_dt'] = pd.to_datetime(df_k['datums']) + pd.Timedelta(days=1)
             df_k['datums_val'] = df_k['datums_dt'].dt.date
             
-            tuvakas_speles = df_k[(df_k['datums_val'] >= sodiena) & (df_k['datums_val'] < beigu_diena)]
+            # Izmantojam <= beigu_dienai, lai iekļautu pilnu piecu dienu diapazonu
+            tuvakas_speles = df_k[(df_k['datums_val'] >= sodiena) & (df_k['datums_val'] <= beigu_diena)]
             
             if tuvakas_speles.empty:
-                st.info("Tuvākajās 3 dienās nav paredzētu spēļu.")
+                st.info("Tuvākajās 5 dienās nav paredzētu spēļu.")
             else:
                 dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
                 for datums_obj, grupa in tuvakas_speles.groupby('datums_val'):
