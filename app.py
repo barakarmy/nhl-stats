@@ -144,7 +144,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🏒 NHL Analītiskais Panelis")
+st.title("🏒 NHL stats&prediction")
 
 raw_df = iegut_datus()
 if raw_df is None:
@@ -192,7 +192,7 @@ def sagatavot_tabulu_izvadei(res_df):
 # === LAPU SATURS ===
 
 if rezims == "Prognozes":
-    st.subheader("Predictions")
+    st.subheader("Prognozes")
     
     gatavs, gatavas_sk, kopa_sk = modelis.parbaudit_gatavibu(df)
     
