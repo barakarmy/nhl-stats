@@ -117,7 +117,6 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-# Iestatām "Prognozes" kā noklusējuma sākumlapu
 if 'rezims' not in st.session_state:
     st.session_state.rezims = "Prognozes"
 
@@ -242,7 +241,7 @@ elif rezims == "2. Periods":
 
 # 3. PERIODS
 elif rezims == "3. Periods":
-    st.subheader("⏱️ 3. Perioda Statistika")
+    st.subheader("⏱️️ 3. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
         "3. perioda vārtu starpība (Visas spēles)",
         "3. perioda vārtu starpība (Mājas spēles)",
@@ -523,4 +522,98 @@ elif rezims == "Kalendārs":
 # REZULTĀTI
 elif rezims == "Rezultāti":
     st.subheader("✅ Spēļu Rezultāti")
-    st.info("Šeit drīzumā parādīsies pēdējo spēļu gala rezultāti un periodu statistika salīdzinājumā ar kalendāru.")
+    
+    # 1. Atmiņa un datumu aprēķins
+    if 'res_date_offset' not in st.session_state:
+        st.session_state.res_date_offset = 0
+        
+    if raw_df is not None and not raw_df.empty:
+        max_date = raw_df['datums'].max().date()
+    else:
+        max_date = datetime.today().date()
+        
+    base_date = max_date + pd.Timedelta(days=st.session_state.res_date_offset)
+    start_date = base_date - pd.Timedelta(days=6)
+    dates = [start_date + pd.Timedelta(days=i) for i in range(7)]
+    
+    if 'selected_res_date' not in st.session_state:
+        st.session_state.selected_res_date = dates[-1]
+
+    # Atmiņas funkcijas pogu darbībām
+    def change_offset(delta):
+        st.session_state.res_date_offset += delta
+
+    def set_date(d):
+        st.session_state.selected_res_date = d
+
+    # 2. Datumu navigācijas pogu rinda
+    cols = st.columns([1, 2, 2, 2, 2, 2, 2, 2, 1])
+    cols[0].button("⬅️", on_click=change_offset, args=(-7,), key="prev_w")
+    
+    for idx, d in enumerate(dates):
+        d_str = d.strftime("%d.%m")
+        btn_style = "primary" if d == st.session_state.selected_res_date else "secondary"
+        cols[idx+1].button(d_str, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,))
+        
+    cols[8].button("➡️", on_click=change_offset, args=(7,), key="next_w")
+    
+    st.markdown("---")
+    st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d.%m.%Y')}")
+
+    # 3. Spēļu attēlošana un "simulēto" prognožu ielāde
+    if raw_df is not None and not raw_df.empty:
+        dienas_speles = raw_df[raw_df['datums'].dt.date == st.session_state.selected_res_date]
+        
+        # Mēs sagatavojam unikalizētu sarakstu, lai katra spēle neparādītos 2 reizes (jo df dati ir dublēti mājas/izbraukuma dēļ)
+        seen_games = set()
+        
+        if dienas_speles.empty:
+            st.info("Šajā datumā nav atrastu noslēgušos spēļu rezultātu.")
+        else:
+            for _, r in dienas_speles.iterrows():
+                if r['game_id'] in seen_games:
+                    continue
+                seen_games.add(r['game_id'])
+                
+                away = r['away_team']
+                home = r['home_team']
+                away_full = pilns_nosaukums(away)
+                home_full = pilns_nosaukums(home)
+                
+                # Drošai nolasīšanai pārvēršam par veselu skaitli
+                ap1, hp1 = int(r['away_p1']), int(r['home_p1'])
+                ap2, hp2 = int(r['away_p2']), int(r['home_p2'])
+                ap3, hp3 = int(r['away_p3']), int(r['home_p3'])
+                
+                ag = ap1 + ap2 + ap3
+                hg = hp1 + hp2 + hp3
+                
+                if ag > hg:
+                    winner = away
+                elif hg > ag:
+                    winner = home
+                else:
+                    winner = "" # Ja spēle vēl procesā vai dati nepilnīgi
+                    
+                score_str = f"{ag}-{hg} {winner}".strip()
+                periods_str = f"({ap1}:{hp1};{ap2}:{hp2};{ap3}:{hp3})"
+                
+                # Spēles pilnais nosaukums (precīzi lūgtajā formātā)
+                match_str = f"**{away_full} ({away}) @ {home_full} ({home}) {score_str} {periods_str}**"
+                
+                # --- PAGAIDU SIMULĒTO PROGNOŽU BLOKS ---
+                # Vēlāk šos datus ņemsim pa tiešo no prognožu moduļa
+                pred_ag = ag # Bieži uzmin viesu vārtus
+                pred_hg = hg - 1 # Nedaudz kļūdās ar mājas vārtiem simulācijā
+                pred_total = 4.5
+                real_total = ag + hg
+                
+                # Krāsu loģika: zaļš, ja precīzs, vai zaļš, ja īstais cipars ir LIELĀKS par doto slieksni (Over)
+                rez_color = "🟢" if (pred_ag == ag and pred_hg == hg) else "🔴"
+                tot_color = "🟢" if real_total > pred_total else "🔴"
+                
+                prog_str = f" — *Prognoze:* Rezultāts {pred_ag}-{pred_hg} {rez_color} | Vārti > {pred_total} {tot_color}"
+                # ----------------------------------------
+                
+                st.markdown(match_str + prog_str)
+                st.divider()
