@@ -463,13 +463,13 @@ elif rezims == "Komandas Statistika":
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.write(f"**Vidēji vārti:** {team_df['g_reg'].mean():.2f}")
-                st.write(f"Mājās: {home_df['g_reg'].mean():.2f} | Izbr: {away_df['g_reg'].mean():.2f}")
+                st.write(f"Mājās: {home_df['g_reg'].mean():.2f} | Izbraukums: {away_df['g_reg'].mean():.2f}")
             with col2:
                 st.write(f"**Vairākuma vārti:** {team_df['ppg'].mean():.2f}")
-                st.write(f"Mājās: {home_df['ppg'].mean():.2f} | Izbr: {away_df['ppg'].mean():.2f}")
+                st.write(f"Mājās: {home_df['ppg'].mean():.2f} | Izbraukums: {away_df['ppg'].mean():.2f}")
             with col3:
                 st.write(f"**Noraidījumi:** {team_df['pim_count'].mean():.1f}")
-                st.write(f"Mājās: {home_df['pim_count'].mean():.1f} | Izbr: {away_df['pim_count'].mean():.1f}")
+                st.write(f"Mājās: {home_df['pim_count'].mean():.1f} | Izbraukums: {away_df['pim_count'].mean():.1f}")
             
             st.markdown("---")
             st.markdown(f"#### 🎯 {selected_team} Sagaidāmo Vārtu (xG) Sadalījums")
@@ -570,21 +570,21 @@ elif rezims == "Komandas Statistika":
             with c1:
                 st.markdown("<h5 style='color:#ff4b4b;'>1. Periods</h5>", unsafe_allow_html=True)
                 st.write(f"Visas spēles: **{int(team_df['diff_p1'].sum()):+d}**")
-                st.write(f"Mājās: **{int(home_df['diff_p1'].sum()) if not home_df.empty else 0:+d}** | Izbr: **{int(away_df['diff_p1'].sum()) if not away_df.empty else 0:+d}**")
+                st.write(f"Mājās: **{int(home_df['diff_p1'].sum()) if not home_df.empty else 0:+d}** | Izbraukums: **{int(away_df['diff_p1'].sum()) if not away_df.empty else 0:+d}**")
                 st.write(f"Pēdējās 10 spēles: **{int(last10_df['diff_p1'].sum()):+d}**")
                 st.write(f"Vidējie metieni (SOG): **{team_df['sog_p1'].mean():.1f}**")
             
             with c2:
                 st.markdown("<h5 style='color:#ff4b4b;'>2. Periods</h5>", unsafe_allow_html=True)
                 st.write(f"Visas spēles: **{int(team_df['diff_p2'].sum()):+d}**")
-                st.write(f"Mājās: **{int(home_df['diff_p2'].sum()) if not home_df.empty else 0:+d}** | Izbr: **{int(away_df['diff_p2'].sum()) if not away_df.empty else 0:+d}**")
+                st.write(f"Mājās: **{int(home_df['diff_p2'].sum()) if not home_df.empty else 0:+d}** | Izbraukums: **{int(away_df['diff_p2'].sum()) if not away_df.empty else 0:+d}**")
                 st.write(f"Pēdējās 10 spēles: **{int(last10_df['diff_p2'].sum()):+d}**")
                 st.write(f"Vidējie metieni (SOG): **{team_df['sog_p2'].mean():.1f}**")
             
             with c3:
                 st.markdown("<h5 style='color:#ff4b4b;'>3. Periods</h5>", unsafe_allow_html=True)
                 st.write(f"Visas spēles: **{int(team_df['diff_p3'].sum()):+d}**")
-                st.write(f"Mājās: **{int(home_df['diff_p3'].sum()) if not home_df.empty else 0:+d}** | Izbr: **{int(away_df['diff_p3'].sum()) if not away_df.empty else 0:+d}**")
+                st.write(f"Mājās: **{int(home_df['diff_p3'].sum()) if not home_df.empty else 0:+d}** | Izbraukums: **{int(away_df['diff_p3'].sum()) if not away_df.empty else 0:+d}**")
                 st.write(f"Pēdējās 10 spēles: **{int(last10_df['diff_p3'].sum()):+d}**")
                 st.write(f"Vidējie metieni (SOG): **{team_df['sog_p3'].mean():.1f}**")
 
