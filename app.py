@@ -88,7 +88,7 @@ def sagatavot_vienoto_tabulu(df):
 
     return combined
 
-# CSS stils sānjoslas pogām
+# CSS stils sānjoslas pogām un noformējumam
 st.markdown("""
     <style>
     div[data-testid="stSidebar"] button {
@@ -156,12 +156,10 @@ def sagatavot_tabulu_izvadei(res_df):
 
 # === LAPU SATURS ===
 
-# PROGNOZES (Sākumlapa)
 if rezims == "Prognozes":
     st.subheader("🎯 Spēļu Prognozes")
     st.info("Šeit drīzumā tiks integrēts matemātiskais prognožu modelis, kas rādīs vārtu un noraidījumu predikcijas nākamajām spēlēm.")
 
-# 1. PERIODS
 elif rezims == "1. Periods":
     st.subheader("⏱️ 1. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
@@ -200,7 +198,6 @@ elif rezims == "1. Periods":
         res.columns = ['komanda', '1. perioda vidējie metieni (SOG)']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='1. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
 
-# 2. PERIODS
 elif rezims == "2. Periods":
     st.subheader("⏱️ 2. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
@@ -238,7 +235,6 @@ elif rezims == "2. Periods":
         res.columns = ['komanda', '2. perioda vidējie metieni (SOG)']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='2. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
 
-# 3. PERIODS
 elif rezims == "3. Periods":
     st.subheader("⏱ 3. Perioda Statistika")
     filtrs = st.selectbox("Izvēlies skatu:", [
@@ -276,7 +272,6 @@ elif rezims == "3. Periods":
         res.columns = ['komanda', '3. perioda vidējie metieni (SOG)']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='3. perioda vidējie metieni (SOG)', ascending=False)), use_container_width=True, hide_index=True)
 
-# FORMA UN VĀRTI
 elif rezims == "Forma un Vārti":
     st.subheader("🔥 Komandu Forma un Vārtu Guvumi")
     filtrs = st.selectbox("Izvēlies skatu:", [
@@ -307,7 +302,6 @@ elif rezims == "Forma un Vārti":
         res.columns = ['komanda', 'Ielaistie vārti pēd. 5 spēlēs']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Ielaistie vārti pēd. 5 spēlēs', ascending=False)), use_container_width=True, hide_index=True)
 
-# POWERPLAY
 elif rezims == "Powerplay":
     st.subheader("⚡ Vairākuma (Powerplay) Līderi")
     filtrs = st.selectbox("Izvēlies skatu:", [
@@ -332,7 +326,6 @@ elif rezims == "Powerplay":
     res.columns = ['komanda', 'Vairākumā gūtie vārti']
     st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vairākumā gūtie vārti', ascending=False)), use_container_width=True, hide_index=True)
 
-# OVER / UNDER
 elif rezims == "Over / Under":
     st.subheader("📈 Spēļu Kopējā Vārtu Summa (Over / Under 6.5)")
     filtrs = st.selectbox("Izvēlies skatu:", [
@@ -361,7 +354,6 @@ elif rezims == "Over / Under":
     res.columns = ['komanda', 'Atbilstošo spēļu skaits']
     st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Atbilstošo spēļu skaits', ascending=False)), use_container_width=True, hide_index=True)
 
-# NORAIDĪJUMI
 elif rezims == "Noraidījumi":
     st.subheader("❌ Noraidījumu (PIM) Līderi")
     filtrs = st.selectbox("Izvēlies skatu:", [
@@ -387,7 +379,6 @@ elif rezims == "Noraidījumi":
         res.columns = ['komanda', f'Vidējais noraidījumu skaits ({loc_text})']
         st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by=f'Vidējais noraidījumu skaits ({loc_text})', ascending=False)), use_container_width=True, hide_index=True)
 
-# KOMANDAS STATISTIKA
 elif rezims == "Komandas Statistika":
     st.subheader("📊 Komandas Analīze")
     
@@ -489,7 +480,6 @@ elif rezims == "Komandas Statistika":
                 pret_viss = pilns_nosaukums(r['pretinieks'])
                 st.text(f"• {d_str} vs {pret_viss} ({r['pretinieks']}) [{viesi_majas}] — {int(r['pim_count'])} noraidījumi ({int(r['pim_tot'])} min)")
 
-# KALENDĀRS
 elif rezims == "Kalendārs":
     st.subheader("📅 Tuvāko 3 dienu spēļu grafiks")
     if not os.path.exists(CSV_KALENDARS):
@@ -518,35 +508,36 @@ elif rezims == "Kalendārs":
         except Exception as e:
             st.error(f"Kļūda nolasot kalendāru: {e}")
 
-# REZULTĀTI
 elif rezims == "Rezultāti":
     st.markdown("""
         <style>
-        /* Padarīt kalendāra pogas kā vienotu bloku bez atstarpēm */
-        div.date-row-wrapper + div[data-testid="stHorizontalBlock"] {
-            gap: 0px !important;
+        /* Padarīt kalendāra pogas kā vienotu bloku bez atstarpēm - optimizēts jaunajam Streamlit */
+        div[data-testid="stColumns"] {
+            gap: 0rem !important;
         }
-        div.date-row-wrapper + div[data-testid="stHorizontalBlock"] div[data-testid="column"] div[data-testid="stButton"] button {
-            width: 100%;
-            border-radius: 0px !important;
+        div[data-testid="stColumn"] {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+        div[data-testid="stColumn"] button {
+            border-radius: 0 !important;
+            width: 100% !important;
             border-right: 0px !important;
-            padding: 5px 0px !important;
         }
-        div.date-row-wrapper + div[data-testid="stHorizontalBlock"] div[data-testid="column"]:last-child div[data-testid="stButton"] button {
-            border-right: 1px solid rgba(49, 51, 63, 0.2) !important;
-            border-top-right-radius: 5px !important;
-            border-bottom-right-radius: 5px !important;
-        }
-        div.date-row-wrapper + div[data-testid="stHorizontalBlock"] div[data-testid="column"]:first-child div[data-testid="stButton"] button {
+        div[data-testid="stColumn"]:first-child button {
             border-top-left-radius: 5px !important;
             border-bottom-left-radius: 5px !important;
         }
+        div[data-testid="stColumn"]:last-child button {
+            border-top-right-radius: 5px !important;
+            border-bottom-right-radius: 5px !important;
+            border-right: 1px solid rgba(49, 51, 63, 0.2) !important;
+        }
         @media (prefers-color-scheme: dark) {
-            div.date-row-wrapper + div[data-testid="stHorizontalBlock"] div[data-testid="column"]:last-child div[data-testid="stButton"] button {
+            div[data-testid="stColumn"]:last-child button {
                 border-right: 1px solid rgba(250, 250, 250, 0.2) !important;
             }
         }
-        /* Prognožu bloka noformējums */
         .prognozes-bloks {
             line-height: 1.6;
             margin-top: 5px;
@@ -559,7 +550,6 @@ elif rezims == "Rezultāti":
     
     st.subheader("✅ Spēļu Rezultāti")
     
-    # Atmiņa un datumu aprēķins
     if 'res_date_offset' not in st.session_state:
         st.session_state.res_date_offset = 0
         
@@ -581,22 +571,20 @@ elif rezims == "Rezultāti":
     def set_date(d):
         st.session_state.selected_res_date = d
 
-    # Datumu navigācijas pogu rinda ar pielāgotu klasi
-    st.markdown('<div class="date-row-wrapper"></div>', unsafe_allow_html=True)
+    # Datumu navigācijas pogu rinda (izmantojot use_container_width=True un jauno CSS)
     cols = st.columns(9)
-    cols[0].button("❮", on_click=change_offset, args=(-7,), key="prev_w")
+    cols[0].button("❮", on_click=change_offset, args=(-7,), key="prev_w", use_container_width=True)
     
     for idx, d in enumerate(dates):
         d_str = d.strftime("%d.%m")
         btn_style = "primary" if d == st.session_state.selected_res_date else "secondary"
-        cols[idx+1].button(d_str, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,))
+        cols[idx+1].button(d_str, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,), use_container_width=True)
         
-    cols[8].button("❯", on_click=change_offset, args=(7,), key="next_w")
+    cols[8].button("❯", on_click=change_offset, args=(7,), key="next_w", use_container_width=True)
     
     st.markdown("---")
     st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d.%m.%Y')}")
 
-    # Spēļu attēlošana
     if raw_df is not None and not raw_df.empty:
         dienas_speles = raw_df[raw_df['datums'].dt.date == st.session_state.selected_res_date]
         seen_games = set()
@@ -643,9 +631,12 @@ elif rezims == "Rezultāti":
                 ou_type = "over"
                 tot_hit = (ag+hg > ou_val) if ou_type == "over" else (ag+hg < ou_val)
                 
+                # KĻŪDAS LABOJUMS NORAIDĪJUMIEM: Izmanto drošus atsevišķos laukus no raw_df
                 pim_val = 5.5
                 pim_type = "over"
-                pim_tot = int(r['pim_tot']) if pd.notna(r['pim_tot']) else 0
+                h_pim = int(r.get('home_pim_total', 0)) if pd.notna(r.get('home_pim_total', 0)) else 0
+                a_pim = int(r.get('away_pim_total', 0)) if pd.notna(r.get('away_pim_total', 0)) else 0
+                pim_tot = h_pim + a_pim
                 pim_hit = (pim_tot > pim_val) if pim_type == "over" else (pim_tot < pim_val)
                 
                 p1_val, p1_type = 1.5, "over"
