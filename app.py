@@ -2,53 +2,9 @@ import pandas as pd
 import streamlit as st
 import os
 from datetime import datetime
-import modelis  # Importējam prognožu modeli
+import modelis  # Importējam mūsu prognožu modeli
 
 st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
-
-# --- MODERNS TUMŠS GRADIENTA FONS UN TĪRA TEKSTA/SĀNJOSLAS STILEŠANA ---
-st.markdown("""
-    <style>
-    /* Tumšs gradienta fons visai aplikācijai un pamata teksta krāsa */
-    .stApp {
-        background: linear-gradient(135deg, #0b132b 0%, #1c2541 50%, #3a506b 100%);
-        color: #f8fafc !important;
-    }
-
-    /* Pielāgojam sānjoslas (sidebar) fonu, lai tas sakrīt ar kopējo stilu */
-    section[data-testid="stSidebar"] {
-        background-color: #0f172a !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    /* Sānjoslas virsraksti un teksti */
-    section[data-testid="stSidebar"] h3 {
-        color: #f8fafc !important;
-    }
-    
-    /* Sānjoslas pogu stils */
-    div[data-testid="stSidebar"] button {
-        border: none !important;
-        background-color: transparent !important;
-        text-align: left !important;
-        padding: 6px 15px !important;
-        font-size: 16px !important;
-        font-weight: 500 !important;
-        color: #cbd5e1 !important;
-        justify-content: flex-start !important;
-        width: 100% !important;
-    }
-    div[data-testid="stSidebar"] button:hover {
-        background-color: rgba(255, 255, 255, 0.1) !important;
-        color: #ff4b4b !important;
-    }
-
-    /* Izvēlņu (Selectbox) un datu tabulu teksta salasāmība uz tumšā fona */
-    .stSelectbox label, .stMarkdown, p, span {
-        color: #f8fafc !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
 
 CSV_FAILS = "nhl_sezona.csv"
 CSV_KALENDARS = "nhl_kalendars.csv"
@@ -137,6 +93,26 @@ def sagatavot_vienoto_tabulu(df):
 
     return combined
 
+# CSS stils sānjoslas pogām
+st.markdown("""
+    <style>
+    div[data-testid="stSidebar"] button {
+        border: none !important;
+        background-color: transparent !important;
+        text-align: left !important;
+        padding: 5px 15px !important;
+        font-size: 16px !important;
+        font-weight: 500 !important;
+        color: inherit !important;
+        justify-content: flex-start !important;
+    }
+    div[data-testid="stSidebar"] button:hover {
+        background-color: rgba(150, 150, 150, 0.1) !important;
+        color: #ff4b4b !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("🏒 NHL Analītiskais Panelis")
 
 raw_df = iegut_datus()
@@ -217,7 +193,7 @@ if rezims == "Prognozes":
                     st.markdown(f"**{datums_fmt} | {pilns_nosaukums(away)} ({away}) @ {pilns_nosaukums(home)} ({home})**")
                     if prognoze:
                         st.markdown(f"""
-                        <div style='background-color:rgba(255, 255, 255, 0.05); padding:10px; border-radius:8px; margin-bottom:15px; border: 1px solid rgba(255, 255, 255, 0.1); color: #f8fafc;'>
+                        <div style='background-color:#f0f2f6; padding:10px; border-radius:8px; margin-bottom:15px; color:#31333F;'>
                             <b>Rezultāts:</b> {prognoze['rezultats']}<br>
                             <b>Over/Under (Vārti):</b> {prognoze['over_under']}<br>
                             <b>Noraidījumi:</b> {prognoze['noraidījumi']}<br>
@@ -510,14 +486,14 @@ elif rezims == "Komandas Statistika":
             away_10 = team_df[team_df['majas'] == 0].tail(10)
             away_xg = away_10['g_reg'].mean() if not away_10.empty else 0.0
             
-            st.markdown("<span style='font-size: 0.9em; color: #a0aec0;'>Balstīts uz pēdējām 10 attiecīgā tipa spēlēm</span>", unsafe_allow_html=True)
+            st.markdown("<span style='font-size: 0.9em; color: gray;'>Balstīts uz pēdējām 10 attiecīgā tipa spēlēm</span>", unsafe_allow_html=True)
             c1, c2, c3 = st.columns(3)
             c1.metric("Kopējais xG", f"{tot_xg:.2f}")
             c2.metric("Mājas xG", f"{home_xg:.2f}")
             c3.metric("Izbraukuma xG", f"{away_xg:.2f}")
 
             st.write("") 
-            st.markdown("<span style='font-size: 0.9em; color: #a0aec0;'>Periodu sadalījums no kopējām pēdējām 10 spēlēm</span>", unsafe_allow_html=True)
+            st.markdown("<span style='font-size: 0.9em; color: gray;'>Periodu sadalījums no kopējām pēdējām 10 spēlēm</span>", unsafe_allow_html=True)
             cp1, cp2, cp3 = st.columns(3)
             cp1.metric("1. Perioda xG", f"{p1_xg:.2f}")
             cp2.metric("2. Perioda xG", f"{p2_xg:.2f}")
@@ -646,16 +622,52 @@ elif rezims == "Kalendārs":
 elif rezims == "Rezultāti":
     st.markdown("""
         <style>
-        div[data-testid="stHorizontalBlock"] { gap: 0px !important; }
-        div[data-testid="column"] { margin: 0px !important; padding: 0px !important; }
-        div[data-testid="stColumn"] button {
-            border-radius: 0 !important; width: 100% !important; border-right: 0px !important;
-            white-space: pre-line !important; line-height: 1.3 !important; text-align: center !important;
-            padding-top: 6px !important; padding-bottom: 6px !important;
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0px !important;
         }
-        div[data-testid="stColumn"]:first-child button { border-top-left-radius: 6px !important; border-bottom-left-radius: 6px !important; }
-        div[data-testid="stColumn"]:last-child button { border-top-right-radius: 6px !important; border-bottom-right-radius: 6px !important; border-right: 1px solid rgba(255, 255, 255, 0.2) !important; }
-        .rez-highlight { background-color: #2b4c7e; color: white; padding: 4px 10px; border-radius: 6px; font-weight: bold; display: inline-block; }
+        div[data-testid="column"] {
+            margin: 0px !important;
+            padding: 0px !important;
+        }
+        div[data-testid="stColumn"] button {
+            border-radius: 0 !important;
+            width: 100% !important;
+            border-right: 0px !important;
+            white-space: pre-line !important; 
+            line-height: 1.3 !important;
+            text-align: center !important;
+            padding-top: 6px !important;
+            padding-bottom: 6px !important;
+        }
+        div[data-testid="stColumn"]:first-child button { 
+            border-top-left-radius: 6px !important; 
+            border-bottom-left-radius: 6px !important; 
+        }
+        div[data-testid="stColumn"]:last-child button {
+            border-top-right-radius: 6px !important;
+            border-bottom-right-radius: 6px !important;
+            border-right: 1px solid rgba(49, 51, 63, 0.2) !important;
+        }
+        @media (prefers-color-scheme: dark) {
+            div[data-testid="stColumn"]:last-child button { 
+                border-right: 1px solid rgba(250, 250, 250, 0.2) !important; 
+            }
+        }
+        .rez-highlight {
+            background-color: #2b4c7e;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        .prognozes-bloks {
+            line-height: 1.6;
+            margin-top: 8px;
+            margin-bottom: 25px;
+            font-size: 15px;
+            color: inherit;
+        }
         </style>
     """, unsafe_allow_html=True)
     
@@ -692,6 +704,7 @@ elif rezims == "Rezultāti":
         d_str = d.strftime("%d.%m")
         d_weekday = dienu_tulkojums.get(d.strftime('%A'), d.strftime('%A'))
         btn_label = f"{d_str}\n{d_weekday}"
+        
         btn_style = "primary" if d == st.session_state.selected_res_date else "secondary"
         cols[idx+1].button(btn_label, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,), width='stretch')
         
@@ -727,7 +740,13 @@ elif rezims == "Rezultāti":
                 ag = ap1 + ap2 + ap3
                 hg = hp1 + hp2 + hp3
                 
-                winner = f" {away}" if ag > hg else (f" {home}" if hg > ag else "")
+                if ag > hg:
+                    winner = f" {away}"
+                elif hg > ag:
+                    winner = f" {home}"
+                else:
+                    winner = ""
+                    
                 score_str = f"{ag}-{hg}{winner}".strip()
                 periods_str = f"({ap1}:{hp1};{ap2}:{hp2};{ap3}:{hp3})"
                 
