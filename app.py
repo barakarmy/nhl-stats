@@ -596,7 +596,7 @@ elif rezims == "Rezultāti":
         btn_style = "primary" if d == st.session_state.selected_res_date else "secondary"
         cols[idx+1].button(btn_label, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,), use_container_width=True)
         
-    cols[8].button("❯", on_click=change_offset, args=(7,), key="next_w", use_container_width=True)
+    cols[8].button("❯", on_click=change_offset, args=(-7,), key="next_w", use_container_width=True)
     
     st.markdown("---")
     st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d-%m-%Y')} ({dienu_tulkojums.get(st.session_state.selected_res_date.strftime('%A'), '')})")
@@ -638,13 +638,19 @@ elif rezims == "Rezultāti":
                 score_str = f"{ag}-{hg}{winner}".strip()
                 periods_str = f"({ap1}:{hp1};{ap2}:{hp2};{ap3}:{hp3})"
                 
-                # Aprēķinām noraidījumu skaitu (pim_count jau ietver to pašu loģiku)
+                # Aprēķinām noraidījumu skaitu atsevišķi viesiem un mājiniekiem
                 h_pim_tot = r['home_pim_total'] if 'home_pim_total' in r and pd.notna(r['home_pim_total']) else 0
                 a_pim_tot = r['away_pim_total'] if 'away_pim_total' in r and pd.notna(r['away_pim_total']) else 0
-                penalties_count = int(round((h_pim_tot + a_pim_tot) / 2))
                 
-                # Oficiālais rezultāts ar Penalties skaitu
-                match_str = f"**{away_full} ({away}) @ {home_full} ({home})** / <span class='rez-highlight'>Rezultāts - {score_str} {periods_str} - Penalties - {penalties_count}</span>"
+                h_penalties = int(round(h_pim_tot / 2))
+                a_penalties = int(round(a_pim_tot / 2))
+                total_penalties = h_penalties + a_penalties
+                
+                # Izveidojam iekavas formātā (ViesuKods;MājasKods) vai otrādi, atbilstoši komandu secībai
+                penalties_breakdown = f"({a_penalties};{h_penalties})"
+                
+                # Oficiālais rezultāts ar Penalties skaitu un komandu sadalījumu iekavās
+                match_str = f"**{away_full} ({away}) @ {home_full} ({home})** / <span class='rez-highlight'>Rezultāts - {score_str} {periods_str} - Penalties - {total_penalties} {penalties_breakdown}</span>"
                 
                 # --- PAGAIDU SIMULĒTO PROGNOŽU BLOKS ---
                 pred_ag = ag 
@@ -658,7 +664,7 @@ elif rezims == "Rezultāti":
                 
                 pim_val = 5.5
                 pim_type = "over"
-                pim_hit = (penalties_count > pim_val) if pim_type == "over" else (penalties_count < pim_val)
+                pim_hit = (total_penalties > pim_val) if pim_type == "over" else (total_penalties < pim_val)
                 
                 p1_val, p1_type = 1.5, "over"
                 p1_tot = ap1 + hp1
