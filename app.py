@@ -126,23 +126,23 @@ if 'rezims' not in st.session_state:
 
 # --- SĀNJOSLAS NAVIGĀCIJA ---
 st.sidebar.markdown("### 🏠 Sākumlapa")
-if st.sidebar.button("🎯 Prognozes", width='stretch'): st.session_state.rezims = "Prognozes"
+if st.sidebar.button("🎯 Prognozes", use_container_width=True): st.session_state.rezims = "Prognozes"
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Datu Filtri")
-if st.sidebar.button("1. Periods", width='stretch'): st.session_state.rezims = "1. Periods"
-if st.sidebar.button("2. Periods", width='stretch'): st.session_state.rezims = "2. Periods"
-if st.sidebar.button("3. Periods", width='stretch'): st.session_state.rezims = "3. Periods"
-if st.sidebar.button("Forma un Vārti", width='stretch'): st.session_state.rezims = "Forma un Vārti"
-if st.sidebar.button("Over / Under", width='stretch'): st.session_state.rezims = "Over / Under"
-if st.sidebar.button("Powerplay", width='stretch'): st.session_state.rezims = "Powerplay"
-if st.sidebar.button("Noraidījumi", width='stretch'): st.session_state.rezims = "Noraidījumi"
+if st.sidebar.button("1. Periods", use_container_width=True): st.session_state.rezims = "1. Periods"
+if st.sidebar.button("2. Periods", use_container_width=True): st.session_state.rezims = "2. Periods"
+if st.sidebar.button("3. Periods", use_container_width=True): st.session_state.rezims = "3. Periods"
+if st.sidebar.button("Forma un Vārti", use_container_width=True): st.session_state.rezims = "Forma un Vārti"
+if st.sidebar.button("Over / Under", use_container_width=True): st.session_state.rezims = "Over / Under"
+if st.sidebar.button("Powerplay", use_container_width=True): st.session_state.rezims = "Powerplay"
+if st.sidebar.button("Noraidījumi", use_container_width=True): st.session_state.rezims = "Noraidījumi"
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Komandas un Spēles")
-if st.sidebar.button("Komandas Statistika", width='stretch'): st.session_state.rezims = "Komandas Statistika"
-if st.sidebar.button("Kalendārs", width='stretch'): st.session_state.rezims = "Kalendārs"
-if st.sidebar.button("Rezultāti", width='stretch'): st.session_state.rezims = "Rezultāti"
+if st.sidebar.button("Komandas Statistika", use_container_width=True): st.session_state.rezims = "Komandas Statistika"
+if st.sidebar.button("Kalendārs", use_container_width=True): st.session_state.rezims = "Kalendārs"
+if st.sidebar.button("Rezultāti", use_container_width=True): st.session_state.rezims = "Rezultāti"
 
 rezims = st.session_state.rezims
 
@@ -586,7 +586,7 @@ elif rezims == "Rezultāti":
         st.session_state.selected_res_date = d
 
     cols = st.columns(9)
-    cols[0].button("❮", on_click=change_offset, args=(-7,), width='stretch')
+    cols[0].button("❮", on_click=change_offset, args=(-7,), key="prev_w", use_container_width=True)
     
     for idx, d in enumerate(dates):
         d_str = d.strftime("%d.%m")
@@ -594,9 +594,9 @@ elif rezims == "Rezultāti":
         btn_label = f"{d_str}\n{d_weekday}"
         
         btn_style = "primary" if d == st.session_state.selected_res_date else "secondary"
-        cols[idx+1].button(btn_label, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,), width='stretch')
+        cols[idx+1].button(btn_label, key=f"d_{d}", type=btn_style, on_click=set_date, args=(d,), use_container_width=True)
         
-    cols[8].button("❯", on_click=change_offset, args=(-7,), width='stretch')
+    cols[8].button("❯", on_click=change_offset, args=(-7,), key="next_w", use_container_width=True)
     
     st.markdown("---")
     st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d-%m-%Y')} ({dienu_tulkojums.get(st.session_state.selected_res_date.strftime('%A'), '')})")
@@ -638,6 +638,7 @@ elif rezims == "Rezultāti":
                 score_str = f"{ag}-{hg}{winner}".strip()
                 periods_str = f"({ap1}:{hp1};{ap2}:{hp2};{ap3}:{hp3})"
                 
+                # Aprēķinām noraidījumu skaitu atsevišķi viesiem un mājiniekiem
                 h_pim_tot = r['home_pim_total'] if 'home_pim_total' in r and pd.notna(r['home_pim_total']) else 0
                 a_pim_tot = r['away_pim_total'] if 'away_pim_total' in r and pd.notna(r['away_pim_total']) else 0
                 
@@ -645,8 +646,10 @@ elif rezims == "Rezultāti":
                 a_penalties = int(round(a_pim_tot / 2))
                 total_penalties = h_penalties + a_penalties
                 
+                # Izveidojam iekavas formātā (ViesuKods;MājasKods) vai otrādi, atbilstoši komandu secībai
                 penalties_breakdown = f"({a_penalties};{h_penalties})"
                 
+                # Oficiālais rezultāts ar Penalties skaitu un komandu sadalījumu iekavās
                 match_str = f"**{away_full} ({away}) @ {home_full} ({home})** / <span class='rez-highlight'>Rezultāts - {score_str} {periods_str} - Penalties - {total_penalties} {penalties_breakdown}</span>"
                 
                 # --- PAGAIDU SIMULĒTO PROGNOŽU BLOKS ---
