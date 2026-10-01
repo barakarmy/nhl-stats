@@ -494,14 +494,11 @@ elif rezims == "Kalendārs":
         try:
             df_k = pd.read_csv(CSV_KALENDARS)
             sodiena = datetime.now().date()
-            # Uzstādām uz turpmākajām 5 dienām (ieskaitot šodienu un nākamo 4 dienu ciklu)
             beigu_diena = sodiena + pd.Timedelta(days=5)
             
-            # Pieliekam +1 dienu arī kalendāram, lai sakristu ar Latvijas laiku
             df_k['datums_dt'] = pd.to_datetime(df_k['datums']) + pd.Timedelta(days=1)
             df_k['datums_val'] = df_k['datums_dt'].dt.date
             
-            # Izmantojam <= beigu_dienai, lai iekļautu pilnu piecu dienu diapazonu
             tuvakas_speles = df_k[(df_k['datums_val'] >= sodiena) & (df_k['datums_val'] <= beigu_diena)]
             
             if tuvakas_speles.empty:
@@ -641,7 +638,13 @@ elif rezims == "Rezultāti":
                 score_str = f"{ag}-{hg}{winner}".strip()
                 periods_str = f"({ap1}:{hp1};{ap2}:{hp2};{ap3}:{hp3})"
                 
-                match_str = f"**{away_full} ({away}) @ {home_full} ({home})** / <span class='rez-highlight'>Rezultāts - {score_str} {periods_str}</span>"
+                # Aprēķinām noraidījumu skaitu (pim_count jau ietver to pašu loģiku)
+                h_pim_tot = r['home_pim_total'] if 'home_pim_total' in r and pd.notna(r['home_pim_total']) else 0
+                a_pim_tot = r['away_pim_total'] if 'away_pim_total' in r and pd.notna(r['away_pim_total']) else 0
+                penalties_count = int(round((h_pim_tot + a_pim_tot) / 2))
+                
+                # Oficiālais rezultāts ar Penalties skaitu
+                match_str = f"**{away_full} ({away}) @ {home_full} ({home})** / <span class='rez-highlight'>Rezultāts - {score_str} {periods_str} - Penalties - {penalties_count}</span>"
                 
                 # --- PAGAIDU SIMULĒTO PROGNOŽU BLOKS ---
                 pred_ag = ag 
@@ -655,10 +658,7 @@ elif rezims == "Rezultāti":
                 
                 pim_val = 5.5
                 pim_type = "over"
-                h_pim = r['home_pim_total'] if 'home_pim_total' in r and pd.notna(r['home_pim_total']) else 0
-                a_pim = r['away_pim_total'] if 'away_pim_total' in r and pd.notna(r['away_pim_total']) else 0
-                pim_tot = int(h_pim) + int(a_pim)
-                pim_hit = (pim_tot > pim_val) if pim_type == "over" else (pim_tot < pim_val)
+                pim_hit = (penalties_count > pim_val) if pim_type == "over" else (penalties_count < pim_val)
                 
                 p1_val, p1_type = 1.5, "over"
                 p1_tot = ap1 + hp1
