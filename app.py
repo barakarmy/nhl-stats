@@ -157,7 +157,6 @@ if 'rezims' not in st.session_state:
     st.session_state.rezims = "Prognozes"
 
 # --- SĀNJOSLAS NAVIGĀCIJA ---
-st.sidebar.markdown("### 🏠 Sākumlapa")
 if st.sidebar.button("🎯 Prognozes", width='stretch'): st.session_state.rezims = "Prognozes"
 
 st.sidebar.markdown("---")
