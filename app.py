@@ -32,7 +32,8 @@ def ielasit_datus():
             return None
         df = pd.read_csv(CSV_FAILS)
         if 'datums' in df.columns:
-            df['datums'] = pd.to_datetime(df['datums'])
+            # Pārvēršam datumus un pieskaitām +1 dienu, lai sakristu ar Latvijas rītu pēc nakts spēlēm
+            df['datums'] = pd.to_datetime(df['datums']) + pd.Timedelta(days=1)
             df = df.sort_values('datums')
         return df
     except Exception:
@@ -511,7 +512,6 @@ elif rezims == "Kalendārs":
 elif rezims == "Rezultāti":
     st.markdown("""
         <style>
-        /* Pogas stils, kas ļauj tekstu dalīt 2 rindās un nocentrēt */
         div[data-testid="stColumns"] { gap: 0rem !important; }
         div[data-testid="stColumn"] { padding-left: 0 !important; padding-right: 0 !important; }
         div[data-testid="stColumn"] button {
@@ -519,8 +519,10 @@ elif rezims == "Rezultāti":
             width: 100% !important;
             border-right: 0px !important;
             white-space: pre-line !important; 
-            line-height: 1.2 !important;
+            line-height: 1.3 !important;
             text-align: center !important;
+            padding-top: 6px !important;
+            padding-bottom: 6px !important;
         }
         div[data-testid="stColumn"]:first-child button { border-top-left-radius: 5px !important; border-bottom-left-radius: 5px !important; }
         div[data-testid="stColumn"]:last-child button {
@@ -531,18 +533,18 @@ elif rezims == "Rezultāti":
         @media (prefers-color-scheme: dark) {
             div[data-testid="stColumn"]:last-child button { border-right: 1px solid rgba(250, 250, 250, 0.2) !important; }
         }
-        /* Rezultāta izcēlums - zils bloks */
         .rez-highlight {
-            background-color: #3b5998;
+            background-color: #2b4c7e;
             color: white;
-            padding: 3px 8px;
-            border-radius: 4px;
+            padding: 4px 10px;
+            border-radius: 6px;
             font-weight: bold;
+            display: inline-block;
         }
         .prognozes-bloks {
             line-height: 1.6;
-            margin-top: 5px;
-            margin-bottom: 20px;
+            margin-top: 8px;
+            margin-bottom: 25px;
             font-size: 15px;
             color: inherit;
         }
@@ -553,12 +555,10 @@ elif rezims == "Rezultāti":
     
     dienu_tulkojums = {'Monday': 'Pirmdiena', 'Tuesday': 'Otrdiena', 'Wednesday': 'Trešdiena', 'Thursday': 'Ceturtdiena', 'Friday': 'Piektdiena', 'Saturday': 'Sestdiena', 'Sunday': 'Svētdiena'}
     
-    # 1. Atrodam centrālo datumu: "šodiena" vai "pēdējais datums csv failā"
+    # Nosakām centrālo datumu (šodiena vai pēdējā diena CSV failā ar +1 dienas korekciju)
     if raw_df is not None and not raw_df.empty:
         max_date_in_csv = raw_df['datums'].max().date()
         today = datetime.today().date()
-        
-        # Ja CSV failā ir dati par šodienu (vai ļoti tuviem datumiem), izmantojam šodienu. Citādi ņemam vēlāko no faila.
         base_center_date = today if today <= max_date_in_csv + pd.Timedelta(days=1) else max_date_in_csv
     else:
         base_center_date = datetime.today().date()
@@ -568,7 +568,7 @@ elif rezims == "Rezultāti":
         
     center_date = base_center_date + pd.Timedelta(days=st.session_state.res_date_offset)
     
-    # Izveidojam 7 dienu sarakstu (centrālais datums ir indekss 3)
+    # 7 dienu logs: 3 dienas pa kreisi, centrs, 3 dienas pa labi
     dates = [center_date + pd.Timedelta(days=i) for i in range(-3, 4)]
     
     if 'selected_res_date' not in st.session_state:
@@ -580,12 +580,10 @@ elif rezims == "Rezultāti":
     def set_date(d):
         st.session_state.selected_res_date = d
 
-    # Datumu pogu rinda
     cols = st.columns(9)
     cols[0].button("❮", on_click=change_offset, args=(-7,), key="prev_w", use_container_width=True)
     
     for idx, d in enumerate(dates):
-        # Formatējam tekstu divās rindās: Datums \n Nedēļas diena
         d_str = d.strftime("%d.%m")
         d_weekday = dienu_tulkojums.get(d.strftime('%A'), d.strftime('%A'))
         btn_label = f"{d_str}\n{d_weekday}"
@@ -596,9 +594,8 @@ elif rezims == "Rezultāti":
     cols[8].button("❯", on_click=change_offset, args=(7,), key="next_w", use_container_width=True)
     
     st.markdown("---")
-    st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d.%m.%Y')}")
+    st.markdown(f"#### Spēles: {st.session_state.selected_res_date.strftime('%d.%m.%Y')} ({dienu_tulkojums.get(st.session_state.selected_res_date.strftime('%A'), '')})")
 
-    # Spēļu attēlošana
     if raw_df is not None and not raw_df.empty:
         dienas_speles = raw_df[raw_df['datums'].dt.date == st.session_state.selected_res_date]
         seen_games = set()
@@ -636,7 +633,6 @@ elif rezims == "Rezultāti":
                 score_str = f"{ag}-{hg}{winner}".strip()
                 periods_str = f"({ap1}:{hp1};{ap2}:{hp2};{ap3}:{hp3})"
                 
-                # HTML struktūra, kas izceļ oficiālo rezultātu "zilā fonā"
                 match_str = f"**{away_full} ({away}) @ {home_full} ({home})** / <span class='rez-highlight'>Rezultāts - {score_str} {periods_str}</span>"
                 
                 # --- PAGAIDU SIMULĒTO PROGNOŽU BLOKS ---
