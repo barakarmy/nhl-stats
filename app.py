@@ -441,12 +441,12 @@ elif rezims == "Noraidījumi":
     
     if "10 spēlēs" in filtrs:
         res = df.groupby('komanda').tail(10).groupby('komanda')['pim_count'].mean().reset_index()
-        res.columns = ['komanda', 'Vidējais noraidījumu skaits (pēd. 10)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vidējais noraidījumu skaits (pēd. 10)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Noraidījumu skaits']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Noraidījumu skaits', ascending=False)), use_container_width=True, hide_index=True)
     elif "Visas" in filtrs:
         res = df.groupby('komanda')['pim_count'].mean().reset_index()
-        res.columns = ['komanda', 'Vidējais noraidījumu skaits (Visas)']
-        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Vidējais noraidījumu skaits (Visas)', ascending=False)), use_container_width=True, hide_index=True)
+        res.columns = ['komanda', 'Noraidījumu skaits']
+        st.dataframe(sagatavot_tabulu_izvadei(res.sort_values(by='Noraidījumu skaits', ascending=False)), use_container_width=True, hide_index=True)
     else:
         is_home = 1 if "mājās" in filtrs else 0
         sub = df[df['majas'] == is_home]
