@@ -2,23 +2,12 @@ import pandas as pd
 import streamlit as st
 import os
 from datetime import datetime
-import modelis  # Importējam prognožu modeli
+import modelis  # Importējam mūsu prognožu modeli
 
-st.set_page_config(page_title="NHL Analītiskais Terminālis", layout="wide")
-
-# --- TUMŠS GRADIENTA FONS UN STILI ---
-st.markdown("""
-    <style>
-    .stApp {
-        background: linear-gradient(135deg, #0b132b 0%, #1c2541 50%, #3a506b 100%);
-        color: #f8fafc !important;
-    }
-    /* Pielāgojam augšējo izvēlni, lai tā izskatītos izcili */
-    .stSelectbox label, .stMarkdown, p, span {
-        color: #f8fafc !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
+st.set_page_config(
+    page_title="NHL Analītiskais Terminālis", 
+    layout="wide"
+)
 
 CSV_FAILS = "nhl_sezona.csv"
 CSV_KALENDARS = "nhl_kalendars.csv"
@@ -116,8 +105,8 @@ if raw_df is None:
 
 df = sagatavot_vienoto_tabulu(raw_df)
 
-# --- AUGŠĒJĀ NAVIGĀCIJAS IZVĒLNE (Bez sānjoslas) ---
-kategorijas = [
+# --- HORIZONTĀLĀ NAVIGĀCIJA LAPAS AUGŠPUSĒ ---
+menu_options = [
     "🎯 Prognozes", 
     "1. Periods", 
     "2. Periods", 
@@ -131,8 +120,8 @@ kategorijas = [
     "Rezultāti"
 ]
 
-# Izveidojam glītu izlecošo izvēlni (selectbox) lapas augšpusē
-rezims = st.selectbox("📂 Izvēlies sadaļu:", kategorijas)
+# Izmantojam st.radio ar horizontal=True, lai izveidotu glītas pogas augšpusē
+rezims = st.radio("Izvēlies sadaļu:", menu_options, horizontal=True, label_visibility="collapsed")
 
 st.markdown("---")
 
@@ -182,7 +171,7 @@ if rezims == "🎯 Prognozes":
                     st.markdown(f"**{datums_fmt} | {pilns_nosaukums(away)} ({away}) @ {pilns_nosaukums(home)} ({home})**")
                     if prognoze:
                         st.markdown(f"""
-                        <div style='background-color:rgba(255, 255, 255, 0.05); padding:10px; border-radius:8px; margin-bottom:15px; border: 1px solid rgba(255, 255, 255, 0.1); color: #f8fafc;'>
+                        <div style='background-color:#f0f2f6; padding:10px; border-radius:8px; margin-bottom:15px; color:#31333F;'>
                             <b>Rezultāts:</b> {prognoze['rezultats']}<br>
                             <b>Over/Under (Vārti):</b> {prognoze['over_under']}<br>
                             <b>Noraidījumi:</b> {prognoze['noraidījumi']}<br>
