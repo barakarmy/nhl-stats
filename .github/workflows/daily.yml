@@ -2,25 +2,25 @@ name: NHL Daily Update
 
 on:
   schedule:
-    - cron: '0 8 * * *'   # 08:00 UTC = 10:00/11:00 Rīgas laikā
+    - cron: '0 8 * * *'
   workflow_dispatch:
     inputs:
-      no:
-        description: 'Neobligāti: sākuma datums (ASV laiks), piem. 2026-09-29'
+      sakums:
+        description: 'Sakuma datums (ASV laiks), piem. 2026-09-29. Var atstat tuksu.'
         required: false
         default: ''
-      lidz:
-        description: 'Neobligāti: beigu datums, piem. 2026-10-02'
+        type: string
+      beigas:
+        description: 'Beigu datums, piem. 2026-10-02. Var atstat tuksu.'
         required: false
         default: ''
+        type: string
 
 jobs:
   update-data:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,9 +39,7 @@ jobs:
         run: python kalendars.py
 
       - name: Run Stats Script
-        # --vieglais: bez lielajām tabulām (notikumi, mainas), lai repozitorijs neuzaugtu.
-        # Bez datumiem tiek pārbaudītas pēdējās 3 dienas; jau esošās spēles tiek izlaistas.
-        run: python nhl_dati.py --vieglais ${{ inputs.no }} ${{ inputs.lidz }}
+        run: python nhl_dati.py --vieglais ${{ inputs.sakums }} ${{ inputs.beigas }}
 
       - name: Commit and push changes if any
         run: |
