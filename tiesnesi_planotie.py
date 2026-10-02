@@ -151,6 +151,8 @@ def komanda_no_teksta(teksts):
 
 
 class _TekstaParseris(HTMLParser):
+    """Teksta izvilkšana no HTML. Tiek izlaists tikai <script>/<style> saturs; pārējais teksts (arī <head>/<noscript>) netiek izlaists,
+    lai nepareizi noslēgti HTML elementi nevarētu "apēst" visu ieraksta tekstu."""
     BLOKI = {"p", "div", "li", "ul", "ol", "tr", "td", "th", "table", "br", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "hr"}
 
     def __init__(self):
@@ -158,13 +160,13 @@ class _TekstaParseris(HTMLParser):
         self.dalas, self._izlaist = [], 0
 
     def handle_starttag(self, tag, attrs):
-        if tag in ("script", "style", "noscript", "title", "head"):
+        if tag in ("script", "style"):
             self._izlaist += 1
         if tag in self.BLOKI:
             self.dalas.append("\n")
 
     def handle_endtag(self, tag):
-        if tag in ("script", "style", "noscript", "title", "head"):
+        if tag in ("script", "style"):
             self._izlaist = max(0, self._izlaist - 1)
         if tag in self.BLOKI:
             self.dalas.append("\n")
@@ -182,8 +184,14 @@ def html_uz_rindam(html):
     return [re.sub(r"\s+", " ", r).strip() for r in tekts.split("\n") if r.strip()]
 
 
-_ANTRAUKUMS = re.compile(r"^[#*\s]*(?P<away>.+?)\s+at\s+(?P<home>.+?)\s+\d{1,2}:\d{2}\s*[AP]M\s*ET[*\s.]*$", re.I)
 _VARDS = r"[A-Z][A-Za-z.'’\-]*(?: [A-Za-z.'’\-]+){0,3}"
+_NOS_RX = "|".join(sorted((r"\s+".join(map(re.escape, v.split())) for v in KOMANDU_NOSAUKUMI.values()), key=len, reverse=True))
+# spēles virsraksts: 'New York Rangers at Detroit Red Wings 6:30 PM ET' (komandu nosaukumi tiek meklēti tieši, tāpēc der arī priedēkļi, piem. 'Opening Night')
+_ANTRAUKUMS = re.compile(r"(?P<away>" + _NOS_RX + r")\s+(?:at|@)\s+(?P<home>" + _NOS_RX + r")\s+\d{1,2}:\d{2}\s*[AP]M\s*ET", re.I)
+
+
+def _bez_akcentiem(x):
+    return "".join(c for c in unicodedata.normalize("NFKD", x) if not unicodedata.combining(c))
 
 
 def _pari(teksts, sakums):
@@ -210,29 +218,38 @@ def _vardi_ar_numuriem(teksts, no, lidz):
 def parse_str(html):
     """
     Scouting The Refs dienas ieraksta parsētājs. Atgriež {(viesi, majas): {"referees": [...], "linesmen": [...]}} ar komandu kodiem.
-    Katras spēles sadaļa sākas ar virsrakstu 'Viesu komanda at Mājas komanda 7:00 PM ET', tās beigās ir teikumi
-    'Referees X and Y are paired up…' un 'Linespersons X and Y are together…'.
+    Viss teksts tiek apvienots vienā virknē (rindu dalījums HTML nav svarīgs); katras spēles sadaļa sākas ar virsrakstu
+    'Viesu komanda at Mājas komanda 7:00 PM ET', un tās beigās ir teikumi 'Referees X and Y are paired up…' un 'Linespersons X and Y are together…'.
     """
-    sekcijas, cur = [], None
-    for rinda in html_uz_rindam(html):
-        m = _ANTRAUKUMS.match(rinda)
-        if m:
-            cur = {"away": m.group("away"), "home": m.group("home"), "rindas": []}
-            sekcijas.append(cur)
-        elif re.match(r"^\W*Games: PS", rinda):
-            cur = None
-        elif cur is not None:
-            cur["rindas"].append(rinda)
+    teksts = _bez_akcentiem(" ".join(html_uz_rindam(html)))
+    griezums = teksts.find("Games: PS")                       # lapas kājene (skaidrojumi, citi ieraksti)
+    if griezums > 0:
+        teksts = teksts[:griezums]
+    sakumi = list(_ANTRAUKUMS.finditer(teksts))
     out = {}
-    for s in sekcijas:
-        a, h = komanda_no_teksta(s["away"]), komanda_no_teksta(s["home"])
+    for n, m in enumerate(sakumi):
+        a, h = komanda_no_teksta(m.group("away")), komanda_no_teksta(m.group("home"))
         if not a or not h:
             continue
-        teksts = " ".join(s["rindas"])
-        refs = _pari(teksts, r"Referees") or _vardi_ar_numuriem(teksts, "REFEREES", "LINESPERSONS")
-        lins = _pari(teksts, r"Linespersons") or _vardi_ar_numuriem(teksts, "LINESPERSONS", None)
+        sekcija = teksts[m.end(): sakumi[n + 1].start() if n + 1 < len(sakumi) else len(teksts)]
+        refs = _pari(sekcija, r"Referees") or _vardi_ar_numuriem(sekcija, "REFEREES", "LINESPERSONS")
+        lins = _pari(sekcija, r"Linespersons") or _vardi_ar_numuriem(sekcija, "LINESPERSONS", None)
         out[(a, h)] = {"referees": refs, "linesmen": lins}
     return out
+
+
+def diagnostika(html, n=700):
+    """Īss ieraksta apraksts, ja spēles netiek atrastas (palīdz saprast, ko portāls atdod)."""
+    rindas = html_uz_rindam(html or "")
+    teksts = " ".join(rindas)
+    print(f"  Diagnostika: HTML garums {len(html or '')}, teksta rindas {len(rindas)}, 'PM ET' reizes {len(re.findall(r'PM ET|AM ET', teksts))}, "
+          f"'paired up' reizes {teksts.count('paired up')}, 'Referees' reizes {teksts.count('Referees')}")
+    if re.search(r"just a moment|cf-chl|captcha|access denied|attention required", (html or "")[:6000], re.I):
+        print("  Diagnostika: lapa izskatās pēc pretbotu aizsardzības (Cloudflare/captcha), nevis ieraksta.")
+    i = teksts.find(" at ")
+    print("  Diagnostika: teksta sākums:", teksts[:n // 2].replace("\n", " "))
+    if i > 0:
+        print("  Diagnostika: apkārt pirmajam ' at ':", teksts[max(0, i - 120): i + 200])
 
 
 def _lejupieladet(url, meginajumi=2):
@@ -242,6 +259,8 @@ def _lejupieladet(url, meginajumi=2):
             r = requests.get(url, headers={"User-Agent": STR_UA, "Accept-Language": "en"}, timeout=20)
             if r.status_code == 200:
                 return r.text
+            if r.status_code == 404:                      # lapas nav (piem., ieraksts vēl nav publicēts): nav jēgas atkārtot
+                return None
             print(f"  Kļūda {r.status_code}: {url} (mēģinājums {i}/{meginajumi})")
         except requests.RequestException as e:
             print(f"  Savienojuma kļūda: {e} (mēģinājums {i}/{meginajumi})")
@@ -269,8 +288,16 @@ def str_dati(datumi, lejupieladet=_lejupieladet):
     if not datumi:
         return {}
     saites = _str_saites(lejupieladet(STR_KATEGORIJA))
+    try:
+        from zoneinfo import ZoneInfo
+        sodien_et = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    except Exception:
+        sodien_et = "9999-12-31"
     rezultats = {}
     for d in sorted(datumi):
+        if d > sodien_et:                                  # ieraksts tiek publicēts spēļu dienā, nākamās dienas vēl nav
+            print(f"  Scouting The Refs: ieraksts par {d} tiks publicēts šajā dienā (ASV laiks)")
+            continue
         url = saites.get(d)
         if not url:                                   # rezerves variants: dienas arhīvs
             arhivs = lejupieladet(f"https://scoutingtherefs.com/date/{d.replace('-', '/')}/")
@@ -281,6 +308,8 @@ def str_dati(datumi, lejupieladet=_lejupieladet):
         html = lejupieladet(url)
         sp = parse_str(html) if html else {}
         print(f"  Scouting The Refs: {d}: atrastas {len(sp)} spēles ({url})")
+        if not sp:
+            diagnostika(html)
         rezultats[d] = sp
     return rezultats
 
