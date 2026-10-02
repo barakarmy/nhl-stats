@@ -1,0 +1,8 @@
+# Lielie faili, kas nav vajadzīgi Streamlit lietotnei (paliek tikai lokāli)
+dati/notikumi.csv
+dati/mainas.csv
+dati/raw/
+dati/*_vecs_*.csv
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
