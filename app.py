@@ -1088,6 +1088,8 @@ def lapa_kalendars():
     if KAL is None:
         st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts (palaid kalendars.py).")
         return
+    st.caption("Galvenos tiesnešus pirms spēlēm paziņo apmēram 4 stundas pirms dienas pirmās spēles. Dati: Scouting The Refs "
+               "(scoutingtherefs.com) un NHL.")
     c1, c2 = st.columns([1, 2])
     dienas = c1.slider("Cik dienas uz priekšu", 1, 14, 5)
     komanda = c2.selectbox("Komanda", ["Visas komandas"] + sorted(da.KOMANDAS),
