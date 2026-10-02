@@ -1,6 +1,13 @@
 """
-Plānotie tiesneši: pirms spēlēm ielasa NHL `right-rail` datus un ieraksta dati/tiesnesi_planotie.csv
+Plānotie tiesneši: pirms spēlēm iegūst galvenos tiesnešus un ieraksta dati/tiesnesi_planotie.csv
 (viena rinda uz spēli un amatpersonu). Spēļu laiki tiek ņemti no nhl_kalendars.csv (to atjaunina kalendars.py).
+
+Avoti (pēc prioritātes):
+  1. Scouting The Refs (scoutingtherefs.com): neatkarīgs hokeja tiesnešu portāls, kas katru dienu apmēram 4 stundas pirms pirmās spēles
+     publicē ierakstu "Tonight's NHL Referees and Linespersons" ar visu spēļu tiesnešiem. NHL API (right-rail) pirms spēles tiesnešus parasti
+     nesniedz, tāpēc šis ir galvenais avots. Skripts tur izdara tikai 2-3 pieprasījumus un tikai tad, kad tiesnešu vēl trūkst.
+  2. NHL right-rail (gameInfo.referees), ja tur tiesneši jau ir.
+Faila kolonna `avots` norāda, no kurienes katrs ieraksts.
 
 Darbplūsma (.github/workflows/referees.yml) katras 30 minūtes palaiž ĀTRO pārbaudi:
   python tiesnesi_planotie.py --parbaude
@@ -18,18 +25,21 @@ Lietošana:
 import csv
 import json
 import os
+import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+import unicodedata
+from datetime import date, datetime, timedelta, timezone
+from html.parser import HTMLParser
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATU_MAPE = os.environ.get("NHL_DATU_MAPE") or os.path.join(BASE, "dati")
 KALENDARS = os.path.join(BASE, "nhl_kalendars.csv")
 FAILS = os.path.join(DATU_MAPE, "tiesnesi_planotie.csv")
-KOLONNAS = ["game_id", "sakums_utc", "home_team", "away_team", "loma", "vards", "atjaunots_utc"]
+KOLONNAS = ["game_id", "sakums_utc", "home_team", "away_team", "loma", "vards", "atjaunots_utc", "avots"]
 
-TRIGERA_STUNDAS = 4    # darbu sāk, ja kādai spēlei tuvāko tik stundu laikā nav tiesnešu
-IEGUVES_STUNDAS = 8    # ielādes laikā tiek pārbaudītas visas spēles bez tiesnešiem tik stundu laikā
+TRIGERA_STUNDAS = 6    # darbu sāk, ja kādai spēlei tuvāko tik stundu laikā nav tiesnešu (portāls ieraksta publicē ~4 h pirms pirmās spēles)
+IEGUVES_STUNDAS = 30   # ielādes laikā tiek pārbaudītas visas spēles bez tiesnešiem tik stundu laikā
 MIN_TIESNESI = 2       # spēle ir "aizpildīta", ja failā ir vismaz tik galvenie tiesneši
 GLABAT_DIENAS = 2
 
@@ -106,6 +116,176 @@ def parbaude(tagad=None):
 
 
 # ----------------------------------------------------------------------------
+# SCOUTING THE REFS (scoutingtherefs.com)
+# ----------------------------------------------------------------------------
+STR_KATEGORIJA = "https://scoutingtherefs.com/category/tonights-officials/nhl-tonights-officials/"
+STR_RX = re.compile(r"https://scoutingtherefs\.com/\d{4}/\d{2}/\d+/(?:tonights|todays)-nhl-(?:playoff-)?referees-and-linespersons-(\d{1,2})-(\d{1,2})-(\d{2})/?")
+STR_UA = "Mozilla/5.0 (compatible; NHLStatsPersonal/1.0; personal non-commercial project)"
+
+# komandu nosaukumi (kā tos raksta portāls); dublē datu_apstrade.KOMANDAS, lai skripts nebūtu atkarīgs no pandas
+KOMANDU_NOSAUKUMI = {
+    "ANA": "Anaheim Ducks", "BOS": "Boston Bruins", "BUF": "Buffalo Sabres", "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes",
+    "CHI": "Chicago Blackhawks", "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets", "DAL": "Dallas Stars",
+    "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers", "FLA": "Florida Panthers", "LAK": "Los Angeles Kings", "MIN": "Minnesota Wild",
+    "MTL": "Montreal Canadiens", "NSH": "Nashville Predators", "NJD": "New Jersey Devils", "NYI": "New York Islanders",
+    "NYR": "New York Rangers", "OTT": "Ottawa Senators", "PHI": "Philadelphia Flyers", "PIT": "Pittsburgh Penguins",
+    "SJS": "San Jose Sharks", "SEA": "Seattle Kraken", "STL": "St. Louis Blues", "TBL": "Tampa Bay Lightning",
+    "TOR": "Toronto Maple Leafs", "UTA": "Utah Mammoth", "VAN": "Vancouver Canucks", "VGK": "Vegas Golden Knights",
+    "WSH": "Washington Capitals", "WPG": "Winnipeg Jets",
+}
+
+
+def _norm(x):
+    x = unicodedata.normalize("NFKD", str(x)).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", x)).strip()
+
+
+_NORM_NOS = {k: _norm(v) for k, v in KOMANDU_NOSAUKUMI.items()}
+
+
+def komanda_no_teksta(teksts):
+    """Komandas kods no nosaukuma (arī ar priedēkli, piem., 'Opening Night Florida Panthers'); None, ja nav atpazīta."""
+    t = " " + _norm(teksts) + " "
+    atrasti = [(len(n), k) for k, n in _NORM_NOS.items() if " " + n + " " in t]
+    return max(atrasti)[1] if atrasti else None
+
+
+class _TekstaParseris(HTMLParser):
+    BLOKI = {"p", "div", "li", "ul", "ol", "tr", "td", "th", "table", "br", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "hr"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.dalas, self._izlaist = [], 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style", "noscript", "title", "head"):
+            self._izlaist += 1
+        if tag in self.BLOKI:
+            self.dalas.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "noscript", "title", "head"):
+            self._izlaist = max(0, self._izlaist - 1)
+        if tag in self.BLOKI:
+            self.dalas.append("\n")
+
+    def handle_data(self, data):
+        if not self._izlaist:
+            self.dalas.append(data)
+
+
+def html_uz_rindam(html):
+    """HTML → teksta rindas (bloka elementi atdala rindas, atstarpes sakārtotas). Darbojas arī ar parastu tekstu."""
+    p = _TekstaParseris()
+    p.feed(html)
+    tekts = "".join(p.dalas).replace("\xa0", " ").replace("\u200b", "")
+    return [re.sub(r"\s+", " ", r).strip() for r in tekts.split("\n") if r.strip()]
+
+
+_ANTRAUKUMS = re.compile(r"^[#*\s]*(?P<away>.+?)\s+at\s+(?P<home>.+?)\s+\d{1,2}:\d{2}\s*[AP]M\s*ET[*\s.]*$", re.I)
+_VARDS = r"[A-Z][A-Za-z.'’\-]*(?: [A-Za-z.'’\-]+){0,3}"
+
+
+def _pari(teksts, sakums):
+    """Divi vārdi no teikuma 'Referees X and Y are paired up…' / 'Linespersons X and Y are together…'."""
+    m = re.search(sakums + r"\s+(" + _VARDS + r")\s+and\s+(" + _VARDS + r")\s+(?:are|have been)\s+(?:paired|together|teamed)", teksts)
+    return [m.group(1).strip(), m.group(2).strip()] if m else []
+
+
+def _vardi_ar_numuriem(teksts, no, lidz):
+    """Rezerves variants: vārdi formā 'Vārds Uzvārds #14' starp virsrakstiem REFEREES un LINESPERSONS."""
+    i = teksts.find(no)
+    if i < 0:
+        return []
+    j = teksts.find(lidz, i + len(no)) if lidz else -1
+    gabals = teksts[i + len(no): j if j > 0 else None]
+    out = []
+    for m in re.finditer(r"(" + _VARDS + r")\s+#\d+", gabals):
+        v = m.group(1).strip()
+        if v not in out:
+            out.append(v)
+    return out[:2]
+
+
+def parse_str(html):
+    """
+    Scouting The Refs dienas ieraksta parsētājs. Atgriež {(viesi, majas): {"referees": [...], "linesmen": [...]}} ar komandu kodiem.
+    Katras spēles sadaļa sākas ar virsrakstu 'Viesu komanda at Mājas komanda 7:00 PM ET', tās beigās ir teikumi
+    'Referees X and Y are paired up…' un 'Linespersons X and Y are together…'.
+    """
+    sekcijas, cur = [], None
+    for rinda in html_uz_rindam(html):
+        m = _ANTRAUKUMS.match(rinda)
+        if m:
+            cur = {"away": m.group("away"), "home": m.group("home"), "rindas": []}
+            sekcijas.append(cur)
+        elif re.match(r"^\W*Games: PS", rinda):
+            cur = None
+        elif cur is not None:
+            cur["rindas"].append(rinda)
+    out = {}
+    for s in sekcijas:
+        a, h = komanda_no_teksta(s["away"]), komanda_no_teksta(s["home"])
+        if not a or not h:
+            continue
+        teksts = " ".join(s["rindas"])
+        refs = _pari(teksts, r"Referees") or _vardi_ar_numuriem(teksts, "REFEREES", "LINESPERSONS")
+        lins = _pari(teksts, r"Linespersons") or _vardi_ar_numuriem(teksts, "LINESPERSONS", None)
+        out[(a, h)] = {"referees": refs, "linesmen": lins}
+    return out
+
+
+def _lejupieladet(url, meginajumi=2):
+    import requests
+    for i in range(1, meginajumi + 1):
+        try:
+            r = requests.get(url, headers={"User-Agent": STR_UA, "Accept-Language": "en"}, timeout=20)
+            if r.status_code == 200:
+                return r.text
+            print(f"  Kļūda {r.status_code}: {url} (mēģinājums {i}/{meginajumi})")
+        except requests.RequestException as e:
+            print(f"  Savienojuma kļūda: {e} (mēģinājums {i}/{meginajumi})")
+        time.sleep(2 * i)
+    return None
+
+
+def _str_saites(html):
+    """{datums 'YYYY-MM-DD': ieraksta URL} no lapas HTML (datums ir ieraksta adreses beigās: m-d-gg)."""
+    out = {}
+    for m in STR_RX.finditer(html or ""):
+        try:
+            d = date(2000 + int(m.group(3)), int(m.group(1)), int(m.group(2))).isoformat()
+        except ValueError:
+            continue
+        out.setdefault(d, m.group(0).rstrip("/") + "/")
+    return out
+
+
+def str_dati(datumi, lejupieladet=_lejupieladet):
+    """
+    Spēļu dienu (ASV datuma) tiesneši no Scouting The Refs. datumi: {'YYYY-MM-DD', ...}.
+    Atgriež {datums: parse_str rezultāts}. Atrod ierakstu kategorijas lapā, rezerves variantā dienas arhīvā.
+    """
+    if not datumi:
+        return {}
+    saites = _str_saites(lejupieladet(STR_KATEGORIJA))
+    rezultats = {}
+    for d in sorted(datumi):
+        url = saites.get(d)
+        if not url:                                   # rezerves variants: dienas arhīvs
+            arhivs = lejupieladet(f"https://scoutingtherefs.com/date/{d.replace('-', '/')}/")
+            url = _str_saites(arhivs).get(d)
+        if not url:
+            print(f"  Scouting The Refs: ieraksts par {d} vēl nav atrasts")
+            continue
+        html = lejupieladet(url)
+        sp = parse_str(html) if html else {}
+        print(f"  Scouting The Refs: {d}: atrastas {len(sp)} spēles ({url})")
+        rezultats[d] = sp
+    return rezultats
+
+
+# ----------------------------------------------------------------------------
 # IELĀDE
 # ----------------------------------------------------------------------------
 def _nhl():
@@ -125,7 +305,7 @@ def tiesnesi_no_right_rail(rr):
     return out
 
 
-def ielasit(stundas=IEGUVES_STUNDAS, visas=False, tagad=None):
+def ielasit(stundas=IEGUVES_STUNDAS, visas=False, tagad=None, lejupieladet=_lejupieladet):
     nhl = _nhl()
     tagad = tagad or datetime.now(timezone.utc)
     esosie = ielasit_esoso()
@@ -136,23 +316,31 @@ def ielasit(stundas=IEGUVES_STUNDAS, visas=False, tagad=None):
 
     atjaunots = tagad.strftime("%Y-%m-%d %H:%M")
     jaunas_rindas, atrasti, paraugs = {}, 0, None
+    portals = str_dati({sp.get("datums") for sp in speles if sp.get("datums")}, lejupieladet=lejupieladet) if speles else {}
     for sp in speles:
         gid = sp["game_id"]
-        rr = nhl.get_json(f"{nhl.API_WEB}/gamecenter/{gid}/right-rail", meginajumi=2)
-        time.sleep(nhl.KAVESANAS)
-        if rr is None:
-            print(f"  ✗ {nosaukums(sp)}: pieprasījums neizdevās")
-            continue
-        paraugs = paraugs or rr
-        ties = tiesnesi_no_right_rail(rr)
+        avots, ties = "", []
+        s = portals.get(sp.get("datums"), {}).get((sp.get("viesu_komanda"), sp.get("majas_komanda")))
+        if s and s["referees"]:
+            ties = [("referee", v) for v in s["referees"]] + [("linesman", v) for v in s["linesmen"]]
+            avots = "ScoutingTheRefs"
+        else:                                          # rezerves variants: NHL right-rail
+            rr = nhl.get_json(f"{nhl.API_WEB}/gamecenter/{gid}/right-rail", meginajumi=2)
+            time.sleep(nhl.KAVESANAS)
+            if rr is None:
+                print(f"  ✗ {nosaukums(sp)}: pieprasījums neizdevās")
+                continue
+            paraugs = paraugs or rr
+            ties = tiesnesi_no_right_rail(rr)
+            avots = "NHL"
         if not any(loma == "referee" for loma, _ in ties):
             print(f"  – {nosaukums(sp)}: tiesneši vēl nav paziņoti")
             continue
         atrasti += 1
-        print(f"  ✓ {nosaukums(sp)}: {', '.join(v for l, v in ties if l == 'referee')}")
+        print(f"  ✓ {nosaukums(sp)}: {', '.join(v for l, v in ties if l == 'referee')} ({avots})")
         jaunas_rindas[gid] = [{"game_id": gid, "sakums_utc": sp["sakuma_laiks_utc"],
                                "home_team": sp.get("majas_komanda"), "away_team": sp.get("viesu_komanda"),
-                               "loma": loma, "vards": v, "atjaunots_utc": atjaunots} for loma, v in ties]
+                               "loma": loma, "vards": v, "atjaunots_utc": atjaunots, "avots": avots} for loma, v in ties]
 
     # apvieno ar esošo: nemaina spēles, kurām tiesneši nav mainījušies; izmet vecās spēles
     robeza = tagad - timedelta(days=GLABAT_DIENAS)
