@@ -13,6 +13,11 @@ un ierakstīti vairākās CSV tabulās mapē DATU_MAPE:
   mainas.csv     - maiņu dati (kurš spēlētājs kad bija laukumā)
   tiesnesi.csv   - spēles tiesneši un līnijtiesneši + spēlē piešķirtie noraidījumi (tiesnešu statistikai)
 
+SVARĪGI: statistikā tiek lietots tikai pamatlaiks (1.-3. periods). Papildlaiks (OT) un pēcspēles metieni (SO)
+tiek tikai saglabāti kolonnās *_ot un kopsummās vizuālai attēlošanai (piem., home_ot, home_sog_ot, home_pen_ot).
+Sodu skaits, sodu minūtes (pim_total), vairākuma rādītāji un tukšo vārtu/mazākuma vārti ir pamatlaika; sog_total ir oficiālā
+kopsumma (arī papildlaiks), tāpēc statistikā jālieto sog_p1..p3.
+
 Lietošana:
   python nhl_dati.py                        # pēdējās 3 dienas (pēc ASV austrumu laika), jau esošās spēles tiek izlaistas
   python nhl_dati.py 2026-10-01             # konkrēta diena
@@ -53,6 +58,7 @@ RAW = "--raw" in sys.argv
 
 ET = ZoneInfo("America/New_York")   # NHL spēļu datumi ir pēc ASV austrumu laika
 PERIODI = ("p1", "p2", "p3", "ot")
+REG_PERIODI = ("p1", "p2", "p3")   # statistikā tiek lietots tikai pamatlaiks; papildlaiks (ot) tiek tikai saglabāts
 
 # ----------------------------------------------------------------------------
 # KOLONNAS
@@ -72,6 +78,7 @@ SPELES_KOL = (
      "spele_beidzas", "uzvaretajs", "home_team", "away_team", "home_total", "away_total"]
     + pari("", PERIODI)                         # vārti pa periodiem
     + pari("pim_", ("total",) + PERIODI)        # sodu minūtes (bez kautiņiem)
+    + pari("pen_", PERIODI)                     # sodu skaits pa periodiem (bez kautiņiem)
     + pari("sog_", ("total",) + PERIODI)        # metieni vārtos
     + ["home_ppg", "away_ppg", "home_pp_sog", "away_pp_sog"]
     + pari("", ("pp_opp", "pen_count", "sh_goals", "en_goals", "missed_shots", "pim_official",
@@ -242,7 +249,7 @@ def cels(nos):
 
 
 def sagatavot_failus():
-    """Ja esoša CSV galvene neatbilst kolonnām, vecais fails tiek pārsaukts (nevis sajaukti dati)."""
+    """Ja esošā CSV galvene neatbilst: pievienotas kolonnas tiek papildinātas vietā, citādi vecais fails tiek pārsaukts."""
     os.makedirs(DATU_MAPE, exist_ok=True)
     for nos, (_, kol) in TABULAS.items():
         c = cels(nos)
@@ -250,7 +257,16 @@ def sagatavot_failus():
             continue
         with open(c, newline="", encoding="utf-8-sig") as f:
             galvene = next(csv.reader(f), None)
-        if galvene != kol:
+        if galvene != kol and galvene and set(galvene) <= set(kol):
+            # tikai pievienotas jaunas kolonnas: fails tiek papildināts vietā, vecie ieraksti paliek (jaunās kolonnas tukšas)
+            with open(c, newline="", encoding="utf-8-sig") as f:
+                rindas = list(csv.DictReader(f))
+            with open(c, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.DictWriter(f, fieldnames=kol, extrasaction="ignore")
+                w.writeheader()
+                w.writerows(rindas)
+            print(f"Piezīme: {os.path.basename(c)} papildināts ar jaunām kolonnām: {[x for x in kol if x not in galvene][:6]}...")
+        elif galvene != kol:
             jauns = c[:-4] + "_vecs_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".csv"
             os.replace(c, jauns)
             print(f"Brīdinājums: {os.path.basename(c)} galvene neatbilda, vecais fails pārsaukts par {os.path.basename(jauns)}")
@@ -362,6 +378,7 @@ def apstradat_spele(spele, datums):
 
     # ---- vārti (landing kopsavilkums) ----
     vartu_rindas = []
+    ppg_ot = {"home": 0, "away": 0}           # vārti vairākumā papildlaikā (netiek ieskaitīti statistikā)
     for pd_ in summary.get("scoring") or []:
         pdesc = pd_.get("periodDescriptor") or {}
         pk = perioda_atslega(pdesc)
@@ -373,12 +390,15 @@ def apstradat_spele(spele, datums):
             if pk:
                 r[f"{puse}_{pk}"] += 1
             stipr = g.get("strength")
-            if stipr == "pp":
-                r[f"{puse}_ppg"] += 1
-            elif stipr == "sh":
-                r[f"{puse}_sh_goals"] += 1
-            if g.get("goalModifier") == "empty-net":
-                r[f"{puse}_en_goals"] += 1
+            if pk in REG_PERIODI:                  # vairākuma / mazākuma / tukšo vārtu statistika: tikai pamatlaiks
+                if stipr == "pp":
+                    r[f"{puse}_ppg"] += 1
+                elif stipr == "sh":
+                    r[f"{puse}_sh_goals"] += 1
+                if g.get("goalModifier") == "empty-net":
+                    r[f"{puse}_en_goals"] += 1
+            elif pk == "ot" and stipr == "pp":
+                ppg_ot[puse] += 1
             ass = g.get("assists") or []
             a1 = ass[0] if len(ass) > 0 else {}
             a2 = ass[1] if len(ass) > 1 else {}
@@ -399,6 +419,7 @@ def apstradat_spele(spele, datums):
     notikumu_rindas = []
     kautinu_pim = {"home": 0, "away": 0}
     pen_per = {"p1": 0, "p2": 0, "p3": 0}      # abu komandu sodu skaits pa periodiem (tiesnešu statistikai)
+    ot_pp_sog = {"home": 0, "away": 0}         # metieni vairākumā papildlaikā (tiek atņemti no PP metieniem)
     for p in plays:
         det = p.get("details") or {}
         pdesc = p.get("periodDescriptor") or {}
@@ -432,17 +453,25 @@ def apstradat_spele(spele, datums):
             if "fight" in str(det.get("descKey", "")).lower():
                 kautinu_pim[puse] += ilgums
             elif pk:
-                r[f"{puse}_pim_{pk}"] += ilgums
-                r[f"{puse}_pim_total"] += ilgums
+                r[f"{puse}_pim_{pk}"] += ilgums           # arī papildlaiks (pim_ot), tikai vizuālai attēlošanai
+                if pk in REG_PERIODI:
+                    r[f"{puse}_pim_total"] += ilgums      # kopā = tikai pamatlaiks
                 if ilgums > 0:
-                    r[f"{puse}_pen_count"] += 1   # sodu skaits (bez kautiņiem)
+                    if pk in REG_PERIODI:
+                        r[f"{puse}_pen_count"] += 1       # sodu skaits pamatlaikā (bez kautiņiem)
+                    r[f"{puse}_pen_{pk}"] += 1            # sodu skaits pa periodiem (arī pen_ot)
                     if pk in pen_per:
                         pen_per[pk] += 1
         elif not pk:
             continue  # pēcspēles metieni netiek skaitīti periodos
         elif tips in ("shot-on-goal", "goal"):
             r[f"{puse}_sog_{pk}"] += 1
-        elif tips == "missed-shot":
+            if pk == "ot" and len(sit) == 4 and all(x.isdigit() for x in sit) and sit[0] == "1" and sit[3] == "1":
+                # papildlaika metiens vairākumā (komandai laukumā vairāk spēlētāju, abi vārtsargi laukumā)
+                sk_savi, sk_pret = (int(sit[2]), int(sit[1])) if puse == "home" else (int(sit[1]), int(sit[2]))
+                if sk_savi > sk_pret:
+                    ot_pp_sog[puse] += 1
+        elif tips == "missed-shot" and pk in REG_PERIODI:
             r[f"{puse}_missed_shots"] += 1
 
     # ---- komandu statistika (teamGameStats: right-rail vai landing kopsavilkums) ----
@@ -474,11 +503,14 @@ def apstradat_spele(spele, datums):
         r[f"{puse}_takeaways"] = tv("takeaways", puse)
         r[f"{puse}_faceoff_pct"] = procenti(tv("faceoffWinningPctg", puse))
         pp_g, pp_o = sadalit_dalu(tv("powerPlay", puse))
+        pret_puse = "away" if puse == "home" else "home"
+        if pp_o is not None:                       # papildlaika vairākuma iespējas (pretinieka sodi papildlaikā) netiek ieskaitītas
+            pp_o = max(pp_o - r[f"{pret_puse}_pen_ot"], 0)
         r[f"{puse}_pp_opp"] = pp_o
         if pp_o is None and "powerPlay" in tgs:
             print("  Piezīme: 'powerPlay' atrasts, bet formātu nevar nolasīt. Paraugs:", tgs["powerPlay"])
-        if pp_g is not None and pp_g != r[f"{puse}_ppg"]:
-            print(f"  Brīdinājums: {puse} vairākuma vārti {r[f'{puse}_ppg']} != oficiālie {pp_g}")
+        if pp_g is not None and pp_g - ppg_ot[puse] != r[f"{puse}_ppg"]:
+            print(f"  Brīdinājums: {puse} vairākuma vārti {r[f'{puse}_ppg']} != oficiālie pamatlaikā {pp_g - ppg_ot[puse]}")
 
         summa = sum(r[f"{puse}_sog_{k}"] for k in PERIODI)
         oficial = home.get("sog") if puse == "home" else away.get("sog")
@@ -487,8 +519,8 @@ def apstradat_spele(spele, datums):
             print(f"  Brīdinājums: {puse} metienu summa pa periodiem ({summa}) != kopējie ({oficial})")
 
         off_pim = r[f"{puse}_pim_official"]
-        if isinstance(off_pim, (int, float)) and r[f"{puse}_pim_total"] + kautinu_pim[puse] != off_pim:
-            print(f"  Brīdinājums: {puse} PIM {r[f'{puse}_pim_total']} + kautiņi {kautinu_pim[puse]} != oficiālie {off_pim}")
+        if isinstance(off_pim, (int, float)) and r[f"{puse}_pim_total"] + r[f"{puse}_pim_ot"] + kautinu_pim[puse] != off_pim:
+            print(f"  Brīdinājums: {puse} PIM {r[f'{puse}_pim_total'] + r[f'{puse}_pim_ot']} + kautiņi {kautinu_pim[puse]} != oficiālie {off_pim}")
 
     # ---- vārtu pārbaude (SO uzvarētāja vārti nav periodu summā) ----
     starp = {p: r[f"{p}_total"] - sum(r[f"{p}_{k}"] for k in PERIODI) for p in ("home", "away")}
@@ -539,6 +571,9 @@ def apstradat_spele(spele, datums):
             _, pp_sa = sadalit_dalu(pl.get("powerPlayShotsAgainst"))
             if pp_sa:
                 r[f"{pret}_pp_sog"] += pp_sa
+
+    for puse in ("home", "away"):                   # vairākuma metieni: tikai pamatlaiks
+        r[f"{puse}_pp_sog"] = max(r[f"{puse}_pp_sog"] - ot_pp_sog[puse], 0)
 
     # ---- maiņas ----
     mainu_rindas = []
