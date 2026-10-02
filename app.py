@@ -211,7 +211,12 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .st-key-datums_josla button { justify-content: center; padding-left: 1.1rem; padding-right: 1.1rem; }
 .st-key-datums_josla button, .st-key-datums_josla button p { font-weight: 700 !important; text-align: center; }
 .st-key-datums_josla button p { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
-.st-key-datums_josla [data-testid="stPopover"] button [data-testid="stIconMaterial"], .st-key-datums_josla [data-testid="stPopover"] button svg { display: none !important; }
+/* datuma lauks: kompakts, teksts centrēts un treknrakstā, vienāds augstums ar pogām */
+.st-key-datums_josla [data-testid="stDateInput"] { width: 10.5rem !important; }
+.st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"] { border-radius: 10px; min-height: 2.5rem; }
+.st-key-datums_josla [data-testid="stDateInput"] input { text-align: center !important; font-weight: 700 !important; letter-spacing: .02em;
+  padding-left: 0 !important; padding-right: 0 !important; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
+.st-key-datums_josla [data-testid="stDateInput"] svg { display: none; }
 
 /* ===== Mobilā versija ===== */
 @media (max-width: 768px) {
@@ -1204,10 +1209,9 @@ def lapa_rezultati():
 
     with st.container(key="datums_josla"):       # kompakta josla pa lapas vidu: tikai tik plata, cik vajag tekstam
         st.button("❮ Iepriekšējā diena", on_click=nobide, args=(-1,))
-        # datums ir treknraksta poga; uz tās nospiežot, atveras kalendārs datuma izvēlei
-        with st.popover(f"{st.session_state['rez_datums']:%d.%m.%Y}"):
-            st.date_input("Datums", min_value=mind, max_value=maxd, key="rez_datums", format="DD.MM.YYYY",
-                          label_visibility="collapsed")
+        # datums: lauks ar centrētu treknrakstu; uz tā nospiežot, kalendārs atveras uzreiz
+        st.date_input("Datums", min_value=mind, max_value=maxd, key="rez_datums", format="DD.MM.YYYY",
+                      label_visibility="collapsed")
         st.button("Nākamā diena ❯", on_click=nobide, args=(1,))
 
     dat = st.session_state["rez_datums"]
