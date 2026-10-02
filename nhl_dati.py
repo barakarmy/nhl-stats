@@ -13,10 +13,11 @@ un ierakstīti vairākās CSV tabulās mapē DATU_MAPE:
   mainas.csv     - maiņu dati (kurš spēlētājs kad bija laukumā)
 
 Lietošana:
-  python nhl_dati.py                        # pēdējās 2 dienas (pēc ASV austrumu laika), jau esošās spēles tiek izlaistas
+  python nhl_dati.py                        # pēdējās 3 dienas (pēc ASV austrumu laika), jau esošās spēles tiek izlaistas
   python nhl_dati.py 2026-10-01             # konkrēta diena
   python nhl_dati.py 2026-10-01 2026-10-07  # datumu intervāls (vēstures aizpildīšanai)
   python nhl_dati.py --raw                  # papildus saglabā neapstrādātos JSON mapē raw\\
+  python nhl_dati.py --vieglais             # bez lielajām tabulām notikumi.csv un mainas.csv (GitHub Actions)
 
 Nepieciešams:  pip install requests tzdata
 """
@@ -33,14 +34,18 @@ import requests
 # ----------------------------------------------------------------------------
 # IESTATĪJUMI
 # ----------------------------------------------------------------------------
-DATU_MAPE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dati")  # mape "dati" blakus skriptam
+DATU_MAPE = os.environ.get("NHL_DATU_MAPE") or os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "dati")   # pēc noklusējuma: mape "dati" blakus skriptam
 API_WEB = "https://api-web.nhle.com/v1"
 API_STATS = "https://api.nhle.com/stats/rest/en"
 
 # 1 = pirmssezona, 2 = regulārā sezona, 3 = izslēgšanas spēles
 SPELU_TIPI = (2, 3)
-IEGUT_MAINAS = True      # maiņu dati (liela tabula); izslēdz ar False
+VIEGLAIS = "--vieglais" in sys.argv   # GitHub Actions: bez lielajām tabulām (notikumi, mainas)
+IEGUT_MAINAS = not VIEGLAIS      # maiņu dati (liela tabula)
+LIELAS_TABULAS = ("notikumi", "mainas")
 KAVESANAS = 0.25         # pauze starp pieprasījumiem (sekundes)
+ATPAKAL_DIENAS = 3       # cik dienas atpakaļ pārbaudīt, ja datumi nav norādīti (jau esošās spēles tiek izlaistas)
 RAW = "--raw" in sys.argv
 
 ET = ZoneInfo("America/New_York")   # NHL spēļu datumi ir pēc ASV austrumu laika
@@ -170,7 +175,7 @@ def situacija(kods):
 
 def noklusejuma_intervals():
     ta = datetime.now(ET).date()
-    return (ta - timedelta(days=2)).isoformat(), (ta - timedelta(days=1)).isoformat()
+    return (ta - timedelta(days=ATPAKAL_DIENAS)).isoformat(), (ta - timedelta(days=1)).isoformat()
 
 
 def datumu_saraksts(no, lidz):
@@ -536,6 +541,8 @@ def main():
 
         # "speles" tiek rakstīta pēdējā, lai pārtraukta darbība neatstātu "pusgatavu" spēli
         for nos in [n for n in TABULAS if n != "speles"] + ["speles"]:
+            if VIEGLAIS and nos in LIELAS_TABULAS:
+                continue
             n = pievienot(nos, krajums[nos])
             if nos == "speles":
                 pievienotas += n
