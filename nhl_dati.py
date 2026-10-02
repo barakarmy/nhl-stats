@@ -19,6 +19,7 @@ Lietošana:
   python nhl_dati.py 2026-10-01 2026-10-07  # datumu intervāls (vēstures aizpildīšanai)
   python nhl_dati.py --raw                  # papildus saglabā neapstrādātos JSON mapē raw\\
   python nhl_dati.py --vieglais             # bez lielajām tabulām notikumi.csv un mainas.csv (GitHub Actions)
+  python nhl_dati.py 2026-09-29 2026-10-02 --atjaunot   # pārraksta jau esošās spēles (piem., lai papildinātu trūkstošos laukus)
 
 Nepieciešams:  pip install requests tzdata
 """
@@ -43,6 +44,7 @@ API_STATS = "https://api.nhle.com/stats/rest/en"
 # 1 = pirmssezona, 2 = regulārā sezona, 3 = izslēgšanas spēles
 SPELU_TIPI = (2, 3)
 VIEGLAIS = "--vieglais" in sys.argv   # GitHub Actions: bez lielajām tabulām (notikumi, mainas)
+ATJAUNOT = "--atjaunot" in sys.argv   # pārlasa un pārraksta arī jau esošās spēles norādītajā intervālā
 IEGUT_MAINAS = not VIEGLAIS      # maiņu dati (liela tabula)
 LIELAS_TABULAS = ("notikumi", "mainas")
 KAVESANAS = 0.25         # pauze starp pieprasījumiem (sekundes)
@@ -267,6 +269,22 @@ def ielasit_id(nos):
     return ids
 
 
+def dzest_spelu_rindas(nos, ids):
+    """Izdzēš no tabulas visas rindas ar norādītajiem game_id (lai tās varētu ierakstīt no jauna)."""
+    c = cels(nos)
+    if not ids or not os.path.isfile(c):
+        return
+    with open(c, newline="", encoding="utf-8-sig") as f:
+        rindas = list(csv.DictReader(f))
+    atlikt = [r for r in rindas if str(r.get("game_id")) not in ids]
+    if len(atlikt) != len(rindas):
+        with open(c, "w", newline="", encoding="utf-8-sig") as f:
+            w = csv.DictWriter(f, fieldnames=TABULAS[nos][1], extrasaction="ignore")
+            w.writeheader()
+            w.writerows(atlikt)
+    ID_KESS.pop(nos, None)
+
+
 def pievienot(nos, rindas):
     """Pievieno rindas; spēles, kas jau ir šajā failā, tiek izlaistas (nav dublikātu)."""
     if not rindas:
@@ -427,11 +445,26 @@ def apstradat_spele(spele, datums):
         elif tips == "missed-shot":
             r[f"{puse}_missed_shots"] += 1
 
-    # ---- komandu statistika (landing) ----
-    tgs = {it.get("category"): it for it in (summary.get("teamGameStats") or [])}
+    # ---- komandu statistika (teamGameStats: right-rail vai landing kopsavilkums) ----
+    tgs_saraksts = atrast_sarakstu(rr, "teamGameStats") or summary.get("teamGameStats") or []
+    tgs = {it.get("category"): it for it in tgs_saraksts if isinstance(it, dict)}
+    gaiditie = ("sog", "faceoffWinningPctg", "powerPlay", "pim", "hits", "blockedShots", "giveaways", "takeaways")
+    if not tgs:
+        print("  Piezīme: teamGameStats nav atrasts (right-rail / landing), komandu statistika (PP, hits u.c.) būs tukša.")
+    elif any(k not in tgs for k in gaiditie):
+        print("  Piezīme: teamGameStats trūkst kategoriju:", [k for k in gaiditie if k not in tgs],
+              "| atrastās:", sorted(k for k in tgs if k))
 
     def tv(kat, puse):
         return (tgs.get(kat) or {}).get(f"{puse}Value")
+
+    def procenti(x):
+        """Iemetienu procenti vienmēr 0-100 (ja API atdod daļskaitli 0-1, tiek pārrēķināts)."""
+        try:
+            x = float(x)
+        except (TypeError, ValueError):
+            return None
+        return round(x * 100, 1) if 0 <= x <= 1 else x
 
     for puse in ("home", "away"):
         r[f"{puse}_pim_official"] = tv("pim", puse)
@@ -439,9 +472,11 @@ def apstradat_spele(spele, datums):
         r[f"{puse}_blocked_shots"] = tv("blockedShots", puse)
         r[f"{puse}_giveaways"] = tv("giveaways", puse)
         r[f"{puse}_takeaways"] = tv("takeaways", puse)
-        r[f"{puse}_faceoff_pct"] = tv("faceoffWinningPctg", puse)
+        r[f"{puse}_faceoff_pct"] = procenti(tv("faceoffWinningPctg", puse))
         pp_g, pp_o = sadalit_dalu(tv("powerPlay", puse))
         r[f"{puse}_pp_opp"] = pp_o
+        if pp_o is None and "powerPlay" in tgs:
+            print("  Piezīme: 'powerPlay' atrasts, bet formātu nevar nolasīt. Paraugs:", tgs["powerPlay"])
         if pp_g is not None and pp_g != r[f"{puse}_ppg"]:
             print(f"  Brīdinājums: {puse} vairākuma vārti {r[f'{puse}_ppg']} != oficiālie {pp_g}")
 
@@ -586,14 +621,17 @@ def main():
             continue
 
         krajums = {nos: [] for nos in TABULAS}
+        apstradatie = set()
         for spele in speles:
             gid = spele.get("id")
             print(f"{teksts((spele.get('awayTeam') or {}).get('abbrev'))} @ "
                   f"{teksts((spele.get('homeTeam') or {}).get('abbrev'))} (ID: {gid})")
-            if str(gid) in gatavas and str(gid) in ar_tiesnesiem:
+            if str(gid) in gatavas and str(gid) in ar_tiesnesiem and not ATJAUNOT:
                 print("  Jau ir datubāzē, izlaižu.")
                 continue
-            if str(gid) in gatavas:
+            if str(gid) in gatavas and ATJAUNOT:
+                print("  Spēle jau ir - pārrakstu (--atjaunot).")
+            elif str(gid) in gatavas:
                 print("  Spēle jau ir, bet trūkst tiesnešu - ielasu atkārtoti.")
             if spele.get("gameType") not in SPELU_TIPI:
                 print(f"  Spēles tips {spele.get('gameType')} nav izvēlēts, izlaižu.")
@@ -605,6 +643,7 @@ def main():
             if rez is None:
                 kludu_skaits += 1
                 continue
+            apstradatie.add(str(gid))
             for nos, rindas in rez.items():
                 krajums[nos].extend(rindas)
             time.sleep(KAVESANAS)
@@ -613,6 +652,8 @@ def main():
         for nos in [n for n in TABULAS if n != "speles"] + ["speles"]:
             if VIEGLAIS and nos in LIELAS_TABULAS:
                 continue
+            if ATJAUNOT:
+                dzest_spelu_rindas(nos, apstradatie)      # vecās rindas tiek aizstātas ar jaunajām
             n = pievienot(nos, krajums[nos])
             if nos == "speles":
                 pievienotas += n
