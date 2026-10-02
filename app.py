@@ -82,6 +82,28 @@ def ielasit_tiesnesus(versija):
     return cur, prev, info
 
 
+@st.cache_data(show_spinner=False)
+def ielasit_planotos(versija):
+    return da.ielasit_planotos_tiesnesus()
+
+
+@st.cache_data(show_spinner=False)
+def tiesnesu_tabula(versija):
+    cur, prev, _ = ielasit_tiesnesus(versija)
+    return da.tiesnesu_apkopojums(cur, prev) if (cur is not None or prev is not None) else (None, None)
+
+
+def speles_tiesnesi(game_id):
+    """(tiesnešu vārdi, gaidāmie noraidījumi pēc tiesnešiem vai None, līgas vidējais vai None)."""
+    vardi = da.planotie_vardi(ielasit_planotos(VERSIJA), game_id)
+    if not vardi:
+        return [], None, None
+    tab, liga = tiesnesu_tabula(VERSIJA)
+    if tab is None:
+        return vardi, None, None
+    return vardi, da.tiesnesu_prognoze(tab, liga, vardi), liga["blend"]["kopa"]
+
+
 RAW, DF, KAL = ielasit_visu(VERSIJA)
 if RAW is None or DF.empty:
     st.error("Nav atrasts datu fails 'dati/speles.csv' (vai vecais 'nhl_sezona.csv'). "
@@ -194,6 +216,14 @@ def lapa_prognozes():
             c1, c2 = st.columns([3, 1])
             c1.markdown(f"**{komandas_etikete(away)}** @ **{komandas_etikete(home)}**")
             c2.caption(f"{r['datums_lv']:%d.%m.%Y} {laiks} (Rīga)")
+            vardi, ref_pr, liga_kopa = speles_tiesnesi(r["game_id"])
+            if vardi:
+                teksts_ = f"🧑‍⚖️ Tiesneši: {', '.join(vardi)}"
+                if ref_pr is not None and pd.notna(ref_pr["kopa"]):
+                    teksts_ += f" · gaidāmie noraidījumi pēc tiesnešiem: {ref_pr['kopa']:.1f} (līgas vidējais {liga_kopa:.1f})"
+                st.caption(teksts_)
+            else:
+                st.caption("🧑‍⚖️ Tiesneši vēl nav paziņoti")
             pr = modelis.aprekinat_prognozi_speles(home, away, DF)
             if pr:
                 prognozes_bloks(pr)
@@ -633,10 +663,16 @@ def lapa_kalendars():
     for dat, grupa in x.groupby(x["datums_lv"].dt.date):
         with st.container(border=True):
             st.markdown(f"**📌 {da.DIENAS[dat.weekday()]}, {dat:%d.%m.%Y}** · {len(grupa)} spēles")
+            plan = ielasit_planotos(VERSIJA)
+            ties_txt = []
+            for gid in grupa["game_id"]:
+                vardi = da.planotie_vardi(plan, gid)
+                ties_txt.append(", ".join(vardi) if vardi else "Tiesneši nav paziņoti")
             st.dataframe(pd.DataFrame({
                 "Laiks (Rīga)": grupa["sakums_lv"].dt.strftime("%H:%M"),
                 "Viesi": grupa["viesu_komanda"].map(komandas_etikete),
-                "Mājinieki": grupa["majas_komanda"].map(komandas_etikete)}),
+                "Mājinieki": grupa["majas_komanda"].map(komandas_etikete),
+                "Galvenie tiesneši": ties_txt}),
                 hide_index=True, width="stretch")
 
 
