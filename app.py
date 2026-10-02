@@ -68,33 +68,61 @@ header[data-testid="stHeader"] { display: none; }
 .stApp [data-testid="stSegmentedControl"] button, .stApp button[kind="secondary"] { border-radius: 10px; }
 .stApp [data-testid="stExpander"] { border-radius: 12px; }
 
-/* ===== Augšējā josla ar hover izvēlnēm ===== */
+/* ===== Augšējā josla ar hover izvēlnēm (melns fons, gaiši teksti) ===== */
 .st-key-topbar { position: sticky; top: .6rem; z-index: 1000; display: flex !important; flex-direction: row !important;
-  flex-wrap: wrap; align-items: center; gap: .15rem !important; background: #0f172a; border: 1px solid rgba(255,255,255,.08);
-  border-radius: 16px; padding: .3rem .6rem; margin-bottom: 1.1rem; box-shadow: 0 10px 28px rgba(15,23,42,.28); }
+  flex-wrap: wrap; align-items: center; gap: .2rem !important; background: #0a0f1c; border: 1px solid rgba(255,255,255,.10);
+  border-radius: 16px; padding: .35rem .7rem; margin-bottom: 1.1rem; box-shadow: 0 10px 28px rgba(0,0,0,.35); }
 .st-key-topbar, .st-key-topbar * { overflow: visible !important; }
 .st-key-topbar > div, [class*="st-key-navg-"], [class*="st-key-navs-"], .st-key-brand { width: auto !important; }
-.st-key-topbar p, .st-key-topbar a { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
-.st-key-brand { margin-right: .9rem; }
-.st-key-brand a, .st-key-brand p { color: #ffffff !important; font-weight: 800 !important; font-size: 1.08rem !important;
-  letter-spacing: -0.03em; text-decoration: none !important; }
-.st-key-brand a { padding-left: .5rem; }
+.st-key-topbar p, .st-key-topbar a, .st-key-topbar .nav-title { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
+
+/* Teksti un ikonas joslā vienmēr skaidri gaiši (netiek mantoti no Streamlit motīva) */
+.st-key-topbar a[data-testid="stPageLink-NavLink"], .st-key-topbar a[data-testid="stPageLink-NavLink"] p,
+.st-key-topbar a[data-testid="stPageLink-NavLink"] div { color: #e5e7eb !important; opacity: 1 !important; }
+.st-key-topbar [data-testid="stIconMaterial"] { color: #cbd5e1 !important; }
+.st-key-topbar a[data-testid="stPageLink-NavLink"]:hover, .st-key-topbar a[data-testid="stPageLink-NavLink"]:hover p,
+.st-key-topbar a[data-testid="stPageLink-NavLink"]:hover [data-testid="stIconMaterial"] { color: #ffffff !important; }
+
+/* Zīmols */
+.st-key-brand { margin-right: .8rem; }
+.st-key-brand a[data-testid="stPageLink-NavLink"], .st-key-brand a[data-testid="stPageLink-NavLink"] p { color: #ffffff !important;
+  font-weight: 800 !important; font-size: 1.1rem !important; letter-spacing: -0.01em !important; text-decoration: none !important; }
+.st-key-brand a[data-testid="stPageLink-NavLink"] { padding: .35rem .6rem !important; background: transparent !important; }
+
+/* Grupu nosaukumi (atver izvēlni uz hover) */
 [class*="st-key-navg-"] { position: relative; }
-.nav-title { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-weight: 600; font-size: .92rem; color: #cbd5e1;
-  padding: .55rem .95rem; border-radius: 10px; cursor: pointer; user-select: none; outline: none; white-space: nowrap; }
+.nav-title { font-weight: 600; font-size: .95rem; color: #e2e8f0; padding: .55rem .95rem; border-radius: 10px; cursor: pointer;
+  user-select: none; outline: none; white-space: nowrap; transition: transform .15s ease, background .15s ease, box-shadow .15s ease; }
 .nav-title:after { content: ""; display: inline-block; margin-left: .5rem; border: solid currentColor; border-width: 0 1.6px 1.6px 0;
-  padding: 2.2px; transform: rotate(45deg) translateY(-2px); opacity: .7; }
-.nav-title.aktivs { color: #ffffff; box-shadow: inset 0 -2px 0 #3b82f6; border-radius: 10px 10px 4px 4px; }
-[class*="st-key-navg-"]:hover .nav-title, [class*="st-key-navg-"]:focus-within .nav-title { color: #ffffff; background: rgba(255,255,255,.12); }
-[class*="st-key-navi-"] { display: none !important; position: absolute; top: 100%; left: 0; min-width: 260px; flex-direction: column;
-  gap: .1rem !important; background: #0f172a; border: 1px solid rgba(255,255,255,.10); border-radius: 14px; padding: .4rem;
-  box-shadow: 0 18px 44px rgba(2,6,23,.5); z-index: 1001; }
-[class*="st-key-navg-"]:hover [class*="st-key-navi-"], [class*="st-key-navg-"]:focus-within [class*="st-key-navi-"] { display: flex !important; }
-.st-key-topbar a[data-testid="stPageLink-NavLink"] { color: #e2e8f0 !important; border-radius: 10px; padding: .5rem .75rem; }
-.st-key-topbar a[data-testid="stPageLink-NavLink"] p { color: inherit !important; font-weight: 500; font-size: .92rem; }
-.st-key-topbar a[data-testid="stPageLink-NavLink"]:hover { background: rgba(255,255,255,.09); }
-.st-key-topbar a[data-testid="stPageLink-NavLink"][aria-current="page"] { background: #2563eb; color: #ffffff !important; }
-[class*="st-key-navs-"] a[data-testid="stPageLink-NavLink"] p { font-weight: 600; color: #cbd5e1 !important; }
+  padding: 2.2px; transform: rotate(45deg) translateY(-2px); opacity: .8; }
+.nav-title.aktivs { color: #ffffff; box-shadow: inset 0 -2px 0 #3b82f6; }
+[class*="st-key-navg-"]:hover .nav-title { color: #ffffff; background: rgba(255,255,255,.14);
+  transform: translateY(-1px) scale(1.06); box-shadow: 0 8px 18px rgba(0,0,0,.5), inset 0 -2px 0 #3b82f6; }
+
+/* Atsevišķās pogas joslā */
+[class*="st-key-navs-"] a[data-testid="stPageLink-NavLink"] { padding: .55rem .95rem !important; border-radius: 10px !important;
+  transition: transform .15s ease, background .15s ease, box-shadow .15s ease; }
+[class*="st-key-navs-"] a[data-testid="stPageLink-NavLink"] p { font-weight: 600 !important; font-size: .95rem !important; color: #e2e8f0 !important; }
+[class*="st-key-navs-"] a[data-testid="stPageLink-NavLink"]:hover { background: rgba(255,255,255,.14) !important;
+  transform: translateY(-1px) scale(1.06); box-shadow: 0 8px 18px rgba(0,0,0,.5); }
+[class*="st-key-navs-"][class*="-akt"] a[data-testid="stPageLink-NavLink"] { background: transparent !important; box-shadow: inset 0 -2px 0 #3b82f6; }
+[class*="st-key-navs-"][class*="-akt"] a[data-testid="stPageLink-NavLink"] p { color: #ffffff !important; }
+
+/* Izkrītošā izvēlne */
+[class*="st-key-navi-"] { display: none !important; position: absolute; top: 100%; left: 0; min-width: 270px; flex-direction: column;
+  gap: .15rem !important; background: #0a0f1c; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: .45rem;
+  box-shadow: 0 20px 48px rgba(0,0,0,.6); z-index: 1001; }
+[class*="st-key-navg-"][class*="-rr"] [class*="st-key-navi-"] { left: auto; right: 0; }
+[class*="st-key-navg-"]:hover [class*="st-key-navi-"] { display: flex !important; }
+@media (hover: none) { [class*="st-key-navg-"]:focus-within [class*="st-key-navi-"] { display: flex !important; } }
+[class*="st-key-navi-"] a[data-testid="stPageLink-NavLink"] { padding: .55rem .8rem !important; border-radius: 10px !important;
+  transform-origin: left center; transition: transform .15s ease, background .15s ease, box-shadow .15s ease; }
+[class*="st-key-navi-"] a[data-testid="stPageLink-NavLink"] p { font-weight: 500 !important; font-size: .95rem !important; color: #e5e7eb !important; }
+[class*="st-key-navi-"] a[data-testid="stPageLink-NavLink"]:hover { background: rgba(255,255,255,.14) !important;
+  transform: translateX(3px) scale(1.04); box-shadow: 0 6px 16px rgba(0,0,0,.5); }
+[class*="st-key-navp-"][class*="-akt"] a[data-testid="stPageLink-NavLink"] { background: #2563eb !important; }
+[class*="st-key-navp-"][class*="-akt"] a[data-testid="stPageLink-NavLink"] p,
+[class*="st-key-navp-"][class*="-akt"] a[data-testid="stPageLink-NavLink"] [data-testid="stIconMaterial"] { color: #ffffff !important; font-weight: 700 !important; }
 
 /* ===== Komandu salīdzināšanas joslas ===== */
 .cmp-row{display:flex;align-items:center;gap:12px;margin:8px 0}
@@ -1353,22 +1381,25 @@ VISAS_LAPAS = [p for _, _, saraksts in STRUKTURA for _, p in saraksts]
 
 
 def augseja_josla(aktiva):
-    """Viena josla augšā: zīmols + grupas, kuru lapas parādās, uzvedot peli virsū (vai pieskaroties)."""
+    """Viena josla augšā: zīmols + atsevišķas pogas + grupas, kuru lapas parādās, uzvedot peli virsū (vai pieskaroties)."""
+    pedeja_grupa = max((i for i, (t, _, _) in enumerate(STRUKTURA) if t == "grupa"), default=-1)
     with st.container(key="topbar"):
         with st.container(key="brand"):
             st.page_link(VISAS_LAPAS[0], label="NHL analītika")
         for i, (tips, nosaukums, saraksts) in enumerate(STRUKTURA):
             if tips == "lapa":
-                with st.container(key=f"navs-{i}"):
+                akt = saraksts[0][1].title == aktiva.title
+                with st.container(key=f"navs-{i}" + ("-akt" if akt else "")):
                     st.page_link(saraksts[0][1], label=nosaukums)
                 continue
             aktivs = any(p.title == aktiva.title for _, p in saraksts)
-            with st.container(key=f"navg-{i}"):
+            with st.container(key=f"navg-{i}" + ("-rr" if i == pedeja_grupa else "")):      # -rr: izvēlne līdzināta pie labās malas
                 st.markdown(f'<div class="nav-title{" aktivs" if aktivs else ""}" tabindex="0">{nosaukums}</div>',
                             unsafe_allow_html=True)
                 with st.container(key=f"navi-{i}"):
-                    for rec, p in saraksts:
-                        st.page_link(p, label=rec[1], icon=f":material/{rec[3]}:")
+                    for j, (rec, p) in enumerate(saraksts):
+                        with st.container(key=f"navp-{i}-{j}" + ("-akt" if p.title == aktiva.title else "")):
+                            st.page_link(p, label=rec[1], icon=f":material/{rec[3]}:")
 
 
 if NAV_REZIMS == "pielagots":
