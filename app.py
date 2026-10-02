@@ -205,7 +205,10 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .mc-lines { margin-top: .45rem; text-align: center; font-size: .88rem; opacity: .72; line-height: 1.75; }
 
 /* ===== Rezultāti: datuma josla (iepriekšējā diena / datums / nākamā diena): vienādi, treknraksts, centrēts teksts ===== */
-.st-key-datums_josla button { justify-content: center; }
+.st-key-datums_josla { display: flex !important; flex-direction: row !important; flex-wrap: wrap; justify-content: center;
+  align-items: center; gap: .6rem !important; margin-bottom: .4rem; }
+.st-key-datums_josla > div { width: auto !important; flex: 0 0 auto; }
+.st-key-datums_josla button { justify-content: center; padding-left: 1.1rem; padding-right: 1.1rem; }
 .st-key-datums_josla button, .st-key-datums_josla button p { font-weight: 700 !important; text-align: center; }
 .st-key-datums_josla button p { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
 .st-key-datums_josla [data-testid="stPopover"] button [data-testid="stIconMaterial"], .st-key-datums_josla [data-testid="stPopover"] button svg { display: none !important; }
@@ -1189,14 +1192,6 @@ def rez_kartite_html(away, home, at, ht, ra, rh, iznakums, linijas, uid="g"):
         '<div class="mc-lines">' + "".join(f"<div>{e(x)}</div>" for x in linijas if x) + '</div>')
 
 
-def _popover(teksts):
-    """Popover poga pa visu kolonnas platumu (jaunākām un vecākām Streamlit versijām)."""
-    try:
-        return st.popover(teksts, width="stretch")
-    except TypeError:
-        return st.popover(teksts, use_container_width=True)
-
-
 def lapa_rezultati():
     st.title("Spēļu rezultāti")
     datumi = RAW["datums_lv"].dt.date
@@ -1207,15 +1202,13 @@ def lapa_rezultati():
     def nobide(dienas):
         st.session_state["rez_datums"] = min(max(st.session_state["rez_datums"] + timedelta(days=dienas), mind), maxd)
 
-    with st.container(key="datums_josla"):
-        c1, c2, c3 = st.columns([1, 2, 1], vertical_alignment="center")
-        c1.button("❮ Iepriekšējā diena", on_click=nobide, args=(-1,), width="stretch")
-        with c2:
-            # datums ir centrēta treknraksta poga; uz tās nospiežot, atveras kalendārs datuma izvēlei
-            with _popover(f"{st.session_state['rez_datums']:%d.%m.%Y} (Rīgas laiks)"):
-                st.date_input("Datums", min_value=mind, max_value=maxd, key="rez_datums", format="DD.MM.YYYY",
-                              label_visibility="collapsed")
-        c3.button("Nākamā diena ❯", on_click=nobide, args=(1,), width="stretch")
+    with st.container(key="datums_josla"):       # kompakta josla pa lapas vidu: tikai tik plata, cik vajag tekstam
+        st.button("❮ Iepriekšējā diena", on_click=nobide, args=(-1,))
+        # datums ir treknraksta poga; uz tās nospiežot, atveras kalendārs datuma izvēlei
+        with st.popover(f"{st.session_state['rez_datums']:%d.%m.%Y}"):
+            st.date_input("Datums", min_value=mind, max_value=maxd, key="rez_datums", format="DD.MM.YYYY",
+                          label_visibility="collapsed")
+        st.button("Nākamā diena ❯", on_click=nobide, args=(1,))
 
     dat = st.session_state["rez_datums"]
     st.markdown(f"#### {da.DIENAS[dat.weekday()]}, {dat:%d.%m.%Y}")
