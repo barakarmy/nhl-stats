@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import cats
 import datu_apstrade as da
 import lokacijas
 import modelis  # Puasona prognožu modelis
@@ -19,24 +20,60 @@ st.set_page_config(page_title="NHL analītika", page_icon=":material/sports_hock
 # PAROLE (ieteicams: Streamlit Cloud → Settings → Secrets → APP_PASSWORD = "...")
 # ============================================================================
 def _parole():
+    """Parole tiek ņemta tikai no Streamlit Secrets (kodā tās nav). Atgriež None, ja nav iestatīta."""
     try:
-        return str(st.secrets["APP_PASSWORD"])
+        v = str(st.secrets["APP_PASSWORD"])
+        return v or None
     except Exception:
-        return "propredict"
+        return None
+
+
+LOGIN_CSS = """<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600&display=swap');
+/* Pieteikšanās ekrāns: fons ir #003366 un #000066 sajaukums, laukums lapas vidū, uzraksts "Password" pazūd, uzvedot peli virsū */
+.stApp { background: radial-gradient(circle at 50% 38%, rgba(255,255,255,.07), transparent 55%),
+                     linear-gradient(135deg, #003366 0%, #000066 100%) !important; }
+header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], footer { display: none !important; }
+.stApp .stMainBlockContainer, .stApp [data-testid="stMainBlockContainer"] { min-height: 100vh; max-width: none !important; padding: 0 !important;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.stApp [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] { width: 100%; align-items: center; gap: .6rem; }
+.stApp [data-testid="stTextInput"] { width: min(340px, 86vw); margin: 0 auto; }
+.stApp [data-testid="stTextInput"] [data-baseweb="input"], .stApp [data-testid="stTextInput"] [data-baseweb="base-input"] {
+  background: rgba(255,255,255,.07) !important; border-radius: 14px !important; }
+.stApp [data-testid="stTextInput"] [data-baseweb="input"] { border: 1px solid rgba(255,255,255,.30) !important;
+  transition: border-color .2s ease, box-shadow .2s ease; }
+.stApp [data-testid="stTextInput"] [data-baseweb="input"]:hover, .stApp [data-testid="stTextInput"] [data-baseweb="input"]:focus-within {
+  border-color: rgba(255,255,255,.75) !important; box-shadow: 0 0 0 4px rgba(255,255,255,.08); }
+.stApp [data-testid="stTextInput"] input { height: 3.2rem; text-align: center; color: #ffffff !important; caret-color: #ffffff;
+  -webkit-text-fill-color: #ffffff; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 1.05rem; letter-spacing: .16em; }
+.stApp [data-testid="stTextInput"] input::placeholder { color: rgba(255,255,255,.82) !important; -webkit-text-fill-color: rgba(255,255,255,.82);
+  opacity: 1; letter-spacing: .08em; font-weight: 500; transition: color .15s ease, opacity .15s ease; }
+/* uz lauka uzvedot peli (vai ieklikšķinot) uzraksts pazūd */
+.stApp [data-testid="stTextInput"] [data-baseweb="input"]:hover input::placeholder, .stApp [data-testid="stTextInput"] [data-baseweb="input"]:focus-within input::placeholder {
+  color: transparent !important; -webkit-text-fill-color: transparent; opacity: 0; }
+.stApp [data-testid="stTextInput"] button, .stApp [data-testid="InputInstructions"] { display: none !important; }
+.login-err { text-align: center; color: #ffb4b4; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: .85rem; letter-spacing: .04em; }
+</style>"""
 
 
 def check_password():
     if st.session_state.get("password_correct"):
         return True
+    parole = _parole()
+    if parole is None:
+        st.error("Parole nav iestatīta. Streamlit Cloud → App settings → Secrets pievieno rindu: APP_PASSWORD = \"tava_parole\" "
+                 "un spied Save changes (izmaiņas stājas spēkā aptuveni minūtes laikā).")
+        return False
 
     def entered():
         ievade = str(st.session_state.get("password", ""))
-        st.session_state["password_correct"] = hmac.compare_digest(ievade.encode(), _parole().encode())
+        st.session_state["password_correct"] = hmac.compare_digest(ievade.encode(), parole.encode())
         st.session_state.pop("password", None)
 
-    st.text_input("Ievadi paroli:", type="password", on_change=entered, key="password")
+    st.markdown(LOGIN_CSS, unsafe_allow_html=True)
+    st.text_input("Password", type="password", placeholder="Password", label_visibility="collapsed", on_change=entered, key="password")
     if st.session_state.get("password_correct") is False:
-        st.error("Nepareiza parole")
+        st.markdown('<div class="login-err">Incorrect password</div>', unsafe_allow_html=True)
     return False
 
 
@@ -1403,6 +1440,105 @@ def lapa_karstie():
 
 
 # ============================================================================
+# LAPA: ČATS
+# ============================================================================
+CATA_PIEMERI = ["Kuras komandas saņem visvairāk noraidījumu?", "Kā klājas NJD pēdējās 5 spēlēs?", "Kuri spēlētāji šobrīd ir karsti?",
+                "Vakardienas rezultāti", "Salīdzini TOR un MTL", "Kuri tiesneši soda visvairāk?"]
+CATA_RIKU_NOS = {"komandas_statistika": "Komandas statistika", "ligas_tabula": "Komandu tabula", "speles": "Spēles", "speletaji": "Spēlētāji",
+                 "karstie_speletaji": "Karstie spēlētāji", "vartsargi": "Vārtsargi", "tiesnesi": "Tiesneši", "kalendars": "Kalendārs",
+                 "salidzinat_komandas": "Komandu salīdzinājums"}
+MAX_CATA_JAUTAJUMI = 40       # jautājumu skaits vienā sesijā (ierobežo izmaksas, ja ieslēgts Claude)
+
+
+def _secret(nos, noklusejums=None):
+    try:
+        return st.secrets[nos]
+    except Exception:
+        return noklusejums
+
+
+def _cata_dati():
+    cur, prev, _ = ielasit_tiesnesus(VERSIJA)
+    return cats.Dati(RAW, DF, KAL, ielasit_papildu("speletaji", VERSIJA), ielasit_papildu("vartsargi", VERSIJA),
+                     cur, prev, ielasit_planotos(VERSIJA), modelis)
+
+
+def _cata_zina(z):
+    with st.chat_message(z["loma"]):
+        st.markdown(z["teksts"])
+        for nos, _, tab in z.get("tabulas", []):
+            with st.expander(f"Dati: {CATA_RIKU_NOS.get(nos, nos)}"):
+                rtabula(tab, hide_index=True, width="stretch")
+
+
+def lapa_cats():
+    st.title("Čats")
+    atslega = _secret("ANTHROPIC_API_KEY")
+    klients, kluda = None, None
+    if atslega:
+        try:
+            import anthropic
+            klients = anthropic.Anthropic(api_key=atslega)
+        except Exception as e:
+            kluda = f"Claude nav pieejams ({type(e).__name__}); pārbaudi, vai requirements.txt ir 'anthropic'."
+    modelis_nos = _secret("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+    if klients:
+        st.caption("Jautā brīvā formā par komandām, spēlētājiem, tiesnešiem un spēlēm. Atbildes balstās tikai uz šīs lietotnes datiem; "
+                   "jautājumi un datu fragmenti tiek nosūtīti Anthropic API apstrādei.")
+    else:
+        st.info("Darbojas vienkāršā meklēšana pēc atslēgvārdiem un komandu/spēlētāju nosaukumiem. Lai čats saprastu brīvas frāzes, "
+                "Streamlit Secrets pievieno ANTHROPIC_API_KEY.")
+        if kluda:
+            st.warning(kluda)
+
+    vesture = st.session_state.setdefault("cats_vesture", [])
+    for z in vesture:
+        _cata_zina(z)
+
+    jaut = None
+    if not vesture:
+        st.markdown("**Piemēri**")
+        for i, piemers in enumerate(CATA_PIEMERI):
+            if st.button(piemers, key=f"cp{i}", width="stretch"):
+                jaut = piemers
+    iev = st.chat_input("Pajautā par komandām, spēlētājiem, tiesnešiem, rezultātiem…")
+    jaut = iev or jaut
+    if vesture:
+        st.button("Notīrīt sarunu", on_click=lambda: st.session_state.update(cats_vesture=[]), key="cats_clear")
+
+    if not jaut:
+        return
+    if sum(1 for z in vesture if z["loma"] == "user") >= MAX_CATA_JAUTAJUMI:
+        st.warning("Sasniegts jautājumu limits šajā sesijā. Nospied «Notīrīt sarunu», lai sāktu no jauna.")
+        return
+    vesture.append({"loma": "user", "teksts": jaut})
+    _cata_zina(vesture[-1])
+    with st.chat_message("assistant"):
+        with st.spinner("Meklēju datos…"):
+            dati = _cata_dati()
+            try:
+                if klients:
+                    api = [{"role": z["loma"], "content": z["teksts"]} for z in vesture[-9:]]
+                    while api and api[0]["role"] != "user":
+                        api.pop(0)
+                    atb, tabulas = cats.atbildet_ar_claude(klients, modelis_nos, api, dati)
+                else:
+                    atb, tabulas = cats.vienkarsa_meklesana(jaut, dati)
+            except Exception as e:
+                try:
+                    teksts, tabulas = cats.vienkarsa_meklesana(jaut, dati)
+                except Exception:
+                    teksts, tabulas = "Neizdevās atrast datus.", []
+                atb = f"Neizdevās sazināties ar Claude ({type(e).__name__}). Vienkāršās meklēšanas rezultāts: {teksts}"
+        st.markdown(atb)
+        for nos, _, tab in tabulas:
+            with st.expander(f"Dati: {CATA_RIKU_NOS.get(nos, nos)}"):
+                rtabula(tab, hide_index=True, width="stretch")
+    vesture.append({"loma": "assistant", "teksts": atb, "tabulas": tabulas})
+    del vesture[:-30]            # saglabā tikai pēdējās 30 ziņas
+
+
+# ============================================================================
 # NAVIGĀCIJA
 # Struktūra ir šeit, vienā vietā: lapas var pārvietot starp grupām, grupas pārsaukt vai lapu izvilkt kā atsevišķu pogu
 # ({"lapa": (...)} ieraksts bez grupas). Ikonas ir Material Symbols (fonts.google.com/icons).
@@ -1430,7 +1566,8 @@ NAV = [
         (lapa_speletaji, "Spēlētāji", "speletaji", "person"),
         (lapa_tiesnesi, "Tiesneši", "tiesnesi", "sports"),
     ]},
-    # beigās atsevišķas sadaļas: Kalendārs priekšpēdējais, Rezultāti pēdējais
+    # beigās atsevišķas sadaļas: Čats, Kalendārs (priekšpēdējais), Rezultāti (pēdējais)
+    {"lapa": (lapa_cats, "Čats", "cats", "chat")},
     {"lapa": (lapa_kalendars, "Kalendārs", "kalendars", "calendar_month")},
     {"lapa": (lapa_rezultati, "Rezultāti", "rezultati", "sports_score")},
 ]
