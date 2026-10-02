@@ -19,6 +19,10 @@ try:
     import lokacijas     # ceļojuma un atpūtas faktori
 except ImportError:
     lokacijas = None
+try:
+    from fons import FONS_DATA_URI      # lapas fona attēls (ledus ar NHL logo)
+except ImportError:
+    FONS_DATA_URI = None
 
 st.set_page_config(page_title="NHL analītika", page_icon=":material/sports_hockey:", layout="wide",
                    initial_sidebar_state="collapsed")
@@ -243,6 +247,18 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .cmp-a{background:#3b82f6}
 .cmp-b{background:#f97316}
 .cmp-group{margin:18px 0 4px 0;font-weight:700;font-size:.9rem;letter-spacing:.04em;opacity:.8}
+</style>""", unsafe_allow_html=True)
+
+# Lapas fons: ledus ar NHL logo, ļoti caurspīdīgs, lai netraucētu lasīt tekstu (gaišajā motīvā ~13%, tumšajā ~7%).
+# Pielāgošana: FONA_CAURSPIDIBA_GAISS / FONA_CAURSPIDIBA_TUMSS (0 = nav redzams, 1 = pilna redzamība).
+FONA_CAURSPIDIBA_GAISS, FONA_CAURSPIDIBA_TUMSS = 0.13, 0.07
+if FONS_DATA_URI:
+    st.markdown(f"""<style>
+.stApp {{ isolation: isolate; }}
+.stApp::before {{ content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: url("{FONS_DATA_URI}") center / cover no-repeat; opacity: {FONA_CAURSPIDIBA_GAISS}; }}
+@media (prefers-color-scheme: dark) {{ .stApp::before {{ opacity: {FONA_CAURSPIDIBA_TUMSS}; }} }}
+.stApp [data-testid="stAppViewContainer"], .stApp [data-testid="stMain"], .stApp section.stMain {{ background: transparent !important; }}
 </style>""", unsafe_allow_html=True)
 
 # ============================================================================
