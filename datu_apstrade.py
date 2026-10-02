@@ -71,7 +71,7 @@ def beigu_etikete(beigas):
 def datu_versija():
     """Faila izmaiņu laiki (kešatmiņas atslēga: kad fails mainās, dati tiek pārlasīti)."""
     celi = [DATU_MAPE / n for n in ("speles.csv", "speletaji.csv", "vartsargi.csv", "varti.csv",
-                                    "tiesnesi.csv", "tiesnesi_pagajusa.csv", "referees_lastseason.csv")]
+                                    "tiesnesi.csv", "tiesnesi_pagajusa.csv", "referees_lastseason.csv", "tiesnesi_planotie.csv")]
     celi += [BASE / "nhl_sezona.csv", BASE / "nhl_kalendars.csv", BASE / "referees_lastseason.csv"]
     return tuple(c.stat().st_mtime if c.exists() else 0 for c in celi)
 
@@ -527,3 +527,20 @@ def tiesnesu_speles(cur, vards):
         return pd.DataFrame()
     r = cur[(cur["loma"] == "referee") & (cur["vards"].map(atslega) == atslega(vards))]
     return r.sort_values("datums", ascending=False)
+
+
+def ielasit_planotos_tiesnesus():
+    """Pirms spēlēm paziņotie tiesneši (dati/tiesnesi_planotie.csv, ko raksta tiesnesi_planotie.py)."""
+    c = DATU_MAPE / "tiesnesi_planotie.csv"
+    if not c.exists():
+        return None
+    df = pd.read_csv(c)
+    return None if df.empty else df
+
+
+def planotie_vardi(plan, game_id):
+    """Spēles galveno tiesnešu vārdi no plānoto tiesnešu tabulas (tukšs saraksts, ja vēl nav paziņoti)."""
+    if plan is None or plan.empty:
+        return []
+    r = plan[(plan["game_id"] == game_id) & (plan["loma"] == "referee")]
+    return r["vards"].tolist()
