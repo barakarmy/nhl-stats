@@ -1422,14 +1422,13 @@ NAV = [
         (lapa_powerplay, "Powerplay", "powerplay", "bolt"),
         (lapa_noraidijumi, "Noraidījumi", "noraidijumi", "gavel"),
     ]},
-    {"grupa": "Spēles", "lapas": [
-        (lapa_kalendars, "Kalendārs", "kalendars", "calendar_month"),
-        (lapa_rezultati, "Rezultāti", "rezultati", "sports_score"),
-    ]},
     {"grupa": "Spēlētāji un tiesneši", "lapas": [
         (lapa_speletaji, "Spēlētāji", "speletaji", "person"),
         (lapa_tiesnesi, "Tiesneši", "tiesnesi", "sports"),
     ]},
+    # beigās atsevišķas sadaļas: Kalendārs priekšpēdējais, Rezultāti pēdējais
+    {"lapa": (lapa_kalendars, "Kalendārs", "kalendars", "calendar_month")},
+    {"lapa": (lapa_rezultati, "Rezultāti", "rezultati", "sports_score")},
 ]
 
 
@@ -1451,7 +1450,7 @@ VISAS_LAPAS = [p for _, _, saraksts in STRUKTURA for _, p in saraksts]
 
 def augseja_josla(aktiva):
     """Viena josla augšā: zīmols + atsevišķas pogas + grupas, kuru lapas parādās, uzvedot peli virsū (vai pieskaroties)."""
-    pedeja_grupa = max((i for i, (t, _, _) in enumerate(STRUKTURA) if t == "grupa"), default=-1)
+    pedejais = len(STRUKTURA) - 1
     with st.container(key="topbar"):
         with st.container(key="brand"):
             st.page_link(VISAS_LAPAS[0], label="NHL analītika")
@@ -1462,7 +1461,7 @@ def augseja_josla(aktiva):
                     st.page_link(saraksts[0][1], label=nosaukums)
                 continue
             aktivs = any(p.title == aktiva.title for _, p in saraksts)
-            with st.container(key=f"navg-{i}" + ("-rr" if i == pedeja_grupa else "")):      # -rr: izvēlne līdzināta pie labās malas
+            with st.container(key=f"navg-{i}" + ("-rr" if i == pedejais else "")):      # -rr: izvēlne līdzināta pie labās malas
                 st.markdown(f'<div class="nav-title{" aktivs" if aktivs else ""}" tabindex="0">{nosaukums}</div>',
                             unsafe_allow_html=True)
                 with st.container(key=f"navi-{i}"):
