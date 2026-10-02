@@ -172,6 +172,7 @@ def _komandas_puse(df, puse, pret):
         "sog_tot": p("sog_total"), "sog_pret": q("sog_total"),
         "ppg": p("ppg"), "pp_sog": p("pp_sog"), "pp_opp": p("pp_opp"),
         "pim_tot": p("pim_total"), "pen_count": p("pen_count"), "pen_draw": q("pen_count"),
+        "draw_pim_tot": q("pim_total"),
         "hits": p("hits"), "blocked": p("blocked_shots"),
         "giveaways": p("giveaways"), "takeaways": p("takeaways"), "fo_pct": p("faceoff_pct"),
     })
@@ -181,6 +182,9 @@ def _komandas_puse(df, puse, pret):
         d[f"sog_p{n}"] = p(f"sog_p{n}")
         d[f"sog_pret_p{n}"] = q(f"sog_p{n}")
         d[f"pim_p{n}"] = p(f"pim_p{n}")
+        d[f"pen_p{n}"] = p(f"pen_p{n}")            # sodu skaits periodā (jaunajos datos)
+        d[f"draw_pim_p{n}"] = q(f"pim_p{n}")       # pretinieka sodu minūtes periodā
+        d[f"draw_p{n}"] = q(f"pen_p{n}")           # pretinieka sodu skaits periodā
     return d
 
 
@@ -197,9 +201,19 @@ def sagatavot_vienoto_tabulu(df):
     c["sog_reg"] = c[["sog_p1", "sog_p2", "sog_p3"]].sum(axis=1)
     c["pim_reg"] = c[["pim_p1", "pim_p2", "pim_p3"]].sum(axis=1)
 
-    # noraidījumu skaits: precīzs no jaunajiem datiem, citādi minūtes / 2 (vecais formāts)
-    c["pim_count"] = c["pen_count"].where(c["pen_count"].notna(), (c["pim_tot"] / 2).round())
-    c["pim_count"] = c["pim_count"].fillna(0).astype(int)
+    # Statistikā tiek lietots tikai pamatlaiks (1.-3. periods); papildlaiks tiek tikai saglabāts vizuālai attēlošanai.
+    # noraidījumu skaits pa periodiem: precīzs no jaunajiem datiem, citādi sodu minūtes / 2 (vecais formāts)
+    for n in (1, 2, 3):
+        c[f"pen_p{n}"] = c[f"pen_p{n}"].where(c[f"pen_p{n}"].notna(), (c[f"pim_p{n}"] / 2).round())
+        c[f"draw_p{n}"] = c[f"draw_p{n}"].where(c[f"draw_p{n}"].notna(), (c[f"draw_pim_p{n}"] / 2).round())
+    c["pim_count"] = c[["pen_p1", "pen_p2", "pen_p3"]].sum(axis=1).fillna(0).astype(int)      # sodu skaits pamatlaikā
+    c["draw_pim_reg"] = c[["draw_pim_p1", "draw_pim_p2", "draw_pim_p3"]].sum(axis=1)        # pretinieka sodu minūtes pamatlaikā
+    c["sog_pret_reg"] = c[["sog_pret_p1", "sog_pret_p2", "sog_pret_p3"]].sum(axis=1)        # pretinieka metieni pamatlaikā
+
+    pret_sk = c[["game_id", "komanda", "pim_count"]].rename(columns={"komanda": "pretinieks", "pim_count": "_pret_sk"})
+    c = c.merge(pret_sk, on=["game_id", "pretinieks"], how="left")
+    c["pen_draw"] = c["_pret_sk"]          # izcīnītie noraidījumi = pretinieka noraidījumi pamatlaikā
+    c = c.drop(columns="_pret_sk")
 
     uzvara = c["g_tot"] > c["z_tot"]
     c["rez"] = np.where(uzvara, "W", np.where(c["beigas"].isin(["OT", "SO", "OT/SO"]), "OTL", "L"))
@@ -229,7 +243,7 @@ def _dala(a, b):
 
 
 def kopsavilkums(df, scope="Visas", n=None):
-    """Komandu kopsavilkums (indekss = komanda). Vārtu rādītāji ir pamatlaika (bez OT/SO)."""
+    """Komandu kopsavilkums (indekss = komanda). Visi rādītāji ir pamatlaika (1.-3. periods), bez papildlaika (OT/SO)."""
     sub = filtret(df, scope, n)
     if sub.empty:
         return pd.DataFrame()
@@ -242,10 +256,10 @@ def kopsavilkums(df, scope="Visas", n=None):
         "W": g["w"].sum(), "L": g["l"].sum(), "OTL": g["otl"].sum(), "PTS": g["pts"].sum(),
         "G": g["g_reg"].sum(), "Z": g["z_reg"].sum(),
         "G_sp": g["g_reg"].mean(), "Z_sp": g["z_reg"].mean(),
-        "SOG_sp": g["sog_tot"].mean(), "SA_sp": g["sog_pret"].mean(),
+        "SOG_sp": g["sog_reg"].mean(), "SA_sp": g["sog_pret_reg"].mean(),
         "PPG": g["ppg"].sum(), "PP_opp": g["pp_opp"].sum(min_count=1), "PP_sog": g["pp_sog"].sum(),
         "PPG_pret": g["ppg_allowed"].sum(), "PP_opp_pret": g["pp_opp_pret"].sum(min_count=1),
-        "PEN_sp": g["pim_count"].mean(), "PIM_sp": g["pim_tot"].mean(), "DRAW_sp": g["pen_draw"].mean(),
+        "PEN_sp": g["pim_count"].mean(), "PIM_sp": g["pim_reg"].mean(), "DRAW_sp": g["pen_draw"].mean(),
         "Over65": g["over65"].mean() * 100,
     })
     for p in (1, 2, 3):
@@ -253,11 +267,39 @@ def kopsavilkums(df, scope="Visas", n=None):
         out[f"Z_p{p}"] = g[f"z_p{p}"].mean()
     out["Starpiba"] = out["G"] - out["Z"]
     out["PTS_pct"] = out["PTS"] / (2 * out["GP"]) * 100
-    sog_s, sa_s = g["sog_tot"].sum(), g["sog_pret"].sum()
+    sog_s, sa_s = g["sog_reg"].sum(), g["sog_pret_reg"].sum()
     out["SOG_dala"] = sog_s / (sog_s + sa_s).where((sog_s + sa_s) > 0) * 100
     out["PP_pct"] = _dala(out["PPG"], out["PP_opp"])
     out["PK_pct"] = 100 - _dala(out["PPG_pret"], out["PP_opp_pret"])
     out["PEN_starpiba"] = out["DRAW_sp"] - out["PEN_sp"]
+    return out
+
+
+def _nor_kolonna(metrika, veids, perioda):
+    """Bāzes tabulas kolonna: metrika 'skaits'/'minutes', veids 'sanemtie'/'izcinitie', perioda 'kopa'/1/2/3."""
+    i = 0 if metrika == "skaits" else 1
+    sanemtie = {"kopa": ("pim_count", "pim_reg"), 1: ("pen_p1", "pim_p1"), 2: ("pen_p2", "pim_p2"), 3: ("pen_p3", "pim_p3")}
+    izcinitie = {"kopa": ("pen_draw", "draw_pim_reg"), 1: ("draw_p1", "draw_pim_p1"),
+                 2: ("draw_p2", "draw_pim_p2"), 3: ("draw_p3", "draw_pim_p3")}
+    return (sanemtie if veids == "sanemtie" else izcinitie)[perioda][i]
+
+
+def noraidijumu_tabula(df, scope="Visas", n=None, metrika="skaits", videji=True):
+    """
+    Noraidījumi pa periodiem (indekss = komanda). Katram periodam (kopa, 1, 2, 3) kolonnas:
+      s_<p> = saņemtie (paša komandas), i_<p> = izcīnītie (pretinieka noraidījumi), r_<p> = izcīnītie - saņemtie.
+    metrika: 'skaits' (sodu skaits) vai 'minutes' (sodu minūtes); videji: vidēji spēlē (True) vai kopsumma (False).
+    """
+    sub = filtret(df, scope, n)
+    if sub.empty:
+        return pd.DataFrame()
+    g = sub.groupby("komanda")
+    out = pd.DataFrame({"GP": g.size()})
+    for p in ("kopa", 1, 2, 3):
+        for kods, veids in (("s", "sanemtie"), ("i", "izcinitie")):
+            kol = _nor_kolonna(metrika, veids, p)
+            out[f"{kods}_{p}"] = g[kol].mean() if videji else g[kol].sum()
+        out[f"r_{p}"] = out[f"i_{p}"] - out[f"s_{p}"]
     return out
 
 
