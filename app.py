@@ -38,21 +38,21 @@ def _parole():
 
 LOGIN_CSS = """<style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600&display=swap');
-/* Pieteikšanās ekrāns: fons ir #003366 un #000066 sajaukums; lauks ir tieši lapas centrā (fiksēts pozicionējums, neatkarīgs no Streamlit izkārtojuma);
+/* Pieteikšanās ekrāns: fons ir #000066, #000039 un #000024 sajaukums; lauks ir tieši lapas centrā (fiksēts pozicionējums, neatkarīgs no Streamlit izkārtojuma);
    lauks ir tumši pelēks, nedaudz caurspīdīgs; uzraksts "Password" pazūd, uzvedot peli virsū */
-.stApp { background: radial-gradient(circle at 50% 45%, rgba(255,255,255,.07), transparent 55%),
-                     linear-gradient(135deg, #003366 0%, #000066 100%) !important; }
+.stApp { background: radial-gradient(circle at 50% 45%, rgba(255,255,255,.035), transparent 55%),
+                     linear-gradient(135deg, #000066 0%, #000039 50%, #000024 100%) !important; }
 header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], footer { display: none !important; }
 .stApp .stMainBlockContainer, .stApp [data-testid="stMainBlockContainer"] { padding: 0 !important; max-width: none !important; }
 
 /* lauks: vidū pa horizontāli un vertikāli */
 .stApp [data-testid="stTextInput"] { position: fixed !important; top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: min(340px, 86vw) !important; z-index: 1000; margin: 0 !important;
-  background: rgba(38, 38, 42, .68); border: 1px solid rgba(255,255,255,.16); border-radius: 14px; overflow: hidden;
+  background: rgba(56, 56, 62, .62); border: 1px solid rgba(255,255,255,.16); border-radius: 14px; overflow: hidden;
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 12px 34px rgba(0,0,20,.38);
   transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
 .stApp [data-testid="stTextInput"]:hover, .stApp [data-testid="stTextInput"]:focus-within {
-  border-color: rgba(255,255,255,.45); background: rgba(38, 38, 42, .78); box-shadow: 0 12px 34px rgba(0,0,20,.45), 0 0 0 4px rgba(255,255,255,.06); }
+  border-color: rgba(255,255,255,.45); background: rgba(56, 56, 62, .74); box-shadow: 0 12px 34px rgba(0,0,20,.45), 0 0 0 4px rgba(255,255,255,.06); }
 /* visi iekšējie slāņi caurspīdīgi un bez apmalēm, lai redzams tikai mūsu tumši pelēkais lauks */
 .stApp [data-testid="stTextInput"] div, .stApp [data-testid="stTextInput"] input {
   background: transparent !important; background-color: transparent !important; border: none !important; box-shadow: none !important; outline: none !important; }
