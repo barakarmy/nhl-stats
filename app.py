@@ -38,29 +38,34 @@ def _parole():
 
 LOGIN_CSS = """<style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600&display=swap');
-/* Pieteikšanās ekrāns: fons ir #003366 un #000066 sajaukums, laukums lapas vidū, uzraksts "Password" pazūd, uzvedot peli virsū */
-.stApp { background: radial-gradient(circle at 50% 38%, rgba(255,255,255,.07), transparent 55%),
+/* Pieteikšanās ekrāns: fons ir #003366 un #000066 sajaukums; lauks ir tieši lapas centrā (fiksēts pozicionējums, neatkarīgs no Streamlit izkārtojuma);
+   lauks ir tumši pelēks, nedaudz caurspīdīgs; uzraksts "Password" pazūd, uzvedot peli virsū */
+.stApp { background: radial-gradient(circle at 50% 45%, rgba(255,255,255,.07), transparent 55%),
                      linear-gradient(135deg, #003366 0%, #000066 100%) !important; }
 header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"], footer { display: none !important; }
-.stApp .stMainBlockContainer, .stApp [data-testid="stMainBlockContainer"] { min-height: 100vh; max-width: none !important; padding: 0 !important;
-  display: flex; flex-direction: column; justify-content: center; align-items: center; }
-.stApp [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] { width: 100%; align-items: center; gap: .6rem; }
-.stApp [data-testid="stTextInput"] { width: min(340px, 86vw); margin: 0 auto; }
-.stApp [data-testid="stTextInput"] [data-baseweb="input"], .stApp [data-testid="stTextInput"] [data-baseweb="base-input"] {
-  background: rgba(255,255,255,.07) !important; border-radius: 14px !important; }
-.stApp [data-testid="stTextInput"] [data-baseweb="input"] { border: 1px solid rgba(255,255,255,.30) !important;
-  transition: border-color .2s ease, box-shadow .2s ease; }
-.stApp [data-testid="stTextInput"] [data-baseweb="input"]:hover, .stApp [data-testid="stTextInput"] [data-baseweb="input"]:focus-within {
-  border-color: rgba(255,255,255,.75) !important; box-shadow: 0 0 0 4px rgba(255,255,255,.08); }
+.stApp .stMainBlockContainer, .stApp [data-testid="stMainBlockContainer"] { padding: 0 !important; max-width: none !important; }
+
+/* lauks: vidū pa horizontāli un vertikāli */
+.stApp [data-testid="stTextInput"] { position: fixed !important; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(340px, 86vw) !important; z-index: 1000; margin: 0 !important;
+  background: rgba(38, 38, 42, .68); border: 1px solid rgba(255,255,255,.16); border-radius: 14px; overflow: hidden;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 12px 34px rgba(0,0,20,.38);
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+.stApp [data-testid="stTextInput"]:hover, .stApp [data-testid="stTextInput"]:focus-within {
+  border-color: rgba(255,255,255,.45); background: rgba(38, 38, 42, .78); box-shadow: 0 12px 34px rgba(0,0,20,.45), 0 0 0 4px rgba(255,255,255,.06); }
+/* visi iekšējie slāņi caurspīdīgi un bez apmalēm, lai redzams tikai mūsu tumši pelēkais lauks */
+.stApp [data-testid="stTextInput"] div, .stApp [data-testid="stTextInput"] input {
+  background: transparent !important; background-color: transparent !important; border: none !important; box-shadow: none !important; outline: none !important; }
 .stApp [data-testid="stTextInput"] input { height: 3.2rem; text-align: center; color: #ffffff !important; caret-color: #ffffff;
   -webkit-text-fill-color: #ffffff; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 1.05rem; letter-spacing: .16em; }
-.stApp [data-testid="stTextInput"] input::placeholder { color: rgba(255,255,255,.82) !important; -webkit-text-fill-color: rgba(255,255,255,.82);
-  opacity: 1; letter-spacing: .08em; font-weight: 500; transition: color .15s ease, opacity .15s ease; }
+.stApp [data-testid="stTextInput"] input::placeholder { color: rgba(255,255,255,.85) !important; -webkit-text-fill-color: rgba(255,255,255,.85);
+  opacity: 1; letter-spacing: .1em; font-weight: 500; transition: color .15s ease, opacity .15s ease; }
 /* uz lauka uzvedot peli (vai ieklikšķinot) uzraksts pazūd */
-.stApp [data-testid="stTextInput"] [data-baseweb="input"]:hover input::placeholder, .stApp [data-testid="stTextInput"] [data-baseweb="input"]:focus-within input::placeholder {
+.stApp [data-testid="stTextInput"]:hover input::placeholder, .stApp [data-testid="stTextInput"]:focus-within input::placeholder {
   color: transparent !important; -webkit-text-fill-color: transparent; opacity: 0; }
 .stApp [data-testid="stTextInput"] button, .stApp [data-testid="InputInstructions"] { display: none !important; }
-.login-err { text-align: center; color: #ffb4b4; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: .85rem; letter-spacing: .04em; }
+.login-err { position: fixed; top: calc(50% + 2.9rem); left: 50%; transform: translateX(-50%); z-index: 1000; white-space: nowrap;
+  color: #ffb4b4; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: .85rem; letter-spacing: .04em; }
 </style>"""
 
 
