@@ -15,6 +15,15 @@ on:
         required: false
         default: ''
         type: string
+      atjaunot:
+        description: 'Pārrakstīt arī jau esošās spēles šajā intervālā (lai papildinātu trūkstošos laukus)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: nhl-data-update
+  cancel-in-progress: false
 
 jobs:
   update-data:
@@ -39,11 +48,11 @@ jobs:
         run: python kalendars.py
 
       - name: Run Stats Script
-        run: python nhl_dati.py --vieglais ${{ inputs.sakums }} ${{ inputs.beigas }}
+        run: python nhl_dati.py --vieglais ${{ inputs.sakums }} ${{ inputs.beigas }} ${{ inputs.atjaunot && '--atjaunot' || '' }}
 
       - name: Commit and push changes if any
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add nhl_kalendars.csv dati/
-          git diff --cached --quiet || (git commit -m "Automated daily NHL data update" && git push)
+          git diff --cached --quiet || (git commit -m "Automated daily NHL data update" && git pull --rebase && git push)
