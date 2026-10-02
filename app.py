@@ -141,12 +141,12 @@ POMOC = {
     "Vārti/sp": "Vidēji gūtie vārti spēlē pamatlaikā (bez papildlaika un pēcspēles metieniem)",
     "Ielaisti/sp": "Vidēji ielaistie vārti spēlē pamatlaikā",
     "Starpība": "Gūto un ielaisto vārtu starpība pamatlaikā",
-    "Metieni/sp": "Vidēji metieni vārtos (SOG) spēlē",
-    "Pretin. metieni/sp": "Pretinieka metieni vārtos pret šo komandu vidēji spēlē",
-    "Metienu daļa %": "Komandas metienu daļa no visiem metieniem vārtos: SOG par / (SOG par + SOG pret)",
-    "PP %": "Vairākuma (Power Play) efektivitāte: vārti vairākumā / vairākuma iespējas",
-    "PK %": "Mazākuma (Penalty Kill) efektivitāte: neielaisto vārtu daļa, kad komanda spēlē mazākumā",
-    "Noraid./sp": "Vidēji noraidījumu (sodu) skaits spēlē, bez kautiņiem",
+    "Metieni/sp": "Vidēji metieni vārtos (SOG) spēlē pamatlaikā (bez papildlaika)",
+    "Pretin. metieni/sp": "Pretinieka metieni vārtos pret šo komandu vidēji spēlē pamatlaikā (bez papildlaika)",
+    "Metienu daļa %": "Komandas metienu daļa pamatlaikā: SOG par / (SOG par + SOG pret), bez papildlaika",
+    "PP %": "Vairākuma (Power Play) efektivitāte pamatlaikā: vārti vairākumā / vairākuma iespējas, bez papildlaika",
+    "PK %": "Mazākuma (Penalty Kill) efektivitāte pamatlaikā: neielaisto vārtu daļa, kad komanda spēlē mazākumā, bez papildlaika",
+    "Noraid./sp": "Vidēji noraidījumu (sodu) skaits spēlē pamatlaikā (bez papildlaika un kautiņiem)",
     "Forma (5)": "Pēdējo 5 spēļu rezultāti (vecākā → jaunākā): 🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
     "Forma": "Pēdējo spēļu rezultāti (vecākā → jaunākā): 🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
     "Gūti vārti": "Pēdējās izvēlētajās spēlēs gūtie vārti pamatlaikā (kopā)",
@@ -159,22 +159,22 @@ POMOC = {
     "Over %": "Spēļu daļa (%), kurās abu komandu vārtu summa pamatlaikā pārsniedza izvēlēto līniju",
     "Under %": "Spēļu daļa (%), kurās abu komandu vārtu summa pamatlaikā bija zemāka par izvēlēto līniju",
     "Vid. vārti spēlē": "Vidējā abu komandu vārtu summa spēlē pamatlaikā",
-    "PP vārti": "Vairākumā gūtie vārti",
-    "PP iespējas": "Vairākuma iespējas (reizes, kad komanda spēlēja vairākumā)",
-    "PP metieni": "Metieni vārtos, kamēr komanda spēlēja vairākumā",
-    "Ielaisti PP": "Pretinieka vairākumā gūtie vārti pret šo komandu",
-    "PIM min/sp": "Vidēji sodu minūtes spēlē (bez kautiņiem)",
-    "Izcīnīti/sp": "Vidēji pretinieka noraidījumi pret šo komandu spēlē (komandas izcīnītie noraidījumi)",
+    "PP vārti": "Vairākumā pamatlaikā gūtie vārti (bez papildlaika)",
+    "PP iespējas": "Vairākuma iespējas pamatlaikā (reizes, kad komanda spēlēja vairākumā), bez papildlaika",
+    "PP metieni": "Metieni vārtos vairākumā pamatlaikā (bez papildlaika)",
+    "Ielaisti PP": "Pretinieka vairākumā pamatlaikā gūtie vārti pret šo komandu",
+    "PIM min/sp": "Vidēji sodu minūtes spēlē pamatlaikā (bez papildlaika un kautiņiem)",
+    "Izcīnīti/sp": "Vidēji pretinieka noraidījumi pret šo komandu spēlē pamatlaikā (bez papildlaika)",
     "Izcīnīti − saņemti": "Izcīnīto un saņemto noraidījumu starpība spēlē; pozitīvs skaitlis = komanda izcīna vairāk, nekā saņem",
     # komandas lapa
     "Skats": "Spēļu izlase, kurai parādīta statistika",
     "Pretinieks": "vs = spēle mājās, @ = spēle izbraukumā",
     "Rez.": "🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
     "Rezultāts": "Spēles rezultāts: komandas vārti–pretinieka vārti (OT/SO = papildlaiks/pēcspēles metieni)",
-    "Metieni": "Metieni vārtos: komanda–pretinieks",
-    "Noraid.": "Komandas noraidījumu (sodu) skaits spēlē, bez kautiņiem",
-    "Noraidījumi": "Komandas noraidījumu (sodu) skaits spēlē, bez kautiņiem",
-    "PIM min": "Sodu minūtes spēlē (bez kautiņiem)",
+    "Metieni": "Metieni vārtos visā spēlē (arī papildlaikā, tikai informācijai): komanda–pretinieks",
+    "Noraid.": "Komandas noraidījumu (sodu) skaits spēlē pamatlaikā (bez papildlaika un kautiņiem)",
+    "Noraidījumi": "Komandas noraidījumu (sodu) skaits spēlē pamatlaikā (bez papildlaika un kautiņiem)",
+    "PIM min": "Sodu minūtes spēlē pamatlaikā (bez papildlaika un kautiņiem)",
     "PIM 1. per.": "Sodu minūtes 1. periodā",
     "PIM 2. per.": "Sodu minūtes 2. periodā",
     "PIM 3. per.": "Sodu minūtes 3. periodā",
@@ -201,7 +201,7 @@ POMOC = {
     "Datu apjoms": "Cik drošs rādītājs ir: Maz datu < 8 spēles, Vidēji 8–19, Pietiekami 20+ (abas sezonas kopā)",
     "Noraid. mājas": "Mājas komandas noraidījumi spēlē",
     "Noraid. viesi": "Viesu komandas noraidījumi spēlē",
-    "Kopā": "Abu komandu noraidījumi kopā",
+    "Kopā": "Abu komandu noraidījumi kopā spēles pamatlaikā",
     # spēles detaļas
     "Per.": "Periods (OT = papildlaiks, SO = pēcspēles metieni)",
     "Laiks": "Laiks periodā, kad gūti vārti",
@@ -400,7 +400,8 @@ def lapa_parskats():
                 "PK %": st.column_config.NumberColumn(format="%.1f"),
                 "Noraid./sp": st.column_config.NumberColumn(format="%.1f")})
     st.caption("U = uzvaras, Z = zaudējumi pamatlaikā, ZPL = zaudējumi papildlaikā/pēcspēles metienos. "
-               "Vārtu rādītāji ir pamatlaika (bez OT/SO). Tabulu var kārtot, klikšķinot uz kolonnas virsraksta.")
+               "Visi statistikas rādītāji (vārti, metieni, noraidījumi, vairākums) ir pamatlaika, bez papildlaika un pēcspēles metieniem. "
+               "Uzvaras, zaudējumi un punkti ir oficiālie rezultāti. Tabulu var kārtot, klikšķinot uz kolonnas virsraksta.")
 
 
 # ============================================================================
@@ -659,17 +660,51 @@ def lapa_noraidijumi():
     with c2:
         logs = izvele("Laika posms", list(LOGI), key="nr_n")
     with c3:
-        kartot = izvele("Kārtot pēc", ["Noraidījumi (vid.)", "PIM minūtes (vid.)", "Izcīnītie noraidījumi"], key="nr_k")
-    kol = {"Noraidījumi (vid.)": "PEN_sp", "PIM minūtes (vid.)": "PIM_sp", "Izcīnītie noraidījumi": "DRAW_sp"}[kartot]
-    res = da.kopsavilkums(DF, scope, LOGI[logs])
-    tabula(res, {"GP": "Sp.", "PEN_sp": "Noraid./sp", "PIM_sp": "PIM min/sp",
-                 "DRAW_sp": "Izcīnīti/sp", "PEN_starpiba": "Izcīnīti − saņemti"},
-           sort_col=kol,
-           config={"Noraid./sp": st.column_config.NumberColumn(format="%.2f"),
-                   "PIM min/sp": st.column_config.NumberColumn(format="%.1f"),
-                   "Izcīnīti/sp": st.column_config.NumberColumn(format="%.2f"),
-                   "Izcīnīti − saņemti": st.column_config.NumberColumn(format="%+.2f")})
-    st.caption("Noraidījumi = sodu skaits (bez kautiņiem). Izcīnītie = pretinieka sodi pret šo komandu.")
+        perioda = izvele("Hokeja periods", ["Visi periodi", "Kopā", "1. periods", "2. periods", "3. periods"], key="nr_p")
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        metrika = izvele("Rādītājs", ["Noraidījumu skaits", "Sodu minūtes"], key="nr_m")
+    with d2:
+        vertiba = izvele("Vērtība", ["Vidēji spēlē", "Kopā"], key="nr_v")
+    with d3:
+        veids = izvele("Veids", ["Saņemtie", "Izcīnītie"], key="nr_k")
+
+    mkods = "skaits" if metrika == "Noraidījumu skaits" else "minutes"
+    videji = vertiba == "Vidēji spēlē"
+    vkods = "s" if veids == "Saņemtie" else "i"
+    fm = "%.2f" if videji else "%.0f"
+    res = da.noraidijumu_tabula(DF, scope, LOGI[logs], mkods, videji)
+
+    mtxt = "noraidījumu skaits" if mkods == "skaits" else "sodu minūtes"
+    vtxt = "vidēji vienā spēlē" if videji else "kopā izvēlētajās spēlēs"
+    ptxt = {"kopa": "pamatlaikā (1.–3. periods kopā, bez papildlaika)", 1: "1. periodā", 2: "2. periodā", 3: "3. periodā"}
+    pkarte = {"Kopā": "kopa", "1. periods": 1, "2. periods": 2, "3. periods": 3}
+
+    def apraksts(k, p):
+        v = "komandas saņemtie (paša sodi)" if k == "s" else "komandas izcīnītie (pretinieka sodi pret šo komandu)"
+        return f"{mtxt[0].upper() + mtxt[1:]} {ptxt[p]}: {v}, {vtxt}"
+
+    if perioda == "Visi periodi":
+        kartot = izvele("Kārtot pēc", list(pkarte), key="nr_kart")
+        kolonnas, pask = {"GP": "Sp."}, {}
+        for nos, p in pkarte.items():
+            kolonnas[f"{vkods}_{p}"] = nos
+            pask[nos] = apraksts(vkods, p)
+        tabula(res, kolonnas, sort_col=f"{vkods}_{pkarte[kartot]}", paskaidr=pask,
+               config={nos: st.column_config.NumberColumn(format=fm) for nos in pkarte})
+    else:
+        p = pkarte[perioda]
+        kolonnas = {"GP": "Sp.", f"s_{p}": "Saņemtie", f"i_{p}": "Izcīnītie", f"r_{p}": "Izcīnīti − saņemti"}
+        pask = {"Saņemtie": apraksts("s", p), "Izcīnītie": apraksts("i", p),
+                "Izcīnīti − saņemti": f"Izcīnīto un saņemto starpība ({ptxt[p]}, {mtxt}, {vtxt}); "
+                                      "pozitīvs skaitlis = komanda izcīna vairāk, nekā saņem"}
+        tabula(res, kolonnas, sort_col=f"{vkods}_{p}", paskaidr=pask,
+               config={"Saņemtie": st.column_config.NumberColumn(format=fm),
+                       "Izcīnītie": st.column_config.NumberColumn(format=fm),
+                       "Izcīnīti − saņemti": st.column_config.NumberColumn(format=fm.replace("%", "%+"))})
+    st.caption("Saņemtie = paša komandas noraidījumi, izcīnītie = pretinieka noraidījumi pret šo komandu. "
+               "Noraidījumu skaitā kautiņi nav iekļauti. Kopā = 1.–3. periods kopā, papildlaiks netiek ieskaitīts. "
+               "Vecākām spēlēm sodu skaits pa periodiem ir aprēķināts kā sodu minūtes / 2, līdz tās tiek atjaunotas.")
 
 
 # ============================================================================
@@ -778,7 +813,7 @@ def lapa_komanda():
         rtabula(pd.DataFrame({
             "Datums": lg["datums"].dt.strftime("%d.%m"),
             "Pretinieks": lg["majas"].map({1: "vs ", 0: "@ "}) + lg["pretinieks"],
-            "Noraidījumi": lg["pim_count"], "PIM min": lg["pim_tot"],
+            "Noraidījumi": lg["pim_count"], "PIM min": lg["pim_reg"],
             "PIM 1. per.": lg["pim_p1"], "PIM 2. per.": lg["pim_p2"], "PIM 3. per.": lg["pim_p3"]}),
             hide_index=True, width="stretch")
 
@@ -896,6 +931,11 @@ def lapa_rezultati():
                      f"Iemetieni % {pari('faceoff_pct', '{:.0f}')}" if pari("faceoff_pct", "{:.0f}") else None]
             st.caption(periodi)
             st.caption(" · ".join(d for d in dalas if d) + "  (viesi–mājinieki)")
+            if et:      # papildlaiks tiek rādīts tikai informācijai, statistikā netiek ieskaitīts
+                ot_d = [x for x in (f"metieni {pari('sog_ot')}" if pari("sog_ot") else None,
+                                    f"noraidījumi {pari('pen_ot')}" if pari("pen_ot") else None) if x]
+                if ot_d:
+                    st.caption(f"Papildlaiks ({et}, tikai informācijai): " + " · ".join(ot_d) + "  (viesi–mājinieki)")
 
             with st.expander("Detaļas"):
                 zv = [r.get(f"star{i}") for i in (1, 2, 3)]
@@ -1041,7 +1081,7 @@ def lapa_tiesnesi():
                                     "Mājas komanda": fm, "Viesu komanda": fm,
                                     "Noraid. 1. per.": fm, "Noraid. 2. per.": fm, "Noraid. 3. per.": fm,
                                     "Pret līgu": st.column_config.NumberColumn(format="%+.2f")})
-        st.caption("Noraidījumi = abu komandu sodu skaits spēlē (bez kautiņiem), ko pieskaita katram spēles tiesnesim. "
+        st.caption("Noraidījumi = abu komandu sodu skaits spēles pamatlaikā (bez papildlaika un kautiņiem), ko pieskaita katram spēles tiesnesim. "
                    "Datu apjoms: Maz datu < 8 spēles, Vidēji 8–19, Pietiekami 20+ (abas sezonas kopā).")
         with st.expander("📊 Grafiks"):
             g = t.set_index("vards")["kopa"].sort_values()
