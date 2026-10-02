@@ -10,7 +10,8 @@ import datu_apstrade as da
 import lokacijas
 import modelis  # Puasona prognožu modelis
 
-st.set_page_config(page_title="NHL stats & predictions", page_icon="🏒", layout="wide")
+st.set_page_config(page_title="NHL analītika", page_icon=":material/sports_hockey:", layout="wide",
+                   initial_sidebar_state="collapsed")
 
 
 # ============================================================================
@@ -45,6 +46,57 @@ if not check_password():
 # STILS
 # ============================================================================
 st.markdown("""<style>
+/* ===== Fonti: virsraksti un sadaļu nosaukumi - Plus Jakarta Sans, teksts - Inter (Google Fonts; ja nav pieejams, tiek lietots sistēmas fonts) ===== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+.stApp, .stApp p, .stApp li, .stApp label, .stApp [data-testid="stMarkdownContainer"],
+.stApp [data-testid="stCaptionContainer"] { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6, .stApp [data-testid="stHeading"] *,
+.stApp button[data-baseweb="tab"] p, .stApp [data-testid="stWidgetLabel"] p, .stApp [data-testid="stExpander"] summary p,
+.stApp [data-testid="stMetricLabel"] p {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; letter-spacing: -0.01em; }
+.stApp h1 { font-weight: 800; font-size: 2.05rem; letter-spacing: -0.03em; margin: .2rem 0 .8rem 0; }
+.stApp h2, .stApp h3 { font-weight: 700; letter-spacing: -0.02em; }
+.stApp h5 { font-weight: 700; }
+.stApp [data-testid="stWidgetLabel"] p { font-weight: 600; font-size: .8rem; opacity: .85; }
+.stApp button[data-baseweb="tab"] p { font-weight: 600; }
+
+/* ===== Vispārējais izskats ===== */
+header[data-testid="stHeader"] { display: none; }
+.stApp .stMainBlockContainer, .stApp [data-testid="stMainBlockContainer"] { padding-top: 1rem; max-width: 1500px; }
+.stApp [data-testid="stMetric"], .stApp [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 14px; }
+.stApp [data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
+.stApp [data-testid="stSegmentedControl"] button, .stApp button[kind="secondary"] { border-radius: 10px; }
+.stApp [data-testid="stExpander"] { border-radius: 12px; }
+
+/* ===== Augšējā josla ar hover izvēlnēm ===== */
+.st-key-topbar { position: sticky; top: .6rem; z-index: 1000; display: flex !important; flex-direction: row !important;
+  flex-wrap: wrap; align-items: center; gap: .15rem !important; background: #0f172a; border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px; padding: .3rem .6rem; margin-bottom: 1.1rem; box-shadow: 0 10px 28px rgba(15,23,42,.28); }
+.st-key-topbar, .st-key-topbar * { overflow: visible !important; }
+.st-key-topbar > div, [class*="st-key-navg-"], [class*="st-key-navs-"], .st-key-brand { width: auto !important; }
+.st-key-topbar p, .st-key-topbar a { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
+.st-key-brand { margin-right: .9rem; }
+.st-key-brand a, .st-key-brand p { color: #ffffff !important; font-weight: 800 !important; font-size: 1.08rem !important;
+  letter-spacing: -0.03em; text-decoration: none !important; }
+.st-key-brand a { padding-left: .5rem; }
+[class*="st-key-navg-"] { position: relative; }
+.nav-title { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-weight: 600; font-size: .92rem; color: #cbd5e1;
+  padding: .55rem .95rem; border-radius: 10px; cursor: pointer; user-select: none; outline: none; white-space: nowrap; }
+.nav-title:after { content: ""; display: inline-block; margin-left: .5rem; border: solid currentColor; border-width: 0 1.6px 1.6px 0;
+  padding: 2.2px; transform: rotate(45deg) translateY(-2px); opacity: .7; }
+.nav-title.aktivs { color: #ffffff; box-shadow: inset 0 -2px 0 #3b82f6; border-radius: 10px 10px 4px 4px; }
+[class*="st-key-navg-"]:hover .nav-title, [class*="st-key-navg-"]:focus-within .nav-title { color: #ffffff; background: rgba(255,255,255,.12); }
+[class*="st-key-navi-"] { display: none !important; position: absolute; top: 100%; left: 0; min-width: 260px; flex-direction: column;
+  gap: .1rem !important; background: #0f172a; border: 1px solid rgba(255,255,255,.10); border-radius: 14px; padding: .4rem;
+  box-shadow: 0 18px 44px rgba(2,6,23,.5); z-index: 1001; }
+[class*="st-key-navg-"]:hover [class*="st-key-navi-"], [class*="st-key-navg-"]:focus-within [class*="st-key-navi-"] { display: flex !important; }
+.st-key-topbar a[data-testid="stPageLink-NavLink"] { color: #e2e8f0 !important; border-radius: 10px; padding: .5rem .75rem; }
+.st-key-topbar a[data-testid="stPageLink-NavLink"] p { color: inherit !important; font-weight: 500; font-size: .92rem; }
+.st-key-topbar a[data-testid="stPageLink-NavLink"]:hover { background: rgba(255,255,255,.09); }
+.st-key-topbar a[data-testid="stPageLink-NavLink"][aria-current="page"] { background: #2563eb; color: #ffffff !important; }
+[class*="st-key-navs-"] a[data-testid="stPageLink-NavLink"] p { font-weight: 600; color: #cbd5e1 !important; }
+
+/* ===== Komandu salīdzināšanas joslas ===== */
 .cmp-row{display:flex;align-items:center;gap:12px;margin:8px 0}
 .cmp-val{width:78px;font-weight:600;font-size:1.02rem;opacity:.7}
 .cmp-val.right{text-align:right}
@@ -306,7 +358,7 @@ def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=True, 
     rtabula(t, hide_index=True, width="stretch", column_config=cfg, paskaidr=paskaidr,
                  height=min(1250, 35 * (len(t) + 1) + 3))
     if grafiks:
-        with st.expander("📊 Grafiks"):
+        with st.expander("Grafiks"):
             s = res[sort_col].dropna().sort_values()
             fig = go.Figure(go.Bar(x=s.values, y=list(s.index), orientation="h", marker_color="#3b82f6"))
             fig.update_layout(height=max(320, 22 * len(s)), margin=dict(l=10, r=10, t=10, b=10),
@@ -353,14 +405,14 @@ def salidzinajuma_rinda(nosaukums, a, b, labak="augsts", formats="{:.2f}"):
 # LAPA: PROGNOZES
 # ============================================================================
 def lapa_prognozes():
-    st.title("🎯 Prognozes")
+    st.title("Prognozes")
     gatavs, gatavas_sk, kopa_sk = modelis.parbaudit_gatavibu(DF)
     if not gatavs:
         st.warning("⏳ Sezonas sākums: modelis šobrīd krāj datus.")
         st.progress(gatavas_sk / kopa_sk)
         st.caption(f"{gatavas_sk} no {kopa_sk} komandām ir sasniegušas vismaz 5 aizvadītas spēles.")
         return
-    st.success("✅ Modelis ir aktīvs. Prognozes tiek aprēķinātas pēc Puasona sadalījuma.")
+    st.success("Modelis ir aktīvs. Prognozes tiek aprēķinātas pēc Puasona sadalījuma.")
     if KAL is None:
         st.warning("Nav atrasts 'nhl_kalendars.csv' (palaid kalendars.py).")
         return
@@ -378,12 +430,12 @@ def lapa_prognozes():
             c2.caption(f"{r['datums_lv']:%d.%m.%Y} {laiks} (Rīga)")
             vardi, ref_pr, liga_kopa = speles_tiesnesi(r["game_id"])
             if vardi:
-                teksts_ = f"🧑‍⚖️ Tiesneši: {', '.join(vardi)}"
+                teksts_ = f"Tiesneši: {', '.join(vardi)}"
                 if ref_pr is not None and pd.notna(ref_pr["kopa"]):
                     teksts_ += f" · gaidāmie noraidījumi pēc tiesnešiem: {ref_pr['kopa']:.1f} (līgas vidējais {liga_kopa:.1f})"
                 st.caption(teksts_)
             else:
-                st.caption("🧑‍⚖️ Tiesneši vēl nav paziņoti")
+                st.caption("Tiesneši vēl nav paziņoti")
             pr = modelis.aprekinat_prognozi_speles(home, away, DF)
             if pr:
                 prognozes_bloks(pr)
@@ -393,7 +445,7 @@ def lapa_prognozes():
 # LAPA: LĪGAS PĀRSKATS
 # ============================================================================
 def lapa_parskats():
-    st.title("📋 Līgas pārskats")
+    st.title("Līgas pārskats")
     c1, c2 = st.columns(2)
     with c1:
         scope = izvele("Spēles", SCOPES, key="pk_scope")
@@ -499,7 +551,7 @@ def celojuma_bloks(home, away, sakums):
 
 
 def lapa_salidzinat():
-    st.title("⚔️ Komandu salīdzināšana")
+    st.title("Komandu salīdzināšana")
     komandas = sorted(da.KOMANDAS)
     nak = da.nakamas_speles(KAL, 15)
     opc = {}
@@ -565,7 +617,7 @@ def lapa_salidzinat():
         st.caption("Reitings pret visām komandām (100 = līgas labākais).")
 
     st.divider()
-    t1, t2, t3 = st.tabs(["🔮 Modeļa prognoze", "🤝 Savstarpējās spēles", "✈️ Ceļojums un atpūta"])
+    t1, t2, t3 = st.tabs(["Modeļa prognoze", "Savstarpējās spēles", "Ceļojums un atpūta"])
     with t1:
         gatavs, _, _ = modelis.parbaudit_gatavibu(DF)
         if gatavs:
@@ -594,15 +646,17 @@ def lapa_salidzinat():
 # ============================================================================
 # LAPAS: PERIODI
 # ============================================================================
-def periodu_lapa(p):
-    st.title(f"⏱️ {p}. perioda statistika")
-    c1, c2, c3 = st.columns(3)
+def lapa_periodi():
+    st.title("Periodu statistika")
+    c0, c1, c2, c3 = st.columns(4)
+    with c0:
+        p = int(izvele("Hokeja periods", ["1. periods", "2. periods", "3. periods"], key="per_p")[0])
     with c1:
-        scope = izvele("Spēles", SCOPES, key=f"p{p}_scope")
+        scope = izvele("Spēles", SCOPES, key="per_scope")
     with c2:
-        logs = izvele("Laika posms", list(LOGI), key=f"p{p}_logs")
+        logs = izvele("Laika posms", list(LOGI), key="per_logs")
     with c3:
-        metrika = izvele("Kārtot pēc", ["Vārtu starpība", "Gūtie", "Ielaistie", "Metieni (SOG)"], key=f"p{p}_met")
+        metrika = izvele("Kārtot pēc", ["Vārtu starpība", "Gūtie", "Ielaistie", "Metieni (SOG)"], key="per_met")
     kolonna = {"Vārtu starpība": "Starpiba", "Gūtie": "G", "Ielaistie": "Z", "Metieni (SOG)": "SOG_sp"}[metrika]
     res = da.periodu_tabula(DF, p, scope, LOGI[logs])
     pask = {
@@ -623,23 +677,11 @@ def periodu_lapa(p):
                    "Pretin. metieni/sp": st.column_config.NumberColumn(format="%.1f")})
 
 
-def lapa_p1():
-    periodu_lapa(1)
-
-
-def lapa_p2():
-    periodu_lapa(2)
-
-
-def lapa_p3():
-    periodu_lapa(3)
-
-
 # ============================================================================
 # LAPA: FORMA UN VĀRTI
 # ============================================================================
 def lapa_forma():
-    st.title("🔥 Forma un vārti")
+    st.title("Forma un vārti")
     c1, c2 = st.columns(2)
     with c1:
         n = int(izvele("Pēdējās spēles", ["5", "10"], key="fm_n"))
@@ -659,7 +701,7 @@ def lapa_forma():
 # LAPA: OVER / UNDER
 # ============================================================================
 def lapa_over_under():
-    st.title("📈 Over / Under (pamatlaika vārtu summa)")
+    st.title("Over / Under (pamatlaika vārtu summa)")
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         linija = float(izvele("Līnija", ["5.5", "6.5", "7.5"], default="6.5", key="ou_l"))
@@ -684,7 +726,7 @@ def lapa_over_under():
 # LAPA: POWERPLAY
 # ============================================================================
 def lapa_powerplay():
-    st.title("⚡ Vairākums (Powerplay)")
+    st.title("Vairākums (Powerplay)")
     c1, c2, c3 = st.columns(3)
     with c1:
         scope = izvele("Spēles", SCOPES, key="pp_s")
@@ -707,7 +749,7 @@ def lapa_powerplay():
 # LAPA: NORAIDĪJUMI
 # ============================================================================
 def lapa_noraidijumi():
-    st.title("❌ Noraidījumi")
+    st.title("Noraidījumi")
     c1, c2, c3 = st.columns(3)
     with c1:
         scope = izvele("Spēles", SCOPES, key="nr_s")
@@ -765,7 +807,7 @@ def lapa_noraidijumi():
 # LAPA: KOMANDAS STATISTIKA
 # ============================================================================
 def lapa_komanda():
-    st.title("📊 Komandas analīze")
+    st.title("Komandas analīze")
     kom = st.selectbox("Komanda", sorted(da.KOMANDAS), format_func=komandas_etikete)
     tdf = DF[DF["komanda"] == kom]
     if tdf.empty:
@@ -792,7 +834,7 @@ def lapa_komanda():
         m[2].metric("Metieni spēlē", fmt(kop["SOG_sp"], "{:.1f}"), border=True)
         m[3].metric("Pretinieka metieni", fmt(kop["SA_sp"], "{:.1f}"), border=True)
 
-        st.markdown("##### 🎯 Vidējie vārti (pēdējās 10 spēles) — prognožu pamats")
+        st.markdown("##### Vidējie vārti (pēdējās 10 spēles) — prognožu pamats")
         last10 = tdf.tail(10)
         home10 = tdf[tdf["majas"] == 1].tail(10)
         away10 = tdf[tdf["majas"] == 0].tail(10)
@@ -889,7 +931,7 @@ def lapa_komanda():
 # LAPA: KALENDĀRS
 # ============================================================================
 def lapa_kalendars():
-    st.title("📅 Spēļu kalendārs")
+    st.title("Spēļu kalendārs")
     if KAL is None:
         st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts (palaid kalendars.py).")
         return
@@ -907,7 +949,7 @@ def lapa_kalendars():
         return
     for dat, grupa in x.groupby(x["datums_lv"].dt.date):
         with st.container(border=True):
-            st.markdown(f"**📌 {da.DIENAS[dat.weekday()]}, {dat:%d.%m.%Y}** · {len(grupa)} spēles")
+            st.markdown(f"**{da.DIENAS[dat.weekday()]}, {dat:%d.%m.%Y}** · {len(grupa)} spēles")
             plan = ielasit_planotos(VERSIJA)
             ties_txt = []
             for gid in grupa["game_id"]:
@@ -925,7 +967,7 @@ def lapa_kalendars():
 # LAPA: REZULTĀTI
 # ============================================================================
 def lapa_rezultati():
-    st.title("✅ Spēļu rezultāti")
+    st.title("Spēļu rezultāti")
     datumi = RAW["datums_lv"].dt.date
     mind, maxd = datumi.min(), max(datumi.max(), da.sodien_lv())
     if "rez_datums" not in st.session_state:
@@ -994,13 +1036,13 @@ def lapa_rezultati():
             with st.expander("Detaļas"):
                 zv = [r.get(f"star{i}") for i in (1, 2, 3)]
                 if any(isinstance(z, str) and z for z in zv):
-                    st.markdown("**⭐ Spēles zvaigznes:** " + " · ".join(
+                    st.markdown("**Spēles zvaigznes:** " + " · ".join(
                         f"{i}. {z}" for i, z in enumerate(zv, 1) if isinstance(z, str) and z))
                 gid = r["game_id"]
                 if ties is not None:
                     tv = ties[(ties["game_id"] == gid) & (ties["loma"] == "referee")]["vards"].tolist()
                     if tv:
-                        st.markdown("**🧑‍⚖️ Tiesneši:** " + ", ".join(tv))
+                        st.markdown("**Tiesneši:** " + ", ".join(tv))
                 if varti is not None:
                     v = varti[varti["game_id"] == gid]
                     if not v.empty:
@@ -1033,7 +1075,7 @@ def lapa_rezultati():
 # LAPA: SPĒLĒTĀJI
 # ============================================================================
 def lapa_speletaji():
-    st.title("🧑‍🎓 Spēlētāji")
+    st.title("Spēlētāji")
     sk = ielasit_papildu("speletaji", VERSIJA)
     vg = ielasit_papildu("vartsargi", VERSIJA)
     if sk is None and vg is None:
@@ -1087,7 +1129,7 @@ def lapa_speletaji():
 # LAPA: TIESNEŠI
 # ============================================================================
 def lapa_tiesnesi():
-    st.title("🧑‍⚖️ Tiesneši")
+    st.title("Tiesneši")
     cur, prev, info = ielasit_tiesnesus(VERSIJA)
     if info:
         st.warning(info)
@@ -1096,7 +1138,7 @@ def lapa_tiesnesi():
                 "(dati/tiesnesi.csv). Pagājušās sezonas datus liec failā dati/referees_lastseason.csv.")
         return
 
-    with st.expander("⚙️ Aprēķina iestatījumi", expanded=False):
+    with st.expander("Aprēķina iestatījumi", expanded=False):
         c1, c2 = st.columns(2)
         w_prev = c1.slider("Pagājušās sezonas svars (%)", 0, 100, 60, 5, key="ti_w") / 100
         k = c2.slider("Līgas vidējā korekcija K (spēles)", 0, 30, 10, key="ti_k")
@@ -1137,7 +1179,7 @@ def lapa_tiesnesi():
                                     "Pret līgu": st.column_config.NumberColumn(format="%+.2f")})
         st.caption("Noraidījumi = abu komandu sodu skaits spēles pamatlaikā (bez papildlaika un kautiņiem), ko pieskaita katram spēles tiesnesim. "
                    "Datu apjoms: Maz datu < 8 spēles, Vidēji 8–19, Pietiekami 20+ (abas sezonas kopā).")
-        with st.expander("📊 Grafiks"):
+        with st.expander("Grafiks"):
             g = t.set_index("vards")["kopa"].sort_values()
             fig = go.Figure(go.Bar(x=g.values, y=list(g.index), orientation="h", marker_color="#3b82f6"))
             fig.add_vline(x=liga["blend"]["kopa"], line_dash="dash")
@@ -1177,13 +1219,13 @@ def lapa_tiesnesi():
 # LAPA: KARSTĀKIE SPĒLĒTĀJI
 # ============================================================================
 def lapa_karstie():
-    st.title("🔥 Karstākie spēlētāji")
+    st.title("Karstākie spēlētāji")
     sk = ielasit_papildu("speletaji", VERSIJA)
     if sk is None:
         st.info("Spēlētāju dati (dati/speletaji.csv) vēl nav pieejami.")
         return
 
-    with st.expander("ℹ️ Kā tiek noteikts, ka spēlētājs ir karsts?"):
+    with st.expander("Kā tiek noteikts, ka spēlētājs ir karsts?"):
         st.markdown(
             "- **Salīdzina ar gaidāmo.** Aprēķina, cik punktu (vārtu / piespēļu) spēlētājam būtu jāiegūst pēdējās N spēlēs, "
             "ņemot vērā viņa iepriekšējo vidējo (pievilktu pie līgas vidējā uzbrucējiem vai aizsargiem, ja spēļu ir maz).\n"
@@ -1261,29 +1303,77 @@ def lapa_karstie():
 
 # ============================================================================
 # NAVIGĀCIJA
+# Struktūra ir šeit, vienā vietā: lapas var pārvietot starp grupām, grupas pārsaukt vai lapu izvilkt kā atsevišķu pogu
+# ({"lapa": (...)} ieraksts bez grupas). Ikonas ir Material Symbols (fonts.google.com/icons).
 # ============================================================================
-lapas = st.navigation({
-    "Prognozes un pārskats": [
-        st.Page(lapa_karstie, title="Karstākie spēlētāji", icon="🔥", url_path="karstie", default=True),
-        st.Page(lapa_prognozes, title="Prognozes", icon="🎯", url_path="prognozes"),
-        st.Page(lapa_parskats, title="Līgas pārskats", icon="📋", url_path="parskats"),
-        st.Page(lapa_salidzinat, title="Salīdzināt komandas", icon="⚔️", url_path="salidzinat"),
-    ],
-    "Datu filtri": [
-        st.Page(lapa_p1, title="1. periods", icon="1️⃣", url_path="periods-1"),
-        st.Page(lapa_p2, title="2. periods", icon="2️⃣", url_path="periods-2"),
-        st.Page(lapa_p3, title="3. periods", icon="3️⃣", url_path="periods-3"),
-        st.Page(lapa_forma, title="Forma un vārti", icon="🔥", url_path="forma"),
-        st.Page(lapa_over_under, title="Over / Under", icon="📈", url_path="over-under"),
-        st.Page(lapa_powerplay, title="Powerplay", icon="⚡", url_path="powerplay"),
-        st.Page(lapa_noraidijumi, title="Noraidījumi", icon="❌", url_path="noraidijumi"),
-        st.Page(lapa_tiesnesi, title="Tiesneši", icon="🧑‍⚖️", url_path="tiesnesi"),
-    ],
-    "Komandas un spēles": [
-        st.Page(lapa_komanda, title="Komandas statistika", icon="📊", url_path="komanda"),
-        st.Page(lapa_speletaji, title="Spēlētāji", icon="🧑‍🎓", url_path="speletaji"),
-        st.Page(lapa_kalendars, title="Kalendārs", icon="📅", url_path="kalendars"),
-        st.Page(lapa_rezultati, title="Rezultāti", icon="✅", url_path="rezultati"),
-    ],
-}, position="top")
+NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
+
+NAV = [
+    # atsevišķas pogas joslā (bez izvēlnes)
+    {"lapa": (lapa_karstie, "Karstākie spēlētāji", "karstie", "local_fire_department")},
+    {"lapa": (lapa_prognozes, "Prognozes", "prognozes", "insights")},
+    # grupas ar izvēlni (funkcija, nosaukums, url, Material ikona)
+    {"grupa": "Komandas", "lapas": [
+        (lapa_parskats, "Līgas pārskats", "parskats", "leaderboard"),
+        (lapa_salidzinat, "Salīdzināt komandas", "salidzinat", "compare_arrows"),
+        (lapa_komanda, "Komandas statistika", "komanda", "groups"),
+    ]},
+    {"grupa": "Statistika", "lapas": [
+        (lapa_periodi, "Periodi", "periodi", "view_timeline"),
+        (lapa_forma, "Forma un vārti", "forma", "trending_up"),
+        (lapa_over_under, "Over / Under", "over-under", "swap_vert"),
+        (lapa_powerplay, "Powerplay", "powerplay", "bolt"),
+        (lapa_noraidijumi, "Noraidījumi", "noraidijumi", "gavel"),
+    ]},
+    {"grupa": "Spēles", "lapas": [
+        (lapa_kalendars, "Kalendārs", "kalendars", "calendar_month"),
+        (lapa_rezultati, "Rezultāti", "rezultati", "sports_score"),
+    ]},
+    {"grupa": "Spēlētāji un tiesneši", "lapas": [
+        (lapa_speletaji, "Spēlētāji", "speletaji", "person"),
+        (lapa_tiesnesi, "Tiesneši", "tiesnesi", "sports"),
+    ]},
+]
+
+
+def _lapa(rec, noklusejuma):
+    f, nos, url, ikona = rec
+    return st.Page(f, title=nos, icon=f":material/{ikona}:", url_path=url, default=noklusejuma)
+
+
+STRUKTURA, _pirma = [], True            # [(tips, nosaukums, [(ieraksts, st.Page), ...]), ...]
+for _ier in NAV:
+    _recs = _ier["lapas"] if "grupa" in _ier else [_ier["lapa"]]
+    _lapas = []
+    for _rec in _recs:
+        _lapas.append((_rec, _lapa(_rec, _pirma)))
+        _pirma = False
+    STRUKTURA.append(("grupa", _ier["grupa"], _lapas) if "grupa" in _ier else ("lapa", _recs[0][1], _lapas))
+VISAS_LAPAS = [p for _, _, saraksts in STRUKTURA for _, p in saraksts]
+
+
+def augseja_josla(aktiva):
+    """Viena josla augšā: zīmols + grupas, kuru lapas parādās, uzvedot peli virsū (vai pieskaroties)."""
+    with st.container(key="topbar"):
+        with st.container(key="brand"):
+            st.page_link(VISAS_LAPAS[0], label="NHL analītika")
+        for i, (tips, nosaukums, saraksts) in enumerate(STRUKTURA):
+            if tips == "lapa":
+                with st.container(key=f"navs-{i}"):
+                    st.page_link(saraksts[0][1], label=nosaukums)
+                continue
+            aktivs = any(p.title == aktiva.title for _, p in saraksts)
+            with st.container(key=f"navg-{i}"):
+                st.markdown(f'<div class="nav-title{" aktivs" if aktivs else ""}" tabindex="0">{nosaukums}</div>',
+                            unsafe_allow_html=True)
+                with st.container(key=f"navi-{i}"):
+                    for rec, p in saraksts:
+                        st.page_link(p, label=rec[1], icon=f":material/{rec[3]}:")
+
+
+if NAV_REZIMS == "pielagots":
+    lapas = st.navigation(VISAS_LAPAS, position="hidden")
+    augseja_josla(lapas)
+else:
+    lapas = st.navigation({n: [p for _, p in s] for t, n, s in STRUKTURA}, position="top")
 lapas.run()
