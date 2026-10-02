@@ -130,6 +130,148 @@ def komandas_etikete(kods):
     return f"{da.pilns_nosaukums(kods)} ({kods})"
 
 
+POMOC = {
+    # līgas / komandu tabulas
+    "Sp.": "Nospēlētās spēles",
+    "U": "Uzvaras (arī papildlaikā un pēcspēles metienos)",
+    "Z": "Zaudējumi pamatlaikā",
+    "ZPL": "Zaudējumi papildlaikā vai pēcspēles metienos (komanda saņem 1 punktu)",
+    "Punkti": "Tabulas punkti: uzvara 2, zaudējums papildlaikā/pēcspēles metienos 1, zaudējums pamatlaikā 0",
+    "Punkti %": "Iegūto punktu daļa no iespējamajiem: punkti / (2 × spēles)",
+    "Vārti/sp": "Vidēji gūtie vārti spēlē pamatlaikā (bez papildlaika un pēcspēles metieniem)",
+    "Ielaisti/sp": "Vidēji ielaistie vārti spēlē pamatlaikā",
+    "Starpība": "Gūto un ielaisto vārtu starpība pamatlaikā",
+    "Metieni/sp": "Vidēji metieni vārtos (SOG) spēlē",
+    "Pretin. metieni/sp": "Pretinieka metieni vārtos pret šo komandu vidēji spēlē",
+    "Metienu daļa %": "Komandas metienu daļa no visiem metieniem vārtos: SOG par / (SOG par + SOG pret)",
+    "PP %": "Vairākuma (Power Play) efektivitāte: vārti vairākumā / vairākuma iespējas",
+    "PK %": "Mazākuma (Penalty Kill) efektivitāte: neielaisto vārtu daļa, kad komanda spēlē mazākumā",
+    "Noraid./sp": "Vidēji noraidījumu (sodu) skaits spēlē, bez kautiņiem",
+    "Forma (5)": "Pēdējo 5 spēļu rezultāti (vecākā → jaunākā): 🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
+    "Forma": "Pēdējo spēļu rezultāti (vecākā → jaunākā): 🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
+    "Gūti vārti": "Pēdējās izvēlētajās spēlēs gūtie vārti pamatlaikā (kopā)",
+    "Ielaisti vārti": "Pēdējās izvēlētajās spēlēs ielaistie vārti pamatlaikā (kopā)",
+    # periodi
+    "Gūti": "Šajā periodā gūtie vārti (kopā)",
+    "Ielaisti": "Šajā periodā ielaistie vārti (kopā)",
+    "Gūti/sp": "Vidēji gūtie vārti šajā periodā spēlē",
+    # over / under, vairākums, noraidījumi
+    "Over %": "Spēļu daļa (%), kurās abu komandu vārtu summa pamatlaikā pārsniedza izvēlēto līniju",
+    "Under %": "Spēļu daļa (%), kurās abu komandu vārtu summa pamatlaikā bija zemāka par izvēlēto līniju",
+    "Vid. vārti spēlē": "Vidējā abu komandu vārtu summa spēlē pamatlaikā",
+    "PP vārti": "Vairākumā gūtie vārti",
+    "PP iespējas": "Vairākuma iespējas (reizes, kad komanda spēlēja vairākumā)",
+    "PP metieni": "Metieni vārtos, kamēr komanda spēlēja vairākumā",
+    "Ielaisti PP": "Pretinieka vairākumā gūtie vārti pret šo komandu",
+    "PIM min/sp": "Vidēji sodu minūtes spēlē (bez kautiņiem)",
+    "Izcīnīti/sp": "Vidēji pretinieka noraidījumi pret šo komandu spēlē (komandas izcīnītie noraidījumi)",
+    "Izcīnīti − saņemti": "Izcīnīto un saņemto noraidījumu starpība spēlē; pozitīvs skaitlis = komanda izcīna vairāk, nekā saņem",
+    # komandas lapa
+    "Skats": "Spēļu izlase, kurai parādīta statistika",
+    "Pretinieks": "vs = spēle mājās, @ = spēle izbraukumā",
+    "Rez.": "🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
+    "Rezultāts": "Spēles rezultāts: komandas vārti–pretinieka vārti (OT/SO = papildlaiks/pēcspēles metieni)",
+    "Metieni": "Metieni vārtos: komanda–pretinieks",
+    "Noraid.": "Komandas noraidījumu (sodu) skaits spēlē, bez kautiņiem",
+    "Noraidījumi": "Komandas noraidījumu (sodu) skaits spēlē, bez kautiņiem",
+    "PIM min": "Sodu minūtes spēlē (bez kautiņiem)",
+    "PIM 1. per.": "Sodu minūtes 1. periodā",
+    "PIM 2. per.": "Sodu minūtes 2. periodā",
+    "PIM 3. per.": "Sodu minūtes 3. periodā",
+    "Starpība (visas)": "Vārtu starpība šajā periodā visās sezonas spēlēs",
+    "Mājās": "Vārtu starpība šajā periodā mājas spēlēs",
+    "Izbraukumā": "Vārtu starpība šajā periodā izbraukuma spēlēs",
+    "Pēdējās 10": "Vārtu starpība šajā periodā pēdējās 10 spēlēs",
+    "Vieta": "Spēles vieta: mājās vai izbraukumā",
+    # kalendārs
+    "Laiks (Rīga)": "Spēles sākuma laiks pēc Rīgas laika",
+    "Galvenie tiesneši": "Spēlei piešķirtie galvenie tiesneši (NHL tos paziņo dažas stundas pirms spēles)",
+    # tiesneši
+    "Spēles šosezon": "Spēles, kurās tiesnesis šosezon ir strādājis",
+    "Spēles pagājušajā": "Spēles, kurās tiesnesis strādāja pagājušajā sezonā",
+    "Noraid./sp šosezon": "Vidēji noraidījumi spēlē (abu komandu kopā), kad šosezon strādāja šis tiesnesis",
+    "Noraid./sp pagājušajā": "Vidēji noraidījumi spēlē (abu komandu kopā), kad pagājušajā sezonā strādāja šis tiesnesis",
+    "Kombinētais": "Kombinētais rādītājs: 60% pagājušā + 40% šī sezona (svarus var mainīt iestatījumos); katra daļa tiek pievilkta pie līgas vidējā, ja spēļu ir maz",
+    "Pret līgu": "Kombinētā rādītāja starpība pret kombinēto līgas vidējo; pozitīvs = tiesnesis soda vairāk par vidējo",
+    "Mājas komanda": "Kombinētie noraidījumi mājas komandai spēlē",
+    "Viesu komanda": "Kombinētie noraidījumi viesu komandai spēlē",
+    "Noraid. 1. per.": "Kombinētie noraidījumi (abu komandu kopā) 1. periodā",
+    "Noraid. 2. per.": "Kombinētie noraidījumi (abu komandu kopā) 2. periodā",
+    "Noraid. 3. per.": "Kombinētie noraidījumi (abu komandu kopā) 3. periodā",
+    "Datu apjoms": "Cik drošs rādītājs ir: Maz datu < 8 spēles, Vidēji 8–19, Pietiekami 20+ (abas sezonas kopā)",
+    "Noraid. mājas": "Mājas komandas noraidījumi spēlē",
+    "Noraid. viesi": "Viesu komandas noraidījumi spēlē",
+    "Kopā": "Abu komandu noraidījumi kopā",
+    # spēles detaļas
+    "Per.": "Periods (OT = papildlaiks, SO = pēcspēles metieni)",
+    "Laiks": "Laiks periodā, kad gūti vārti",
+    "Piespēles": "Piespēļu autori",
+    "Situācija": "EV = vienāds sastāvs, PP = vairākums, SH = mazākums",
+    "Rez. pēc vārtiem": "Rezultāts pēc šiem vārtiem (viesi–mājinieki)",
+    "G": "Vārti",
+    "A": "Piespēles",
+    "P": "Punkti (vārti + piespēles)",
+    "TOI spēlē": "Laiks laukumā šajā spēlē (mm:ss)",
+    "Atvairīti": "Atvairītie metieni",
+    "Metieni pret": "Metieni pret vārtsargu šajā spēlē",
+    "SV %": "Atvairīto metienu procents: atvairītie / metieni pret",
+    "Iznākums": "W = uzvara, L = zaudējums pamatlaikā, O = zaudējums papildlaikā/pēcspēles metienos",
+    # spēlētāju tabulas (kolonnu nosaukumi no datu moduļa)
+    "Poz": "Pozīcija: C centrs, L/R spārni, D aizsargs",
+    "GP": "Nospēlētās spēles",
+    "PM": "Plus/mīnus: komandas gūtie mīnus ielaistie vārti, kamēr spēlētājs bija laukumā vienāda sastāva spēlē",
+    "PIM": "Sodu minūtes",
+    "SOG": "Metieni vārtos",
+    "HIT": "Sitieni pretiniekam (hits)",
+    "BLK": "Bloķētie pretinieka metieni",
+    "PPG": "Vārti vairākumā",
+    "TOI": "Vidējais laiks laukumā spēlē (minūtes)",
+    "TOI_kopa": "Kopējais laiks laukumā (minūtes)",
+    "P_sp": "Punkti spēlē",
+    "GS": "Spēles sākuma sastāvā",
+    "W": "Uzvaras",
+    "SA": "Metieni pret vārtsargu",
+    "SV": "Atvairītie metieni",
+    "GA": "Ielaistie vārti",
+    "SVpct": "Atvairīto metienu procents: atvairītie / metieni pret",
+    "GAA": "Ielaisto vārtu vidējais skaits 60 minūtēs",
+}
+
+
+def palidziba(label):
+    """Paskaidrojums kolonnas virsrakstam (parādās, uzbraucot ar peli)."""
+    if label in POMOC:
+        return POMOC[label]
+    for tips, apraksts in (("Over", "lielāka"), ("Under", "mazāka")):
+        if str(label).startswith(tips + " "):
+            return f"Spēles, kurās abu komandu vārtu summa pamatlaikā bija {apraksts} par {str(label)[len(tips) + 1:]}"
+    return None
+
+
+def cfg_ar_help(kolonnas, config=None):
+    """column_config visām kolonnām ar paskaidrojumiem (help), saglabājot jau norādīto formatējumu."""
+    config = config or {}
+    out = {}
+    for k in kolonnas:
+        h = palidziba(k)
+        spec = config.get(k)
+        if spec is None:
+            if h and k not in config:
+                out[k] = st.column_config.Column(k, help=h)
+        elif h:
+            out[k] = {**spec, "help": h}
+        else:
+            out[k] = spec
+    for k, v in config.items():        # arī kolonnas, kas paslēptas (None) vai nav tabulā
+        out.setdefault(k, v)
+    return out
+
+
+def rtabula(df, column_config=None, **kw):
+    """st.dataframe ar paskaidrojumiem kolonnu virsrakstos."""
+    st.dataframe(df, column_config=cfg_ar_help(list(df.columns), column_config), **kw)
+
+
 def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=True):
     """Rangu tabula ar logotipiem. res: DataFrame ar indeksu 'komanda'; kolonnas: {iekšējais: virsraksts}."""
     if res is None or res.empty:
@@ -143,7 +285,7 @@ def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=True):
     cfg = {"Logo": st.column_config.ImageColumn("", width="small"),
            "#": st.column_config.NumberColumn("#", width="small")}
     cfg.update(config or {})
-    st.dataframe(t, hide_index=True, width="stretch", column_config=cfg,
+    rtabula(t, hide_index=True, width="stretch", column_config=cfg,
                  height=min(1250, 35 * (len(t) + 1) + 3))
     if grafiks:
         with st.expander("📊 Grafiks"):
@@ -389,7 +531,7 @@ def lapa_salidzinat():
                 "Rezultāts (viesi–mājas)": [rezultata_teksts(r.home_total, r.away_total, r.spele_beidzas)
                                             for r in h2h.itertuples()],
             })
-            st.dataframe(t, hide_index=True, width="stretch")
+            rtabula(t, hide_index=True, width="stretch")
 
 
 # ============================================================================
@@ -573,7 +715,7 @@ def lapa_komanda():
         t = pd.DataFrame(rindas).T[["GP", "G_sp", "Z_sp", "SOG_sp", "SA_sp", "PEN_sp", "PIM_sp", "PP_pct", "PK_pct"]]
         t.columns = ["Sp.", "Vārti/sp", "Ielaisti/sp", "Metieni/sp", "Pretin. metieni/sp",
                      "Noraid./sp", "PIM min/sp", "PP %", "PK %"]
-        st.dataframe(t.reset_index().rename(columns={"index": "Skats"}), hide_index=True, width="stretch",
+        rtabula(t.reset_index().rename(columns={"index": "Skats"}), hide_index=True, width="stretch",
                      column_config={c: st.column_config.NumberColumn(format="%.2f") for c in t.columns[1:]})
 
     with t_sp:
@@ -588,7 +730,7 @@ def lapa_komanda():
             "Noraid.": lg["pim_count"],
             "PP vārti": lg["ppg"],
         })
-        st.dataframe(tab, hide_index=True, width="stretch")
+        rtabula(tab, hide_index=True, width="stretch")
 
     with t_per:
         mh, ma, l10 = tdf[tdf["majas"] == 1], tdf[tdf["majas"] == 0], tdf.tail(10)
@@ -601,7 +743,7 @@ def lapa_komanda():
                            "Gūti/sp": tdf[f"g_p{p}"].mean(), "Ielaisti/sp": tdf[f"z_p{p}"].mean(),
                            "Metieni/sp": tdf[f"sog_p{p}"].mean()})
         pt = pd.DataFrame(rindas)
-        st.dataframe(pt, hide_index=True, width="stretch",
+        rtabula(pt, hide_index=True, width="stretch",
                      column_config={"Gūti/sp": st.column_config.NumberColumn(format="%.2f"),
                                     "Ielaisti/sp": st.column_config.NumberColumn(format="%.2f"),
                                     "Metieni/sp": st.column_config.NumberColumn(format="%.1f")})
@@ -619,11 +761,11 @@ def lapa_komanda():
         m[3].metric("PK %", fmt(kop["PK_pct"], "{:.1f}"), border=True)
         lg = tdf.tail(5).iloc[::-1]
         st.markdown("##### Noraidījumi pēdējās 5 spēlēs")
-        st.dataframe(pd.DataFrame({
+        rtabula(pd.DataFrame({
             "Datums": lg["datums"].dt.strftime("%d.%m"),
             "Pretinieks": lg["majas"].map({1: "vs ", 0: "@ "}) + lg["pretinieks"],
             "Noraidījumi": lg["pim_count"], "PIM min": lg["pim_tot"],
-            "1. per.": lg["pim_p1"], "2. per.": lg["pim_p2"], "3. per.": lg["pim_p3"]}),
+            "PIM 1. per.": lg["pim_p1"], "PIM 2. per.": lg["pim_p2"], "PIM 3. per.": lg["pim_p3"]}),
             hide_index=True, width="stretch")
 
     with t_nak:
@@ -631,7 +773,7 @@ def lapa_komanda():
         if nak.empty:
             st.info("Kalendārā nav atrastu nākamo spēļu.")
         else:
-            st.dataframe(pd.DataFrame({
+            rtabula(pd.DataFrame({
                 "Datums": nak["datums_lv"].dt.strftime("%d.%m.%Y"),
                 "Laiks (Rīga)": nak["sakums_lv"].dt.strftime("%H:%M"),
                 "Pretinieks": [komandas_etikete(v if m == kom else m)
@@ -668,7 +810,7 @@ def lapa_kalendars():
             for gid in grupa["game_id"]:
                 vardi = da.planotie_vardi(plan, gid)
                 ties_txt.append(", ".join(vardi) if vardi else "Tiesneši nav paziņoti")
-            st.dataframe(pd.DataFrame({
+            rtabula(pd.DataFrame({
                 "Laiks (Rīga)": grupa["sakums_lv"].dt.strftime("%H:%M"),
                 "Viesi": grupa["viesu_komanda"].map(komandas_etikete),
                 "Mājinieki": grupa["majas_komanda"].map(komandas_etikete),
@@ -755,28 +897,28 @@ def lapa_rezultati():
                     v = varti[varti["game_id"] == gid]
                     if not v.empty:
                         st.markdown("**Vārti**")
-                        st.dataframe(pd.DataFrame({
+                        rtabula(pd.DataFrame({
                             "Per.": v["period"].astype(str) + v["period_type"].map(lambda x: "" if x == "REG" else f" {x}"),
                             "Laiks": v["laiks"], "Komanda": v["komanda"], "Autors": v["scorer"],
                             "Piespēles": (v["assist1"].fillna("") + ", " + v["assist2"].fillna("")).str.strip(", "),
                             "Situācija": v["strength"].str.upper(),
-                            "Rezultāts": v["away_score"].astype("Int64").astype(str) + "–" + v["home_score"].astype("Int64").astype(str)}),
+                            "Rez. pēc vārtiem": v["away_score"].astype("Int64").astype(str) + "–" + v["home_score"].astype("Int64").astype(str)}),
                             hide_index=True, width="stretch")
                 if sk is not None:
                     s = sk[sk["game_id"] == gid].sort_values(["points", "goals", "sog"], ascending=False).head(6)
                     if not s.empty:
                         st.markdown("**Labākie spēlētāji**")
-                        st.dataframe(s[["vards", "team", "goals", "assists", "points", "sog", "toi"]].rename(columns={
+                        rtabula(s[["vards", "team", "goals", "assists", "points", "sog", "toi"]].rename(columns={
                             "vards": "Spēlētājs", "team": "Komanda", "goals": "G", "assists": "A",
-                            "points": "P", "sog": "Metieni", "toi": "TOI"}), hide_index=True, width="stretch")
+                            "points": "P", "sog": "Metieni", "toi": "TOI spēlē"}), hide_index=True, width="stretch")
                 if vg is not None:
                     g = vg[(vg["game_id"] == gid) & (vg["shotsAgainst"].fillna(0) > 0)].copy()
                     if not g.empty:
                         g["SV %"] = (g["saves"] / g["shotsAgainst"] * 100).round(1)
                         st.markdown("**Vārtsargi**")
-                        st.dataframe(g[["vards", "team", "saves", "shotsAgainst", "SV %", "decision"]].rename(columns={
+                        rtabula(g[["vards", "team", "saves", "shotsAgainst", "SV %", "decision"]].rename(columns={
                             "vards": "Vārtsargs", "team": "Komanda", "saves": "Atvairīti",
-                            "shotsAgainst": "Metieni pret", "decision": "Rezultāts"}), hide_index=True, width="stretch")
+                            "shotsAgainst": "Metieni pret", "decision": "Iznākums"}), hide_index=True, width="stretch")
 
 
 # ============================================================================
@@ -808,7 +950,7 @@ def lapa_speletaji():
                 L = L[L["Poz"].isin(["C", "L", "R", "W"])]
             elif poz == "Aizsargi":
                 L = L[L["Poz"] == "D"]
-            st.dataframe(L.sort_values(kartot, ascending=False).head(60), hide_index=True, width="stretch",
+            rtabula(L.sort_values(kartot, ascending=False).head(60), hide_index=True, width="stretch",
                          column_config={"playerId": None,
                                         "TOI": st.column_config.NumberColumn("TOI (min)", format="%.1f"),
                                         "P_sp": st.column_config.NumberColumn("P/sp", format="%.2f")})
@@ -824,11 +966,12 @@ def lapa_speletaji():
             if kom != "Visas komandas":
                 G = G[G["Komanda"] == kom]
             G = G[G["GP"] >= min_sp]
-            st.dataframe(G.sort_values("SVpct", ascending=False), hide_index=True, width="stretch",
+            rtabula(G.sort_values("SVpct", ascending=False).rename(columns={"TOI": "TOI_kopa"}),
+                         hide_index=True, width="stretch",
                          column_config={"playerId": None,
                                         "SVpct": st.column_config.NumberColumn("SV %", format="%.1f"),
                                         "GAA": st.column_config.NumberColumn("GAA", format="%.2f"),
-                                        "TOI": st.column_config.NumberColumn("TOI (min)", format="%.0f")})
+                                        "TOI_kopa": st.column_config.NumberColumn("TOI kopā (min)", format="%.0f")})
 
 
 
@@ -876,13 +1019,13 @@ def lapa_tiesnesi():
             "Noraid./sp šosezon": t["kopa_t"], "Noraid./sp pagājušajā": t["kopa_p"],
             "Kombinētais": t["kopa"], "Pret līgu": t["kopa_vs_liga"],
             "Mājas komanda": t["majas"], "Viesu komanda": t["viesi"],
-            "1. per.": t["p1"], "2. per.": t["p2"], "3. per.": t["p3"], "Datu apjoms": t["dati"]})
+            "Noraid. 1. per.": t["p1"], "Noraid. 2. per.": t["p2"], "Noraid. 3. per.": t["p3"], "Datu apjoms": t["dati"]})
         fm = st.column_config.NumberColumn(format="%.2f")
-        st.dataframe(vis, hide_index=True, width="stretch",
+        rtabula(vis, hide_index=True, width="stretch",
                      height=min(900, 35 * (len(vis) + 1) + 3),
                      column_config={"Noraid./sp šosezon": fm, "Noraid./sp pagājušajā": fm, "Kombinētais": fm,
                                     "Mājas komanda": fm, "Viesu komanda": fm,
-                                    "1. per.": fm, "2. per.": fm, "3. per.": fm,
+                                    "Noraid. 1. per.": fm, "Noraid. 2. per.": fm, "Noraid. 3. per.": fm,
                                     "Pret līgu": st.column_config.NumberColumn(format="%+.2f")})
         st.caption("Noraidījumi = abu komandu sodu skaits spēlē (bez kautiņiem), ko pieskaita katram spēles tiesnesim. "
                    "Datu apjoms: Maz datu < 8 spēles, Vidēji 8–19, Pietiekami 20+ (abas sezonas kopā).")
@@ -916,7 +1059,7 @@ def lapa_tiesnesi():
         else:
             vards = st.selectbox("Tiesnesis", sorted(cur.loc[cur["loma"] == "referee", "vards"].unique()), key="ti_sel")
             sp = da.tiesnesu_speles(cur, vards)
-            st.dataframe(pd.DataFrame({
+            rtabula(pd.DataFrame({
                 "Datums": pd.to_datetime(sp["datums"]).dt.strftime("%d.%m.%Y"),
                 "Spēle": sp["away_team"] + " @ " + sp["home_team"],
                 "Noraid. mājas": sp["pen_home"], "Noraid. viesi": sp["pen_away"], "Kopā": sp["pen_total"],
