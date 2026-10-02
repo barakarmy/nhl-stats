@@ -193,6 +193,12 @@ POMOC = {
     "Back-to-back": "Jā = spēle nākamajā kalendārajā dienā (pēc ASV austrumu laika) pēc iepriekšējās spēles",
     "Spēles 7 dienās": "Komandas spēļu skaits pēdējās 7 dienās pirms šīs spēles",
     "Slodzes indekss": "Vienkārša heiristika: back-to-back, ceļojuma garums, laika joslu maiņa un daudz spēļu nedēļā. Jo lielāks, jo vairāk noguruma. Svarus var mainīt failā lokacijas.py",
+    # karstie spēlētāji
+    "Statuss": "🔥🔥 = ļoti karsts (indekss ≥ 3), 🔥 = karsts (indekss ≥ 2)",
+    "Sp. logā": "Spēļu skaits izvēlētajā logā (pēdējās N spēles; ja spēlētājs nospēlējis mazāk, visas viņa spēles)",
+    "Sērija": "Spēles pēc kārtas (skaitot no jaunākās), kurās spēlētājs guvis vismaz vienu izvēlēto rādītāju",
+    "Sezona īsumā": "Sezonas kopsavilkums: spēles, vārti (G), piespēles (A), punkti (P), metieni vārtos",
+    "Kāpēc karsts": "Automātisks īss paskaidrojums: rezultāts logā, sērija, metieni un šaušanas %, laiks laukumā",
     # kalendārs
     "Laiks (Rīga)": "Spēles sākuma laiks pēc Rīgas laika",
     "Galvenie tiesneši": "Spēlei piešķirtie galvenie tiesneši (NHL tos paziņo dažas stundas pirms spēles)",
@@ -1168,11 +1174,98 @@ def lapa_tiesnesi():
                 "PIM min": sp["pim_home"] + sp["pim_away"]}), hide_index=True, width="stretch")
 
 # ============================================================================
+# LAPA: KARSTĀKIE SPĒLĒTĀJI
+# ============================================================================
+def lapa_karstie():
+    st.title("🔥 Karstākie spēlētāji")
+    sk = ielasit_papildu("speletaji", VERSIJA)
+    if sk is None:
+        st.info("Spēlētāju dati (dati/speletaji.csv) vēl nav pieejami.")
+        return
+
+    with st.expander("ℹ️ Kā tiek noteikts, ka spēlētājs ir karsts?"):
+        st.markdown(
+            "- **Salīdzina ar gaidāmo.** Aprēķina, cik punktu (vārtu / piespēļu) spēlētājam būtu jāiegūst pēdējās N spēlēs, "
+            "ņemot vērā viņa iepriekšējo vidējo (pievilktu pie līgas vidējā uzbrucējiem vai aizsargiem, ja spēļu ir maz).\n"
+            "- **Karstuma indekss** = (faktiskais − gaidāmais) / √gaidāmais. 0 ir parasts līmenis, 2 un vairāk ir karsts (🔥), 3 un vairāk ir ļoti karsts (🔥🔥). "
+            "Indekss ņem vērā izlases lielumu, tāpēc īss uzliesmojums nedod augstu vērtību.\n"
+            "- **Vienas spēles nepietiek.** Spēlētājam jābūt vismaz izvēlētajam spēļu skaitam logā un rādītājam jābūt vismaz divās dažādās spēlēs.\n"
+            "- **Papildu signāli:** sērija (spēles pēc kārtas ar rādītāju), metienu skaits un šaušanas % (vai rezultāts ir pamatots, vai tā ir veiksme) "
+            "un laiks laukumā (vai loma ir augusi).\n"
+            "- **Gaidāmais nākamajā spēlē** = 75% sezonas vidējais + 25% pēdējo spēļu vidējais (abi pievilkti pie līgas vidējā). "
+            "Hokejā karstumam ir neliela noturība: lielu daļu uzliesmojumu veido veiksme, tāpēc prognoze ir piesardzīga.\n"
+            "- Punkti = vārti + piespēles (G+A), tāpēc atsevišķa G+A kolonna nav vajadzīga.")
+
+    max_gp = int(sk.groupby("playerId").size().max())
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        metrika = izvele("Rādītājs", ["Punkti", "Vārti", "Piespēles"], key="ks_m")
+    with c2:
+        logs_t = izvele("Logs", ["Pēdējās 3", "Pēdējās 5", "Pēdējās 10"], default="Pēdējās 5", key="ks_l")
+    with c3:
+        min_sp = st.slider("Minimālais spēļu skaits logā", 2, 10, max(2, min(3, max_gp)), key="ks_min",
+                           help="Viena spēle nekad netiek ņemta vērā; agrā sezonā logā var būt mazāk spēļu")
+    d1, d2 = st.columns(2)
+    komandas = ["Visas komandas"] + sorted(da.KOMANDAS)
+    kom = d1.selectbox("Komanda", komandas, key="ks_kom",
+                       format_func=lambda x: x if x == "Visas komandas" else komandas_etikete(x))
+    with d2:
+        poz = izvele("Pozīcija", ["Visi", "Uzbrucēji", "Aizsargi"], key="ks_poz")
+
+    mkods = {"Punkti": "punkti", "Vārti": "vardi", "Piespēles": "piespeles"}[metrika]
+    nos = {"punkti": "punkti", "vardi": "vārti", "piespeles": "piespēles"}[mkods]
+    logs = int(logs_t.split()[-1])
+    res = da.karstie_speletaji(sk, mkods, logs, min_sp)
+    res = res[res["z"].notna()] if not res.empty else res
+    if not res.empty and kom != "Visas komandas":
+        res = res[res["Komanda"] == kom]
+    if not res.empty and poz != "Visi":
+        res = res[res["grupa"] == ("D" if poz == "Aizsargi" else "F")]
+    if res.empty:
+        st.info("Nav spēlētāju, kas atbilst nosacījumiem (nepietiek spēļu vai rādītājs bijis tikai vienā spēlē). "
+                "Pamēģini samazināt minimālo spēļu skaitu vai izvēlēties garāku logu.")
+        return
+    res = res.head(50)
+
+    ind = f"Karstuma indekss ({nos})"
+    vid_w, vid_s = f"{metrika} spēlē logā", f"{metrika} spēlē sezonā"
+    gaid = f"Gaidāmie {nos} nākamajā spēlē"
+    vis = pd.DataFrame({
+        "Spēlētājs": res["Speletajs"].values, "Komanda": res["Komanda"].values, "Poz": res["Poz"].values,
+        "Statuss": np.where(res["z"] >= 3, "🔥🔥", np.where(res["z"] >= 2, "🔥", "–")),
+        "Sp. logā": res["n_w"].astype(int).values,
+        "G": res["G_w"].astype(int).values, "A": res["A_w"].astype(int).values, "P": res["P_w"].astype(int).values,
+        vid_w: res["vid_w"].values, vid_s: res["vid_sez"].values,
+        "Sērija": res["serija"].astype(int).values,
+        ind: res["z"].values, gaid: res["gaidamie_nakamaja"].values,
+        "Sezona īsumā": [f"{int(r.GP)} sp · {int(r.G_sez)}G {int(r.A_sez)}A {int(r.P_sez)}P · {int(r.SOG_sez)} metieni"
+                         for r in res.itertuples()],
+        "Kāpēc karsts": [da.karstuma_teksts(r, mkods) for _, r in res.iterrows()],
+    })
+    pask = {
+        "G": "Vārti izvēlētajā logā", "A": "Piespēles izvēlētajā logā", "P": "Punkti (vārti + piespēles) izvēlētajā logā",
+        vid_w: f"Vidēji {nos} spēlē izvēlētajā logā", vid_s: f"Vidēji {nos} spēlē visā sezonā",
+        ind: f"Faktiskie {nos} logā pret gaidāmajiem (z-vērtība): 0 = parasts līmenis, 2+ = karsts, 3+ = ļoti karsts. "
+             "Netiek rēķināts, ja logā ir pārāk maz spēļu vai rādītājs bijis tikai vienā spēlē",
+        gaid: f"Piesardzīgs novērtējums: 75% sezonas vidējais + 25% pēdējo spēļu vidējais ({nos} spēlē), pievilkti pie līgas vidējā",
+    }
+    rtabula(vis, hide_index=True, width="stretch", height=min(900, 35 * (len(vis) + 1) + 3), paskaidr=pask,
+            column_config={vid_w: st.column_config.NumberColumn(format="%.2f"),
+                           vid_s: st.column_config.NumberColumn(format="%.2f"),
+                           ind: st.column_config.ProgressColumn(ind, min_value=0, max_value=5, format="%.1f"),
+                           gaid: st.column_config.NumberColumn(format="%.2f"),
+                           "Kāpēc karsts": st.column_config.TextColumn(width="large")})
+    st.caption(f"Logs: {logs_t.lower()} (ja spēlētājs nospēlējis mazāk, tiek ņemtas visas viņa spēles). "
+               "Sezonas sākumā izlase ir maza, tāpēc rangs var strauji mainīties. Tā ir statistikas indikācija, nevis garantija.")
+
+
+# ============================================================================
 # NAVIGĀCIJA
 # ============================================================================
 lapas = st.navigation({
     "Prognozes un pārskats": [
-        st.Page(lapa_prognozes, title="Prognozes", icon="🎯", url_path="prognozes", default=True),
+        st.Page(lapa_karstie, title="Karstākie spēlētāji", icon="🔥", url_path="karstie", default=True),
+        st.Page(lapa_prognozes, title="Prognozes", icon="🎯", url_path="prognozes"),
         st.Page(lapa_parskats, title="Līgas pārskats", icon="📋", url_path="parskats"),
         st.Page(lapa_salidzinat, title="Salīdzināt komandas", icon="⚔️", url_path="salidzinat"),
     ],
