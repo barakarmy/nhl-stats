@@ -214,13 +214,13 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 /* Datuma lauks: pats Streamlit lauks ir neredzams (opacity 0), bet aizpilda visu rāmīti un saņem klikšķus, tāpēc kalendārs atveras uzreiz;
    redzamo izskatu (balts fons, apmale, centrēts treknraksts) zīmējam mēs, tāpēc tas izskatās kā blakus pogas un nav atkarīgs no Streamlit iekšējās struktūras.
    Datuma tekstu ieliek ::after satura vērtībā (to uzstāda Python katrā izpildē). */
-.st-key-datums_josla > .st-key-datums_lauks { position: relative; width: 10rem !important; height: 2.5rem; flex: 0 0 auto;
-  background: #ffffff; border: 1px solid rgba(49,51,63,.2); border-radius: 10px; box-sizing: border-box; transition: border-color .15s ease; cursor: pointer; }
-.st-key-datums_lauks > div { position: absolute; inset: 0; width: 100% !important; height: 100% !important; opacity: 0; }
+.st-key-datums_lauks { position: relative !important; width: 10rem !important; height: 2.5rem; flex: 0 0 auto; overflow: hidden; box-sizing: border-box;
+  background: #ffffff; border: 1px solid rgba(49,51,63,.2); border-radius: 10px; transition: border-color .15s ease; cursor: pointer; }
+.st-key-datums_lauks > * { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; margin: 0 !important; opacity: 0; }
 .st-key-datums_lauks::after { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-size: 1rem; font-weight: 700; letter-spacing: .01em; }
-.st-key-datums_josla > .st-key-datums_lauks:hover, .st-key-datums_josla > .st-key-datums_lauks:focus-within { border-color: #3b82f6; }
-@media (prefers-color-scheme: dark) { .st-key-datums_josla > .st-key-datums_lauks { background: #0e1117; border-color: rgba(250,250,250,.2); } }
+.st-key-datums_lauks:hover, .st-key-datums_lauks:focus-within { border-color: #3b82f6; }
+@media (prefers-color-scheme: dark) { .st-key-datums_lauks { background: #0e1117; border-color: rgba(250,250,250,.2); } }
 
 /* ===== Mobilā versija ===== */
 @media (max-width: 768px) {
