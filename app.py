@@ -1165,8 +1165,6 @@ def lapa_rezultati():
 
     dat = st.session_state["rez_datums"]
     st.markdown(f"#### {da.DIENAS[dat.weekday()]}, {dat:%d.%m.%Y}")
-    st.caption("Rezultāta cipari: zaļš = uzvarētājs, sarkans = zaudētājs (pamatlaikā izšķirtas spēles). "
-               "Ja spēle gāja uz papildlaiku, cipara apakšā ir oranžs (neizšķirts pamatlaikā), bet augšā zaļš/sarkans (uzvarētājs/zaudētājs).")
     dienas_speles = RAW[datumi == dat].sort_values(["sakums_lv", "game_id"])
     if dienas_speles.empty:
         st.info("Šajā datumā nav noslēgušos spēļu.")
@@ -1447,7 +1445,7 @@ def lapa_karstie():
     vid_w, vid_s = f"{metrika} spēlē logā", f"{metrika} spēlē sezonā"
     gaid = f"Gaidāmie {nos} nākamajā spēlē"
     vis = pd.DataFrame({
-        "Spēlētājs": res["Speletajs"].values, "Komanda": res["Komanda"].values, "Poz": res["Poz"].values,
+        "Spēlētājs": res["Speletajs"].values, "Komanda": [da.logo_url(k) for k in res["Komanda"]], "Poz": res["Poz"].values,
         "Statuss": np.where(res["z"] >= 3, "🔥🔥", np.where(res["z"] >= 2, "🔥", "–")),
         "Sp. logā": res["n_w"].astype(int).values,
         "G": res["G_w"].astype(int).values, "A": res["A_w"].astype(int).values, "P": res["P_w"].astype(int).values,
@@ -1470,6 +1468,7 @@ def lapa_karstie():
                            vid_s: st.column_config.NumberColumn(format="%.2f"),
                            ind: st.column_config.ProgressColumn(ind, min_value=0, max_value=5, format="%.1f"),
                            gaid: st.column_config.NumberColumn(format="%.2f"),
+                           "Komanda": st.column_config.ImageColumn("Komanda", width="small"),
                            "Kāpēc karsts": st.column_config.TextColumn(width="large")})
     st.caption(f"Logs: {logs_t.lower()} (ja spēlētājs nospēlējis mazāk, tiek ņemtas visas viņa spēles). "
                "Sezonas sākumā izlase ir maza, tāpēc rangs var strauji mainīties. Tā ir statistikas indikācija, nevis garantija.")
