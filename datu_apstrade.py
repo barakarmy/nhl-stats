@@ -586,3 +586,102 @@ def planotie_vardi(plan, game_id):
         return []
     r = plan[(plan["game_id"] == game_id) & (plan["loma"] == "referee")]
     return r["vards"].tolist()
+
+
+# ----------------------------------------------------------------------------
+# KARSTIE SPĒLĒTĀJI
+# ----------------------------------------------------------------------------
+KARSTUMA_METRIKAS = {"punkti": "points", "vardi": "goals", "piespeles": "assists"}   # points = vārti + piespēles
+
+
+def _trailing_serija(vertibas):
+    """Cik spēles pēc kārtas (skaitot no jaunākās) rādītājs ir vismaz 1."""
+    n = 0
+    for v in vertibas[::-1]:
+        if v >= 1:
+            n += 1
+        else:
+            break
+    return n
+
+
+def karstie_speletaji(sk, metrika="punkti", logs=5, min_speles=3, k=10, min_speles_ar_raditaju=2):
+    """
+    Spēlētāju "karstuma" novērtējums pēc pēdējo `logs` spēļu rezultātiem (no speletaji.csv).
+
+    Loģika (vienkārša, izskaidrojama):
+      1. Gaidāmais rādītājs logā E = spēlētāja iepriekšējo spēļu vidējais (pievilkts pie līgas vidējā savā pozīcijā ar K spēlēm)
+         × spēļu skaits logā. Spēlētājam bez vēstures E ir pozīcijas (uzbrucēju/aizsargu) līgas vidējais.
+      2. Karstuma indekss z = (faktiskais - E) / sqrt(max(E, 0.5)): tas ņem vērā izlases lielumu, tāpēc 1-2 spēles nevar dot
+         augstu indeksu, ja nav pietiekami daudz atkārtojumu.
+      3. Prasības: vismaz `min_speles` spēles logā un rādītājs vismaz `min_speles_ar_raditaju` dažādās spēlēs
+         (viena "uzspridzināta" spēle netiek uzskatīta par karstumu).
+      4. Papildu signāli: sērija (spēles pēc kārtas ar rādītāju), metienu skaits un šaušanas % (vai rezultāts ir pamatots
+         ar metieniem vai veiksmi), laiks laukumā (vai loma ir augusi).
+      5. Gaidāmais rādītājs nākamajā spēlē = 75% sezonas vidējais (pievilkts pie līgas) + 25% loga vidējais (pievilkts).
+         Hokejā "karstumam" ir neliela noturība, tāpēc svars ir mazs.
+    Atgriež DataFrame (viena rinda uz spēlētāju), kārtotu pēc karstuma indeksa (dilstoši).
+    """
+    if sk is None or sk.empty:
+        return pd.DataFrame()
+    col = KARSTUMA_METRIKAS[metrika]
+    x = sk.copy()
+    x["toi_min"] = x["toi"].map(toi_minutes)
+    x["_dat"] = pd.to_datetime(x["datums"], errors="coerce")
+    x = x.sort_values(["playerId", "_dat", "game_id"]).reset_index(drop=True)
+    x["_no_gala"] = x.groupby("playerId").cumcount(ascending=False)       # 0 = jaunākā spēle
+    x["grupa"] = np.where(x["pozicija"] == "D", "D", "F")
+    liga = x.groupby("grupa")[col].mean()
+
+    g = x.groupby("playerId")
+    out = pd.DataFrame({
+        "Speletajs": g["vards"].last(), "Komanda": g["team"].last(), "Poz": g["pozicija"].last(),
+        "grupa": g["grupa"].last(), "GP": g.size(),
+        "G_sez": g["goals"].sum(), "A_sez": g["assists"].sum(), "P_sez": g["points"].sum(), "SOG_sez": g["sog"].sum(),
+        "m_sez": g[col].sum(), "toi_sez": g["toi_min"].mean(),
+        "serija": g[col].agg(lambda s: _trailing_serija(s.fillna(0).values)),
+    })
+    w = x[x["_no_gala"] < logs].groupby("playerId")
+    pr = x[x["_no_gala"] >= logs].groupby("playerId")
+    out["n_w"] = w.size().reindex(out.index).fillna(0).astype(int)
+    for nos, c in (("G_w", "goals"), ("A_w", "assists"), ("P_w", "points"), ("SOG_w", "sog"), ("m_w", col)):
+        out[nos] = w[c].sum().reindex(out.index).fillna(0)
+    out["toi_w"] = w["toi_min"].mean().reindex(out.index)
+    out["spel_ar"] = w[col].agg(lambda s: int((s.fillna(0) >= 1).sum())).reindex(out.index).fillna(0).astype(int)
+    out["n_p"] = pr.size().reindex(out.index).fillna(0)
+    out["m_p"] = pr[col].sum().reindex(out.index).fillna(0)
+
+    liga_s = out["grupa"].map(liga)
+    pirms = (out["m_p"] + k * liga_s) / (out["n_p"] + k)                      # iepriekšējo spēļu vidējais (pievilkts)
+    out["gaidamais_logaa"] = pirms * out["n_w"]
+    out["z"] = (out["m_w"] - out["gaidamais_logaa"]) / np.sqrt(np.maximum(out["gaidamais_logaa"], 0.5))
+    sezona_s = (out["m_sez"] + k * liga_s) / (out["GP"] + k)
+    loga_s = (out["m_w"] + 5 * liga_s) / (out["n_w"] + 5)
+    out["gaidamie_nakamaja"] = 0.75 * sezona_s + 0.25 * loga_s
+    out["vid_sez"] = out["m_sez"] / out["GP"]
+    out["vid_w"] = out["m_w"] / out["n_w"].where(out["n_w"] > 0)
+
+    derigi = (out["n_w"] >= min_speles) & (out["spel_ar"] >= min_speles_ar_raditaju)
+    out["z"] = out["z"].where(derigi)                                           # nederīgiem indekss nav aprēķināts
+    return out[out["n_w"] >= min_speles].sort_values("z", ascending=False, na_position="last")
+
+
+def karstuma_teksts(r, metrika="punkti"):
+    """Īss paskaidrojums, kāpēc spēlētājs tiek uzskatīts par karstu (viena rinda no karstie_speletaji)."""
+    nos = {"punkti": "punkti", "vardi": "vārti", "piespeles": "piespēles"}[metrika]
+    daudz = f"{int(r['m_w'])} {nos} {int(r['n_w'])} spēlēs ({r['vid_w']:.2f} spēlē; sezonā {r['vid_sez']:.2f})"
+    daļas = [daudz]
+    if r["spel_ar"] >= 2:
+        daļas.append(f"rādītājs {int(r['spel_ar'])} no {int(r['n_w'])} spēlēm")
+    if r["serija"] >= 3:
+        daļas.append(f"sērija {int(r['serija'])} spēles pēc kārtas")
+    if r["n_w"] > 0 and r["GP"] > r["n_w"]:
+        sog_w, sog_s = r["SOG_w"] / r["n_w"], r["SOG_sez"] / r["GP"]
+        if metrika in ("punkti", "vardi"):
+            if sog_s > 0 and sog_w >= sog_s * 1.15:
+                daļas.append(f"metienu skaits audzis ({sog_w:.1f} pret {sog_s:.1f} spēlē), tāpēc rezultāts pamatots")
+            elif r["SOG_w"] > 0 and r["G_w"] / r["SOG_w"] > max(0.25, 1.8 * r["G_sez"] / max(r["SOG_sez"], 1)):
+                daļas.append("šaušanas % ļoti augsts, daļa var būt veiksme")
+        if pd.notna(r["toi_w"]) and pd.notna(r["toi_sez"]) and r["toi_w"] - r["toi_sez"] >= 1.0:
+            daļas.append(f"laiks laukumā +{r['toi_w'] - r['toi_sez']:.1f} min")
+    return "; ".join(daļas)
