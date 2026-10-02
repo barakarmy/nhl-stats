@@ -8,6 +8,8 @@ Ja speles.csv vēl nav, tiek izmantots vecais nhl_sezona.csv.
 """
 from __future__ import annotations
 
+import re
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -43,6 +45,7 @@ PAPILDU_SKAITLI = {
                   "sog", "faceoffWinningPctg", "blockedShots", "shifts", "giveaways", "takeaways"),
     "vartsargi": ("numurs", "shotsAgainst", "saves", "goalsAgainst", "savePctg", "pim"),
     "varti": (),
+    "tiesnesi": ("pen_home", "pen_away", "pen_total", "pim_home", "pim_away"),
 }
 
 
@@ -67,8 +70,9 @@ def beigu_etikete(beigas):
 
 def datu_versija():
     """Faila izmaiņu laiki (kešatmiņas atslēga: kad fails mainās, dati tiek pārlasīti)."""
-    celi = [DATU_MAPE / n for n in ("speles.csv", "speletaji.csv", "vartsargi.csv", "varti.csv")]
-    celi += [BASE / "nhl_sezona.csv", BASE / "nhl_kalendars.csv"]
+    celi = [DATU_MAPE / n for n in ("speles.csv", "speletaji.csv", "vartsargi.csv", "varti.csv",
+                                    "tiesnesi.csv", "tiesnesi_pagajusa.csv", "referees_lastseason.csv")]
+    celi += [BASE / "nhl_sezona.csv", BASE / "nhl_kalendars.csv", BASE / "referees_lastseason.csv"]
     return tuple(c.stat().st_mtime if c.exists() else 0 for c in celi)
 
 
@@ -332,3 +336,194 @@ def vartsargu_lideri(vg):
     out["SVpct"] = out["SV"] / out["SA"].where(out["SA"] > 0) * 100
     out["GAA"] = out["GA"] * 60 / out["TOI"].where(out["TOI"] > 0)
     return out.reset_index()
+
+
+# ----------------------------------------------------------------------------
+# TIESNEŠI
+# ----------------------------------------------------------------------------
+# Pagājušās sezonas fails: dati/referees_lastseason.csv (vai dati/tiesnesi_pagajusa.csv, vai tas pats fails saknē)
+TIESNESU_METRIKAS = ("kopa", "majas", "viesi", "p1", "p2", "p3")   # noraidījumi spēlē: kopā, mājas, viesu komanda, pa periodiem
+
+_ALIASI = {
+    "vards": ("vards", "name", "referee", "official", "tiesnesis", "tiesnesa_vards"),
+    "speles": ("speles", "gp", "games", "games_count", "games_officiated"),
+    "liga": ("league_avg_default", "league_avg", "liga_vid"),
+}
+# metrika: (kolonnas ar kopsummu / vērtību spēlē, kolonnas ar vidējo spēlē)
+_METR_ALIASI = {
+    "kopa": (("noraid_kopa", "penalties", "total_penalties", "pen_total", "noraidijumi_kopa"),
+             ("noraid_sp", "pen_per_game", "penalties_per_game", "noraidijumi_spele", "avg_pen_per_game")),
+    "majas": (("noraid_majas", "home_penalties", "pen_home"), ("home_avg", "avg_home_pen")),
+    "viesi": (("noraid_viesi", "away_penalties", "pen_away"), ("away_avg", "avg_away_pen")),
+    "p1": (("pen_p1",), ("p1_avg", "avg_p1")),
+    "p2": (("pen_p2",), ("p2_avg", "avg_p2")),
+    "p3": (("pen_p3",), ("p3_avg", "avg_p3")),
+}
+
+
+def _pagajusie_faili():
+    return (DATU_MAPE / "referees_lastseason.csv", DATU_MAPE / "tiesnesi_pagajusa.csv", BASE / "referees_lastseason.csv")
+
+
+def atslega(vards):
+    """Vārda atslēga salīdzināšanai: pirmais burts + uzvārds ('Wes McCauley' = 'W. McCauley')."""
+    s = unicodedata.normalize("NFKD", str(vards)).encode("ascii", "ignore").decode().lower()
+    s = re.sub(r"[^a-z\s-]", " ", s.replace("'", ""))
+    dalas = [d for d in s.split() if d not in ("jr", "sr", "ii", "iii")]
+    return f"{dalas[0][0]} {dalas[-1]}" if dalas else ""
+
+
+def ielasit_pagajuso_tiesnesus():
+    """
+    Pagājušās sezonas tiesnešu dati. Atgriež (DataFrame vai None, paziņojums).
+    DataFrame kolonnas: key, vards, GP, kopa, majas, viesi, p1, p2, p3, liga_kopa
+    (noraidījumi spēlē vidēji; kolonnas, kuru failā nav, ir NaN).
+    Formāts A (viena rinda uz tiesnesi): referee, games_count, avg_pen_per_game, p1_avg, p2_avg, p3_avg, league_avg_default
+    Formāts B (viena rinda uz spēli un tiesnesi): vards, game_id, pen_total [, pen_home, pen_away, pen_p1..3]
+    """
+    fails = next((c for c in _pagajusie_faili() if c.exists()), None)
+    if fails is None:
+        return None, ""
+    df = pd.read_csv(fails)
+    df.columns = [str(c).strip().lower() for c in df.columns]
+
+    def kol(aliasi):
+        return next((c for c in df.columns if c in aliasi), None)
+
+    sagaidamas = "referee, games_count, avg_pen_per_game (neobligāti p1_avg, p2_avg, p3_avg, league_avg_default)"
+    k_vards, k_speles, k_liga = kol(_ALIASI["vards"]), kol(_ALIASI["speles"]), kol(_ALIASI["liga"])
+    if k_vards is None:
+        return None, f"Pagājušās sezonas failā ({fails.name}) nav kolonnas ar tiesneša vārdu. Sagaidāmās kolonnas: {sagaidamas}."
+    par_spele = "game_id" in df.columns
+    if not par_spele and k_speles is None:
+        return None, f"Pagājušās sezonas failā ({fails.name}) nav spēļu skaita kolonnas. Sagaidāmās kolonnas: {sagaidamas}."
+
+    df["key"] = df[k_vards].map(atslega)
+    df = df[df["key"] != ""].copy()
+    gp = pd.to_numeric(df[k_speles], errors="coerce") if k_speles else pd.Series(np.nan, index=df.index)
+    vert = {}
+    for m, (summ, vid) in _METR_ALIASI.items():
+        c_sum, c_vid = kol(summ), kol(vid)
+        if c_sum:
+            vert[m] = pd.to_numeric(df[c_sum], errors="coerce")
+        elif c_vid and not par_spele:
+            vert[m] = pd.to_numeric(df[c_vid], errors="coerce") * gp      # vidējais × spēles = kopsumma
+    if "kopa" not in vert:
+        return None, f"Pagājušās sezonas failā ({fails.name}) nav noraidījumu kolonnas. Sagaidāmās kolonnas: {sagaidamas}."
+
+    d = pd.DataFrame({"key": df["key"], "vards": df[k_vards], **vert})
+    if par_spele:                                    # formāts B
+        d["game_id"] = df["game_id"]
+        g = d.groupby("key")
+        out = pd.DataFrame({"vards": g["vards"].last(), "GP": g["game_id"].nunique()})
+        for m in TIESNESU_METRIKAS:
+            out[m] = g[m].mean() if m in vert else np.nan
+    else:                                            # formāts A
+        d["GP"] = gp
+        d = d[d["GP"] > 0]
+        g = d.groupby("key")
+        out = pd.DataFrame({"vards": g["vards"].last(), "GP": g["GP"].sum()})
+        for m in TIESNESU_METRIKAS:
+            out[m] = g[m].sum(min_count=1) / out["GP"] if m in vert else np.nan
+    liga = pd.to_numeric(df[k_liga], errors="coerce").dropna() if k_liga else pd.Series(dtype=float)
+    out["liga_kopa"] = float(liga.iloc[0]) if not liga.empty else np.nan
+    return out.reset_index(), ""
+
+
+def _kol(df, nos):
+    return df[nos] if nos in df.columns else pd.Series(np.nan, index=df.index)
+
+
+_TEK_KOL = {"kopa": "pen_total", "majas": "pen_home", "viesi": "pen_away", "p1": "pen_p1", "p2": "pen_p2", "p3": "pen_p3"}
+
+
+def _tiesnesu_tek_agregats(cur):
+    r = cur[cur["loma"] == "referee"] if "loma" in cur.columns else cur
+    r = r.assign(key=r["vards"].map(atslega))
+    g = r.groupby("key")
+    out = pd.DataFrame({"vards": g["vards"].last(), "GP": g["game_id"].nunique()})
+    for m, c in _TEK_KOL.items():
+        out[m] = g[c].mean() if c in r.columns else np.nan
+    return out
+
+
+def _liga_tek(cur):
+    r = cur[cur["loma"] == "referee"] if "loma" in cur.columns else cur
+    spele = r.drop_duplicates("game_id")
+    return {m: (spele[c].mean() if c in spele.columns else np.nan) for m, c in _TEK_KOL.items()}
+
+
+def _liga_prev(prev):
+    out = {}
+    for m in TIESNESU_METRIKAS:
+        ok = prev[m].notna()
+        out[m] = float((prev.loc[ok, m] * prev.loc[ok, "GP"]).sum() / prev.loc[ok, "GP"].sum()) if ok.any() else np.nan
+    if "liga_kopa" in prev.columns and prev["liga_kopa"].notna().any():      # failā norādītais līgas vidējais
+        out["kopa"] = float(prev["liga_kopa"].dropna().iloc[0])
+    return out
+
+
+def _shrink(n, avg, liga, k):
+    """Pievelk tiesneša vidējo pie līgas vidējā: maz spēļu -> tuvāk līgai, daudz spēļu -> tuvāk paša vidējam."""
+    n = n.where(avg.notna(), 0)
+    return (n * avg.fillna(0) + k * liga) / (n + k) if (k > 0) else avg.fillna(liga)
+
+
+def tiesnesu_apkopojums(cur, prev, w_prev=0.6, k=10):
+    """
+    Kombinētais noraidījumu rādītājs katram tiesnesim (kopā, mājas/viesu komandai, pa periodiem):
+        kombinets = w_prev * pagājušā_sezona + (1 - w_prev) * šosezona,
+    kur katra sezonas komponente ir pievilkta pie līgas vidējā ar K "papildu spēlēm"
+    (jaunam tiesnesim vai ar maz spēlēm komponente ≈ līgas vidējais).
+    Atgriež (tabula ar indeksu key, {"t": līga šosezon, "p": līga pagājušā, "blend": līga kombinētā}).
+    """
+    tuks = pd.DataFrame(columns=["vards", "GP", *TIESNESU_METRIKAS]).astype({"GP": float})
+    t = _tiesnesu_tek_agregats(cur) if cur is not None and not cur.empty else tuks
+    p = prev.set_index("key") if prev is not None and not prev.empty else tuks
+    nan = {m: np.nan for m in TIESNESU_METRIKAS}
+    liga_t = _liga_tek(cur) if cur is not None and not cur.empty else dict(nan)
+    liga_p = _liga_prev(p.reset_index()) if not p.empty else dict(nan)
+    for m in TIESNESU_METRIKAS:        # ja vienas sezonas nav, izmanto otras līgas vidējo
+        if pd.isna(liga_t[m]):
+            liga_t[m] = liga_p[m]
+        if pd.isna(liga_p[m]):
+            liga_p[m] = liga_t[m]
+
+    keys = t.index.union(p.index)
+    tab = pd.DataFrame(index=keys)
+    tab["vards"] = t["vards"].reindex(keys).fillna(p["vards"].reindex(keys))
+    gp_t = t["GP"].reindex(keys).fillna(0).astype(float)
+    gp_p = p["GP"].reindex(keys).fillna(0).astype(float)
+    tab["GP_t"], tab["GP_p"] = gp_t.astype(int), gp_p.astype(int)
+    liga_bl = {}
+    for m in TIESNESU_METRIKAS:
+        avg_t, avg_p = t[m].reindex(keys).astype(float), p[m].reindex(keys).astype(float)
+        w = w_prev if (not p.empty and p[m].notna().any()) else 0.0
+        tab[f"{m}_t"], tab[f"{m}_p"] = avg_t, avg_p
+        tab[m] = w * _shrink(gp_p, avg_p, liga_p[m], k) + (1 - w) * _shrink(gp_t, avg_t, liga_t[m], k)
+        liga_bl[m] = w * liga_p[m] + (1 - w) * liga_t[m]
+    tab["kopa_vs_liga"] = tab["kopa"] - liga_bl["kopa"]
+    kopa_sp = tab["GP_t"] + tab["GP_p"]
+    tab["dati"] = np.where(kopa_sp >= 20, "Pietiekami", np.where(kopa_sp >= 8, "Vidēji", "Maz datu"))
+    return tab, {"t": liga_t, "p": liga_p, "blend": liga_bl}
+
+
+def tiesnesu_prognoze(tab, liga, vardi):
+    """Gaidāmie noraidījumi spēlē konkrētiem tiesnešiem (parasti 2); nezināmiem tiesnešiem - līgas vidējais."""
+    out = {}
+    for m in TIESNESU_METRIKAS:
+        vert = []
+        for v in vardi:
+            k = atslega(v)
+            ok = k in tab.index and pd.notna(tab.at[k, m])
+            vert.append(float(tab.at[k, m]) if ok else float(liga["blend"][m]))
+        out[m] = float(np.mean(vert)) if vert else float(liga["blend"][m])
+    return out
+
+
+def tiesnesu_speles(cur, vards):
+    """Konkrēta tiesneša spēles šosezon (no tiesnesi.csv)."""
+    if cur is None or cur.empty:
+        return pd.DataFrame()
+    r = cur[(cur["loma"] == "referee") & (cur["vards"].map(atslega) == atslega(vards))]
+    return r.sort_values("datums", ascending=False)
