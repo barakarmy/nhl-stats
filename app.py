@@ -194,19 +194,12 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .mc-name { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-size: 1.15rem; font-weight: 500; line-height: 1.2; }
 .mc-name.uzv-nos { font-weight: 800; }
 .mc-mid { display: flex; flex-direction: column; align-items: center; gap: .45rem; }
-.mc-score { display: flex; align-items: center; justify-content: center; gap: .55rem; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-  font-weight: 800; font-size: 3.5rem; line-height: .8; letter-spacing: -0.02em; padding: .45rem 0; }
-.mc-sep { opacity: .6; }
-/* cipari: pamatlaikā izšķirta spēle - zaļš (uzvarētājs) / sarkans (zaudētājs) pa visu ciparu, košāk apakšā;
-   spēle ar papildlaiku (neizšķirts pamatlaikā) - apakšā līdz vidum oranžs, augšā līdz vidum zaļš / sarkans (galīgais uzvarētājs / zaudētājs) */
-.sk { position: relative; display: inline-block; }
-.sk::after { content: attr(data-t); position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none;
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-.sk.uzv { --w: 34,197,94; } .sk.zaud { --w: 239,68,68; }
-.sk.reg::after { background-image: linear-gradient(to top, rgba(var(--w),1) 6%, rgba(var(--w),.38) 94%); }
-.sk.ot::after { background-image: linear-gradient(to top, rgba(245,158,11,1) 6%, rgba(245,158,11,0) 52%),
-                            linear-gradient(to bottom, rgba(var(--w),1) 6%, rgba(var(--w),0) 52%); }
-.sk.ot:not(.uzv):not(.zaud)::after { background-image: linear-gradient(to top, rgba(245,158,11,1) 6%, rgba(245,158,11,0) 52%); }
+.mc-score { display: flex; align-items: center; justify-content: center; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  font-weight: 800; font-size: 3.5rem; line-height: 0; padding: .45rem 0; }
+/* rezultāta cipari ir SVG teksts: pamatlīnija un krāsu pāreja nav atkarīgas no fonta metrikas, tāpēc apakšas netiek nogrieztas.
+   Pamatlaikā izšķirta spēle - zaļš (uzvarētājs) / sarkans (zaudētājs) pa visu ciparu; spēle ar papildlaiku - apakšā līdz vidum oranžs, augšā līdz vidum zaļš/sarkans */
+.mc-score svg { display: block; height: 1em; overflow: visible; }
+.mc-score text { font-family: inherit; font-weight: inherit; }
 .mc-outcome { font-size: .72rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; padding: .15rem .7rem;
   border-radius: 999px; border: 1px solid rgba(127,127,127,.45); opacity: .85; }
 .mc-lines { margin-top: .45rem; text-align: center; font-size: .88rem; opacity: .72; line-height: 1.75; }
@@ -1121,26 +1114,68 @@ def lapa_kalendars():
 # ============================================================================
 # LAPA: REZULTĀTI
 # ============================================================================
-def rez_kartite_html(away, home, at, ht, ra, rh, iznakums, linijas):
+def _rezultata_svg(at, ht, kl_a, kl_h, uid):
+    """
+    Rezultāts 'viesi : mājinieki' kā viens SVG (1 vienība = 1 em). Pamatlīnija ir y=0.84, cipara augša ~y=0.12, vidus ~y=0.48,
+    tāpēc krāsu pārejas "no apakšas līdz vidum" un "no augšas līdz vidum" nav atkarīgas no fonta metrikas.
+    kl: ("reg", "uzv"/"zaud") = krāsa pa visu ciparu; ("ot", "uzv"/"zaud"/"") = apakšā oranžs, augšā zaļš/sarkans.
+    """
+    KRASAS = {"uzv": (34, 197, 94), "zaud": (239, 68, 68), "oranzs": (245, 158, 11)}
+    PAMATLINIJA, AUGSA, VIDUS = 0.84, 0.12, 0.48
+    cipara_platums, kols, sprauga = 0.66, 0.3, 0.12
+    wa, wh = cipara_platums * len(str(at)), cipara_platums * len(str(ht))
+    W = wa + wh + kols + 2 * sprauga
+    xa, xk, xh = wa / 2, wa + sprauga + kols / 2, wa + 2 * sprauga + kols + wh / 2
+
+    def gradients(gid, krasa, rezims):
+        r, g, b = KRASAS[krasa]
+        c = f"rgb({r},{g},{b})"
+        if rezims == "pilns":           # no apakšas (nepārtraukts) uz augšu (38%)
+            return (f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" x1="0" y1="{PAMATLINIJA + .02}" x2="0" y2="{AUGSA}">'
+                    f'<stop offset="0" stop-color="{c}" stop-opacity="1"/><stop offset="1" stop-color="{c}" stop-opacity=".38"/></linearGradient>')
+        gala = AUGSA if rezims == "augsa" else PAMATLINIJA + .02          # "augsa": no augšas līdz vidum; "apakssa": no apakšas līdz vidum
+        return (f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" x1="0" y1="{gala}" x2="0" y2="{VIDUS}">'
+                f'<stop offset="0" stop-color="{c}" stop-opacity="1"/><stop offset="1" stop-color="{c}" stop-opacity="0"/></linearGradient>')
+
+    defs, teksti = "", ""
+    for nos, x, vert, (tips, rez) in (("a", xa, at, kl_a), ("h", xh, ht, kl_h)):
+        teksti += f'<text x="{x:.3f}" y="{PAMATLINIJA}" text-anchor="middle" font-size="1" fill="currentColor">{vert}</text>'
+        if tips == "reg":
+            gid = f"{uid}{nos}f"
+            defs += gradients(gid, rez, "pilns")
+            teksti += f'<text x="{x:.3f}" y="{PAMATLINIJA}" text-anchor="middle" font-size="1" fill="url(#{gid})">{vert}</text>'
+        else:
+            gb = f"{uid}{nos}b"
+            defs += gradients(gb, "oranzs", "apakssa")
+            teksti += f'<text x="{x:.3f}" y="{PAMATLINIJA}" text-anchor="middle" font-size="1" fill="url(#{gb})">{vert}</text>'
+            if rez:
+                gt = f"{uid}{nos}t"
+                defs += gradients(gt, rez, "augsa")
+                teksti += f'<text x="{x:.3f}" y="{PAMATLINIJA}" text-anchor="middle" font-size="1" fill="url(#{gt})">{vert}</text>'
+    kolons = f'<text x="{xk:.3f}" y="{PAMATLINIJA}" text-anchor="middle" font-size="1" fill="currentColor" fill-opacity=".6">:</text>'
+    return (f'<svg viewBox="0 0 {W:.3f} 1" style="width:{W:.3f}em" role="img" aria-label="{at} : {ht}" xmlns="http://www.w3.org/2000/svg">'
+            f'<defs>{defs}</defs>{teksti}{kolons}</svg>')
+
+
+def rez_kartite_html(away, home, at, ht, ra, rh, iznakums, linijas, uid="g"):
     """
     Spēles kartītes augša: [viesu nosaukums][logo] [rezultāts + iznākums] [logo][mājinieku nosaukums] un centrētas statistikas rindas.
     Ciparu krāsas: pamatlaikā izšķirta spēle - uzvarētājs zaļš, zaudētājs sarkans (pa visu ciparu);
     spēle ar papildlaiku (pamatlaikā neizšķirts) - cipara apakšējā puse oranža, augšējā puse zaļa/sarkana (galīgais uzvarētājs/zaudētājs).
     """
     if ra != rh:                                              # izšķirta pamatlaikā
-        kl_a, kl_h = ("sk reg uzv", "sk reg zaud") if ra > rh else ("sk reg zaud", "sk reg uzv")
+        kl_a, kl_h = (("reg", "uzv"), ("reg", "zaud")) if ra > rh else (("reg", "zaud"), ("reg", "uzv"))
     elif at == ht:                                            # neizšķirts arī galarezultātā (nav gaidāms)
-        kl_a = kl_h = "sk ot"
+        kl_a = kl_h = ("ot", "")
     else:                                                     # papildlaiks / pēcspēles metieni
-        kl_a, kl_h = ("sk ot uzv", "sk ot zaud") if at > ht else ("sk ot zaud", "sk ot uzv")
+        kl_a, kl_h = (("ot", "uzv"), ("ot", "zaud")) if at > ht else (("ot", "zaud"), ("ot", "uzv"))
     e = _html.escape
     return (
         '<div class="mc">'
         f'<div class="mc-team mc-away"><span class="mc-name{" uzv-nos" if at > ht else ""}">{e(da.pilns_nosaukums(away))}</span>'
         f'<img class="mc-logo" src="{e(da.logo_url(away))}" alt="{e(away)}"></div>'
         '<div class="mc-mid">'
-        f'<div class="mc-score"><span class="{kl_a}" data-t="{at}">{at}</span><span class="mc-sep">:</span>'
-        f'<span class="{kl_h}" data-t="{ht}">{ht}</span></div>'
+        f'<div class="mc-score">{_rezultata_svg(at, ht, kl_a, kl_h, "g" + str(uid))}</div>'
         f'<div class="mc-outcome">{e(iznakums)}</div></div>'
         f'<div class="mc-team mc-home"><img class="mc-logo" src="{e(da.logo_url(home))}" alt="{e(home)}">'
         f'<span class="mc-name{" uzv-nos" if ht > at else ""}">{e(da.pilns_nosaukums(home))}</span></div>'
@@ -1203,7 +1238,7 @@ def lapa_rezultati():
                     linijas.append(f"Papildlaiks ({et}, tikai informācijai): " + " · ".join(ot_d) + "  (viesi–mājinieki)")
             ra = int(sum(r[f"away_p{p}"] for p in (1, 2, 3)))
             rh = int(sum(r[f"home_p{p}"] for p in (1, 2, 3)))
-            st.markdown(rez_kartite_html(away, home, at, ht, ra, rh, et or "Pamatlaiks", linijas), unsafe_allow_html=True)
+            st.markdown(rez_kartite_html(away, home, at, ht, ra, rh, et or "Pamatlaiks", linijas, uid=r["game_id"]), unsafe_allow_html=True)
 
             with st.expander("Detaļas"):
                 zv = [r.get(f"star{i}") for i in (1, 2, 3)]
