@@ -1,1 +1,51 @@
+name: NHL Daily Update
 
+on:
+  schedule:
+    - cron: '0 8 * * *'   # 08:00 UTC = 10:00/11:00 Rīgas laikā
+  workflow_dispatch:
+    inputs:
+      no:
+        description: 'Neobligāti: sākuma datums (ASV laiks), piem. 2026-09-29'
+        required: false
+        default: ''
+      lidz:
+        description: 'Neobligāti: beigu datums, piem. 2026-10-02'
+        required: false
+        default: ''
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_collector.txt
+
+      - name: Run Calendar Script
+        run: python kalendars.py
+
+      - name: Run Stats Script
+        # --vieglais: bez lielajām tabulām (notikumi, mainas), lai repozitorijs neuzaugtu.
+        # Bez datumiem tiek pārbaudītas pēdējās 3 dienas; jau esošās spēles tiek izlaistas.
+        run: python nhl_dati.py --vieglais ${{ inputs.no }} ${{ inputs.lidz }}
+
+      - name: Commit and push changes if any
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add nhl_kalendars.csv dati/
+          git diff --cached --quiet || (git commit -m "Automated daily NHL data update" && git push)
