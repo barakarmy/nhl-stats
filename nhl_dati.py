@@ -145,6 +145,36 @@ def teksts(x):
     return "" if x is None else str(x)
 
 
+def atrast_sarakstu(obj, atslega):
+    """Meklē pirmo sarakstu ar doto atslēgu jebkurā JSON dziļumā (neatkarīgi no precīza ceļa)."""
+    if isinstance(obj, dict):
+        v = obj.get(atslega)
+        if isinstance(v, list):
+            return v
+        for x in obj.values():
+            r = atrast_sarakstu(x, atslega)
+            if r is not None:
+                return r
+    elif isinstance(obj, list):
+        for x in obj:
+            r = atrast_sarakstu(x, atslega)
+            if r is not None:
+                return r
+    return None
+
+
+def amatpersonas_vards(x):
+    """Tiesneša vārds no dažādiem iespējamiem formātiem: 'Vārds', {'default': 'Vārds'}, {'firstName':..,'lastName':..}."""
+    if isinstance(x, str):
+        return x.strip()
+    if isinstance(x, dict):
+        v = teksts(x.get("default")) or teksts(x.get("name")) or teksts(x.get("fullName"))
+        if v:
+            return v.strip()
+        return f"{teksts(x.get('firstName'))} {teksts(x.get('lastName'))}".strip()
+    return ""
+
+
 def sadalit_dalu(x):
     """'6/8' -> (6, 8); ja nevar nolasīt -> (None, None)."""
     try:
@@ -491,12 +521,13 @@ def apstradat_spele(spele, datums):
     if IEGUT_MAINAS and not mainu_rindas:
         print("  Piezīme: maiņu dati šai spēlei vēl nav pieejami.")
 
-    # ---- tiesneši (right-rail → gameInfo) ----
-    gi = (rr or {}).get("gameInfo") or {}
+    # ---- tiesneši (right-rail; atslēga 'referees' tiek meklēta jebkurā dziļumā) ----
     tiesnesu_rindas = []
-    for loma, saraksts in (("referee", gi.get("referees")), ("linesman", gi.get("linesmen"))):
-        for x in saraksts or []:
-            vards = teksts(x)
+    atrasts = {}
+    for loma, atsl in (("referee", "referees"), ("linesman", "linesmen")):
+        atrasts[atsl] = atrast_sarakstu(rr, atsl)
+        for x in atrasts[atsl] or []:
+            vards = amatpersonas_vards(x)
             if vards:
                 tiesnesu_rindas.append({
                     "datums": datums, "game_id": gid, "sezona": land.get("season"), "loma": loma, "vards": vards,
@@ -507,7 +538,14 @@ def apstradat_spele(spele, datums):
                     "pim_home": r["home_pim_total"], "pim_away": r["away_pim_total"],
                 })
     if not any(t["loma"] == "referee" for t in tiesnesu_rindas):
-        print("  Piezīme: tiesneši šai spēlei nav pieejami (right-rail → gameInfo → referees).")
+        if rr is None:
+            print("  Piezīme: right-rail pieprasījums neizdevās, tiesneši nav ielasīti.")
+        elif atrasts["referees"]:
+            print("  Piezīme: 'referees' atrasts, bet vārdus nevar nolasīt. Paraugs:",
+                  json.dumps(atrasts["referees"][:2], ensure_ascii=False)[:250])
+        else:
+            print("  Piezīme: right-rail atbildē nav 'referees'. Augšējās atslēgas:", list(rr)[:15],
+                  "| gameInfo:", json.dumps(rr.get("gameInfo"), ensure_ascii=False)[:300])
 
     return {
         "tiesnesi": tiesnesu_rindas,
