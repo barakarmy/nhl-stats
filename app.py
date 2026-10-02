@@ -211,12 +211,22 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .st-key-datums_josla button { justify-content: center; padding-left: 1.1rem; padding-right: 1.1rem; }
 .st-key-datums_josla button, .st-key-datums_josla button p { font-weight: 700 !important; text-align: center; }
 .st-key-datums_josla button p { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
-/* datuma lauks: kompakts, teksts centrēts un treknrakstā, vienāds augstums ar pogām */
-.st-key-datums_josla [data-testid="stDateInput"] { width: 10.5rem !important; }
-.st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"] { border-radius: 10px; min-height: 2.5rem; }
-.st-key-datums_josla [data-testid="stDateInput"] input { text-align: center !important; font-weight: 700 !important; letter-spacing: .02em;
-  padding-left: 0 !important; padding-right: 0 !important; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
+/* datuma lauks izskatās kā blakus esošās pogas: tāds pats augstums, fons, apmale, noapaļojums un burti (centrēts treknraksts) */
+.st-key-datums_josla button { min-height: 2.5rem; border-radius: 10px; }
+.st-key-datums_josla [data-testid="stDateInput"] { width: 10rem !important; }
+.st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="base-input"] { background: transparent !important; border-radius: 9px !important; }
+.st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"] { background: #ffffff !important; overflow: hidden; height: 2.5rem; min-height: 2.5rem;
+  box-sizing: border-box; border: 1px solid rgba(49,51,63,.2) !important; border-radius: 10px !important; transition: border-color .15s ease; }
+.st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"]:hover, .st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"]:focus-within {
+  border-color: #3b82f6 !important; }
+.st-key-datums_josla [data-testid="stDateInput"] input { height: 100%; background: transparent !important; text-align: center !important;
+  font-size: 1rem; font-weight: 700 !important; letter-spacing: .01em; padding: 0 !important;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
 .st-key-datums_josla [data-testid="stDateInput"] svg { display: none; }
+@media (prefers-color-scheme: dark) {
+  .st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"] { background: #0e1117 !important; }
+  .st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"] { border-color: rgba(250,250,250,.2) !important; }
+}
 
 /* ===== Mobilā versija ===== */
 @media (max-width: 768px) {
