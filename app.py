@@ -1,4 +1,5 @@
 import hmac
+import html as _html
 from datetime import timedelta
 
 import numpy as np
@@ -123,6 +124,53 @@ header[data-testid="stHeader"] { display: none; }
 [class*="st-key-navp-"][class*="-akt"] a[data-testid="stPageLink-NavLink"] { background: #2563eb !important; }
 [class*="st-key-navp-"][class*="-akt"] a[data-testid="stPageLink-NavLink"] p,
 [class*="st-key-navp-"][class*="-akt"] a[data-testid="stPageLink-NavLink"] [data-testid="stIconMaterial"] { color: #ffffff !important; font-weight: 700 !important; }
+
+/* ===== Spēles kartīte (Rezultāti) ===== */
+.mc { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: .9rem; padding: .5rem .2rem 0; }
+.mc-team { display: flex; align-items: center; gap: .8rem; min-width: 0; }
+.mc-away { justify-content: flex-end; text-align: right; }
+.mc-home { justify-content: flex-start; text-align: left; }
+.mc-logo { width: 3.3rem; height: 3.3rem; object-fit: contain; flex: 0 0 auto; }
+.mc-name { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-size: 1.05rem; font-weight: 500; line-height: 1.2; }
+.mc-name.uzv-nos { font-weight: 800; }
+.mc-mid { display: flex; flex-direction: column; align-items: center; gap: .45rem; }
+.mc-score { display: flex; align-items: center; justify-content: center; gap: .55rem; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  font-weight: 800; font-size: 2.6rem; line-height: .8; letter-spacing: -0.02em; padding: .35rem 0; }
+.mc-sep { opacity: .6; }
+/* cipari: no apakšas līdz pusei krāsaini (košāk apakšā), uz augšu caurspīdīgāk; zaļš = uzvara, sarkans = zaudējums, oranžs = neizšķirts */
+.sk { position: relative; display: inline-block; }
+.sk::after { content: attr(data-t); position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none;
+  background: linear-gradient(to top, var(--c) 8%, transparent 56%);
+  background: linear-gradient(to top, var(--c) 0%, color-mix(in srgb, var(--c) 88%, transparent) 14%,
+    color-mix(in srgb, var(--c) 55%, transparent) 30%, color-mix(in srgb, var(--c) 20%, transparent) 44%, transparent 56%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.sk.uzv { --c: #22c55e; } .sk.zaud { --c: #ef4444; } .sk.neiz { --c: #f59e0b; }
+.mc-outcome { font-size: .72rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; padding: .15rem .7rem;
+  border-radius: 999px; border: 1px solid rgba(127,127,127,.45); opacity: .85; }
+.mc-lines { margin-top: .45rem; text-align: center; font-size: .88rem; opacity: .72; line-height: 1.75; }
+
+/* ===== Mobilā versija ===== */
+@media (max-width: 768px) {
+  .stApp .stMainBlockContainer, .stApp [data-testid="stMainBlockContainer"] { padding: .6rem .8rem 3rem .8rem; }
+  .stApp h1 { font-size: 1.55rem; margin-bottom: .5rem; }
+  .st-key-topbar { top: .3rem; padding: .25rem .35rem; border-radius: 14px; gap: .05rem !important; }
+  .st-key-brand { margin-right: .3rem; }
+  .st-key-brand a[data-testid="stPageLink-NavLink"], .st-key-brand a[data-testid="stPageLink-NavLink"] p { font-size: 1rem !important; }
+  .nav-title { padding: .45rem .6rem; font-size: .85rem; }
+  [class*="st-key-navs-"] a[data-testid="stPageLink-NavLink"] { padding: .45rem .6rem !important; }
+  [class*="st-key-navs-"] a[data-testid="stPageLink-NavLink"] p { font-size: .85rem !important; }
+  /* izvēlne atveras zem joslas pa visu platumu, tāpēc nekad neiet ārpus ekrāna */
+  [class*="st-key-navg-"] { position: static !important; }
+  [class*="st-key-navi-"], [class*="st-key-navg-"][class*="-rr"] [class*="st-key-navi-"] { left: .35rem; right: .35rem; top: 100%; min-width: 0; width: auto; max-height: 70vh; overflow-y: auto !important; }
+  .mc { gap: .4rem; }
+  .mc-team { flex-direction: column; gap: .3rem; justify-content: center; text-align: center !important; }
+  .mc-away { flex-direction: column-reverse; }
+  .mc-logo { width: 2.6rem; height: 2.6rem; }
+  .mc-name { font-size: .8rem; }
+  .mc-score { font-size: 2rem; gap: .35rem; }
+  .mc-lines { font-size: .78rem; }
+  .cmp-val { width: 56px; font-size: .9rem; }
+}
 
 /* ===== Komandu salīdzināšanas joslas ===== */
 .cmp-row{display:flex;align-items:center;gap:12px;margin:8px 0}
@@ -994,6 +1042,28 @@ def lapa_kalendars():
 # ============================================================================
 # LAPA: REZULTĀTI
 # ============================================================================
+KRASAS_PEC_PAMATLAIKA = True   # True: cipari krāsoti pēc rezultāta pamatlaikā (papildlaika spēle = neizšķirts, oranžs); False: pēc galīgā rezultāta
+
+
+def rez_kartite_html(away, home, at, ht, ra, rh, iznakums, linijas):
+    """Spēles kartītes augša: [viesi nosaukums][logo] [rezultāts + iznākums] [logo][mājinieki nosaukums] un centrētas statistikas rindas."""
+    a, h = (ra, rh) if KRASAS_PEC_PAMATLAIKA else (at, ht)
+    kl_a, kl_h = ("neiz", "neiz") if a == h else (("uzv", "zaud") if a > h else ("zaud", "uzv"))
+    e = _html.escape
+    return (
+        '<div class="mc">'
+        f'<div class="mc-team mc-away"><span class="mc-name{" uzv-nos" if at > ht else ""}">{e(da.pilns_nosaukums(away))}</span>'
+        f'<img class="mc-logo" src="{e(da.logo_url(away))}" alt="{e(away)}"></div>'
+        '<div class="mc-mid">'
+        f'<div class="mc-score"><span class="sk {kl_a}" data-t="{at}">{at}</span><span class="mc-sep">:</span>'
+        f'<span class="sk {kl_h}" data-t="{ht}">{ht}</span></div>'
+        f'<div class="mc-outcome">{e(iznakums)}</div></div>'
+        f'<div class="mc-team mc-home"><img class="mc-logo" src="{e(da.logo_url(home))}" alt="{e(home)}">'
+        f'<span class="mc-name{" uzv-nos" if ht > at else ""}">{e(da.pilns_nosaukums(home))}</span></div>'
+        '</div>'
+        '<div class="mc-lines">' + "".join(f"<div>{e(x)}</div>" for x in linijas if x) + '</div>')
+
+
 def lapa_rezultati():
     st.title("Spēļu rezultāti")
     datumi = RAW["datums_lv"].dt.date
@@ -1026,25 +1096,13 @@ def lapa_rezultati():
         ht, at = int(r["home_total"]), int(r["away_total"])
         et = da.beigu_etikete(r["spele_beidzas"])
         with st.container(border=True):
-            c1, c2, c3 = st.columns([5, 3, 5], vertical_alignment="center")
-            with c1:
-                st.image(da.logo_url(away), width=48)
-                st.markdown(f"**{da.pilns_nosaukums(away)}**" if at > ht else da.pilns_nosaukums(away))
-            with c2:
-                st.markdown(f"<h2 style='text-align:center;margin:0'>{at} : {ht}</h2>", unsafe_allow_html=True)
-                st.markdown(f"<div style='text-align:center;opacity:.7'>{et or 'Pamatlaiks'}</div>",
-                            unsafe_allow_html=True)
-            with c3:
-                st.image(da.logo_url(home), width=48)
-                st.markdown(f"**{da.pilns_nosaukums(home)}**" if ht > at else da.pilns_nosaukums(home))
-
             periodi = " · ".join(f"{p}P {int(r[f'away_p{p}'])}:{int(r[f'home_p{p}'])}" for p in (1, 2, 3))
             if (r.get("home_ot", 0) or 0) + (r.get("away_ot", 0) or 0) > 0:
                 periodi += f" · OT/SO {int(r['away_ot'])}:{int(r['home_ot'])}"
 
             def pari(nos, formats="{:.0f}"):
-                a, h = r.get(f"away_{nos}"), r.get(f"home_{nos}")
-                return None if pd.isna(a) or pd.isna(h) else f"{formats.format(a)}–{formats.format(h)}"
+                a_, h_ = r.get(f"away_{nos}"), r.get(f"home_{nos}")
+                return None if pd.isna(a_) or pd.isna(h_) else f"{formats.format(a_)}–{formats.format(h_)}"
 
             pen_a = r.get("away_pen_count")
             pen_h = r.get("home_pen_count")
@@ -1053,13 +1111,15 @@ def lapa_rezultati():
             dalas = [f"Metieni {pari('sog_total')}", f"Noraidījumi {int(pen_a)}–{int(pen_h)}",
                      f"PP vārti {pari('ppg')}", f"Hits {pari('hits')}" if pari("hits") else None,
                      f"Iemetieni % {pari('faceoff_pct', '{:.0f}')}" if pari("faceoff_pct", "{:.0f}") else None]
-            st.caption(periodi)
-            st.caption(" · ".join(d for d in dalas if d) + "  (viesi–mājinieki)")
+            linijas = [periodi, " · ".join(d for d in dalas if d) + "  (viesi–mājinieki)"]
             if et:      # papildlaiks tiek rādīts tikai informācijai, statistikā netiek ieskaitīts
                 ot_d = [x for x in (f"metieni {pari('sog_ot')}" if pari("sog_ot") else None,
                                     f"noraidījumi {pari('pen_ot')}" if pari("pen_ot") else None) if x]
                 if ot_d:
-                    st.caption(f"Papildlaiks ({et}, tikai informācijai): " + " · ".join(ot_d) + "  (viesi–mājinieki)")
+                    linijas.append(f"Papildlaiks ({et}, tikai informācijai): " + " · ".join(ot_d) + "  (viesi–mājinieki)")
+            ra = int(sum(r[f"away_p{p}"] for p in (1, 2, 3)))
+            rh = int(sum(r[f"home_p{p}"] for p in (1, 2, 3)))
+            st.markdown(rez_kartite_html(away, home, at, ht, ra, rh, et or "Pamatlaiks", linijas), unsafe_allow_html=True)
 
             with st.expander("Detaļas"):
                 zv = [r.get(f"star{i}") for i in (1, 2, 3)]
