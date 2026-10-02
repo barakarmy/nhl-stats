@@ -11,6 +11,7 @@ un ierakstīti vairākās CSV tabulās mapē DATU_MAPE:
   notikumi.csv   - pilns play-by-play (katrs notikums ar koordinātām, spēlētāju ID, situāciju)
   sastavi.csv    - spēles sastāvi (playerId -> vārds, numurs, pozīcija)
   mainas.csv     - maiņu dati (kurš spēlētājs kad bija laukumā)
+  tiesnesi.csv   - spēles tiesneši un līnijtiesneši + spēlē piešķirtie noraidījumi (tiesnešu statistikai)
 
 Lietošana:
   python nhl_dati.py                        # pēdējās 3 dienas (pēc ASV austrumu laika), jau esošās spēles tiek izlaistas
@@ -100,6 +101,8 @@ NOTIKUMU_KOL = (
 VARTU_KOL = ["datums", "game_id", "period", "period_type", "laiks", "komanda", "strength", "goal_modifier",
              "shot_type", "situacijas_kods", "scorer_id", "scorer", "assist1_id", "assist1",
              "assist2_id", "assist2", "home_score", "away_score"]
+TIESNESU_KOL = ["datums", "game_id", "sezona", "loma", "vards", "home_team", "away_team",
+               "pen_home", "pen_away", "pen_total", "pen_p1", "pen_p2", "pen_p3", "pim_home", "pim_away"]
 MAINU_KOL = ["datums", "game_id", "team", "playerId", "vards", "period", "shiftNumber",
              "startTime", "endTime", "duration"]
 
@@ -110,6 +113,7 @@ TABULAS = {
     "notikumi": ("notikumi.csv", NOTIKUMU_KOL),
     "sastavi": ("sastavi.csv", SPELETAJA_PAMATS),
     "mainas": ("mainas.csv", MAINU_KOL),
+    "tiesnesi": ("tiesnesi.csv", TIESNESU_KOL),
     "speles": ("speles.csv", SPELES_KOL),   # pēdējā: spēle ir "gatava" tikai tad, kad tā ierakstīta šeit
 }
 
@@ -266,11 +270,14 @@ def apstradat_spele(spele, datums):
         print("  Trūkst datu no API, spēle izlaista (tiks mēģināta nākamreiz).")
         return None
 
+    time.sleep(KAVESANAS)
+    rr = get_json(f"{API_WEB}/gamecenter/{gid}/right-rail", meginajumi=2)   # tiesneši atrodas šeit (gameInfo)
+
     maina = None
     if IEGUT_MAINAS:
         time.sleep(KAVESANAS)
         maina = get_json(f"{API_STATS}/shiftcharts?cayenneExp=gameId={gid}", meginajumi=2)
-    for nos, dati in (("landing", land), ("boxscore", box), ("pbp", pbp), ("shifts", maina)):
+    for nos, dati in (("landing", land), ("boxscore", box), ("pbp", pbp), ("rightrail", rr), ("shifts", maina)):
         saglabat_raw(gid, nos, dati)
 
     home = land.get("homeTeam") or spele.get("homeTeam") or {}
@@ -343,6 +350,7 @@ def apstradat_spele(spele, datums):
     # ---- play-by-play: notikumi, metieni, sodi ----
     notikumu_rindas = []
     kautinu_pim = {"home": 0, "away": 0}
+    pen_per = {"p1": 0, "p2": 0, "p3": 0}      # abu komandu sodu skaits pa periodiem (tiesnešu statistikai)
     for p in plays:
         det = p.get("details") or {}
         pdesc = p.get("periodDescriptor") or {}
@@ -380,6 +388,8 @@ def apstradat_spele(spele, datums):
                 r[f"{puse}_pim_total"] += ilgums
                 if ilgums > 0:
                     r[f"{puse}_pen_count"] += 1   # sodu skaits (bez kautiņiem)
+                    if pk in pen_per:
+                        pen_per[pk] += 1
         elif not pk:
             continue  # pēcspēles metieni netiek skaitīti periodos
         elif tips in ("shot-on-goal", "goal"):
@@ -481,7 +491,26 @@ def apstradat_spele(spele, datums):
     if IEGUT_MAINAS and not mainu_rindas:
         print("  Piezīme: maiņu dati šai spēlei vēl nav pieejami.")
 
+    # ---- tiesneši (right-rail → gameInfo) ----
+    gi = (rr or {}).get("gameInfo") or {}
+    tiesnesu_rindas = []
+    for loma, saraksts in (("referee", gi.get("referees")), ("linesman", gi.get("linesmen"))):
+        for x in saraksts or []:
+            vards = teksts(x)
+            if vards:
+                tiesnesu_rindas.append({
+                    "datums": datums, "game_id": gid, "sezona": land.get("season"), "loma": loma, "vards": vards,
+                    "home_team": home_ab, "away_team": away_ab,
+                    "pen_home": r["home_pen_count"], "pen_away": r["away_pen_count"],
+                    "pen_total": r["home_pen_count"] + r["away_pen_count"],
+                    "pen_p1": pen_per["p1"], "pen_p2": pen_per["p2"], "pen_p3": pen_per["p3"],
+                    "pim_home": r["home_pim_total"], "pim_away": r["away_pim_total"],
+                })
+    if not any(t["loma"] == "referee" for t in tiesnesu_rindas):
+        print("  Piezīme: tiesneši šai spēlei nav pieejami (right-rail → gameInfo → referees).")
+
     return {
+        "tiesnesi": tiesnesu_rindas,
         "speles": [r], "varti": vartu_rindas, "notikumi": notikumu_rindas,
         "sastavi": sastavu_rindas, "speletaji": speletaju_rindas,
         "vartsargi": vartsargu_rindas, "mainas": mainu_rindas,
@@ -503,6 +532,7 @@ def main():
 
     sagatavot_failus()
     gatavas = ielasit_id("speles")
+    ar_tiesnesiem = ielasit_id("tiesnesi")
     pievienotas = 0
 
     for datums in datumu_saraksts(no, lidz):
@@ -522,9 +552,11 @@ def main():
             gid = spele.get("id")
             print(f"{teksts((spele.get('awayTeam') or {}).get('abbrev'))} @ "
                   f"{teksts((spele.get('homeTeam') or {}).get('abbrev'))} (ID: {gid})")
-            if str(gid) in gatavas:
+            if str(gid) in gatavas and str(gid) in ar_tiesnesiem:
                 print("  Jau ir datubāzē, izlaižu.")
                 continue
+            if str(gid) in gatavas:
+                print("  Spēle jau ir, bet trūkst tiesnešu - ielasu atkārtoti.")
             if spele.get("gameType") not in SPELU_TIPI:
                 print(f"  Spēles tips {spele.get('gameType')} nav izvēlēts, izlaižu.")
                 continue
