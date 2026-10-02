@@ -51,10 +51,17 @@ def main():
 
     for spele in speles:
         game_id = spele.get("id")
+        game_state = spele.get("gameState")
+        
+        # PĀRBAUDE: Apstrādājam TIKAI tās spēles, kas ir pilnībā beigušas savu gaitu (OFF vai FINAL)
+        if game_state not in ["OFF", "FINAL"]:
+            print(f"Spēle {game_id} vēl nav beigusies (Statuss: {game_state}). Izlaižam.")
+            continue
+
         home_team = spele.get("homeTeam", {}).get("abbrev", "N/A")
         away_team = spele.get("awayTeam", {}).get("abbrev", "N/A")
         
-        print(f"Apstrādāju: {away_team} @ {home_team} (ID: {game_id})")
+        print(f"Apstrādāju beigušos spēli: {away_team} @ {home_team} (ID: {game_id})")
         
         url_land = f"https://api-web.nhle.com/v1/gamecenter/{game_id}/landing"
         url_box = f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore"
@@ -107,17 +114,15 @@ def main():
         away_summa = speles_dati["away_p1"] + speles_dati["away_p2"] + speles_dati["away_p3"] + speles_dati["away_ot"]
         if speles_dati["away_total"] > away_summa: speles_dati["away_ot"] += (speles_dati["away_total"] - away_summa)
 
-        # 2. NORAIDĪJUMI (IZSLĒDZAM TIKAI KAUTIŅUS / FIGHTING)
+        # 2. NORAIDĪJUMI
         penalties_data = d_land.get("summary", {}).get("penalties", [])
         for p_data in penalties_data:
             p_num = p_data.get("periodDescriptor", {}).get("number")
             for pen in p_data.get("penalties", []):
                 kom_dict = pen.get("teamAbbrev", {})
                 kom = kom_dict.get("default") if isinstance(kom_dict, dict) else pen.get("teamAbbrev")
-                ilgums = pen.get("duration", 0)
                 apraksts = str(pen.get("descKey", "")).lower()
                 
-                # Izslēdzam TIKAI kautiņus (fight / fighting), bet ļaujam citus lielos sodus (piem. boarding)
                 if "fight" in apraksts:
                     continue
 
