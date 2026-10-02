@@ -50,9 +50,11 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
   width: min(340px, 86vw) !important; z-index: 1000; margin: 0 !important;
   background: rgba(56, 56, 62, .62); border: 1px solid rgba(255,255,255,.16); border-radius: 14px; overflow: hidden;
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 12px 34px rgba(0,0,20,.38);
-  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+  transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease, background .22s ease; }
+/* uz lauka uzvedot peli: lauks mazliet palielinās un kļūst tumšāks (bez gaismas apspīdējuma) */
 .stApp [data-testid="stTextInput"]:hover, .stApp [data-testid="stTextInput"]:focus-within {
-  border-color: rgba(255,255,255,.45); background: rgba(56, 56, 62, .74); box-shadow: 0 12px 34px rgba(0,0,20,.45), 0 0 0 4px rgba(255,255,255,.06); }
+  transform: translate(-50%, -50%) scale(1.035); border-color: rgba(255,255,255,.22); background: rgba(44, 44, 50, .82);
+  box-shadow: 0 18px 42px rgba(0,0,14,.6); }
 /* visi iekšējie slāņi caurspīdīgi un bez apmalēm, lai redzams tikai mūsu tumši pelēkais lauks */
 .stApp [data-testid="stTextInput"] div, .stApp [data-testid="stTextInput"] input {
   background: transparent !important; background-color: transparent !important; border: none !important; box-shadow: none !important; outline: none !important; }
