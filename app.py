@@ -7,10 +7,18 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-import cats
 import datu_apstrade as da
-import lokacijas
 import modelis  # Puasona prognožu modelis
+
+# Neobligātie moduļi: ja fails nav augšupielādēts repozitorijā, lietotne darbojas bez attiecīgās funkcijas (nevis apstājas ar kļūdu)
+try:
+    import cats          # čata sadaļa
+except ImportError:
+    cats = None
+try:
+    import lokacijas     # ceļojuma un atpūtas faktori
+except ImportError:
+    lokacijas = None
 
 st.set_page_config(page_title="NHL analītika", page_icon=":material/sports_hockey:", layout="wide",
                    initial_sidebar_state="collapsed")
@@ -638,6 +646,9 @@ def percentiles(liga, komanda):
 
 def celojuma_bloks(home, away, sakums):
     """Attālums starp pilsētām un abu komandu atpūta/ceļojums pirms spēles (modulis lokacijas.py)."""
+    if lokacijas is None:
+        st.info("Ceļojuma modulis nav pieejams: repozitorijā trūkst faila lokacijas.py.")
+        return
     f = lokacijas.speles_faktori(DF, home, away, sakums)
     c = f["starp_pilsetam"]
     m = st.columns(4)
@@ -1567,7 +1578,7 @@ NAV = [
         (lapa_tiesnesi, "Tiesneši", "tiesnesi", "sports"),
     ]},
     # beigās atsevišķas sadaļas: Čats, Kalendārs (priekšpēdējais), Rezultāti (pēdējais)
-    {"lapa": (lapa_cats, "Čats", "cats", "chat")},
+    *([{"lapa": (lapa_cats, "Čats", "cats", "chat")}] if cats is not None else []),   # tikai, ja ir cats.py
     {"lapa": (lapa_kalendars, "Kalendārs", "kalendars", "calendar_month")},
     {"lapa": (lapa_rezultati, "Rezultāti", "rezultati", "sports_score")},
 ]
