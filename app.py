@@ -211,22 +211,16 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .st-key-datums_josla button { justify-content: center; padding-left: 1.1rem; padding-right: 1.1rem; }
 .st-key-datums_josla button, .st-key-datums_josla button p { font-weight: 700 !important; text-align: center; }
 .st-key-datums_josla button p { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
-/* datuma lauks izskatās kā blakus esošās pogas: tāds pats augstums, fons, apmale, noapaļojums un burti (centrēts treknraksts) */
-.st-key-datums_josla button { min-height: 2.5rem; border-radius: 10px; }
-.st-key-datums_josla [data-testid="stDateInput"] { width: 10rem !important; }
-.st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="base-input"] { background: transparent !important; border-radius: 9px !important; }
-.st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"] { background: #ffffff !important; overflow: hidden; height: 2.5rem; min-height: 2.5rem;
-  box-sizing: border-box; border: 1px solid rgba(49,51,63,.2) !important; border-radius: 10px !important; transition: border-color .15s ease; }
-.st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"]:hover, .st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"]:focus-within {
-  border-color: #3b82f6 !important; }
-.st-key-datums_josla [data-testid="stDateInput"] input { height: 100%; background: transparent !important; text-align: center !important;
-  font-size: 1rem; font-weight: 700 !important; letter-spacing: .01em; padding: 0 !important;
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
-.st-key-datums_josla [data-testid="stDateInput"] svg { display: none; }
-@media (prefers-color-scheme: dark) {
-  .st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"] { background: #0e1117 !important; }
-  .st-key-datums_josla [data-testid="stDateInput"] [data-baseweb="input"] { border-color: rgba(250,250,250,.2) !important; }
-}
+/* Datuma lauks: pats Streamlit lauks ir neredzams (opacity 0), bet aizpilda visu rāmīti un saņem klikšķus, tāpēc kalendārs atveras uzreiz;
+   redzamo izskatu (balts fons, apmale, centrēts treknraksts) zīmējam mēs, tāpēc tas izskatās kā blakus pogas un nav atkarīgs no Streamlit iekšējās struktūras.
+   Datuma tekstu ieliek ::after satura vērtībā (to uzstāda Python katrā izpildē). */
+.st-key-datums_josla > .st-key-datums_lauks { position: relative; width: 10rem !important; height: 2.5rem; flex: 0 0 auto;
+  background: #ffffff; border: 1px solid rgba(49,51,63,.2); border-radius: 10px; box-sizing: border-box; transition: border-color .15s ease; cursor: pointer; }
+.st-key-datums_lauks > div { position: absolute; inset: 0; width: 100% !important; height: 100% !important; opacity: 0; }
+.st-key-datums_lauks::after { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-size: 1rem; font-weight: 700; letter-spacing: .01em; }
+.st-key-datums_josla > .st-key-datums_lauks:hover, .st-key-datums_josla > .st-key-datums_lauks:focus-within { border-color: #3b82f6; }
+@media (prefers-color-scheme: dark) { .st-key-datums_josla > .st-key-datums_lauks { background: #0e1117; border-color: rgba(250,250,250,.2); } }
 
 /* ===== Mobilā versija ===== */
 @media (max-width: 768px) {
@@ -1219,12 +1213,14 @@ def lapa_rezultati():
 
     with st.container(key="datums_josla"):       # kompakta josla pa lapas vidu: tikai tik plata, cik vajag tekstam
         st.button("❮ Iepriekšējā diena", on_click=nobide, args=(-1,))
-        # datums: lauks ar centrētu treknrakstu; uz tā nospiežot, kalendārs atveras uzreiz
-        st.date_input("Datums", min_value=mind, max_value=maxd, key="rez_datums", format="DD.MM.YYYY",
-                      label_visibility="collapsed")
+        # datums: redzamo izskatu zīmē CSS (::after), pats Streamlit lauks ir neredzams un aizpilda rāmīti, tāpēc kalendārs atveras uzreiz
+        with st.container(key="datums_lauks"):
+            st.date_input("Datums", min_value=mind, max_value=maxd, key="rez_datums", format="DD.MM.YYYY",
+                          label_visibility="collapsed")
         st.button("Nākamā diena ❯", on_click=nobide, args=(1,))
 
     dat = st.session_state["rez_datums"]
+    st.markdown(f"<style>.st-key-datums_lauks::after {{ content: '{dat:%d.%m.%Y}'; }}</style>", unsafe_allow_html=True)
     st.markdown(f"#### {da.DIENAS[dat.weekday()]}, {dat:%d.%m.%Y}")
     dienas_speles = RAW[datumi == dat].sort_values(["sakums_lv", "game_id"])
     if dienas_speles.empty:
