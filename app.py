@@ -75,6 +75,13 @@ def ielasit_papildu(nos, versija):
     return da.ielasit_tabulu(nos)
 
 
+@st.cache_data(show_spinner=False)
+def ielasit_tiesnesus(versija):
+    cur = da.ielasit_tabulu("tiesnesi")
+    prev, info = da.ielasit_pagajuso_tiesnesus()
+    return cur, prev, info
+
+
 RAW, DF, KAL = ielasit_visu(VERSIJA)
 if RAW is None or DF.empty:
     st.error("Nav atrasts datu fails 'dati/speles.csv' (vai vecais 'nhl_sezona.csv'). "
@@ -661,6 +668,7 @@ def lapa_rezultati():
     varti = ielasit_papildu("varti", VERSIJA)
     sk = ielasit_papildu("speletaji", VERSIJA)
     vg = ielasit_papildu("vartsargi", VERSIJA)
+    ties = ielasit_papildu("tiesnesi", VERSIJA)
 
     for _, r in dienas_speles.iterrows():
         home, away = r["home_team"], r["away_team"]
@@ -703,6 +711,10 @@ def lapa_rezultati():
                     st.markdown("**⭐ Spēles zvaigznes:** " + " · ".join(
                         f"{i}. {z}" for i, z in enumerate(zv, 1) if isinstance(z, str) and z))
                 gid = r["game_id"]
+                if ties is not None:
+                    tv = ties[(ties["game_id"] == gid) & (ties["loma"] == "referee")]["vards"].tolist()
+                    if tv:
+                        st.markdown("**🧑‍⚖️ Tiesneši:** " + ", ".join(tv))
                 if varti is not None:
                     v = varti[varti["game_id"] == gid]
                     if not v.empty:
@@ -783,6 +795,97 @@ def lapa_speletaji():
                                         "TOI": st.column_config.NumberColumn("TOI (min)", format="%.0f")})
 
 
+
+# ============================================================================
+# LAPA: TIESNEŠI
+# ============================================================================
+def lapa_tiesnesi():
+    st.title("🧑‍⚖️ Tiesneši")
+    cur, prev, info = ielasit_tiesnesus(VERSIJA)
+    if info:
+        st.warning(info)
+    if cur is None and prev is None:
+        st.info("Tiesnešu dati vēl nav pieejami. Tie parādīsies pēc nākamās datu atjaunināšanas "
+                "(dati/tiesnesi.csv). Pagājušās sezonas datus liec failā dati/referees_lastseason.csv.")
+        return
+
+    with st.expander("⚙️ Aprēķina iestatījumi", expanded=False):
+        c1, c2 = st.columns(2)
+        w_prev = c1.slider("Pagājušās sezonas svars (%)", 0, 100, 60, 5, key="ti_w") / 100
+        k = c2.slider("Līgas vidējā korekcija K (spēles)", 0, 30, 10, key="ti_k")
+        st.caption(f"Kombinētais rādītājs = {w_prev:.0%} × pagājušā sezona + {1 - w_prev:.0%} × šī sezona. "
+                   f"Katra sezonas komponente tiek pievilkta pie līgas vidējā, kas vienāds ar {k} spēlēm: "
+                   "jaunam tiesnesim vai ar maz spēlēm rādītājs ir tuvu līgas vidējam.")
+
+    tab, liga = da.tiesnesu_apkopojums(cur, prev, w_prev=w_prev, k=k)
+    if tab.empty:
+        st.info("Nav tiesnešu datu.")
+        return
+    if prev is None:
+        st.caption("Pagājušās sezonas fails (dati/referees_lastseason.csv) nav ielādēts, tāpēc tiek lietota tikai šī sezona.")
+
+    m = st.columns(4)
+    m[0].metric("Līgas vidējais šosezon", fmt(liga["t"]["kopa"]), border=True)
+    m[1].metric("Līgas vidējais pagājušajā", f"{liga['p']['kopa']:.2f}" if pd.notna(liga["p"]["kopa"]) else "–", border=True)
+    m[2].metric("Tiesneši datubāzē", len(tab), border=True)
+    m[3].metric("Spēles ar tiesnešiem šosezon",
+                0 if cur is None else int(cur.loc[cur["loma"] == "referee", "game_id"].nunique()), border=True)
+
+    t_tab, t_rez, t_spele = st.tabs(["Tiesnešu tabula", "Gaidāmie noraidījumi spēlei", "Tiesneša spēles"])
+    with t_tab:
+        min_sp = st.slider("Rādīt tiesnešus ar vismaz tik spēlēm (abās sezonās kopā)", 0, 60, 0, key="ti_min")
+        t = tab[(tab["GP_t"] + tab["GP_p"]) >= min_sp].sort_values("kopa", ascending=False).reset_index(drop=True)
+        vis = pd.DataFrame({
+            "Tiesnesis": t["vards"], "Spēles šosezon": t["GP_t"], "Spēles pagājušajā": t["GP_p"],
+            "Noraid./sp šosezon": t["kopa_t"], "Noraid./sp pagājušajā": t["kopa_p"],
+            "Kombinētais": t["kopa"], "Pret līgu": t["kopa_vs_liga"],
+            "Mājas komanda": t["majas"], "Viesu komanda": t["viesi"],
+            "1. per.": t["p1"], "2. per.": t["p2"], "3. per.": t["p3"], "Datu apjoms": t["dati"]})
+        fm = st.column_config.NumberColumn(format="%.2f")
+        st.dataframe(vis, hide_index=True, width="stretch",
+                     height=min(900, 35 * (len(vis) + 1) + 3),
+                     column_config={"Noraid./sp šosezon": fm, "Noraid./sp pagājušajā": fm, "Kombinētais": fm,
+                                    "Mājas komanda": fm, "Viesu komanda": fm,
+                                    "1. per.": fm, "2. per.": fm, "3. per.": fm,
+                                    "Pret līgu": st.column_config.NumberColumn(format="%+.2f")})
+        st.caption("Noraidījumi = abu komandu sodu skaits spēlē (bez kautiņiem), ko pieskaita katram spēles tiesnesim. "
+                   "Datu apjoms: Maz datu < 8 spēles, Vidēji 8–19, Pietiekami 20+ (abas sezonas kopā).")
+        with st.expander("📊 Grafiks"):
+            g = t.set_index("vards")["kopa"].sort_values()
+            fig = go.Figure(go.Bar(x=g.values, y=list(g.index), orientation="h", marker_color="#3b82f6"))
+            fig.add_vline(x=liga["blend"]["kopa"], line_dash="dash")
+            fig.update_layout(height=max(320, 22 * len(g)), margin=dict(l=10, r=10, t=10, b=10),
+                              xaxis_title="Kombinētie noraidījumi spēlē")
+            st.plotly_chart(fig)
+
+    with t_rez:
+        vardi = tab["vards"].dropna().sort_values().tolist()
+        izv = st.multiselect("Spēles tiesneši (parasti divi)", vardi, max_selections=3, key="ti_izv")
+        pr = da.tiesnesu_prognoze(tab, liga, izv)
+        if not izv:
+            st.caption("Nav izvēlēts neviens tiesnesis, tāpēc rādīts līgas kombinētais vidējais.")
+        c = st.columns(3)
+        c[0].metric("Noraidījumi spēlē kopā", f"{pr['kopa']:.2f}", f"{pr['kopa'] - liga['blend']['kopa']:+.2f} pret līgu",
+                    border=True)
+        c[1].metric("Mājas komandai", f"{pr['majas']:.2f}", border=True)
+        c[2].metric("Viesu komandai", f"{pr['viesi']:.2f}", border=True)
+        c = st.columns(3)
+        for i, per in enumerate(("p1", "p2", "p3")):
+            c[i].metric(f"{i + 1}. periodā", f"{pr[per]:.2f}", f"{pr[per] - liga['blend'][per]:+.2f} pret līgu", border=True)
+        st.caption("Šo vērtību vēlāk var padot modelim (da.tiesnesu_prognoze), lai koriģētu noraidījumu prognozi.")
+
+    with t_spele:
+        if cur is None:
+            st.info("Šosezon vēl nav tiesnešu spēļu.")
+        else:
+            vards = st.selectbox("Tiesnesis", sorted(cur.loc[cur["loma"] == "referee", "vards"].unique()), key="ti_sel")
+            sp = da.tiesnesu_speles(cur, vards)
+            st.dataframe(pd.DataFrame({
+                "Datums": pd.to_datetime(sp["datums"]).dt.strftime("%d.%m.%Y"),
+                "Spēle": sp["away_team"] + " @ " + sp["home_team"],
+                "Noraid. mājas": sp["pen_home"], "Noraid. viesi": sp["pen_away"], "Kopā": sp["pen_total"],
+                "PIM min": sp["pim_home"] + sp["pim_away"]}), hide_index=True, width="stretch")
+
 # ============================================================================
 # NAVIGĀCIJA
 # ============================================================================
@@ -800,6 +903,7 @@ lapas = st.navigation({
         st.Page(lapa_over_under, title="Over / Under", icon="📈", url_path="over-under"),
         st.Page(lapa_powerplay, title="Powerplay", icon="⚡", url_path="powerplay"),
         st.Page(lapa_noraidijumi, title="Noraidījumi", icon="❌", url_path="noraidijumi"),
+        st.Page(lapa_tiesnesi, title="Tiesneši", icon="🧑‍⚖️", url_path="tiesnesi"),
     ],
     "Komandas un spēles": [
         st.Page(lapa_komanda, title="Komandas statistika", icon="📊", url_path="komanda"),
