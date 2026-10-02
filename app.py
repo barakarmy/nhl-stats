@@ -130,21 +130,23 @@ header[data-testid="stHeader"] { display: none; }
 .mc-team { display: flex; align-items: center; gap: .8rem; min-width: 0; }
 .mc-away { justify-content: flex-end; text-align: right; }
 .mc-home { justify-content: flex-start; text-align: left; }
-.mc-logo { width: 3.3rem; height: 3.3rem; object-fit: contain; flex: 0 0 auto; }
-.mc-name { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-size: 1.05rem; font-weight: 500; line-height: 1.2; }
+.mc-logo { width: 4.6rem; height: 4.6rem; object-fit: contain; flex: 0 0 auto; }
+.mc-name { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-size: 1.15rem; font-weight: 500; line-height: 1.2; }
 .mc-name.uzv-nos { font-weight: 800; }
 .mc-mid { display: flex; flex-direction: column; align-items: center; gap: .45rem; }
 .mc-score { display: flex; align-items: center; justify-content: center; gap: .55rem; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
-  font-weight: 800; font-size: 2.6rem; line-height: .8; letter-spacing: -0.02em; padding: .35rem 0; }
+  font-weight: 800; font-size: 3.5rem; line-height: .8; letter-spacing: -0.02em; padding: .45rem 0; }
 .mc-sep { opacity: .6; }
-/* cipari: no apakšas līdz pusei krāsaini (košāk apakšā), uz augšu caurspīdīgāk; zaļš = uzvara, sarkans = zaudējums, oranžs = neizšķirts */
+/* cipari: pamatlaikā izšķirta spēle - zaļš (uzvarētājs) / sarkans (zaudētājs) pa visu ciparu, košāk apakšā;
+   spēle ar papildlaiku (neizšķirts pamatlaikā) - apakšā līdz vidum oranžs, augšā līdz vidum zaļš / sarkans (galīgais uzvarētājs / zaudētājs) */
 .sk { position: relative; display: inline-block; }
 .sk::after { content: attr(data-t); position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none;
-  background: linear-gradient(to top, var(--c) 8%, transparent 56%);
-  background: linear-gradient(to top, var(--c) 0%, color-mix(in srgb, var(--c) 88%, transparent) 14%,
-    color-mix(in srgb, var(--c) 55%, transparent) 30%, color-mix(in srgb, var(--c) 20%, transparent) 44%, transparent 56%);
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-.sk.uzv { --c: #22c55e; } .sk.zaud { --c: #ef4444; } .sk.neiz { --c: #f59e0b; }
+.sk.uzv { --w: 34,197,94; } .sk.zaud { --w: 239,68,68; }
+.sk.reg::after { background-image: linear-gradient(to top, rgba(var(--w),1) 6%, rgba(var(--w),.38) 94%); }
+.sk.ot::after { background-image: linear-gradient(to top, rgba(245,158,11,1) 6%, rgba(245,158,11,0) 52%),
+                            linear-gradient(to bottom, rgba(var(--w),1) 6%, rgba(var(--w),0) 52%); }
+.sk.ot:not(.uzv):not(.zaud)::after { background-image: linear-gradient(to top, rgba(245,158,11,1) 6%, rgba(245,158,11,0) 52%); }
 .mc-outcome { font-size: .72rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; padding: .15rem .7rem;
   border-radius: 999px; border: 1px solid rgba(127,127,127,.45); opacity: .85; }
 .mc-lines { margin-top: .45rem; text-align: center; font-size: .88rem; opacity: .72; line-height: 1.75; }
@@ -165,9 +167,9 @@ header[data-testid="stHeader"] { display: none; }
   .mc { gap: .4rem; }
   .mc-team { flex-direction: column; gap: .3rem; justify-content: center; text-align: center !important; }
   .mc-away { flex-direction: column-reverse; }
-  .mc-logo { width: 2.6rem; height: 2.6rem; }
+  .mc-logo { width: 3.4rem; height: 3.4rem; }
   .mc-name { font-size: .8rem; }
-  .mc-score { font-size: 2rem; gap: .35rem; }
+  .mc-score { font-size: 2.6rem; gap: .35rem; }
   .mc-lines { font-size: .78rem; }
   .cmp-val { width: 56px; font-size: .9rem; }
 }
@@ -1042,21 +1044,26 @@ def lapa_kalendars():
 # ============================================================================
 # LAPA: REZULTĀTI
 # ============================================================================
-KRASAS_PEC_PAMATLAIKA = True   # True: cipari krāsoti pēc rezultāta pamatlaikā (papildlaika spēle = neizšķirts, oranžs); False: pēc galīgā rezultāta
-
-
 def rez_kartite_html(away, home, at, ht, ra, rh, iznakums, linijas):
-    """Spēles kartītes augša: [viesi nosaukums][logo] [rezultāts + iznākums] [logo][mājinieki nosaukums] un centrētas statistikas rindas."""
-    a, h = (ra, rh) if KRASAS_PEC_PAMATLAIKA else (at, ht)
-    kl_a, kl_h = ("neiz", "neiz") if a == h else (("uzv", "zaud") if a > h else ("zaud", "uzv"))
+    """
+    Spēles kartītes augša: [viesu nosaukums][logo] [rezultāts + iznākums] [logo][mājinieku nosaukums] un centrētas statistikas rindas.
+    Ciparu krāsas: pamatlaikā izšķirta spēle - uzvarētājs zaļš, zaudētājs sarkans (pa visu ciparu);
+    spēle ar papildlaiku (pamatlaikā neizšķirts) - cipara apakšējā puse oranža, augšējā puse zaļa/sarkana (galīgais uzvarētājs/zaudētājs).
+    """
+    if ra != rh:                                              # izšķirta pamatlaikā
+        kl_a, kl_h = ("sk reg uzv", "sk reg zaud") if ra > rh else ("sk reg zaud", "sk reg uzv")
+    elif at == ht:                                            # neizšķirts arī galarezultātā (nav gaidāms)
+        kl_a = kl_h = "sk ot"
+    else:                                                     # papildlaiks / pēcspēles metieni
+        kl_a, kl_h = ("sk ot uzv", "sk ot zaud") if at > ht else ("sk ot zaud", "sk ot uzv")
     e = _html.escape
     return (
         '<div class="mc">'
         f'<div class="mc-team mc-away"><span class="mc-name{" uzv-nos" if at > ht else ""}">{e(da.pilns_nosaukums(away))}</span>'
         f'<img class="mc-logo" src="{e(da.logo_url(away))}" alt="{e(away)}"></div>'
         '<div class="mc-mid">'
-        f'<div class="mc-score"><span class="sk {kl_a}" data-t="{at}">{at}</span><span class="mc-sep">:</span>'
-        f'<span class="sk {kl_h}" data-t="{ht}">{ht}</span></div>'
+        f'<div class="mc-score"><span class="{kl_a}" data-t="{at}">{at}</span><span class="mc-sep">:</span>'
+        f'<span class="{kl_h}" data-t="{ht}">{ht}</span></div>'
         f'<div class="mc-outcome">{e(iznakums)}</div></div>'
         f'<div class="mc-team mc-home"><img class="mc-logo" src="{e(da.logo_url(home))}" alt="{e(home)}">'
         f'<span class="mc-name{" uzv-nos" if ht > at else ""}">{e(da.pilns_nosaukums(home))}</span></div>'
@@ -1081,6 +1088,8 @@ def lapa_rezultati():
 
     dat = st.session_state["rez_datums"]
     st.markdown(f"#### {da.DIENAS[dat.weekday()]}, {dat:%d.%m.%Y}")
+    st.caption("Rezultāta cipari: zaļš = uzvarētājs, sarkans = zaudētājs (pamatlaikā izšķirtas spēles). "
+               "Ja spēle gāja uz papildlaiku, cipara apakšā ir oranžs (neizšķirts pamatlaikā), bet augšā zaļš/sarkans (uzvarētājs/zaudētājs).")
     dienas_speles = RAW[datumi == dat].sort_values(["sakums_lv", "game_id"])
     if dienas_speles.empty:
         st.info("Šajā datumā nav noslēgušos spēļu.")
