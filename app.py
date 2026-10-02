@@ -249,9 +249,9 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .cmp-group{margin:18px 0 4px 0;font-weight:700;font-size:.9rem;letter-spacing:.04em;opacity:.8}
 </style>""", unsafe_allow_html=True)
 
-# Lapas fons: ledus ar NHL logo, ļoti caurspīdīgs, lai netraucētu lasīt tekstu (gaišajā motīvā ~13%, tumšajā ~7%).
+# Lapas fons: ledus ar NHL logo, caurspīdīgs, lai netraucētu lasīt tekstu (gaišajā motīvā 30%, tumšajā 16%).
 # Pielāgošana: FONA_CAURSPIDIBA_GAISS / FONA_CAURSPIDIBA_TUMSS (0 = nav redzams, 1 = pilna redzamība).
-FONA_CAURSPIDIBA_GAISS, FONA_CAURSPIDIBA_TUMSS = 0.13, 0.07
+FONA_CAURSPIDIBA_GAISS, FONA_CAURSPIDIBA_TUMSS = 0.30, 0.16
 if FONS_DATA_URI:
     st.markdown(f"""<style>
 .stApp {{ isolation: isolate; }}
