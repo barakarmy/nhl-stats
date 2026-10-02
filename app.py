@@ -248,12 +248,14 @@ def palidziba(label):
     return None
 
 
-def cfg_ar_help(kolonnas, config=None):
-    """column_config visām kolonnām ar paskaidrojumiem (help), saglabājot jau norādīto formatējumu."""
+def cfg_ar_help(kolonnas, config=None, paskaidr=None):
+    """column_config visām kolonnām ar paskaidrojumiem (help), saglabājot jau norādīto formatējumu.
+    paskaidr: konkrētas tabulas paskaidrojumi, kas aizstāj vispārīgos (piem., periodu lapām)."""
     config = config or {}
+    paskaidr = paskaidr or {}
     out = {}
     for k in kolonnas:
-        h = palidziba(k)
+        h = paskaidr.get(k) or palidziba(k)
         spec = config.get(k)
         if spec is None:
             if h and k not in config:
@@ -267,12 +269,12 @@ def cfg_ar_help(kolonnas, config=None):
     return out
 
 
-def rtabula(df, column_config=None, **kw):
+def rtabula(df, column_config=None, paskaidr=None, **kw):
     """st.dataframe ar paskaidrojumiem kolonnu virsrakstos."""
-    st.dataframe(df, column_config=cfg_ar_help(list(df.columns), column_config), **kw)
+    st.dataframe(df, column_config=cfg_ar_help(list(df.columns), column_config, paskaidr), **kw)
 
 
-def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=True):
+def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=True, paskaidr=None):
     """Rangu tabula ar logotipiem. res: DataFrame ar indeksu 'komanda'; kolonnas: {iekšējais: virsraksts}."""
     if res is None or res.empty:
         st.info("Nav datu šim skatam.")
@@ -285,7 +287,7 @@ def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=True):
     cfg = {"Logo": st.column_config.ImageColumn("", width="small"),
            "#": st.column_config.NumberColumn("#", width="small")}
     cfg.update(config or {})
-    rtabula(t, hide_index=True, width="stretch", column_config=cfg,
+    rtabula(t, hide_index=True, width="stretch", column_config=cfg, paskaidr=paskaidr,
                  height=min(1250, 35 * (len(t) + 1) + 3))
     if grafiks:
         with st.expander("📊 Grafiks"):
@@ -380,7 +382,7 @@ def lapa_parskats():
     with c1:
         scope = izvele("Spēles", SCOPES, key="pk_scope")
     with c2:
-        logs = izvele("Periods", list(LOGI), key="pk_logs")
+        logs = izvele("Laika posms", list(LOGI), key="pk_logs")
     res = da.kopsavilkums(DF, scope, LOGI[logs])
     res["Forma"] = da.forma(DF, 5)
     tabula(res, {
@@ -543,14 +545,23 @@ def periodu_lapa(p):
     with c1:
         scope = izvele("Spēles", SCOPES, key=f"p{p}_scope")
     with c2:
-        logs = izvele("Periods", list(LOGI), key=f"p{p}_logs")
+        logs = izvele("Laika posms", list(LOGI), key=f"p{p}_logs")
     with c3:
         metrika = izvele("Kārtot pēc", ["Vārtu starpība", "Gūtie", "Ielaistie", "Metieni (SOG)"], key=f"p{p}_met")
     kolonna = {"Vārtu starpība": "Starpiba", "Gūtie": "G", "Ielaistie": "Z", "Metieni (SOG)": "SOG_sp"}[metrika]
     res = da.periodu_tabula(DF, p, scope, LOGI[logs])
+    pask = {
+        "Gūti": f"{p}. periodā gūtie vārti (kopā izvēlētajās spēlēs)",
+        "Ielaisti": f"{p}. periodā ielaistie vārti (kopā izvēlētajās spēlēs)",
+        "Starpība": f"Gūto un ielaisto vārtu starpība {p}. periodā (kopā izvēlētajās spēlēs)",
+        "Gūti/sp": f"Vidēji gūtie vārti {p}. periodā vienā spēlē",
+        "Ielaisti/sp": f"Vidēji ielaistie vārti {p}. periodā vienā spēlē",
+        "Metieni/sp": f"Vidēji metieni vārtos {p}. periodā vienā spēlē",
+        "Pretin. metieni/sp": f"Pretinieka vidējie metieni vārtos pret šo komandu {p}. periodā vienā spēlē",
+    }
     tabula(res, {"GP": "Sp.", "G": "Gūti", "Z": "Ielaisti", "Starpiba": "Starpība",
                  "G_sp": "Gūti/sp", "Z_sp": "Ielaisti/sp", "SOG_sp": "Metieni/sp", "SA_sp": "Pretin. metieni/sp"},
-           sort_col=kolonna,
+           sort_col=kolonna, paskaidr=pask,
            config={"Gūti/sp": st.column_config.NumberColumn(format="%.2f"),
                    "Ielaisti/sp": st.column_config.NumberColumn(format="%.2f"),
                    "Metieni/sp": st.column_config.NumberColumn(format="%.1f"),
@@ -602,7 +613,7 @@ def lapa_over_under():
     with c3:
         scope = izvele("Spēles", SCOPES, key="ou_s")
     with c4:
-        logs = izvele("Periods", ["Pēdējās 5", "Pēdējās 10", "Visa sezona"], default="Pēdējās 10", key="ou_n")
+        logs = izvele("Laika posms", ["Pēdējās 5", "Pēdējās 10", "Visa sezona"], default="Pēdējās 10", key="ou_n")
     res = da.over_under(DF, linija, scope, LOGI[logs])
     kol = "Over" if virziens == "Over" else "Under"
     tabula(res, {"GP": "Sp.", "Over": f"Over {linija}", "Over_pct": "Over %",
@@ -623,7 +634,7 @@ def lapa_powerplay():
     with c1:
         scope = izvele("Spēles", SCOPES, key="pp_s")
     with c2:
-        logs = izvele("Periods", list(LOGI), key="pp_n")
+        logs = izvele("Laika posms", list(LOGI), key="pp_n")
     with c3:
         kartot = izvele("Kārtot pēc", ["Vairākuma vārti", "PP %", "Vairākuma metieni", "PK %"], key="pp_k")
     kol = {"Vairākuma vārti": "PPG", "PP %": "PP_pct", "Vairākuma metieni": "PP_sog", "PK %": "PK_pct"}[kartot]
@@ -646,7 +657,7 @@ def lapa_noraidijumi():
     with c1:
         scope = izvele("Spēles", SCOPES, key="nr_s")
     with c2:
-        logs = izvele("Periods", list(LOGI), key="nr_n")
+        logs = izvele("Laika posms", list(LOGI), key="nr_n")
     with c3:
         kartot = izvele("Kārtot pēc", ["Noraidījumi (vid.)", "PIM minūtes (vid.)", "Izcīnītie noraidījumi"], key="nr_k")
     kol = {"Noraidījumi (vid.)": "PEN_sp", "PIM minūtes (vid.)": "PIM_sp", "Izcīnītie noraidījumi": "DRAW_sp"}[kartot]
@@ -744,6 +755,9 @@ def lapa_komanda():
                            "Metieni/sp": tdf[f"sog_p{p}"].mean()})
         pt = pd.DataFrame(rindas)
         rtabula(pt, hide_index=True, width="stretch",
+                paskaidr={"Gūti/sp": "Vidēji gūtie vārti attiecīgajā periodā vienā spēlē",
+                          "Ielaisti/sp": "Vidēji ielaistie vārti attiecīgajā periodā vienā spēlē",
+                          "Metieni/sp": "Vidēji metieni vārtos attiecīgajā periodā vienā spēlē"},
                      column_config={"Gūti/sp": st.column_config.NumberColumn(format="%.2f"),
                                     "Ielaisti/sp": st.column_config.NumberColumn(format="%.2f"),
                                     "Metieni/sp": st.column_config.NumberColumn(format="%.1f")})
