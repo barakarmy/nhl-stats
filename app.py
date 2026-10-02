@@ -220,7 +220,6 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .st-key-datums_lauks::after { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-size: 1rem; font-weight: 700; letter-spacing: .01em; }
 .st-key-datums_lauks:hover, .st-key-datums_lauks:focus-within { border-color: #3b82f6; }
-@media (prefers-color-scheme: dark) { .st-key-datums_lauks { background: #0e1117; border-color: rgba(250,250,250,.2); } }
 
 /* ===== Mobilā versija ===== */
 @media (max-width: 768px) {
@@ -260,15 +259,35 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .cmp-group{margin:18px 0 4px 0;font-weight:700;font-size:.9rem;letter-spacing:.04em;opacity:.8}
 </style>""", unsafe_allow_html=True)
 
+def tema():
+    """Streamlit lietotnes patiesais motīvs: 'light' / 'dark' (st.context.theme), vai None, ja to nevar noteikt."""
+    try:
+        t = st.context.theme.type
+    except Exception:
+        return None
+    return t if t in ("light", "dark") else None
+
+
+def tema_css(tumss_css):
+    """CSS, kas jāpiemēro tikai tumšajā motīvā. Ja motīvu var noteikt, izvēlas pēc tā (nevis pēc ierīces iestatījuma); citādi pēc ierīces."""
+    t = tema()
+    if t == "dark":
+        return tumss_css
+    if t == "light":
+        return ""
+    return "@media (prefers-color-scheme: dark) { " + tumss_css + " }"
+
+
 # Lapas fons: ledus ar NHL logo, caurspīdīgs, lai netraucētu lasīt tekstu (gaišajā motīvā 30%, tumšajā 16%).
 # Pielāgošana: FONA_CAURSPIDIBA_GAISS / FONA_CAURSPIDIBA_TUMSS (0 = nav redzams, 1 = pilna redzamība).
 FONA_CAURSPIDIBA_GAISS, FONA_CAURSPIDIBA_TUMSS = 0.30, 0.16
 if FONS_DATA_URI:
+    _tumss_fons = tema_css(".stApp::before { opacity: " + str(FONA_CAURSPIDIBA_TUMSS) + "; }")
     st.markdown(f"""<style>
 .stApp {{ isolation: isolate; }}
 .stApp::before {{ content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background: url("{FONS_DATA_URI}") center / cover no-repeat; opacity: {FONA_CAURSPIDIBA_GAISS}; }}
-@media (prefers-color-scheme: dark) {{ .stApp::before {{ opacity: {FONA_CAURSPIDIBA_TUMSS}; }} }}
+{_tumss_fons}
 .stApp [data-testid="stAppViewContainer"], .stApp [data-testid="stMain"], .stApp section.stMain {{ background: transparent !important; }}
 </style>""", unsafe_allow_html=True)
 
@@ -1220,7 +1239,8 @@ def lapa_rezultati():
         st.button("Nākamā diena ❯", on_click=nobide, args=(1,))
 
     dat = st.session_state["rez_datums"]
-    st.markdown(f"<style>.st-key-datums_lauks::after {{ content: '{dat:%d.%m.%Y}'; }}</style>", unsafe_allow_html=True)
+    _tumss_lauks = tema_css(".st-key-datums_lauks { background: #0e1117; border-color: rgba(250,250,250,.2); }")
+    st.markdown(f"<style>.st-key-datums_lauks::after {{ content: '{dat:%d.%m.%Y}'; }} {_tumss_lauks}</style>", unsafe_allow_html=True)
     st.markdown(f"#### {da.DIENAS[dat.weekday()]}, {dat:%d.%m.%Y}")
     dienas_speles = RAW[datumi == dat].sort_values(["sakums_lv", "game_id"])
     if dienas_speles.empty:
