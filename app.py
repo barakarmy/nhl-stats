@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import datu_apstrade as da
+import lokacijas
 import modelis  # Puasona prognožu modelis
 
 st.set_page_config(page_title="NHL stats & predictions", page_icon="🏒", layout="wide")
@@ -183,6 +184,15 @@ POMOC = {
     "Izbraukumā": "Vārtu starpība šajā periodā izbraukuma spēlēs",
     "Pēdējās 10": "Vārtu starpība šajā periodā pēdējās 10 spēlēs",
     "Vieta": "Spēles vieta: mājās vai izbraukumā",
+    # ceļojums un atpūta
+    "Iepriekšējā spēle pie": "Komandas pēdējā spēle pirms šīs: kuras komandas mājās tā notika",
+    "Ceļojums (km)": "Attālums no iepriekšējās spēles vietas līdz šīs spēles vietai (lielais aplis, aptuveni)",
+    "Ceļojuma laiks (h)": "Aptuvenais ceļojuma laiks: autobuss līdz ~400 km, citādi čartera lidojums (~800 km/h + 45 min); bez gaidīšanas un viesnīcas",
+    "Laika joslu maiņa (h)": "Laika joslu starpība starp iepriekšējās spēles vietu un šo spēli (+ uz austrumiem, − uz rietumiem)",
+    "Stundas kopš pēdējās spēles": "Stundas no iepriekšējās spēles sākuma līdz šīs spēles sākumam",
+    "Back-to-back": "Jā = spēle nākamajā kalendārajā dienā (pēc ASV austrumu laika) pēc iepriekšējās spēles",
+    "Spēles 7 dienās": "Komandas spēļu skaits pēdējās 7 dienās pirms šīs spēles",
+    "Slodzes indekss": "Vienkārša heiristika: back-to-back, ceļojuma garums, laika joslu maiņa un daudz spēļu nedēļā. Jo lielāks, jo vairāk noguruma. Svarus var mainīt failā lokacijas.py",
     # kalendārs
     "Laiks (Rīga)": "Spēles sākuma laiks pēc Rīgas laika",
     "Galvenie tiesneši": "Spēlei piešķirtie galvenie tiesneši (NHL tos paziņo dažas stundas pirms spēles)",
@@ -449,6 +459,39 @@ def percentiles(liga, komanda):
     return vert
 
 
+def celojuma_bloks(home, away, sakums):
+    """Attālums starp pilsētām un abu komandu atpūta/ceļojums pirms spēles (modulis lokacijas.py)."""
+    f = lokacijas.speles_faktori(DF, home, away, sakums)
+    c = f["starp_pilsetam"]
+    m = st.columns(4)
+    m[0].metric("Attālums starp pilsētām", f"{c['km']:.0f} km", border=True)
+    m[1].metric("Ceļojuma laiks (aptuveni)", f"{c['laiks_h']} h", border=True,
+                help="Autobuss līdz ~400 km, citādi čartera lidojums (~800 km/h + 45 min)")
+    m[2].metric("Ceļojuma veids", {"autobuss": "Autobuss", "lidojums": "Lidojums", "nav": "—"}[c["veids"]], border=True)
+    m[3].metric("Laika joslu starpība", f"{c['laika_joslu_starpiba_h']:+.0f} h", border=True,
+                help="Viesu komandas laika josla attiecībā pret mājiniekiem (+ = viesi pārceļas uz austrumiem)")
+    rindas = []
+    for puse, kods in (("majas", home), ("viesi", away)):
+        x = f[puse]
+        rindas.append({
+            "Komanda": da.pilns_nosaukums(kods) + (" (mājinieki)" if puse == "majas" else " (viesi)"),
+            "Iepriekšējā spēle pie": x["iepriekspeja_vieta"] or "–",
+            "Ceļojums (km)": x["km"], "Ceļojuma laiks (h)": x["laiks_h"],
+            "Laika joslu maiņa (h)": x["laika_joslu_starpiba_h"],
+            "Stundas kopš pēdējās spēles": x["stundas_kops_pedejas"],
+            "Back-to-back": "Jā" if x["back_to_back"] else "Nē",
+            "Spēles 7 dienās": x["speles_pedejas_7_dienas"],
+            "Slodzes indekss": lokacijas.celojuma_slodze(x),
+        })
+    rtabula(pd.DataFrame(rindas), hide_index=True, width="stretch",
+            column_config={"Ceļojums (km)": st.column_config.NumberColumn(format="%.0f"),
+                           "Laika joslu maiņa (h)": st.column_config.NumberColumn(format="%+.0f"),
+                           "Stundas kopš pēdējās spēles": st.column_config.NumberColumn(format="%.0f"),
+                           "Slodzes indekss": st.column_config.NumberColumn(format="%.2f")})
+    st.caption("Ceļojums = attālums no komandas iepriekšējās spēles vietas līdz šīs spēles vietai. "
+               "Attālumi un laiks ir aptuveni (lielais aplis, čartera lidojums). Slodzes indekss ir heiristika, nevis pierādīta ietekme.")
+
+
 def lapa_salidzinat():
     st.title("⚔️ Komandu salīdzināšana")
     komandas = sorted(da.KOMANDAS)
@@ -456,11 +499,14 @@ def lapa_salidzinat():
     opc = {}
     for _, r in nak.iterrows():
         opc[f"{r['datums_lv']:%d.%m} · {r['viesu_komanda']} @ {r['majas_komanda']}"] = (
-            r["majas_komanda"], r["viesu_komanda"])
+            r["majas_komanda"], r["viesu_komanda"], r["sakums_lv"])
     izv = st.selectbox("Spēle no kalendāra", ["— izvēlēties komandas manuāli —"] + list(opc),
                        index=1 if opc else 0)
+    sakums = pd.Timestamp.now(tz=da.LV_TZ)          # manuālai izvēlei: aprēķins uz šo brīdi
     if izv in opc:
-        home, away = opc[izv]
+        home, away, sak = opc[izv]
+        if pd.notna(sak):
+            sakums = sak
     else:
         c1, c2 = st.columns(2)
         home = c1.selectbox("Mājinieki (A)", komandas, index=0, format_func=komandas_etikete)
@@ -513,7 +559,7 @@ def lapa_salidzinat():
         st.caption("Reitings pret visām komandām (100 = līgas labākais).")
 
     st.divider()
-    t1, t2 = st.tabs(["🔮 Modeļa prognoze", "🤝 Savstarpējās spēles"])
+    t1, t2, t3 = st.tabs(["🔮 Modeļa prognoze", "🤝 Savstarpējās spēles", "✈️ Ceļojums un atpūta"])
     with t1:
         gatavs, _, _ = modelis.parbaudit_gatavibu(DF)
         if gatavs:
@@ -535,6 +581,8 @@ def lapa_salidzinat():
                                             for r in h2h.itertuples()],
             })
             rtabula(t, hide_index=True, width="stretch")
+    with t3:
+        celojuma_bloks(home, away, sakums)
 
 
 # ============================================================================
