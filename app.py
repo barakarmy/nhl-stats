@@ -97,7 +97,7 @@ header[data-testid="stHeader"] { display: none; }
 .nav-title:after { content: ""; display: inline-block; margin-left: .5rem; border: solid currentColor; border-width: 0 1.6px 1.6px 0;
   padding: 2.2px; transform: rotate(45deg) translateY(-2px); opacity: .8; }
 .nav-title.aktivs { color: #ffffff; box-shadow: inset 0 -2px 0 #3b82f6; }
-[class*="st-key-navg-"]:hover .nav-title { color: #ffffff; background: rgba(255,255,255,.14);
+[class*="st-key-navg-"]:hover .nav-title, [class*="st-key-navg-"]:focus-within .nav-title { color: #ffffff; background: rgba(255,255,255,.14);
   transform: translateY(-1px) scale(1.06); box-shadow: 0 8px 18px rgba(0,0,0,.5), inset 0 -2px 0 #3b82f6; }
 
 /* Atsevišķās pogas joslā */
@@ -114,8 +114,12 @@ header[data-testid="stHeader"] { display: none; }
   gap: .15rem !important; background: #0a0f1c; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: .45rem;
   box-shadow: 0 20px 48px rgba(0,0,0,.6); z-index: 1001; }
 [class*="st-key-navg-"][class*="-rr"] [class*="st-key-navi-"] { left: auto; right: 0; }
-[class*="st-key-navg-"]:hover [class*="st-key-navi-"] { display: flex !important; }
+@media (hover: hover) { [class*="st-key-navg-"]:hover [class*="st-key-navi-"] { display: flex !important; } }
 @media (hover: none) { [class*="st-key-navg-"]:focus-within [class*="st-key-navi-"] { display: flex !important; } }
+/* pēc saites nospiešanas izvēlne tiek aizvērta (klasi uzliek mazs skripts, kad nospiež saiti joslā) */
+.st-key-topbar.nav-aizvert [class*="st-key-navg-"] [class*="st-key-navi-"] { display: none !important; }
+/* tukšais konteiners ar skriptu netraucē izkārtojumam */
+div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolute; width: 0; height: 0; margin: 0; overflow: hidden; }
 [class*="st-key-navi-"] a[data-testid="stPageLink-NavLink"] { padding: .55rem .8rem !important; border-radius: 10px !important;
   transform-origin: left center; transition: transform .15s ease, background .15s ease, box-shadow .15s ease; }
 [class*="st-key-navi-"] a[data-testid="stPageLink-NavLink"] p { font-weight: 500 !important; font-size: .95rem !important; color: #e5e7eb !important; }
@@ -1470,9 +1474,40 @@ def augseja_josla(aktiva):
                             st.page_link(p, label=rec[1], icon=f":material/{rec[3]}:")
 
 
+IZVELNES_SKRIPTS = """
+<script>
+(function () {
+  var w = window.parent, d = w.document;
+  if (w.__nhlIzvelne) return;
+  w.__nhlIzvelne = true;
+  function josla() { return d.querySelector('.st-key-topbar'); }
+  // nospiežot saiti joslā: aizver izvēlni un noņem fokusu
+  d.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('.st-key-topbar a');
+    var b = josla();
+    if (!a || !b) return;
+    b.classList.add('nav-aizvert');
+    if (d.activeElement && d.activeElement.blur) d.activeElement.blur();
+  }, true);
+  // atkal ļauj atvērt, kad lietotājs uzved peli vai pieskaras grupas nosaukumam
+  function atvert(e) {
+    var t = e.target.closest && e.target.closest('.nav-title');
+    var b = josla();
+    if (t && b) b.classList.remove('nav-aizvert');
+  }
+  ['pointerover', 'touchstart', 'focusin'].forEach(function (n) { d.addEventListener(n, atvert, true); });
+})();
+</script>
+"""
+
 if NAV_REZIMS == "pielagots":
     lapas = st.navigation(VISAS_LAPAS, position="hidden")
     augseja_josla(lapas)
+    try:
+        import streamlit.components.v1 as components
+        components.html(IZVELNES_SKRIPTS, height=0)
+    except Exception:       # skripts ir tikai uzlabojums: bez tā izvēlne aizveras, nospiežot jebkur citur
+        pass
 else:
     lapas = st.navigation({n: [p for _, p in s] for t, n, s in STRUKTURA}, position="top")
 lapas.run()
