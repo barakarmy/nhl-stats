@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import html as _html
+import re
 import time
 from datetime import timedelta
 
@@ -369,11 +370,15 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 [class*="st-key-kt_"] { position: relative !important; width: 4.9rem; height: 4.9rem; display: flex !important; align-items: center; justify-content: center;
   padding: 0 !important; border: none !important; background: none !important; box-shadow: none !important; cursor: pointer; }
 [class*="st-key-kt_"] .kt-logo { opacity: .8; transition: filter .2s ease, transform .2s ease, opacity .2s ease; }       /* blur katram logo uzstādās no Python (attālums līdz izvēlētajam) */
-[class*="st-key-kt_"]:hover { z-index: 5; }
-[class*="st-key-kt_"]:hover .kt-logo { filter: none !important; transform: scale(1.15); opacity: 1; }
+@media (hover: hover) {      /* hover efekti tikai ierīcēs ar peli (uz telefona hover "pielīp" un iOS prasa dubultu pieskārienu) */
+  [class*="st-key-kt_"]:hover { z-index: 5; }
+  [class*="st-key-kt_"]:hover .kt-logo { filter: none !important; transform: scale(1.15); opacity: 1; }
+}
+.kt-logo { pointer-events: none; -webkit-user-drag: none; }          /* palielinātais logo nedrīkst nosegt blakus esošo komandu pogas */
+[class*="st-key-kt_"] button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 [class*="st-key-kt_"][class*="_akt"] { z-index: 4; }
 [class*="st-key-kt_"][class*="_akt"] .kt-logo, [class*="st-key-kt_"][class*="_akt"]:hover .kt-logo { transform: scale(1.7); opacity: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,.32)) !important;
-  animation: kt-pulss 2.6s ease-in-out infinite; }
+  animation: kt-pulss 5.2s ease-in-out infinite; }
 @keyframes kt-pulss { 0%, 100% { transform: scale(1.64); } 50% { transform: scale(1.78); } }          /* minimāla pulsēšana ap 1.7x */
 @media (prefers-reduced-motion: reduce) { [class*="st-key-kt_"][class*="_akt"] .kt-logo { animation: none; } }
 [class*="st-key-kt_"] > div:first-child { width: 100% !important; line-height: 0; display: flex; justify-content: center; }
@@ -1319,17 +1324,27 @@ def kom_blur_css(kodi, izv):
     return f"<style>{noteikumi(8)} @media (max-width: 640px) {{ {noteikumi(4)} }}</style>"
 
 
+def mobila_ierice():
+    """True, ja lietotne atvērta telefonā/planšetē (pēc User-Agent). Tur nav peles, tāpēc 'help' burbuļi pēc pieskāriena paliek redzami un nosedz citus elementus."""
+    try:
+        ua = st.context.headers.get("User-Agent", "") or ""
+    except Exception:
+        return False
+    return bool(re.search(r"Mobi|Android|iPhone|iPad|iPod", str(ua)))
+
+
 def komandu_registis(atslega="kom_izv"):
     """Visu NHL komandu logo režģis (8x4): klikšķis uz logo izvēlas komandu. Atgriež izvēlētās komandas kodu."""
     kodi = sorted(da.KOMANDAS, key=lambda k: da.KOMANDAS[k])
     izv = st.session_state.setdefault(atslega, kodi[0])
+    mob = mobila_ierice()
     with st.container(key="komreg_stils"):
         st.markdown(kom_blur_css(kodi, izv), unsafe_allow_html=True)
     with st.container(key="kom_registis"):
         for kods in kodi:
             with st.container(key=f"kt_{kods}" + ("_akt" if kods == izv else "")):
                 st.markdown(f'<img class="kt-logo" src="{_html.escape(da.logo_url(kods))}" alt="{kods}">', unsafe_allow_html=True)
-                st.button(kods, key=f"ktb_{kods}", help=da.pilns_nosaukums(kods), on_click=_izvelet_komandu, args=(atslega, kods))
+                st.button(kods, key=f"ktb_{kods}", help=None if mob else da.pilns_nosaukums(kods), on_click=_izvelet_komandu, args=(atslega, kods))
     return st.session_state[atslega]
 
 
@@ -1670,444 +1685,4 @@ def lapa_rezultati():
                     if tv:
                         st.markdown("**Tiesneši:** " + ", ".join(tv))
                 if varti is not None:
-                    v = varti[varti["game_id"] == gid]
-                    if not v.empty:
-                        st.markdown("**Vārti**")
-                        rtabula(pd.DataFrame({
-                            "Per.": v["period"].astype(str) + v["period_type"].map(lambda x: "" if x == "REG" else f" {x}"),
-                            "Laiks": v["laiks"], "Komanda": v["komanda"], "Autors": v["scorer"],
-                            "Piespēles": (v["assist1"].fillna("") + ", " + v["assist2"].fillna("")).str.strip(", "),
-                            "Situācija": v["strength"].str.upper(),
-                            "Rez. pēc vārtiem": v["away_score"].astype("Int64").astype(str) + "–" + v["home_score"].astype("Int64").astype(str)}),
-                            hide_index=True, width="stretch")
-                if sk is not None:
-                    s = sk[sk["game_id"] == gid].sort_values(["points", "goals", "sog"], ascending=False).head(6)
-                    if not s.empty:
-                        st.markdown("**Labākie spēlētāji**")
-                        rtabula(s[["vards", "team", "goals", "assists", "points", "sog", "toi"]].rename(columns={
-                            "vards": "Spēlētājs", "team": "Komanda", "goals": "G", "assists": "A",
-                            "points": "P", "sog": "Metieni", "toi": "TOI spēlē"}), hide_index=True, width="stretch")
-                if vg is not None:
-                    g = vg[(vg["game_id"] == gid) & (vg["shotsAgainst"].fillna(0) > 0)].copy()
-                    if not g.empty:
-                        g["SV %"] = (g["saves"] / g["shotsAgainst"] * 100).round(1)
-                        st.markdown("**Vārtsargi**")
-                        rtabula(g[["vards", "team", "saves", "shotsAgainst", "SV %", "decision"]].rename(columns={
-                            "vards": "Vārtsargs", "team": "Komanda", "saves": "Atvairīti",
-                            "shotsAgainst": "Metieni pret", "decision": "Iznākums"}), hide_index=True, width="stretch")
-
-
-# ============================================================================
-# LAPA: SPĒLĒTĀJI
-# ============================================================================
-def lapa_speletaji():
-    st.title("Spēlētāji")
-    sk = ielasit_papildu("speletaji", VERSIJA)
-    vg = ielasit_papildu("vartsargi", VERSIJA)
-    if sk is None and vg is None:
-        st.info("Spēlētāju dati (dati/speletaji.csv un dati/vartsargi.csv) vēl nav pieejami.")
-        return
-    t_lauk, t_vart = st.tabs(["Laukuma spēlētāji", "Vārtsargi"])
-    komandas = ["Visas komandas"] + sorted(da.KOMANDAS)
-    with t_lauk:
-        L = da.speletaju_lideri(sk)
-        if L.empty:
-            st.info("Nav datu.")
-        else:
-            c1, c2, c3 = st.columns(3)
-            kom = c1.selectbox("Komanda", komandas, key="sp_kom",
-                               format_func=lambda x: x if x == "Visas komandas" else komandas_etikete(x))
-            kartot = c2.selectbox("Kārtot pēc", ["P", "G", "A", "SOG", "PM", "PIM", "HIT", "BLK", "PPG", "TOI", "P_sp"],
-                                  key="sp_kart")
-            poz = c3.selectbox("Pozīcija", ["Visas", "Uzbrucēji", "Aizsargi"], key="sp_poz")
-            if kom != "Visas komandas":
-                L = L[L["Komanda"] == kom]
-            if poz == "Uzbrucēji":
-                L = L[L["Poz"].isin(["C", "L", "R", "W"])]
-            elif poz == "Aizsargi":
-                L = L[L["Poz"] == "D"]
-            L = L.sort_values(kartot, ascending=False).head(60).copy()
-            L["Komanda"] = L["Komanda"].map(da.logo_url)                       # komandas saīsinājuma vietā logotips
-            rtabula(L, hide_index=True, width="stretch",
-                         column_config={"playerId": None, "Komanda": st.column_config.ImageColumn("Komanda", width="small"),
-                                        "TOI": st.column_config.NumberColumn("TOI (min)", format="%.1f"),
-                                        "P_sp": st.column_config.NumberColumn("P/sp", format="%.2f")})
-    with t_vart:
-        G = da.vartsargu_lideri(vg)
-        if G.empty:
-            st.info("Nav datu.")
-        else:
-            c1, c2 = st.columns(2)
-            kom = c1.selectbox("Komanda", komandas, key="vg_kom",
-                               format_func=lambda x: x if x == "Visas komandas" else komandas_etikete(x))
-            min_sp = c2.slider("Minimālais spēļu skaits", 1, 10, 1, key="vg_min")
-            if kom != "Visas komandas":
-                G = G[G["Komanda"] == kom]
-            G = G[G["GP"] >= min_sp]
-            G = G.sort_values("SVpct", ascending=False).rename(columns={"TOI": "TOI_kopa"}).copy()
-            G["Komanda"] = G["Komanda"].map(da.logo_url)
-            rtabula(G, hide_index=True, width="stretch",
-                         column_config={"playerId": None, "Komanda": st.column_config.ImageColumn("Komanda", width="small"),
-                                        "SVpct": st.column_config.NumberColumn("SV %", format="%.1f"),
-                                        "GAA": st.column_config.NumberColumn("GAA", format="%.2f"),
-                                        "TOI_kopa": st.column_config.NumberColumn("TOI kopā (min)", format="%.0f")})
-
-
-
-# ============================================================================
-# LAPA: TIESNEŠI
-# ============================================================================
-def lapa_tiesnesi():
-    st.title("Tiesneši")
-    cur, prev, info = ielasit_tiesnesus(VERSIJA)
-    if info:
-        st.warning(info)
-    if cur is None and prev is None:
-        st.info("Tiesnešu dati vēl nav pieejami. Tie parādīsies pēc nākamās datu atjaunināšanas "
-                "(dati/tiesnesi.csv). Pagājušās sezonas datus liec failā dati/referees_lastseason.csv.")
-        return
-
-    with st.expander("Aprēķina iestatījumi", expanded=False):
-        c1, c2 = st.columns(2)
-        w_prev = c1.slider("Pagājušās sezonas svars (%)", 0, 100, 60, 5, key="ti_w") / 100
-        k = c2.slider("Līgas vidējā korekcija K (spēles)", 0, 30, 10, key="ti_k")
-        st.caption(f"Kombinētais rādītājs = {w_prev:.0%} × pagājušā sezona + {1 - w_prev:.0%} × šī sezona. "
-                   f"Katra sezonas komponente tiek pievilkta pie līgas vidējā, kas vienāds ar {k} spēlēm: "
-                   "jaunam tiesnesim vai ar maz spēlēm rādītājs ir tuvu līgas vidējam.")
-
-    tab, liga = da.tiesnesu_apkopojums(cur, prev, w_prev=w_prev, k=k)
-    if tab.empty:
-        st.info("Nav tiesnešu datu.")
-        return
-    if prev is None:
-        st.caption("Pagājušās sezonas fails (dati/referees_lastseason.csv) nav ielādēts, tāpēc tiek lietota tikai šī sezona.")
-
-    m = st.columns(4)
-    m[0].metric("Līgas vidējais šosezon", fmt(liga["t"]["kopa"]), border=True)
-    m[1].metric("Līgas vidējais pagājušajā", f"{liga['p']['kopa']:.2f}" if pd.notna(liga["p"]["kopa"]) else "–", border=True)
-    m[2].metric("Tiesneši datubāzē", len(tab), border=True)
-    m[3].metric("Spēles ar tiesnešiem šosezon",
-                0 if cur is None else int(cur.loc[cur["loma"] == "referee", "game_id"].nunique()), border=True)
-
-    t_tab, t_rez, t_spele = st.tabs(["Tiesnešu tabula", "Gaidāmie noraidījumi spēlei", "Tiesneša spēles"])
-    with t_tab:
-        min_sp = st.slider("Rādīt tiesnešus ar vismaz tik spēlēm (abās sezonās kopā)", 0, 60, 0, key="ti_min")
-        t = tab[(tab["GP_t"] + tab["GP_p"]) >= min_sp].sort_values("kopa", ascending=False).reset_index(drop=True)
-        vis = pd.DataFrame({
-            "Tiesnesis": t["vards"], "Spēles šosezon": t["GP_t"], "Spēles pagājušajā": t["GP_p"],
-            "Noraid./sp šosezon": t["kopa_t"], "Noraid./sp pagājušajā": t["kopa_p"],
-            "Kombinētais": t["kopa"], "Pret līgu": t["kopa_vs_liga"],
-            "Mājas komanda": t["majas"], "Viesu komanda": t["viesi"],
-            "Noraid. 1. per.": t["p1"], "Noraid. 2. per.": t["p2"], "Noraid. 3. per.": t["p3"], "Datu apjoms": t["dati"]})
-        fm = st.column_config.NumberColumn(format="%.2f")
-        rtabula(vis, hide_index=True, width="stretch",
-                     height=min(900, 35 * (len(vis) + 1) + 3),
-                     column_config={"Noraid./sp šosezon": fm, "Noraid./sp pagājušajā": fm, "Kombinētais": fm,
-                                    "Mājas komanda": fm, "Viesu komanda": fm,
-                                    "Noraid. 1. per.": fm, "Noraid. 2. per.": fm, "Noraid. 3. per.": fm,
-                                    "Pret līgu": st.column_config.NumberColumn(format="%+.2f")})
-        st.caption("Noraidījumi = abu komandu sodu skaits spēles pamatlaikā (bez papildlaika un kautiņiem), ko pieskaita katram spēles tiesnesim. "
-                   "Datu apjoms: Maz datu < 8 spēles, Vidēji 8–19, Pietiekami 20+ (abas sezonas kopā).")
-        with st.expander("Grafiks"):
-            g = t.set_index("vards")["kopa"].sort_values()
-            fig = go.Figure(go.Bar(x=g.values, y=list(g.index), orientation="h", marker_color="#3b82f6"))
-            fig.add_vline(x=liga["blend"]["kopa"], line_dash="dash")
-            fig.update_layout(height=max(320, 22 * len(g)), margin=dict(l=10, r=10, t=10, b=10),
-                              xaxis_title="Kombinētie noraidījumi spēlē")
-            st.plotly_chart(fig)
-
-    with t_rez:
-        vardi = tab["vards"].dropna().sort_values().tolist()
-        izv = st.multiselect("Spēles tiesneši (parasti divi)", vardi, max_selections=3, key="ti_izv")
-        pr = da.tiesnesu_prognoze(tab, liga, izv)
-        if not izv:
-            st.caption("Nav izvēlēts neviens tiesnesis, tāpēc rādīts līgas kombinētais vidējais.")
-        c = st.columns(3)
-        c[0].metric("Noraidījumi spēlē kopā", f"{pr['kopa']:.2f}", f"{pr['kopa'] - liga['blend']['kopa']:+.2f} pret līgu",
-                    border=True)
-        c[1].metric("Mājas komandai", f"{pr['majas']:.2f}", border=True)
-        c[2].metric("Viesu komandai", f"{pr['viesi']:.2f}", border=True)
-        c = st.columns(3)
-        for i, per in enumerate(("p1", "p2", "p3")):
-            c[i].metric(f"{i + 1}. periodā", f"{pr[per]:.2f}", f"{pr[per] - liga['blend'][per]:+.2f} pret līgu", border=True)
-        st.caption("Šo vērtību vēlāk var padot modelim (da.tiesnesu_prognoze), lai koriģētu noraidījumu prognozi.")
-
-    with t_spele:
-        if cur is None:
-            st.info("Šosezon vēl nav tiesnešu spēļu.")
-        else:
-            vards = st.selectbox("Tiesnesis", sorted(cur.loc[cur["loma"] == "referee", "vards"].unique()), key="ti_sel")
-            sp = da.tiesnesu_speles(cur, vards)
-            rtabula(pd.DataFrame({
-                "Datums": pd.to_datetime(sp["datums"]).dt.strftime("%d.%m.%Y"),
-                "Spēle": sp["away_team"] + " @ " + sp["home_team"],
-                "Noraid. mājas": sp["pen_home"], "Noraid. viesi": sp["pen_away"], "Kopā": sp["pen_total"],
-                "PIM min": sp["pim_home"] + sp["pim_away"]}), hide_index=True, width="stretch")
-
-# ============================================================================
-# LAPA: KARSTĀKIE SPĒLĒTĀJI
-# ============================================================================
-def lapa_karstie():
-    st.title("Karstākie spēlētāji")
-    sk = ielasit_papildu("speletaji", VERSIJA)
-    if sk is None:
-        st.info("Spēlētāju dati (dati/speletaji.csv) vēl nav pieejami.")
-        return
-
-    with st.expander("Kā tiek noteikts, ka spēlētājs ir karsts?"):
-        st.markdown(
-            "- **Salīdzina ar gaidāmo.** Aprēķina, cik punktu (vārtu / piespēļu) spēlētājam būtu jāiegūst pēdējās N spēlēs, "
-            "ņemot vērā viņa iepriekšējo vidējo (pievilktu pie līgas vidējā uzbrucējiem vai aizsargiem, ja spēļu ir maz).\n"
-            "- **Karstuma indekss** = (faktiskais − gaidāmais) / √gaidāmais. 0 ir parasts līmenis, 2 un vairāk ir karsts (🔥), 3 un vairāk ir ļoti karsts (🔥🔥). "
-            "Indekss ņem vērā izlases lielumu, tāpēc īss uzliesmojums nedod augstu vērtību.\n"
-            "- **Vienas spēles nepietiek.** Spēlētājam jābūt vismaz izvēlētajam spēļu skaitam logā un rādītājam jābūt vismaz divās dažādās spēlēs.\n"
-            "- **Papildu signāli:** sērija (spēles pēc kārtas ar rādītāju), metienu skaits un šaušanas % (vai rezultāts ir pamatots, vai tā ir veiksme) "
-            "un laiks laukumā (vai loma ir augusi).\n"
-            f"- **Sērija pēc vietas.** Sarakstā tiek iekļauti arī spēlētāji, kas negūst rādītāju katrā spēlē, bet gūst to {da.VIETAS_SERIJAS_SLIEKSNIS} un vairāk "
-            "mājas (🏠) vai izbraukuma (✈️) spēlēs pēc kārtas (skaitot tikai attiecīgās vietas spēles).\n"
-            "- **Sp. logā:** uzvedot peli uz spēļu skaita, redzams, vai spēle bija mājās vai izbraukumā un ko spēlētājs tajā guva (jaunākā spēle augšā).\n"
-            "- **Gaidāmais nākamajā spēlē** = 75% sezonas vidējais + 25% pēdējo spēļu vidējais (abi pievilkti pie līgas vidējā). "
-            "Hokejā karstumam ir neliela noturība: lielu daļu uzliesmojumu veido veiksme, tāpēc prognoze ir piesardzīga.\n"
-            "- Punkti = vārti + piespēles (G+A), tāpēc atsevišķa G+A kolonna nav vajadzīga.")
-
-    max_gp = int(sk.groupby("playerId").size().max())
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        metrika = izvele("Rādītājs", ["Punkti", "Vārti", "Piespēles"], key="ks_m")
-    with c2:
-        logs_t = izvele("Logs", ["Pēdējās 3", "Pēdējās 5", "Pēdējās 10"], default="Pēdējās 5", key="ks_l")
-    with c3:
-        min_sp = st.slider("Minimālais spēļu skaits logā", 2, 10, max(2, min(3, max_gp)), key="ks_min",
-                           help="Viena spēle nekad netiek ņemta vērā; agrā sezonā logā var būt mazāk spēļu")
-    d1, d2 = st.columns(2)
-    komandas = ["Visas komandas"] + sorted(da.KOMANDAS)
-    kom = d1.selectbox("Komanda", komandas, key="ks_kom",
-                       format_func=lambda x: x if x == "Visas komandas" else komandas_etikete(x))
-    with d2:
-        poz = izvele("Pozīcija", ["Visi", "Uzbrucēji", "Aizsargi"], key="ks_poz")
-
-    mkods = {"Punkti": "punkti", "Vārti": "vardi", "Piespēles": "piespeles"}[metrika]
-    nos = {"punkti": "punkti", "vardi": "vārti", "piespeles": "piespēles"}[mkods]
-    logs = int(logs_t.split()[-1])
-    res = da.karstie_speletaji(sk, mkods, logs, min_sp)
-    res = res[(res["z"].notna()) | res["tr_serija"]] if not res.empty else res      # indekss vai sērija mājās/izbraukumā
-    if not res.empty and kom != "Visas komandas":
-        res = res[res["Komanda"] == kom]
-    if not res.empty and poz != "Visi":
-        res = res[res["grupa"] == ("D" if poz == "Aizsargi" else "F")]
-    if res.empty:
-        st.info("Nav spēlētāju, kas atbilst nosacījumiem (nepietiek spēļu vai rādītājs bijis tikai vienā spēlē). "
-                "Pamēģini samazināt minimālo spēļu skaitu vai izvēlēties garāku logu.")
-        return
-    res = res.head(50)
-
-    ind = f"Karstuma indekss ({nos})"
-    vid_w, vid_s = f"{metrika} spēlē logā", f"{metrika} spēlē sezonā"
-    gaid = f"Gaidāmie {nos} nākamajā spēlē"
-    vis = pd.DataFrame({
-        "Spēlētājs": res["Speletajs"].values, "Komanda": [da.logo_url(k) for k in res["Komanda"]], "Poz": res["Poz"].values,
-        "Statuss": [(" ".join(x for x in (("🔥🔥" if z >= 3 else "🔥" if z >= 2 else ""),
-                                          (f"🏠{int(m)}" if m >= da.VIETAS_SERIJAS_SLIEKSNIS else ""),
-                                          (f"✈️{int(v)}" if v >= da.VIETAS_SERIJAS_SLIEKSNIS else "")) if x)) or "–"
-                    for z, m, v in zip(res["z"].fillna(0), res["ser_majas"], res["ser_viesos"])],
-        "Sp. logā": res["n_w"].astype(int).values,
-        "G": res["G_w"].astype(int).values, "A": res["A_w"].astype(int).values, "P": res["P_w"].astype(int).values,
-        vid_w: res["vid_w"].values, vid_s: res["vid_sez"].values,
-        "Sērija": res["serija"].astype(int).values,
-        ind: res["z"].values, gaid: res["gaidamie_nakamaja"].values,
-        "Sezona īsumā": [f"{int(r.GP)} sp · {int(r.G_sez)}G {int(r.A_sez)}A {int(r.P_sez)}P · {int(r.SOG_sez)} metieni"
-                         for r in res.itertuples()],
-        "Kāpēc karsts": [da.karstuma_teksts(r, mkods) for _, r in res.iterrows()],
-    })
-    # burbulis kolonnai "Sp. logā": spēlētāja pēdējās spēles (jaunākā augšā), mājās vai izbraukumā, un ko viņš tajā guva
-    speles_df = da.speletaju_speles(sk[sk["playerId"].isin(res.index)], RAW, logs)
-    burbuli = []
-    for pid in res.index:
-        g = speles_df[speles_df["playerId"] == pid]
-        ier = [{"teksts": f"{r.datums:%d.%m.} · {r.vieta} vs {r.pretinieks}", "piez": f"{int(r.goals)}G {int(r.assists)}A ({int(r.points)}P)"}
-               for r in g.itertuples()]
-        burbuli.append(burbula_html(f"Pēdējās {logs} spēles (jaunākā augšā)", ier))
-    pask = {
-        "Sp. logā": "Spēles izvēlētajā logā. Uzvedot peli, redzams, vai spēle bija mājās vai izbraukumā un ko spēlētājs tajā guva (jaunākā augšā)",
-        "Statuss": f"🔥 karsts (indekss 2+), 🔥🔥 ļoti karsts (3+); 🏠/✈️ ar skaitli = rādītājs tik mājas/izbraukuma spēlēs pēc kārtas (no {da.VIETAS_SERIJAS_SLIEKSNIS})",
-        "G": "Vārti izvēlētajā logā", "A": "Piespēles izvēlētajā logā", "P": "Punkti (vārti + piespēles) izvēlētajā logā",
-        vid_w: f"Vidēji {nos} spēlē izvēlētajā logā", vid_s: f"Vidēji {nos} spēlē visā sezonā",
-        ind: f"Faktiskie {nos} logā pret gaidāmajiem (z-vērtība): 0 = parasts līmenis, 2+ = karsts, 3+ = ļoti karsts. "
-             "Netiek rēķināts, ja logā ir pārāk maz spēļu vai rādītājs bijis tikai vienā spēlē",
-        gaid: f"Piesardzīgs novērtējums: 75% sezonas vidējais + 25% pēdējo spēļu vidējais ({nos} spēlē), pievilkti pie līgas vidējā",
-    }
-    df_html(vis, formati={vid_w: "{:.2f}", vid_s: "{:.2f}", ind: "{:.1f}", gaid: "{:.2f}"}, prog={ind: (0, 5)}, paskaidr=pask,
-            logo_kol=("Komanda",), burbuli=burbuli, bur_kol="Sp. logā", platas=("Kāpēc karsts",))
-    st.caption(f"Logs: {logs_t.lower()} (ja spēlētājs nospēlējis mazāk, tiek ņemtas visas viņa spēles). "
-               "Sezonas sākumā izlase ir maza, tāpēc rangs var strauji mainīties. Tā ir statistikas indikācija, nevis garantija.")
-
-
-# ============================================================================
-# LAPA: ČATS
-# ============================================================================
-CATA_PIEMERI = ["Kuras komandas saņem visvairāk noraidījumu?", "Kā klājas NJD pēdējās 5 spēlēs?", "Kuri spēlētāji šobrīd ir karsti?",
-                "Vakardienas rezultāti", "Salīdzini TOR un MTL", "Kuri tiesneši soda visvairāk?"]
-CATA_RIKU_NOS = {"komandas_statistika": "Komandas statistika", "ligas_tabula": "Komandu tabula", "speles": "Spēles", "speletaji": "Spēlētāji",
-                 "karstie_speletaji": "Karstie spēlētāji", "vartsargi": "Vārtsargi", "tiesnesi": "Tiesneši", "kalendars": "Kalendārs",
-                 "salidzinat_komandas": "Komandu salīdzinājums"}
-MAX_CATA_JAUTAJUMI = 40       # jautājumu skaits vienā sesijā (ierobežo izmaksas, ja ieslēgts Claude)
-
-
-def _secret(nos, noklusejums=None):
-    try:
-        return st.secrets[nos]
-    except Exception:
-        return noklusejums
-
-
-def _cata_dati():
-    cur, prev, _ = ielasit_tiesnesus(VERSIJA)
-    return cats.Dati(RAW, DF, KAL, ielasit_papildu("speletaji", VERSIJA), ielasit_papildu("vartsargi", VERSIJA),
-                     cur, prev, ielasit_planotos(VERSIJA), modelis)
-
-
-def _cata_zina(z):
-    with st.chat_message(z["loma"]):
-        st.markdown(z["teksts"])
-        for nos, _, tab in z.get("tabulas", []):
-            with st.expander(f"Dati: {CATA_RIKU_NOS.get(nos, nos)}"):
-                rtabula(tab, hide_index=True, width="stretch")
-
-
-def lapa_cats():
-    st.title("Čats")
-    atslega = _secret("ANTHROPIC_API_KEY")
-    klients, kluda = None, None
-    if atslega:
-        try:
-            import anthropic
-            klients = anthropic.Anthropic(api_key=atslega)
-        except Exception as e:
-            kluda = f"Claude nav pieejams ({type(e).__name__}); pārbaudi, vai requirements.txt ir 'anthropic'."
-    modelis_nos = _secret("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
-    if klients:
-        st.caption("Jautā brīvā formā par komandām, spēlētājiem, tiesnešiem un spēlēm. Atbildes balstās tikai uz šīs lietotnes datiem; "
-                   "jautājumi un datu fragmenti tiek nosūtīti Anthropic API apstrādei.")
-    else:
-        st.info("Darbojas vienkāršā meklēšana pēc atslēgvārdiem un komandu/spēlētāju nosaukumiem. Lai čats saprastu brīvas frāzes, "
-                "Streamlit Secrets pievieno ANTHROPIC_API_KEY.")
-        if kluda:
-            st.warning(kluda)
-
-    vesture = st.session_state.setdefault("cats_vesture", [])
-    for z in vesture:
-        _cata_zina(z)
-
-    jaut = None
-    if not vesture:
-        st.markdown("**Piemēri**")
-        for i, piemers in enumerate(CATA_PIEMERI):
-            if st.button(piemers, key=f"cp{i}", width="stretch"):
-                jaut = piemers
-    iev = st.chat_input("Pajautā par komandām, spēlētājiem, tiesnešiem, rezultātiem…")
-    jaut = iev or jaut
-    if vesture:
-        st.button("Notīrīt sarunu", on_click=lambda: st.session_state.update(cats_vesture=[]), key="cats_clear")
-
-    if not jaut:
-        return
-    if sum(1 for z in vesture if z["loma"] == "user") >= MAX_CATA_JAUTAJUMI:
-        st.warning("Sasniegts jautājumu limits šajā sesijā. Nospied «Notīrīt sarunu», lai sāktu no jauna.")
-        return
-    vesture.append({"loma": "user", "teksts": jaut})
-    _cata_zina(vesture[-1])
-    with st.chat_message("assistant"):
-        with st.spinner("Meklēju datos…"):
-            dati = _cata_dati()
-            try:
-                if klients:
-                    api = [{"role": z["loma"], "content": z["teksts"]} for z in vesture[-9:]]
-                    while api and api[0]["role"] != "user":
-                        api.pop(0)
-                    atb, tabulas = cats.atbildet_ar_claude(klients, modelis_nos, api, dati)
-                else:
-                    atb, tabulas = cats.vienkarsa_meklesana(jaut, dati)
-            except Exception as e:
-                try:
-                    teksts, tabulas = cats.vienkarsa_meklesana(jaut, dati)
-                except Exception:
-                    teksts, tabulas = "Neizdevās atrast datus.", []
-                atb = f"Neizdevās sazināties ar Claude ({type(e).__name__}). Vienkāršās meklēšanas rezultāts: {teksts}"
-        st.markdown(atb)
-        for nos, _, tab in tabulas:
-            with st.expander(f"Dati: {CATA_RIKU_NOS.get(nos, nos)}"):
-                rtabula(tab, hide_index=True, width="stretch")
-    vesture.append({"loma": "assistant", "teksts": atb, "tabulas": tabulas})
-    del vesture[:-30]            # saglabā tikai pēdējās 30 ziņas
-
-
-# ============================================================================
-# NAVIGĀCIJA
-# Struktūra ir šeit, vienā vietā: lapas var pārvietot starp grupām, grupas pārsaukt vai lapu izvilkt kā atsevišķu pogu
-# ({"lapa": (...)} ieraksts bez grupas). Ikonas ir Material Symbols (fonts.google.com/icons).
-# ============================================================================
-def augseja_josla(aktiva):
-    """Viena josla augšā: zīmols + atsevišķas pogas + grupas, kuru lapas parādās, uzvedot peli virsū (vai pieskaroties)."""
-    pedejais = len(STRUKTURA) - 1
-    with st.container(key="topbar"):
-        with st.container(key="brand"):
-            st.page_link(VISAS_LAPAS[0], label="NHL analītika")
-        for i, (tips, nosaukums, saraksts) in enumerate(STRUKTURA):
-            if tips == "lapa":
-                akt = saraksts[0][1].title == aktiva.title
-                with st.container(key=f"navs-{i}" + ("-akt" if akt else "")):
-                    st.page_link(saraksts[0][1], label=nosaukums)
-                continue
-            aktivs = any(p.title == aktiva.title for _, p in saraksts)
-            with st.container(key=f"navg-{i}" + ("-rr" if i == pedejais else "")):      # -rr: izvēlne līdzināta pie labās malas
-                st.markdown(f'<div class="nav-title{" aktivs" if aktivs else ""}" tabindex="0">{nosaukums}</div>',
-                            unsafe_allow_html=True)
-                with st.container(key=f"navi-{i}"):
-                    for j, (rec, p) in enumerate(saraksts):
-                        with st.container(key=f"navp-{i}-{j}" + ("-akt" if p.title == aktiva.title else "")):
-                            st.page_link(p, label=rec[1], icon=f":material/{rec[3]}:")
-
-
-IZVELNES_SKRIPTS = """
-<script>
-(function () {
-  var w = window.parent, d = w.document;
-  function josla() { return d.querySelector('.st-key-topbar'); }
-  // Streamlit var pārbūvēt šo kadru (piem., mainoties elementu secībai lapā). Iepriekšējā kadra klausītāji tiek noņemti, un katrs jauns kadrs
-  // reģistrē savus; tāpēc izvēlnes nepaliek "iestrēgušas" (agrāk vecais kadrs bija likvidēts, bet tā iestatītais stāvoklis palika).
-  var vecais = w.__nhlIzv;
-  if (vecais) { try { vecais.reg.forEach(function (n) { d.removeEventListener(n[0], n[1], true); }); } catch (e) {} }
-  function klik(e) {                      // nospiežot saiti joslā: aizver izvēlni un noņem fokusu
-    var a = e.target.closest && e.target.closest('.st-key-topbar a');
-    var b = josla();
-    if (!a || !b) return;
-    b.classList.add('nav-aizvert');
-    if (d.activeElement && d.activeElement.blur) d.activeElement.blur();
-  }
-  function atvert(e) {                    // atkal ļauj atvērt, kad lietotājs uzved peli vai pieskaras grupas nosaukumam
-    var t = e.target.closest && e.target.closest('.nav-title');
-    var b = josla();
-    if (t && b) b.classList.remove('nav-aizvert');
-  }
-  var reg = [['click', klik], ['pointerover', atvert], ['touchstart', atvert], ['focusin', atvert]];
-  reg.forEach(function (n) { d.addEventListener(n[0], n[1], true); });
-  w.__nhlIzv = { reg: reg };
-  var b0 = josla(); if (b0) b0.classList.remove('nav-aizvert');          // jauns kadrs = tīrs sākums
-  function tirit() {                       // kadrs tiek likvidēts: noņem savus klausītājus un iestrēgušo stāvokli
-    try { reg.forEach(function (n) { d.removeEventListener(n[0], n[1], true); }); if (w.__nhlIzv && w.__nhlIzv.reg === reg) w.__nhlIzv = null; var b = josla(); if (b) b.classList.remove('nav-aizvert'); } catch (e) {}
-  }
-  window.addEventListener('pagehide', tirit);
-  window.addEventListener('unload', tirit);
-})();
-</script>
-"""
-
-if NAV_REZIMS == "pielagots":
-    augseja_josla(lapas)
-    with st.container(key="nav_skripts"):       # stabila pozīcija: skripta kadrs netiek pārbūvēts, mainoties citiem elementiem
-        try:
-            import streamlit.components.v1 as components
-            components.html(IZVELNES_SKRIPTS, height=0)
-        except Exception:       # skripts ir tikai uzlabojums: bez tā izvēlne aizveras, nospiežot jebkur citur
-            pass
-lapas.run()
+          
