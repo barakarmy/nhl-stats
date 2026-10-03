@@ -362,20 +362,28 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   .tb .bubble::before { display: none; }
 }
 
-/* ===== Komandu logo režģis (Komandu statistika): katrs logo ir rāmītis ar neredzamu pogu virsū ===== */
-.st-key-kom_registis { display: grid !important; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .5rem !important; margin: 0 auto .8rem; max-width: 46rem; }
-.st-key-kom_registis > div { width: auto !important; min-width: 0; }
-[class*="st-key-kt_"] { position: relative !important; aspect-ratio: 1 / 1; display: flex !important; align-items: center; justify-content: center; padding: .4rem;
-  border: 1px solid rgba(128,128,128,.28); border-radius: 14px; background: rgba(255,255,255,.72); cursor: pointer; box-sizing: border-box;
-  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
-[class*="st-key-kt_"]:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 6px 16px rgba(0,0,0,.14); border-color: #3b82f6; }
-[class*="st-key-kt_"][class*="_akt"] { border-color: #3b82f6; border-width: 2px; background: #ffffff; box-shadow: 0 0 0 3px rgba(59,130,246,.25); }
+/* ===== Komandu logo režģis (Komandu statistika): bez rāmjiem, logo centrēti; katrs logo ir klikšķināms pa visu savu laukumu (neredzama poga virsū) ===== */
+.st-key-kom_registis { display: grid !important; grid-template-columns: repeat(8, 4.9rem); justify-content: center; justify-items: center; align-items: center;
+  gap: .45rem !important; margin: 0 auto 1rem; width: 100%; }
+.st-key-kom_registis > div { width: 4.9rem !important; min-width: 0; }
+[class*="st-key-kt_"] { position: relative !important; width: 4.9rem; height: 4.9rem; display: flex !important; align-items: center; justify-content: center;
+  padding: 0 !important; border: none !important; background: none !important; box-shadow: none !important; cursor: pointer; opacity: .62;
+  transition: transform .14s ease, opacity .14s ease; }
+[class*="st-key-kt_"]:hover { opacity: 1; transform: scale(1.1); }
+[class*="st-key-kt_"][class*="_akt"] { opacity: 1; transform: scale(1.14); }
+[class*="st-key-kt_"][class*="_akt"] .kt-logo { filter: drop-shadow(0 4px 7px rgba(0,0,0,.3)); }
+[class*="st-key-kt_"] > div:first-child { width: 100% !important; line-height: 0; display: flex; justify-content: center; }
+[class*="st-key-kt_"] p { margin: 0 !important; }
+/* neredzamā poga aizpilda visu laukumu: visi tās ietinumi (jebkura tipa elementi) tiek izstiepti 100% */
 [class*="st-key-kt_"] > div:last-child { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; margin: 0 !important; opacity: 0; }
-[class*="st-key-kt_"] > div:last-child div { width: 100% !important; height: 100% !important; margin: 0 !important; display: block !important; }
-[class*="st-key-kt_"] > div:last-child button { width: 100% !important; height: 100% !important; min-height: 0 !important; padding: 0 !important; }
-[class*="st-key-kt_"] > div:first-child { width: auto !important; line-height: 0; }
-.kt-logo { width: 100%; max-width: 2.9rem; height: auto; aspect-ratio: 1 / 1; object-fit: contain; display: block; }
-@media (max-width: 640px) { .st-key-kom_registis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+[class*="st-key-kt_"] > div:last-child * { width: 100% !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
+  display: block !important; box-sizing: border-box; }
+.kt-logo { width: 3.7rem !important; height: 3.7rem !important; max-width: none !important; object-fit: contain; display: block; margin: 0 auto; }
+@media (max-width: 640px) {
+  .st-key-kom_registis { grid-template-columns: repeat(4, 4.4rem); }
+  .st-key-kom_registis > div, [class*="st-key-kt_"] { width: 4.4rem !important; height: 4.4rem; }
+  .kt-logo { width: 3.3rem !important; height: 3.3rem !important; }
+}
 /* pēdējā spēle: rezultāts kā saite uz Rezultātu sadaļu */
 .st-key-pedeja_spele_josla { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; gap: .4rem !important; margin-bottom: .6rem; }
 .st-key-pedeja_spele_josla > div { width: auto !important; flex: 0 0 auto; }
