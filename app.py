@@ -46,13 +46,13 @@ def _parole():
         return None
 
 
-# Pieteikšanās atcerēšanās: pēc paroles ievades pārlūkā tiek ierakstīta paraksīta sīkdatne (nav pati parole), tāpēc jaunā cilnē (piem., saitē no
-# burbuļa uz Rezultātiem) parole nav jāievada vēlreiz. Zīmogs ir HMAC no paroles, tāpēc paroles maiņa visas sīkdatnes anulē.
-COOKIE_NOS, COOKIE_DIENAS = "nhl_auth", 30
+# Saites uz citām cilnēm: katra jauna cilne ir jauna sesija un prasītu paroli. Tāpēc saitēs, ko lietotne pati izveido (piem., burbuļos), tiek pievienots
+# īslaicīgs paraksts t=... (HMAC no derīguma laika ar paroli kā atslēgu; pati parole tajā nav). Jaunā cilne to pārbauda un paraksts tiek noņemts no adreses.
+SAITES_ZETONA_STUNDAS = 8
 
 
 def _auth_zetons(parole, lidz):
-    return f"{lidz}.{hmac.new(parole.encode(), f'nhl-auth:{lidz}'.encode(), hashlib.sha256).hexdigest()}"
+    return f"{lidz}.{hmac.new(parole.encode(), f'nhl-saite:{lidz}'.encode(), hashlib.sha256).hexdigest()}"
 
 
 def _auth_zetons_derigs(zetons, parole):
@@ -63,6 +63,12 @@ def _auth_zetons_derigs(zetons, parole):
         return hmac.compare_digest(paraksts, _auth_zetons(parole, int(lidz)).split(".", 1)[1])
     except Exception:
         return False
+
+
+def saites_zetons():
+    """Derīgs 8-9 stundas (laiks noapaļots uz stundu, lai HTML nemainās katrā izpildē). None, ja parole nav iestatīta."""
+    p = _parole()
+    return _auth_zetons(p, (int(time.time()) // 3600 + SAITES_ZETONA_STUNDAS + 1) * 3600) if p else None
 
 
 LOGIN_CSS = """<style>
@@ -109,19 +115,18 @@ def check_password():
                  "un spied Save changes (izmaiņas stājas spēkā aptuveni minūtes laikā).")
         return False
 
-    try:                                                 # atcerēta pieteikšanās (sīkdatne): jaunas cilnes netiek apturētas
-        ck = st.context.cookies.get(COOKIE_NOS)
-    except Exception:
-        ck = None
-    if ck and _auth_zetons_derigs(ck, parole):
+    zet = st.query_params.get("t")                       # saite no citas cilnes (burbulis u.c.): derīgs paraksts aizstāj paroles ievadi
+    if zet and _auth_zetons_derigs(zet, parole):
         st.session_state["password_correct"] = True
+        try:
+            del st.query_params["t"]                     # paraksts nepaliek adreses joslā
+        except Exception:
+            pass
         return True
 
     def entered():
         ievade = str(st.session_state.get("password", ""))
         st.session_state["password_correct"] = hmac.compare_digest(ievade.encode(), parole.encode())
-        if st.session_state["password_correct"]:
-            st.session_state["_auth_cookie"] = _auth_zetons(parole, int(time.time()) + COOKIE_DIENAS * 86400)
         st.session_state.pop("password", None)
 
     st.markdown(LOGIN_CSS, unsafe_allow_html=True)
@@ -131,17 +136,70 @@ def check_password():
     return False
 
 
+NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
+
+NAV = [
+    # atsevišķas pogas joslā (bez izvēlnes)
+    {"lapa": ("lapa_karstie", "Karstākie spēlētāji", "karstie", "local_fire_department")},
+    {"lapa": ("lapa_prognozes", "Prognozes", "prognozes", "insights")},
+    # grupas ar izvēlni (funkcija, nosaukums, url, Material ikona)
+    {"grupa": "Komandas", "lapas": [
+        ("lapa_parskats", "Līgas pārskats", "parskats", "leaderboard"),
+        ("lapa_salidzinat", "Salīdzināt komandas", "salidzinat", "compare_arrows"),
+        ("lapa_komanda", "Komandas statistika", "komanda", "groups"),
+    ]},
+    {"grupa": "Statistika", "lapas": [
+        ("lapa_periodi", "Periodi", "periodi", "view_timeline"),
+        ("lapa_forma", "Forma un vārti", "forma", "trending_up"),
+        ("lapa_over_under", "Over / Under", "over-under", "swap_vert"),
+        ("lapa_powerplay", "Powerplay", "powerplay", "bolt"),
+        ("lapa_noraidijumi", "Noraidījumi", "noraidijumi", "gavel"),
+    ]},
+    {"grupa": "Spēlētāji un tiesneši", "lapas": [
+        ("lapa_speletaji", "Spēlētāji", "speletaji", "person"),
+        ("lapa_tiesnesi", "Tiesneši", "tiesnesi", "sports"),
+    ]},
+    # beigās atsevišķas sadaļas: Čats, Kalendārs (priekšpēdējais), Rezultāti (pēdējais)
+    *([{"lapa": ("lapa_cats", "Čats", "cats", "chat")}] if cats is not None else []),   # tikai, ja ir cats.py
+    {"lapa": ("lapa_kalendars", "Kalendārs", "kalendars", "calendar_month")},
+    {"lapa": ("lapa_rezultati", "Rezultāti", "rezultati", "sports_score")},
+]
+
+
+def _lazy(funkcijas_nosaukums):
+    """Lapas funkcija tiek atrasta pēc nosaukuma izpildes brīdī (funkcijas ir definētas zemāk failā; izpildās tikai pēc pieteikšanās)."""
+    def _izsaukt():
+        globals()[funkcijas_nosaukums]()
+    _izsaukt.__name__ = funkcijas_nosaukums
+    return _izsaukt
+
+
+def _lapa(rec, noklusejuma):
+    f, nos, url, ikona = rec
+    return st.Page(_lazy(f), title=nos, icon=f":material/{ikona}:", url_path=url, default=noklusejuma)
+
+
+STRUKTURA, _pirma = [], True            # [(tips, nosaukums, [(ieraksts, st.Page), ...]), ...]
+for _ier in NAV:
+    _recs = _ier["lapas"] if "grupa" in _ier else [_ier["lapa"]]
+    _lapas = []
+    for _rec in _recs:
+        _lapas.append((_rec, _lapa(_rec, _pirma)))
+        _pirma = False
+    STRUKTURA.append(("grupa", _ier["grupa"], _lapas) if "grupa" in _ier else ("lapa", _recs[0][1], _lapas))
+VISAS_LAPAS = [p for _, _, saraksts in STRUKTURA for _, p in saraksts]
+
+
+
+# Navigācija tiek reģistrēta PIRMS paroles pārbaudes: tad adrese (piem., /rezultati?spele=...) tiek saglabāta arī tad, ja vispirms jāievada parole
+if NAV_REZIMS == "pielagots":
+    lapas = st.navigation(VISAS_LAPAS, position="hidden")
+else:
+    lapas = st.navigation({n: [p for _, p in s] for t, n, s in STRUKTURA}, position="top")
+
 if not check_password():
     st.stop()
 
-_ck = st.session_state.pop("_auth_cookie", None)          # tikko pieteicās: ieraksta paraksīto sīkdatni pārlūkā (skripts izpildās vienreiz)
-if _ck:
-    try:
-        import streamlit.components.v1 as _comp
-        _comp.html("<script>try{var p=window.parent;p.document.cookie='" + COOKIE_NOS + "=" + _ck + "; path=/; max-age=" + str(COOKIE_DIENAS * 86400)
-                   + "; SameSite=Lax'+(p.location.protocol==='https:'?'; Secure':'');}catch(e){}</script>", height=0)
-    except Exception:
-        pass
 
 # ============================================================================
 # STILS
@@ -264,6 +322,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .st-key-datums_lauks::after { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-size: 1rem; font-weight: 700; letter-spacing: .01em; }
 .st-key-datums_lauks:hover, .st-key-datums_lauks:focus-within { border-color: #3b82f6; }
+.st-key-nav_skripts { position: absolute !important; width: 0; height: 0; overflow: hidden; margin: 0 !important; padding: 0 !important; }
 
 /* ===== HTML tabula ar uznirstošajiem burbuļiem (spēļu saraksts, uzvedot peli uz "Sp.") ===== */
 .tb-wrap { width: 100%; }
@@ -273,7 +332,8 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .tb th.l, .tb td.l { text-align: left; }
 .tb td.w { white-space: normal; min-width: 20rem; text-align: left; font-size: .85rem; }
 .tb tbody tr:hover { background: rgba(59,130,246,.07); }
-.tb-logo { width: 26px; height: 26px; object-fit: contain; vertical-align: middle; }
+.tb td.lg { text-align: center; padding: .3rem .5rem; }
+.tb img.tb-logo { display: block; margin: 0 auto; width: 38px !important; height: 38px !important; max-width: none !important; object-fit: contain; }
 .tb .pb { position: relative; min-width: 88px; height: 1.15rem; border-radius: 6px; overflow: hidden; background: rgba(128,128,128,.2); text-align: center; }
 .tb .pb i { position: absolute; inset: 0 auto 0 0; background: rgba(59,130,246,.55); }
 .tb .pb b { position: relative; font-size: .78rem; font-weight: 600; line-height: 1.15rem; }
@@ -311,7 +371,8 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 [class*="st-key-kt_"]:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 6px 16px rgba(0,0,0,.14); border-color: #3b82f6; }
 [class*="st-key-kt_"][class*="_akt"] { border-color: #3b82f6; border-width: 2px; background: #ffffff; box-shadow: 0 0 0 3px rgba(59,130,246,.25); }
 [class*="st-key-kt_"] > div:last-child { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; margin: 0 !important; opacity: 0; }
-[class*="st-key-kt_"] > div:last-child button { width: 100%; height: 100%; }
+[class*="st-key-kt_"] > div:last-child div { width: 100% !important; height: 100% !important; margin: 0 !important; display: block !important; }
+[class*="st-key-kt_"] > div:last-child button { width: 100% !important; height: 100% !important; min-height: 0 !important; padding: 0 !important; }
 [class*="st-key-kt_"] > div:first-child { width: auto !important; line-height: 0; }
 .kt-logo { width: 100%; max-width: 2.9rem; height: auto; aspect-ratio: 1 / 1; object-fit: contain; display: block; }
 @media (max-width: 640px) { .st-key-kom_registis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
@@ -925,8 +986,9 @@ def lapa_salidzinat():
 # LAPAS: PERIODI
 # ============================================================================
 def speles_saite(game_id):
-    """Saite uz šīs spēles protokolu lietotnes sadaļā Rezultāti (atveras jaunā cilnē; pieteikšanās tiek atcerēta sīkdatnē)."""
-    return f"/rezultati?spele={int(game_id)}"
+    """Saite uz šīs spēles protokolu lietotnes sadaļā Rezultāti (atveras jaunā cilnē; saitē ir īslaicīgs paraksts, lai nebūtu jāievada parole)."""
+    zet = saites_zetons()
+    return f"/rezultati?spele={int(game_id)}" + (f"&t={zet}" if zet else "")
 
 
 def burbula_html(virsraksts, ieraksti):
@@ -985,7 +1047,7 @@ def tabula_html(res, kolonnas, sort_col, ascending=False, formati=None, prog=Non
         galva += f'<th{" class=l" if k in platas else ""}>{saturs}</th>'
     rindas = ""
     for i, (kods, r) in enumerate(t.iterrows(), 1):
-        rinda = f'<td>{i}</td><td><img class="tb-logo" src="{e(da.logo_url(kods))}" alt="{e(kods)}"></td><td class="l">{e(da.pilns_nosaukums(kods))}</td>'
+        rinda = f'<td>{i}</td><td class="lg"><img class="tb-logo" width="38" height="38" src="{e(da.logo_url(kods))}" alt="{e(kods)}"></td><td class="l">{e(da.pilns_nosaukums(kods))}</td>'
         for k in kolonnas:
             v = r[k]
             if k == bur_kol and kods in burbuli:
@@ -1027,7 +1089,7 @@ def df_html(df, formati=None, prog=None, paskaidr=None, logo_kol=(), burbuli=Non
         for k in df.columns:
             v = r[k]
             if k in logo_kol:
-                rinda += f'<td><img class="tb-logo" src="{e(v)}" alt=""></td>'
+                rinda += f'<td class="lg"><img class="tb-logo" width="38" height="38" src="{e(v)}" alt=""></td>'
             elif k == bur_kol and burbuli is not None:
                 rinda += f'<td class="tbsp" tabindex="0"><span class="spw">{fmt(v, "{:.0f}")}<span class="bubble">{burbuli[i]}</span></span></td>'
             elif k in prog:
@@ -1951,52 +2013,6 @@ def lapa_cats():
 # Struktūra ir šeit, vienā vietā: lapas var pārvietot starp grupām, grupas pārsaukt vai lapu izvilkt kā atsevišķu pogu
 # ({"lapa": (...)} ieraksts bez grupas). Ikonas ir Material Symbols (fonts.google.com/icons).
 # ============================================================================
-NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
-
-NAV = [
-    # atsevišķas pogas joslā (bez izvēlnes)
-    {"lapa": (lapa_karstie, "Karstākie spēlētāji", "karstie", "local_fire_department")},
-    {"lapa": (lapa_prognozes, "Prognozes", "prognozes", "insights")},
-    # grupas ar izvēlni (funkcija, nosaukums, url, Material ikona)
-    {"grupa": "Komandas", "lapas": [
-        (lapa_parskats, "Līgas pārskats", "parskats", "leaderboard"),
-        (lapa_salidzinat, "Salīdzināt komandas", "salidzinat", "compare_arrows"),
-        (lapa_komanda, "Komandas statistika", "komanda", "groups"),
-    ]},
-    {"grupa": "Statistika", "lapas": [
-        (lapa_periodi, "Periodi", "periodi", "view_timeline"),
-        (lapa_forma, "Forma un vārti", "forma", "trending_up"),
-        (lapa_over_under, "Over / Under", "over-under", "swap_vert"),
-        (lapa_powerplay, "Powerplay", "powerplay", "bolt"),
-        (lapa_noraidijumi, "Noraidījumi", "noraidijumi", "gavel"),
-    ]},
-    {"grupa": "Spēlētāji un tiesneši", "lapas": [
-        (lapa_speletaji, "Spēlētāji", "speletaji", "person"),
-        (lapa_tiesnesi, "Tiesneši", "tiesnesi", "sports"),
-    ]},
-    # beigās atsevišķas sadaļas: Čats, Kalendārs (priekšpēdējais), Rezultāti (pēdējais)
-    *([{"lapa": (lapa_cats, "Čats", "cats", "chat")}] if cats is not None else []),   # tikai, ja ir cats.py
-    {"lapa": (lapa_kalendars, "Kalendārs", "kalendars", "calendar_month")},
-    {"lapa": (lapa_rezultati, "Rezultāti", "rezultati", "sports_score")},
-]
-
-
-def _lapa(rec, noklusejuma):
-    f, nos, url, ikona = rec
-    return st.Page(f, title=nos, icon=f":material/{ikona}:", url_path=url, default=noklusejuma)
-
-
-STRUKTURA, _pirma = [], True            # [(tips, nosaukums, [(ieraksts, st.Page), ...]), ...]
-for _ier in NAV:
-    _recs = _ier["lapas"] if "grupa" in _ier else [_ier["lapa"]]
-    _lapas = []
-    for _rec in _recs:
-        _lapas.append((_rec, _lapa(_rec, _pirma)))
-        _pirma = False
-    STRUKTURA.append(("grupa", _ier["grupa"], _lapas) if "grupa" in _ier else ("lapa", _recs[0][1], _lapas))
-VISAS_LAPAS = [p for _, _, saraksts in STRUKTURA for _, p in saraksts]
-
-
 def augseja_josla(aktiva):
     """Viena josla augšā: zīmols + atsevišķas pogas + grupas, kuru lapas parādās, uzvedot peli virsū (vai pieskaroties)."""
     pedejais = len(STRUKTURA) - 1
@@ -2023,36 +2039,42 @@ IZVELNES_SKRIPTS = """
 <script>
 (function () {
   var w = window.parent, d = w.document;
-  if (w.__nhlIzvelne) return;
-  w.__nhlIzvelne = true;
   function josla() { return d.querySelector('.st-key-topbar'); }
-  // nospiežot saiti joslā: aizver izvēlni un noņem fokusu
-  d.addEventListener('click', function (e) {
+  // Streamlit var pārbūvēt šo kadru (piem., mainoties elementu secībai lapā). Iepriekšējā kadra klausītāji tiek noņemti, un katrs jauns kadrs
+  // reģistrē savus; tāpēc izvēlnes nepaliek "iestrēgušas" (agrāk vecais kadrs bija likvidēts, bet tā iestatītais stāvoklis palika).
+  var vecais = w.__nhlIzv;
+  if (vecais) { try { vecais.reg.forEach(function (n) { d.removeEventListener(n[0], n[1], true); }); } catch (e) {} }
+  function klik(e) {                      // nospiežot saiti joslā: aizver izvēlni un noņem fokusu
     var a = e.target.closest && e.target.closest('.st-key-topbar a');
     var b = josla();
     if (!a || !b) return;
     b.classList.add('nav-aizvert');
     if (d.activeElement && d.activeElement.blur) d.activeElement.blur();
-  }, true);
-  // atkal ļauj atvērt, kad lietotājs uzved peli vai pieskaras grupas nosaukumam
-  function atvert(e) {
+  }
+  function atvert(e) {                    // atkal ļauj atvērt, kad lietotājs uzved peli vai pieskaras grupas nosaukumam
     var t = e.target.closest && e.target.closest('.nav-title');
     var b = josla();
     if (t && b) b.classList.remove('nav-aizvert');
   }
-  ['pointerover', 'touchstart', 'focusin'].forEach(function (n) { d.addEventListener(n, atvert, true); });
+  var reg = [['click', klik], ['pointerover', atvert], ['touchstart', atvert], ['focusin', atvert]];
+  reg.forEach(function (n) { d.addEventListener(n[0], n[1], true); });
+  w.__nhlIzv = { reg: reg };
+  var b0 = josla(); if (b0) b0.classList.remove('nav-aizvert');          // jauns kadrs = tīrs sākums
+  function tirit() {                       // kadrs tiek likvidēts: noņem savus klausītājus un iestrēgušo stāvokli
+    try { reg.forEach(function (n) { d.removeEventListener(n[0], n[1], true); }); if (w.__nhlIzv && w.__nhlIzv.reg === reg) w.__nhlIzv = null; var b = josla(); if (b) b.classList.remove('nav-aizvert'); } catch (e) {}
+  }
+  window.addEventListener('pagehide', tirit);
+  window.addEventListener('unload', tirit);
 })();
 </script>
 """
 
 if NAV_REZIMS == "pielagots":
-    lapas = st.navigation(VISAS_LAPAS, position="hidden")
     augseja_josla(lapas)
-    try:
-        import streamlit.components.v1 as components
-        components.html(IZVELNES_SKRIPTS, height=0)
-    except Exception:       # skripts ir tikai uzlabojums: bez tā izvēlne aizveras, nospiežot jebkur citur
-        pass
-else:
-    lapas = st.navigation({n: [p for _, p in s] for t, n, s in STRUKTURA}, position="top")
+    with st.container(key="nav_skripts"):       # stabila pozīcija: skripta kadrs netiek pārbūvēts, mainoties citiem elementiem
+        try:
+            import streamlit.components.v1 as components
+            components.html(IZVELNES_SKRIPTS, height=0)
+        except Exception:       # skripts ir tikai uzlabojums: bez tā izvēlne aizveras, nospiežot jebkur citur
+            pass
 lapas.run()
