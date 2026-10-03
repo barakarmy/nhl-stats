@@ -592,6 +592,7 @@ def planotie_vardi(plan, game_id):
 # KARSTIE SPĒLĒTĀJI
 # ----------------------------------------------------------------------------
 KARSTUMA_METRIKAS = {"punkti": "points", "vardi": "goals", "piespeles": "assists"}   # points = vārti + piespēles
+VIETAS_SERIJAS_SLIEKSNIS = 4      # tik mājas (vai izbraukuma) spēles pēc kārtas ar rādītāju: spēlētājs tiek iekļauts sarakstā arī bez augsta indeksa
 
 
 def _trailing_serija(vertibas):
@@ -605,7 +606,7 @@ def _trailing_serija(vertibas):
     return n
 
 
-def karstie_speletaji(sk, metrika="punkti", logs=5, min_speles=3, k=10, min_speles_ar_raditaju=2):
+def karstie_speletaji(sk, metrika="punkti", logs=5, min_speles=3, k=10, min_speles_ar_raditaju=2, vietas_serija=VIETAS_SERIJAS_SLIEKSNIS):
     """
     Spēlētāju "karstuma" novērtējums pēc pēdējo `logs` spēļu rezultātiem (no speletaji.csv).
 
@@ -620,6 +621,8 @@ def karstie_speletaji(sk, metrika="punkti", logs=5, min_speles=3, k=10, min_spel
          ar metieniem vai veiksmi), laiks laukumā (vai loma ir augusi).
       5. Gaidāmais rādītājs nākamajā spēlē = 75% sezonas vidējais (pievilkts pie līgas) + 25% loga vidējais (pievilkts).
          Hokejā "karstumam" ir neliela noturība, tāpēc svars ir mazs.
+      6. Papildu atlase: spēlētājs tiek iekļauts arī tad, ja viņš negūst rādītāju katrā spēlē, bet gūst to vismaz `vietas_serija` mājas
+         (vai izbraukuma) spēlēs pēc kārtas (skaitot tikai attiecīgās vietas spēles, piem., 4 mājas spēles pēc kārtas). Kolonna tr_serija.
     Atgriež DataFrame (viena rinda uz spēlētāju), kārtotu pēc karstuma indeksa (dilstoši).
     """
     if sk is None or sk.empty:
@@ -661,9 +664,17 @@ def karstie_speletaji(sk, metrika="punkti", logs=5, min_speles=3, k=10, min_spel
     out["vid_sez"] = out["m_sez"] / out["GP"]
     out["vid_w"] = out["m_w"] / out["n_w"].where(out["n_w"] > 0)
 
+    # sērijas pēc vietas: tikai mājas vai tikai izbraukuma spēles (hronoloģiskā secībā), cik pēdējās pēc kārtas ar rādītāju
+    for nos, vieta in (("ser_majas", "home"), ("ser_viesos", "away")):
+        xv = x[x["home_away"] == vieta]
+        out[nos] = xv.groupby("playerId")[col].agg(lambda s: _trailing_serija(s.fillna(0).values)).reindex(out.index).fillna(0).astype(int)
+    out["tr_serija"] = (out["ser_majas"] >= vietas_serija) | (out["ser_viesos"] >= vietas_serija)
+
     derigi = (out["n_w"] >= min_speles) & (out["spel_ar"] >= min_speles_ar_raditaju)
     out["z"] = out["z"].where(derigi)                                           # nederīgiem indekss nav aprēķināts
-    return out[out["n_w"] >= min_speles].sort_values("z", ascending=False, na_position="last")
+    out = out[(out["n_w"] >= min_speles) | out["tr_serija"]].copy()
+    out["_serija_maks"] = out[["ser_majas", "ser_viesos"]].max(axis=1)
+    return out.sort_values(["z", "_serija_maks"], ascending=[False, False], na_position="last")
 
 
 def karstuma_teksts(r, metrika="punkti"):
@@ -675,6 +686,9 @@ def karstuma_teksts(r, metrika="punkti"):
         daļas.append(f"rādītājs {int(r['spel_ar'])} no {int(r['n_w'])} spēlēm")
     if r["serija"] >= 3:
         daļas.append(f"sērija {int(r['serija'])} spēles pēc kārtas")
+    for nos, vieta in (("ser_majas", "mājas"), ("ser_viesos", "izbraukuma")):
+        if int(r.get(nos, 0) or 0) >= VIETAS_SERIJAS_SLIEKSNIS and int(r["serija"]) < int(r.get(nos, 0)):
+            daļas.append(f"{int(r[nos])} {vieta} spēles pēc kārtas ar rādītāju (tikai {vieta} spēļu secībā)")
     if r["n_w"] > 0 and r["GP"] > r["n_w"]:
         sog_w, sog_s = r["SOG_w"] / r["n_w"], r["SOG_sez"] / r["GP"]
         if metrika in ("punkti", "vardi"):
@@ -685,3 +699,18 @@ def karstuma_teksts(r, metrika="punkti"):
         if pd.notna(r["toi_w"]) and pd.notna(r["toi_sez"]) and r["toi_w"] - r["toi_sez"] >= 1.0:
             daļas.append(f"laiks laukumā +{r['toi_w'] - r['toi_sez']:.1f} min")
     return "; ".join(daļas)
+
+
+def speletaju_speles(sk, raw, logs=5):
+    """
+    Katra spēlētāja pēdējās `logs` spēles (jaunākā pirmā), lai varētu redzēt, vai spēle bija mājās vai izbraukumā un ko viņš tajā guva.
+    Atgriež DataFrame: playerId, game_id, datums (Rīgas), vieta ('Mājās'/'Izbraukumā'), pretinieks (kods), goals, assists, points.
+    """
+    if sk is None or sk.empty:
+        return pd.DataFrame()
+    x = sk.merge(raw[["game_id", "datums_lv", "home_team", "away_team"]], on="game_id", how="left")
+    x["pretinieks"] = np.where(x["home_away"] == "home", x["away_team"], x["home_team"])
+    x["vieta"] = np.where(x["home_away"] == "home", "Mājās", "Izbraukumā")
+    x = x.sort_values(["playerId", "datums_lv", "game_id"], ascending=[True, False, False])
+    x = x.groupby("playerId").head(logs)
+    return x[["playerId", "game_id", "datums_lv", "vieta", "pretinieks", "goals", "assists", "points"]].rename(columns={"datums_lv": "datums"})
