@@ -367,22 +367,24 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   gap: .45rem !important; margin: 0 auto 1rem; width: 100%; }
 .st-key-kom_registis > div { width: 4.9rem !important; min-width: 0; }
 [class*="st-key-kt_"] { position: relative !important; width: 4.9rem; height: 4.9rem; display: flex !important; align-items: center; justify-content: center;
-  padding: 0 !important; border: none !important; background: none !important; box-shadow: none !important; cursor: pointer; opacity: .62;
-  transition: transform .14s ease, opacity .14s ease; }
-[class*="st-key-kt_"]:hover { opacity: 1; transform: scale(1.1); }
-[class*="st-key-kt_"][class*="_akt"] { opacity: 1; transform: scale(1.14); }
-[class*="st-key-kt_"][class*="_akt"] .kt-logo { filter: drop-shadow(0 4px 7px rgba(0,0,0,.3)); }
+  padding: 0 !important; border: none !important; background: none !important; box-shadow: none !important; cursor: pointer; }
+[class*="st-key-kt_"] .kt-logo { opacity: .8; transition: filter .2s ease, transform .2s ease, opacity .2s ease; }       /* blur katram logo uzstādās no Python (attālums līdz izvēlētajam) */
+[class*="st-key-kt_"]:hover { z-index: 5; }
+[class*="st-key-kt_"]:hover .kt-logo { filter: none !important; transform: scale(1.15); opacity: 1; }
+[class*="st-key-kt_"][class*="_akt"] { z-index: 4; }
+[class*="st-key-kt_"][class*="_akt"] .kt-logo, [class*="st-key-kt_"][class*="_akt"]:hover .kt-logo { transform: scale(1.7); opacity: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,.32)) !important; }
 [class*="st-key-kt_"] > div:first-child { width: 100% !important; line-height: 0; display: flex; justify-content: center; }
 [class*="st-key-kt_"] p { margin: 0 !important; }
+.st-key-komreg_stils { position: absolute !important; width: 0; height: 0; overflow: hidden; margin: 0 !important; padding: 0 !important; }
 /* neredzamā poga aizpilda visu laukumu: visi tās ietinumi (jebkura tipa elementi) tiek izstiepti 100% */
 [class*="st-key-kt_"] > div:last-child { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; margin: 0 !important; opacity: 0; }
 [class*="st-key-kt_"] > div:last-child * { width: 100% !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
   display: block !important; box-sizing: border-box; }
-.kt-logo { width: 3.7rem !important; height: 3.7rem !important; max-width: none !important; object-fit: contain; display: block; margin: 0 auto; }
+.kt-logo { width: 3.4rem !important; height: 3.4rem !important; max-width: none !important; object-fit: contain; display: block; margin: 0 auto; }
 @media (max-width: 640px) {
   .st-key-kom_registis { grid-template-columns: repeat(4, 4.4rem); }
   .st-key-kom_registis > div, [class*="st-key-kt_"] { width: 4.4rem !important; height: 4.4rem; }
-  .kt-logo { width: 3.3rem !important; height: 3.3rem !important; }
+  .kt-logo { width: 3rem !important; height: 3rem !important; }
 }
 /* pēdējā spēle: rezultāts kā saite uz Rezultātu sadaļu */
 .st-key-pedeja_spele_josla { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; gap: .4rem !important; margin-bottom: .6rem; }
@@ -1293,10 +1295,29 @@ def _izvelet_komandu(atslega, kods):
     st.session_state[atslega] = kods
 
 
+def kom_blur_css(kodi, izv):
+    """
+    CSS, kas katram neizvēlētajam logo uzliek blur: jo tuvāk izvēlētajam logo (attālums režģī), jo spēcīgāks blur (3.5 px pie blakus esošā,
+    pakāpeniski līdz 0.8 px tālu no tā). Atsevišķi aprēķināts 8 kolonnu (dators) un 4 kolonnu (telefons) izkārtojumam.
+    """
+    i0 = kodi.index(izv)
+
+    def px(i, kol):
+        dr, dc = i // kol - i0 // kol, i % kol - i0 % kol
+        d = (dr * dr + dc * dc) ** 0.5
+        return 0.8 + 2.7 * max(0.0, 1 - (d - 1) / 6)
+
+    def noteikumi(kol):
+        return " ".join(f'[class*="st-key-kt_{k}"] .kt-logo {{ filter: blur({px(i, kol):.2f}px); }}' for i, k in enumerate(kodi) if k != izv)
+    return f"<style>{noteikumi(8)} @media (max-width: 640px) {{ {noteikumi(4)} }}</style>"
+
+
 def komandu_registis(atslega="kom_izv"):
     """Visu NHL komandu logo režģis (8x4): klikšķis uz logo izvēlas komandu. Atgriež izvēlētās komandas kodu."""
     kodi = sorted(da.KOMANDAS, key=lambda k: da.KOMANDAS[k])
     izv = st.session_state.setdefault(atslega, kodi[0])
+    with st.container(key="komreg_stils"):
+        st.markdown(kom_blur_css(kodi, izv), unsafe_allow_html=True)
     with st.container(key="kom_registis"):
         for kods in kodi:
             with st.container(key=f"kt_{kods}" + ("_akt" if kods == izv else "")):
