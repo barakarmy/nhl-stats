@@ -372,7 +372,10 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 [class*="st-key-kt_"]:hover { z-index: 5; }
 [class*="st-key-kt_"]:hover .kt-logo { filter: none !important; transform: scale(1.15); opacity: 1; }
 [class*="st-key-kt_"][class*="_akt"] { z-index: 4; }
-[class*="st-key-kt_"][class*="_akt"] .kt-logo, [class*="st-key-kt_"][class*="_akt"]:hover .kt-logo { transform: scale(1.7); opacity: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,.32)) !important; }
+[class*="st-key-kt_"][class*="_akt"] .kt-logo, [class*="st-key-kt_"][class*="_akt"]:hover .kt-logo { transform: scale(1.7); opacity: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,.32)) !important;
+  animation: kt-pulss 2.6s ease-in-out infinite; }
+@keyframes kt-pulss { 0%, 100% { transform: scale(1.64); } 50% { transform: scale(1.78); } }          /* minimāla pulsēšana ap 1.7x */
+@media (prefers-reduced-motion: reduce) { [class*="st-key-kt_"][class*="_akt"] .kt-logo { animation: none; } }
 [class*="st-key-kt_"] > div:first-child { width: 100% !important; line-height: 0; display: flex; justify-content: center; }
 [class*="st-key-kt_"] p { margin: 0 !important; }
 .st-key-komreg_stils { position: absolute !important; width: 0; height: 0; overflow: hidden; margin: 0 !important; padding: 0 !important; }
@@ -386,6 +389,10 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   .st-key-kom_registis > div, [class*="st-key-kt_"] { width: 4.4rem !important; height: 4.4rem; }
   .kt-logo { width: 3rem !important; height: 3rem !important; }
 }
+/* izvēlētās komandas nosaukums virs statistikas: centrēts, liels */
+.kom-nos { text-align: center; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-weight: 800; font-size: 2.7rem; line-height: 1.15;
+  letter-spacing: -.01em; margin: 1.1rem 0 1.2rem; }
+@media (max-width: 640px) { .kom-nos { font-size: 1.9rem; margin-top: .9rem; } }
 /* pēdējā spēle: rezultāts kā saite uz Rezultātu sadaļu */
 .st-key-pedeja_spele_josla { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; gap: .4rem !important; margin-bottom: .6rem; }
 .st-key-pedeja_spele_josla > div { width: auto !important; flex: 0 0 auto; }
@@ -1336,10 +1343,7 @@ def lapa_komanda():
     if tdf.empty:
         st.warning("Šai komandai vēl nav datu.")
         return
-    c1, c2 = st.columns([1, 8], vertical_alignment="center")
-    c1.image(da.logo_url(kom), width=64)
-    c2.subheader(da.pilns_nosaukums(kom))
-    c2.caption(f"Forma (pēdējās 5): {da.forma(tdf, 5).iloc[0]}")
+    st.markdown(f'<div class="kom-nos">{_html.escape(da.pilns_nosaukums(kom))}</div>', unsafe_allow_html=True)
 
     t_par, t_mi, t_sp, t_per, t_nor, t_nak = st.tabs(
         ["Pārskats", "Mājas / izbraukums", "Pēdējās spēles", "Periodi", "Noraidījumi un PP", "Nākamās spēles"])
