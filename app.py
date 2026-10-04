@@ -406,6 +406,87 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 
 .st-key-rez_fokuss_kartite { border: 2px solid #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
 
+/* ===== Visas filtru / kārtošanas pogas: tumšas noapaļotas pogas (kā "Salīdzināt"), aktīvā zilā ===== */
+[class*="st-key-pg_"] { gap: .3rem !important; }
+.pg-lab { font-size: .78rem; font-weight: 600; opacity: .7; margin: 0 0 .05rem .15rem; }
+[class*="st-key-pgr_"], .st-key-sl_per, .st-key-cmp_vh, .st-key-cmp_va { display: flex !important; flex-direction: row !important; flex-wrap: wrap; gap: .4rem !important; }
+[class*="st-key-pgr_"] > div, .st-key-sl_per > div, .st-key-cmp_vh > div, .st-key-cmp_va > div { width: auto !important; flex: 0 0 auto; }
+[class*="st-key-pgr_"] button, .st-key-datums_josla button, .st-key-sl_per button, .st-key-cmp_vh button, .st-key-cmp_va button {
+  background: linear-gradient(135deg, #18233d 0%, #0a0f1c 100%) !important; border: 1px solid rgba(255,255,255,.12) !important; border-radius: 999px !important;
+  min-height: 2.25rem; padding: .3rem 1.05rem !important; box-shadow: 0 4px 12px rgba(10,15,28,.22); transition: transform .15s ease, box-shadow .15s ease; }
+[class*="st-key-pgr_"] button p, .st-key-datums_josla button p, .st-key-sl_per button p, .st-key-cmp_vh button p, .st-key-cmp_va button p {
+  color: #cbd5e1 !important; font-weight: 600 !important; font-size: .88rem; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
+[class*="st-key-pgr_"] button:hover, .st-key-datums_josla button:hover, .st-key-sl_per button:hover, .st-key-cmp_vh button:hover, .st-key-cmp_va button:hover {
+  transform: translateY(-1px); box-shadow: 0 8px 18px rgba(10,15,28,.32); }
+[class*="st-key-pgr_"] button:hover p, .st-key-sl_per button:hover p, .st-key-cmp_vh button:hover p, .st-key-cmp_va button:hover p, .st-key-datums_josla button:hover p { color: #ffffff !important; }
+[class*="st-key-pgr_"] button[data-testid="stBaseButton-primary"], [class*="st-key-pgr_"] button[kind="primary"],
+.st-key-sl_per button[data-testid="stBaseButton-primary"], .st-key-sl_per button[kind="primary"],
+.st-key-cmp_vh button[data-testid="stBaseButton-primary"], .st-key-cmp_vh button[kind="primary"],
+.st-key-cmp_va button[data-testid="stBaseButton-primary"], .st-key-cmp_va button[kind="primary"] {
+  background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%) !important; border-color: rgba(147,197,253,.5) !important;
+  box-shadow: 0 0 0 2px rgba(59,130,246,.3), 0 6px 16px rgba(37,99,235,.32); }
+[class*="st-key-pgr_"] button[data-testid="stBaseButton-primary"] p, [class*="st-key-pgr_"] button[kind="primary"] p,
+.st-key-sl_per button[data-testid="stBaseButton-primary"] p, .st-key-sl_per button[kind="primary"] p,
+.st-key-cmp_vh button[data-testid="stBaseButton-primary"] p, .st-key-cmp_vh button[kind="primary"] p,
+.st-key-cmp_va button[data-testid="stBaseButton-primary"] p, .st-key-cmp_va button[kind="primary"] p { color: #ffffff !important; }
+.st-key-datums_lauks { background: linear-gradient(135deg, #18233d 0%, #0a0f1c 100%) !important; border-color: rgba(255,255,255,.12) !important;
+  border-radius: 999px !important; color: #ffffff; box-shadow: 0 4px 12px rgba(10,15,28,.22); }
+
+/* ===== Salīdzinājuma virsraksts: [mājinieki] [VS + maiņas poga] [viesi], zem nosaukumiem katras komandas Mājās/Izbraukumā ===== */
+.st-key-cmp_head { display: flex !important; flex-direction: row !important; flex-wrap: nowrap; justify-content: center; align-items: flex-start;
+  gap: 1.1rem !important; max-width: 900px; margin: .3rem auto .2rem; }
+.st-key-cmp_head > div { width: auto !important; flex: 0 0 auto; min-width: 0; }
+.st-key-cmp_ch, .st-key-cmp_ca { width: 15rem !important; align-items: center; gap: .6rem !important; }
+.st-key-cmp_cm { width: 4.5rem !important; align-items: center; gap: .55rem !important; }
+.st-key-cmp_vh, .st-key-cmp_va { justify-content: center; gap: .35rem !important; }
+.st-key-cmp_vh button, .st-key-cmp_va button { min-height: 1.95rem; padding: .15rem .8rem !important; }
+.st-key-cmp_vh button p, .st-key-cmp_va button p { font-size: .8rem; }
+.st-key-sl_per { justify-content: center; margin: .5rem 0 .3rem; }
+.cmp-nos .tip { font-weight: 800; }
+.st-key-cmp_ch .cmp-col, .st-key-cmp_ca .cmp-col { width: 100%; }
+/* maiņas poga (ikona) ar paskaidrojumu, uzejot ar peli */
+.st-key-sl_maina { position: relative !important; width: 2.7rem !important; height: 2.7rem; cursor: pointer; flex: 0 0 auto; }
+.st-key-sl_maina > div:first-child { width: 100% !important; line-height: 0; }
+.st-key-sl_maina p { margin: 0 !important; }
+.maina-ik { width: 2.7rem !important; height: 2.7rem !important; max-width: none !important; display: block; pointer-events: none; transition: transform .35s ease; }
+.st-key-sl_maina > div:last-child { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; margin: 0 !important; opacity: 0; }
+.st-key-sl_maina > div:last-child * { width: 100% !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; display: block !important; }
+.st-key-sl_maina::after { content: "Salīdzināt citas komandas"; position: absolute; top: 100%; left: 50%; transform: translate(-50%, 6px); z-index: 30;
+  padding: .3rem .65rem; border-radius: .45rem; background: #262730; color: #fff; font-size: .78rem; font-weight: 600; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity .12s ease; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; }
+@media (hover: hover) { .st-key-sl_maina:hover::after { opacity: 1; } .st-key-sl_maina:hover .maina-ik { transform: rotate(180deg); } }
+/* paskaidrojums, uzejot ar peli (vai pieskaroties) uz pasvītrota teksta */
+.tip { position: relative; display: inline-block; cursor: help; text-decoration: underline dotted rgba(128,128,128,.8); text-underline-offset: 3px; outline: none; }
+.tip .bubble { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 6px; z-index: 40; width: max-content; max-width: 17rem;
+  padding: .45rem .7rem; background: #ffffff; color: #31333f; border: 1px solid rgba(49,51,63,.12); border-radius: .5rem; box-shadow: 0 .25rem 1rem rgba(0,0,0,.18);
+  font-size: .8rem; font-weight: 400; line-height: 1.45; text-align: left; white-space: normal; letter-spacing: 0; text-transform: none; }
+.tip:hover .bubble, .tip:focus .bubble, .tip:focus-within .bubble { display: block; }
+/* pēdējās 5 spēles abām komandām */
+.cmp-l5 { display: flex; justify-content: space-between; gap: 1.2rem; margin: 1.8rem 0 .5rem; }
+.l5c { flex: 1 1 0; min-width: 0; max-width: 26rem; }
+.l5h { font-weight: 800; font-size: .9rem; margin-bottom: .35rem; }
+.l5c.r .l5h { text-align: right; }
+.l5r { display: flex; align-items: center; gap: .55rem; padding: .38rem 0; border-bottom: 1px solid rgba(128,128,128,.2); font-size: .9rem; }
+.l5c.r .l5r { flex-direction: row-reverse; }
+.l5d { opacity: .65; font-size: .8rem; min-width: 2.6rem; }
+.l5o { font-weight: 600; }
+.l5s { font-weight: 800; color: inherit !important; text-decoration: underline; text-underline-offset: 3px; }
+.l5u { font-size: .68rem; font-weight: 800; padding: .08rem .38rem; border-radius: .3rem; }
+.l5u.U { background: rgba(22,163,74,.14); color: #15803d; }
+.l5u.Z { background: rgba(220,38,38,.12); color: #b91c1c; }
+.l5u.ZPL { background: rgba(245,158,11,.16); color: #b45309; }
+@media (max-width: 640px) {
+  .st-key-cmp_head { gap: .3rem !important; }
+  .st-key-cmp_ch, .st-key-cmp_ca { width: 9.3rem !important; }
+  .st-key-cmp_cm { width: 2.8rem !important; }
+  .st-key-cmp_vh, .st-key-cmp_va { gap: .25rem !important; flex-wrap: nowrap; }
+  .st-key-cmp_vh button, .st-key-cmp_va button { padding: .1rem .45rem !important; min-height: 1.8rem; }
+  .st-key-cmp_vh button p, .st-key-cmp_va button p { font-size: .7rem; }
+  .cmp-l5 { gap: .6rem; }
+  .l5r { font-size: .78rem; gap: .35rem; }
+  .l5d { min-width: 2.2rem; font-size: .72rem; }
+}
+
 /* ===== Mobilā versija ===== */
 @media (max-width: 768px) {
   .stApp .stMainBlockContainer, .stApp [data-testid="stMainBlockContainer"] { padding: .6rem .8rem 3rem .8rem; }
@@ -429,7 +510,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 }
 
 /* ===== Komandu salīdzināšana: virsraksts (logo VS logo vienā rindā), krāsas sarkana/melna pie logo, rādītāju rindas ===== */
-.cmp-wrap { max-width: 900px; margin: 0 auto; }
+.cmp-wrap { width: 100%; max-width: 900px; margin: 0 auto; }
 .cmp-head { display: flex; align-items: flex-start; justify-content: center; gap: 1.4rem; margin: .4rem 0 1rem; }
 .cmp-col { width: 10.5rem; display: flex; flex-direction: column; align-items: center; text-align: center; gap: .5rem; }
 .cmp-logo { width: 7rem !important; height: 7rem !important; max-width: none !important; object-fit: contain; display: block; }
@@ -438,14 +519,12 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .cmp-krasa.b, .cmp-bar i.b { background: #111827; }
 .cmp-nos { font-weight: 700; font-size: 1rem; line-height: 1.2; }
 .cmp-vs { height: 7rem; display: flex; align-items: center; font-weight: 800; font-size: 2rem; opacity: .55; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; }
-.cmp-group { margin: 1.4rem 0 .2rem; font-weight: 700; font-size: .85rem; letter-spacing: .06em; opacity: .7; }
+.cmp-group { margin: 1.5rem 0 .2rem; font-weight: 800; font-size: .88rem; letter-spacing: .07em; opacity: .9; text-align: center; }
 .cmp-row { margin: .8rem 0; }
 .cmp-top { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; }
 .cmp-v { font-weight: 600; font-size: 1.15rem; min-width: 3.2rem; opacity: .7; }
 .cmp-v.r { text-align: right; }
 .cmp-v.win { opacity: 1; font-weight: 800; }
-.cmp-v.win.l { color: #dc2626; }
-.cmp-v.win.r { color: #111827; }
 .cmp-lab { flex: 1; text-align: center; font-size: .88rem; opacity: .85; }
 .cmp-bar { display: flex; gap: .25rem; height: .5rem; margin-top: .35rem; }
 .cmp-bar i { display: block; height: 100%; }
@@ -498,7 +577,7 @@ def tema_css(tumss_css):
     return "@media (prefers-color-scheme: dark) { " + tumss_css + " }"
 
 
-_tumss_tab = tema_css(".tb .bubble { background: #262730; color: #fafafa; border-color: rgba(250,250,250,.15); } .tb .bubble a { color: #60a5fa; }")
+_tumss_tab = tema_css(".tb .bubble, .tip .bubble { background: #262730; color: #fafafa; border-color: rgba(250,250,250,.15); } .tb .bubble a { color: #60a5fa; } .maina-ik { filter: invert(1); }")
 if _tumss_tab:
     st.markdown(f"<style>{_tumss_tab}</style>", unsafe_allow_html=True)
 
@@ -591,9 +670,28 @@ LOGI = {"Visa sezona": None, "Pēdējās 5": 5, "Pēdējās 10": 10}
 # ============================================================================
 # PALĪGFUNKCIJAS
 # ============================================================================
+def _izv_vertiba(key, opcijas, noklusejums):
+    v = st.session_state.get(key)
+    return v if v in opcijas else noklusejums
+
+
+def _izv_set(key, v):
+    st.session_state[key] = v
+
+
 def izvele(label, opcijas, default=None, key=None):
-    vertiba = st.segmented_control(label, opcijas, default=default or opcijas[0], key=key)
-    return vertiba if vertiba is not None else (default or opcijas[0])
+    """Filtru / kārtošanas pogu grupa: tumšas noapaļotas pogas (kā "Salīdzināt"), aktīvā izcelta zilā krāsā. Atgriež izvēlēto vērtību."""
+    opcijas = list(opcijas)
+    key = key or "izv_" + "".join(ch if ch.isalnum() else "_" for ch in label)
+    d = default if default in opcijas else opcijas[0]
+    cur = _izv_vertiba(key, opcijas, d)
+    with st.container(key=f"pg_{key}"):
+        if label:
+            st.markdown(f'<div class="pg-lab">{_html.escape(label)}</div>', unsafe_allow_html=True)
+        with st.container(key=f"pgr_{key}"):
+            for o in opcijas:
+                st.button(str(o), key=f"{key}__{o}", type="primary" if o == cur else "secondary", on_click=_izv_set, args=(key, o))
+    return cur
 
 
 def fmt(x, formats="{:.2f}"):
@@ -870,37 +968,36 @@ def lapa_parskats():
 # ============================================================================
 # LAPA: SALĪDZINĀT KOMANDAS
 # ============================================================================
-SALIDZ_METRIKAS = [      # (nosaukums ar "(vidēji)" vai "(kopā)", kolonna, kam labāk ("augsts"/"zems"/"neitrals"), zīmes aiz komata)
-    ("", [("Spēles (kopā)", "GP", "neitrals", 0)]),
+SALIDZ_METRIKAS = [      # (nosaukums, paskaidrojums uzejot ar peli, kolonna, kam labāk ("augsts"/"zems"/"neitrals"), zīmes aiz komata)
     ("Rezultativitāte", [
-        ("Punkti % (kopā)", "PTS_pct", "augsts", 0),
-        ("Vārti spēlē (vidēji)", "G_sp", "augsts", 2),
-        ("Ielaisti spēlē (vidēji)", "Z_sp", "zems", 2),
-        ("Over 6.5 spēļu daļa % (kopā)", "Over65", "neitrals", 0),
+        ("Vārti spēlē", "Vidēji spēlē (pamatlaikā)", "G_sp", "augsts", 2),
+        ("Ielaisti spēlē", "Vidēji spēlē (pamatlaikā)", "Z_sp", "zems", 2),
+        ("Over 6.5", "% – spēļu daļa, kurās abu komandu vārtu summa pamatlaikā ir lielāka par 6.5", "Over65", "neitrals", 0),
+        ("Over 5.5", "% – spēļu daļa, kurās abu komandu vārtu summa pamatlaikā ir lielāka par 5.5", "Over55", "neitrals", 0),
     ]),
     ("Metieni", [
-        ("Metieni vārtos spēlē (vidēji)", "SOG_sp", "augsts", 1),
-        ("Pretinieka metieni spēlē (vidēji)", "SA_sp", "zems", 1),
-        ("Metienu daļa % (kopā)", "SOG_dala", "augsts", 1),
+        ("Metieni vārtos spēlē", "Vidēji spēlē (pamatlaikā)", "SOG_sp", "augsts", 1),
+        ("Pretinieka metieni spēlē", "Vidēji spēlē (pamatlaikā)", "SA_sp", "zems", 1),
     ]),
     ("Vairākums un noraidījumi", [
-        ("Vairākums PP % (kopā)", "PP_pct", "augsts", 1),
-        ("Mazākums PK % (kopā)", "PK_pct", "augsts", 1),
-        ("Noraidījumi spēlē (vidēji)", "PEN_sp", "zems", 1),
-        ("Izcīnītie noraidījumi spēlē (vidēji)", "DRAW_sp", "augsts", 1),
+        ("Vairākums PP", "% – kopā izvēlētajās spēlēs: vairākumā gūtie vārti / vairākuma iespējas", "PP_pct", "augsts", 1),
+        ("Mazākums PK", "% – kopā izvēlētajās spēlēs: mazākumā nosargātās reizes", "PK_pct", "augsts", 1),
+        ("Noraidījumi spēlē", "Vidēji spēlē (saņemtie, pamatlaikā)", "PEN_sp", "zems", 1),
+        ("Izcīnītie noraidījumi spēlē", "Vidēji spēlē (pretinieka noraidījumi)", "DRAW_sp", "augsts", 1),
     ]),
-    ("Vārti pa periodiem (gūti)", [
-        ("1. periods (vidēji)", "G_p1", "augsts", 2),
-        ("2. periods (vidēji)", "G_p2", "augsts", 2),
-        ("3. periods (vidēji)", "G_p3", "augsts", 2),
+    ("Gūtie vārti pa periodiem", [
+        ("1. periods", "Vidēji spēlē", "G_p1", "augsts", 2),
+        ("2. periods", "Vidēji spēlē", "G_p2", "augsts", 2),
+        ("3. periods", "Vidēji spēlē", "G_p3", "augsts", 2),
     ]),
-    ("Vārti pa periodiem (ielaisti)", [
-        ("1. periods (vidēji)", "Z_p1", "zems", 2),
-        ("2. periods (vidēji)", "Z_p2", "zems", 2),
-        ("3. periods (vidēji)", "Z_p3", "zems", 2),
+    ("Ielaistie vārti pa periodiem", [
+        ("1. periods", "Vidēji spēlē", "Z_p1", "zems", 2),
+        ("2. periods", "Vidēji spēlē", "Z_p2", "zems", 2),
+        ("3. periods", "Vidēji spēlē", "Z_p3", "zems", 2),
     ]),
 ]
-SL_PAMATI = {"Visa sezona": None, "Pēdējās 10": 10, "Pēdējās 5": 5}
+SL_LOGI = {"Pēdējās 5": 5, "Pēdējās 10": 10}          # ja neviens nav izvēlēts: visas sezonas spēles
+MAINA_IKONA = "data:image/png;base64,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"
 
 
 def _sk(v, dec):
@@ -909,10 +1006,17 @@ def _sk(v, dec):
     return s.rstrip("0").rstrip(".") if "." in s else s
 
 
-def sl_rinda_html(nos, a, b, labak, dec):
-    """Viena salīdzinājuma rinda: vērtība | nosaukums | vērtība un sarkani-melna josla (pa kreisi 1. komanda, pa labi 2. komanda)."""
-    if pd.isna(a) or pd.isna(b):
-        fa = fb = "–"
+def tip_html(teksts, paskaidrojums):
+    """Teksts ar paskaidrojumu, kas parādās, uzejot ar peli (vai pieskaroties)."""
+    e = _html.escape
+    return f'<span class="tip" tabindex="0">{e(str(teksts))}<span class="bubble">{e(paskaidrojums)}</span></span>'
+
+
+def sl_rinda_html(nos, paskaidr, a, b, labak, dec):
+    """Viena rinda: vērtība | nosaukums (paskaidrojums uzejot ar peli) | vērtība, un sarkani-melna josla. Labākais cipars treknrakstā."""
+    if a is None or b is None or pd.isna(a) or pd.isna(b):
+        fa = "–" if a is None or pd.isna(a) else _sk(a, dec)
+        fb = "–" if b is None or pd.isna(b) else _sk(b, dec)
         sa, wa, wb = 50.0, False, False
     else:
         fa, fb = _sk(a, dec), _sk(b, dec)
@@ -920,33 +1024,46 @@ def sl_rinda_html(nos, a, b, labak, dec):
         sa = 50.0 if kopa == 0 else abs(a) / kopa * 100
         wa, wb = ((a > b, b > a) if labak == "augsts" else (a < b, b < a) if labak == "zems" else (False, False))
     return (f'<div class="cmp-row"><div class="cmp-top"><span class="cmp-v l{" win" if wa else ""}">{fa}</span>'
-            f'<span class="cmp-lab">{_html.escape(nos)}</span><span class="cmp-v r{" win" if wb else ""}">{fb}</span></div>'
+            f'<span class="cmp-lab">{tip_html(nos, paskaidr)}</span><span class="cmp-v r{" win" if wb else ""}">{fb}</span></div>'
             f'<div class="cmp-bar"><i class="a" style="width:{sa:.1f}%"></i><i class="b" style="width:{100 - sa:.1f}%"></i></div></div>')
 
 
-def sl_galva_html(home, away):
-    """Virsraksts: logo VS logo vienā rindā; zem katra logo (logo platumā) komandas krāsa, zem tās nosaukums."""
-    def kolonna(k, kl):
-        return (f'<div class="cmp-col"><img class="cmp-logo" src="{_html.escape(da.logo_url(k))}" alt="{_html.escape(k)}">'
-                f'<div class="cmp-krasa {kl}"></div><div class="cmp-nos">{_html.escape(da.pilns_nosaukums(k))}</div></div>')
-    return f'<div class="cmp-head">{kolonna(home, "a")}<div class="cmp-vs">VS</div>{kolonna(away, "b")}</div>'
+def sl_komanda_html(kods, kl, gp_kopa, gp_skata, majas_puse):
+    """Logo, komandas krāsa (zem logo, tā platumā) un nosaukums; nospēlēto spēļu skaits mājiniekiem pirms nosaukuma, viesiem aiz tā."""
+    sk = tip_html(gp_kopa, f"Nospēlētās spēles kopā: {gp_kopa}" + (f" · šajā skatā: {gp_skata}" if gp_skata is not None and gp_skata != gp_kopa else ""))
+    nos = _html.escape(da.pilns_nosaukums(kods))
+    rinda = f"{sk} {nos}" if majas_puse else f"{nos} {sk}"
+    return (f'<div class="cmp-col"><img class="cmp-logo" src="{_html.escape(da.logo_url(kods))}" alt="{_html.escape(kods)}">'
+            f'<div class="cmp-krasa {kl}"></div><div class="cmp-nos">{rinda}</div></div>')
+
+
+def sl_pedejas5_html(kods, puse):
+    """Komandas pēdējās 5 spēles (jaunākā augšā). Rezultāts ir saite uz spēles protokolu sadaļā Rezultāti (jaunā cilnē)."""
+    g = DF[DF["komanda"] == kods].sort_values(["datums", "game_id"]).tail(5).iloc[::-1]
+    iznak = {"W": "U", "L": "Z", "OTL": "ZPL"}
+    rindas = ""
+    for r in g.itertuples():
+        bg = da.beigu_etikete(r.beigas)
+        rez = f"{int(r.g_tot)}:{int(r.z_tot)}" + (f" {bg}" if bg else "")
+        u = iznak.get(r.rez, "")
+        rindas += (f'<div class="l5r"><span class="l5d">{pd.Timestamp(r.datums):%d.%m}</span>'
+                   f'<span class="l5o" title="{_html.escape(da.pilns_nosaukums(r.pretinieks))}">{"vs" if r.majas == 1 else "@"} {_html.escape(r.pretinieks)}</span>'
+                   f'<a class="l5s" href="{_html.escape(speles_saite(r.game_id))}" target="_blank" rel="noopener noreferrer">{rez}</a>'
+                   + (f'<span class="l5u {u}">{u}</span>' if u else "") + "</div>")
+    return f'<div class="l5c {puse}"><div class="l5h">Pēdējās 5 spēles</div>{rindas or "<div class=l5r>Nav spēļu</div>"}</div>'
 
 
 def _sl_salidzinat(a, b):
-    st.session_state.update(sl_a=a, sl_b=b, sl_rezims="salidzinajums")
+    # noklusējums jaunam salīdzinājumam: mājiniekiem mājas spēles, viesiem izbraukuma spēles, visa sezona
+    st.session_state.update(sl_a=a, sl_b=b, sl_rezims="salidzinajums", sl_vh="Mājās", sl_va="Izbraukumā", sl_logs=None)
 
 
 def _sl_citas():
     st.session_state["sl_rezims"] = "izvele"
 
 
-def _sl_laiks(p):                 # augšējais filtrs: izvēlas laika posmu un vienmēr notīra mājās/izbraukumā (atgriešanās uz "visas spēles kopā")
-    st.session_state["sl_periods"] = p
-    st.session_state["sl_vieta"] = None
-
-
-def _sl_vieta(v):                 # apakšējais filtrs: mājās vai izbraukumā (atkārtots klikšķis uz tā paša to atceļ)
-    st.session_state["sl_vieta"] = None if st.session_state.get("sl_vieta") == v else v
+def _sl_tog(atslega, v):          # pārslēdzējs: klikšķis ieslēdz, atkārtots klikšķis uz tā paša izslēdz (tad - visas spēles)
+    st.session_state[atslega] = None if st.session_state.get(atslega) == v else v
 
 
 def lapa_salidzinat():
@@ -974,29 +1091,44 @@ def lapa_salidzinat():
             st.button("Salīdzināt", disabled=(kom_a == kom_b), on_click=_sl_salidzinat, args=(kom_a, kom_b), key="sl_poga")
         return
 
-    # 2) salīdzinājums: rullīši pazūd, paliek abi logo ar "VS" (statiski, bez pulsēšanas), poga "Salīdzināt citas komandas" un filtri
+    # 2) salīdzinājums: rullīši pazūd; virsraksts [mājinieki] [VS + maiņas poga] [viesi], zem nosaukumiem katrai komandai Mājās/Izbraukumā
     home, away = st.session_state["sl_a"], st.session_state["sl_b"]
-    st.markdown(f'<div class="cmp-wrap">{sl_galva_html(home, away)}</div>', unsafe_allow_html=True)
-    with st.container(key="sl_citas"):
-        st.button("Salīdzināt citas komandas", on_click=_sl_citas, key="sl_citas_poga")
-    per, vieta = st.session_state.setdefault("sl_periods", "Visa sezona"), st.session_state.get("sl_vieta")
-    with st.container(key="sl_per"):
-        for p in SL_PAMATI:
-            st.button(p, key=f"slp_{p}", type="primary" if p == per else "secondary", on_click=_sl_laiks, args=(p,))
-    with st.container(key="sl_viet"):
-        for v in ("Mājās", "Izbraukumā"):
-            st.button(v, key=f"slv_{v}", type="primary" if v == vieta else "secondary", on_click=_sl_vieta, args=(v,))
-    liga = da.kopsavilkums(DF, vieta or "Visas", SL_PAMATI[per])
-    if home not in liga.index or away not in liga.index:
-        st.warning("Vienai no komandām šim skatam vēl nav datu.")
-        return
-    a, b = liga.loc[home], liga.loc[away]
+    vh = st.session_state.setdefault("sl_vh", "Mājās")
+    va = st.session_state.setdefault("sl_va", "Izbraukumā")
+    logs = st.session_state.get("sl_logs")
+    n = SL_LOGI.get(logs)
+    kopa = da.kopsavilkums(DF, "Visas", None)
+    kh, ka = da.kopsavilkums(DF, vh or "Visas", n), da.kopsavilkums(DF, va or "Visas", n)
+    a = kh.loc[home] if home in kh.index else None
+    b = ka.loc[away] if away in ka.index else None
+    gp = lambda k: int(kopa.loc[k, "GP"]) if k in kopa.index else 0                    # noqa: E731
+
+    with st.container(key="cmp_head"):
+        with st.container(key="cmp_ch"):
+            st.markdown(sl_komanda_html(home, "a", gp(home), int(a["GP"]) if a is not None else 0, True), unsafe_allow_html=True)
+            with st.container(key="cmp_vh"):
+                for v in ("Mājās", "Izbraukumā"):
+                    st.button(v, key=f"slvh_{v}", type="primary" if v == vh else "secondary", on_click=_sl_tog, args=("sl_vh", v))
+        with st.container(key="cmp_cm"):
+            st.markdown('<div class="cmp-vs">VS</div>', unsafe_allow_html=True)
+            with st.container(key="sl_maina"):
+                st.markdown(f'<img class="maina-ik" src="{MAINA_IKONA}" alt="Salīdzināt citas komandas">', unsafe_allow_html=True)
+                st.button("Salīdzināt citas komandas", key="sl_maina_poga", on_click=_sl_citas)
+        with st.container(key="cmp_ca"):
+            st.markdown(sl_komanda_html(away, "b", gp(away), int(b["GP"]) if b is not None else 0, False), unsafe_allow_html=True)
+            with st.container(key="cmp_va"):
+                for v in ("Mājās", "Izbraukumā"):
+                    st.button(v, key=f"slva_{v}", type="primary" if v == va else "secondary", on_click=_sl_tog, args=("sl_va", v))
+    with st.container(key="sl_per"):                       # pēdējās 5 / 10: ieslēdz ar klikšķi, izslēdz ar atkārtotu klikšķi (tad - visa sezona)
+        for p in SL_LOGI:
+            st.button(p, key=f"slp_{p}", type="primary" if p == logs else "secondary", on_click=_sl_tog, args=("sl_logs", p))
+
     rindas = ""
     for grupa, metrikas in SALIDZ_METRIKAS:
-        if grupa:
-            rindas += f'<div class="cmp-group">{_html.escape(grupa.upper())}</div>'
-        for nos, k, labak, dec in metrikas:
-            rindas += sl_rinda_html(nos, a[k], b[k], labak, dec)
+        rindas += f'<div class="cmp-group">{_html.escape(grupa.upper())}</div>'
+        for nos, pask, k, labak, dec in metrikas:
+            rindas += sl_rinda_html(nos, pask, a[k] if a is not None else None, b[k] if b is not None else None, labak, dec)
+    rindas += f'<div class="cmp-l5">{sl_pedejas5_html(home, "l")}{sl_pedejas5_html(away, "r")}</div>'
     st.markdown(f'<div class="cmp-wrap">{rindas}</div>', unsafe_allow_html=True)
 
 
