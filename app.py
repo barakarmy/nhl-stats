@@ -437,6 +437,8 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   gap: 1.1rem !important; max-width: 900px; margin: .3rem auto .2rem; }
 .st-key-cmp_head > div { width: auto !important; flex: 0 0 auto; min-width: 0; }
 .st-key-cmp_ch, .st-key-cmp_ca { width: 15rem !important; align-items: center; gap: .6rem !important; }
+.st-key-cmp_head [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }      /* Streamlit noklusējums -1rem lika pogām uzbraukt nosaukumam */
+.st-key-cmp_head .cmp-nos { margin-bottom: .15rem; }
 .st-key-cmp_cm { width: 4.5rem !important; align-items: center; gap: .55rem !important; }
 .st-key-cmp_vh, .st-key-cmp_va { justify-content: center; gap: .35rem !important; }
 .st-key-cmp_vh button, .st-key-cmp_va button { min-height: 1.95rem; padding: .15rem .8rem !important; }
@@ -1062,6 +1064,15 @@ def _sl_citas():
     st.session_state["sl_rezims"] = "izvele"
 
 
+def sl_kopsavilkums(scope, n):
+    """Komandu kopsavilkums salīdzinājumam. Over 5.5 tiek aprēķināts šeit, ja datu_apstrade.py vēl ir vecā versija bez tā."""
+    k = da.kopsavilkums(DF, scope, n)
+    if not k.empty and "Over55" not in k.columns:
+        sub_ = da.filtret(DF, scope, n)
+        k["Over55"] = (sub_["tot_reg_goals"] > 5.5).groupby(sub_["komanda"]).mean() * 100
+    return k
+
+
 def _sl_tog(atslega, v):          # pārslēdzējs: klikšķis ieslēdz, atkārtots klikšķis uz tā paša izslēdz (tad - visas spēles)
     st.session_state[atslega] = None if st.session_state.get(atslega) == v else v
 
@@ -1098,7 +1109,7 @@ def lapa_salidzinat():
     logs = st.session_state.get("sl_logs")
     n = SL_LOGI.get(logs)
     kopa = da.kopsavilkums(DF, "Visas", None)
-    kh, ka = da.kopsavilkums(DF, vh or "Visas", n), da.kopsavilkums(DF, va or "Visas", n)
+    kh, ka = sl_kopsavilkums(vh or "Visas", n), sl_kopsavilkums(va or "Visas", n)
     a = kh.loc[home] if home in kh.index else None
     b = ka.loc[away] if away in ka.index else None
     gp = lambda k: int(kopa.loc[k, "GP"]) if k in kopa.index else 0                    # noqa: E731
@@ -1127,7 +1138,7 @@ def lapa_salidzinat():
     for grupa, metrikas in SALIDZ_METRIKAS:
         rindas += f'<div class="cmp-group">{_html.escape(grupa.upper())}</div>'
         for nos, pask, k, labak, dec in metrikas:
-            rindas += sl_rinda_html(nos, pask, a[k] if a is not None else None, b[k] if b is not None else None, labak, dec)
+            rindas += sl_rinda_html(nos, pask, a.get(k) if a is not None else None, b.get(k) if b is not None else None, labak, dec)
     rindas += f'<div class="cmp-l5">{sl_pedejas5_html(home, "l")}{sl_pedejas5_html(away, "r")}</div>'
     st.markdown(f'<div class="cmp-wrap">{rindas}</div>', unsafe_allow_html=True)
 
