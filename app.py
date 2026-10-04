@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-04.11"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-04.13"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -2032,7 +2032,8 @@ def lapa_kalendars():
     try:
         _ts = _planotie_ar_statusu(VERSIJA)[1]
         _f = lambda t: t.strftime("%d.%m. %H:%M")                                                # noqa: E731
-        st.caption(f"Tiesneši pārbaudīti {_ts['laiks']} spēlēm no {_f(_ts['no'])} līdz {_f(_ts['lidz'])}: "
+        _parb = _ts["lidz"] - timedelta(hours=30)                                                # pārbaudes brīdis
+        st.caption(f"Tiesneši pārbaudīti {_f(_parb)} spēlēm, kas notiek tagad vai sāksies līdz {_f(_ts['lidz'])}: "
                    f"no datu faila {_ts['fails']}, tiešsaistē (Scouting The Refs) papildus {_ts['tiessaiste']}"
                    + (f" · ⚠️ {_ts['kluda']}" if _ts.get("kluda") else "")
                    + f". Nākamā pārbaude: {_ts['nakama']} (kad lapa tiek atvērta vai atsvaidzināta).")
@@ -2144,8 +2145,35 @@ def rez_kartite_html(away, home, at, ht, ra, rh, iznakums, linijas, uid="g", det
         + beigas)
 
 
+DATU_ATJAUNINASANA = (11, 15)      # ikdienas datu atjaunināšana (cron-job.org → NHL Daily Update), pēc Rīgas laika
+
+
+def rezultatu_statuss():
+    """Rinda Rezultātu lapā: kad dati atjaunināti, kuras spēles tajos ir, cik pabeigtu spēļu vēl gaida rezultātu un kad nākamā atjaunināšana."""
+    lv = lambda t: t.astimezone(da.LV_TZ)                                                       # noqa: E731
+    f = lambda t: t.strftime("%d.%m. %H:%M")                                                     # noqa: E731
+    tagad = datetime.datetime.now(datetime.timezone.utc)
+    c = da.DATU_MAPE / "speles.csv"
+    atjaun = lv(datetime.datetime.fromtimestamp(c.stat().st_mtime, datetime.timezone.utc)) if c.exists() else None
+    sak = RAW["datums_lv"].dt.date
+    teksts = (f"Pēdējais NHL Daily Update: {f(atjaun)}" if atjaun else "NHL Daily Update") + f" · rezultāti līdz {sak.max():%d.%m.} ({len(RAW)} spēles)"
+    # pabeigtas spēles (sākums pirms 3,5 h), kuru rezultātu datos vēl nav
+    if KAL is not None and not KAL.empty and "sakums_lv" in KAL.columns:
+        beigusas = KAL[(KAL["sakums_lv"] < pd.Timestamp(tagad) - pd.Timedelta(hours=3.5)) & (~KAL["game_id"].isin(RAW["game_id"]))]
+        if not beigusas.empty:
+            teksts += f" · {len(beigusas)} pabeigtas spēles vēl gaida rezultātu"
+    nak = lv(tagad).replace(hour=DATU_ATJAUNINASANA[0], minute=DATU_ATJAUNINASANA[1], second=0, microsecond=0)
+    if nak <= lv(tagad):
+        nak += timedelta(days=1)
+    return teksts + f" · nākamais NHL Daily Update: {f(nak)}."
+
+
 def lapa_rezultati():
     st.title("Spēļu rezultāti")
+    try:
+        st.caption(rezultatu_statuss())
+    except Exception:
+        pass
     datumi = RAW["datums_lv"].dt.date
     mind, maxd = datumi.min(), max(datumi.max(), da.sodien_lv())
     if "rez_datums" not in st.session_state:
