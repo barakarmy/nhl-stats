@@ -397,6 +397,7 @@ def apstradat_spele(spele, datums):
 
     # ---- vārti (landing kopsavilkums) ----
     vartu_rindas = []
+    pasvarti = set()                           # (perioda numurs, laiks) paštrāpījumiem: NHL tos neieskaita komandas metienos vārtos
     ppg_ot = {"home": 0, "away": 0}           # vārti vairākumā papildlaikā (netiek ieskaitīti statistikā)
     for pd_ in summary.get("scoring") or []:
         pdesc = pd_.get("periodDescriptor") or {}
@@ -421,6 +422,8 @@ def apstradat_spele(spele, datums):
             ass = g.get("assists") or []
             a1 = ass[0] if len(ass) > 0 else {}
             a2 = ass[1] if len(ass) > 1 else {}
+            if g.get("goalModifier") == "own-goal":
+                pasvarti.add((pdesc.get("number"), g.get("timeInPeriod")))
             vartu_rindas.append({
                 "datums": datums, "game_id": gid,
                 "period": pdesc.get("number"), "period_type": pdesc.get("periodType"),
@@ -486,6 +489,8 @@ def apstradat_spele(spele, datums):
         elif not pk:
             continue  # pēcspēles metieni netiek skaitīti periodos
         elif tips in ("shot-on-goal", "goal"):
+            if tips == "goal" and ((pdesc.get("number"), p.get("timeInPeriod")) in pasvarti or str(det.get("goalModifier", "")) == "own-goal"):
+                continue                               # paštrāpījums: vārti skaitās, bet NHL to neieskaita metienos vārtos
             r[f"{puse}_sog_{pk}"] += 1
             if pk == "ot" and len(sit) == 4 and all(x.isdigit() for x in sit) and sit[0] == "1" and sit[3] == "1":
                 # papildlaika metiens vairākumā (komandai laukumā vairāk spēlētāju, abi vārtsargi laukumā)
