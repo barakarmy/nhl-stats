@@ -334,6 +334,36 @@ def tiesnesi_no_right_rail(rr):
     return out
 
 
+def dzivie_tiesnesi(kalendars, esosie_id=(), stundas=IEGUVES_STUNDAS, tagad=None, lejupieladet=_lejupieladet):
+    """
+    Tiesneši spēlēm bez tiesnešiem, ielādēti tieši no Scouting The Refs (lietotnei: nav atkarīgs no GitHub Actions grafika).
+    kalendars: DataFrame vai saraksts ar vārdnīcām (game_id, datums [ASV datums], majas_komanda, viesu_komanda, sakuma_laiks_utc).
+    Atgriež rindu sarakstu tādā pašā formātā kā dati/tiesnesi_planotie.csv (avots 'ScoutingTheRefs'). Nekā nerakstī failos.
+    """
+    rindas = kalendars.to_dict("records") if hasattr(kalendars, "to_dict") else list(kalendars or [])
+    tagad = tagad or datetime.now(timezone.utc)
+    esosie_id = {int(x) for x in esosie_id}
+    vajag = []
+    for sp in rindas:
+        t = _laiks(sp.get("sakuma_laiks_utc"))
+        if t is None or int(sp["game_id"]) in esosie_id or not (tagad - timedelta(hours=1) <= t <= tagad + timedelta(hours=stundas)):
+            continue
+        vajag.append(sp)
+    if not vajag:
+        return []
+    portals = str_dati({str(sp["datums"])[:10] for sp in vajag if sp.get("datums")}, lejupieladet=lejupieladet)
+    atjaunots = tagad.strftime("%Y-%m-%d %H:%M")
+    out = []
+    for sp in vajag:
+        s = portals.get(str(sp.get("datums"))[:10], {}).get((sp.get("viesu_komanda"), sp.get("majas_komanda")))
+        if not s or not s["referees"]:
+            continue
+        for loma, vards in [("referee", v) for v in s["referees"]] + [("linesman", v) for v in s["linesmen"]]:
+            out.append({"game_id": int(sp["game_id"]), "sakums_utc": sp["sakuma_laiks_utc"], "home_team": sp.get("majas_komanda"),
+                        "away_team": sp.get("viesu_komanda"), "loma": loma, "vards": vards, "atjaunots_utc": atjaunots, "avots": "ScoutingTheRefs"})
+    return out
+
+
 def ielasit(stundas=IEGUVES_STUNDAS, visas=False, tagad=None, lejupieladet=_lejupieladet):
     nhl = _nhl()
     tagad = tagad or datetime.now(timezone.utc)
