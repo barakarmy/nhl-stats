@@ -2,10 +2,18 @@ name: NHL Referees (pirms spēlēm)
 
 on:
   schedule:
-    # Ātra pārbaude katras 30 minūtes no 12:00 līdz 23:30 UTC (pēc UTC, tāpēc vasaras/ziemas laiks nav svarīgs).
-    # Pati ielāde notiek tikai tad, ja kādai spēlei tuvāko 4 stundu laikā vēl nav paziņoti tiesneši.
-    - cron: '*/30 12-23 * * *'
-  workflow_dispatch:   # ar roku: vienmēr veic ielādi un pārbauda spēles tuvāko 30 stundu laikā
+    # Ātra pārbaude (~10 s) ik 15 minūtes no 12:00 līdz 23:59 UTC (pēc UTC, tāpēc vasaras/ziemas laiks nav svarīgs).
+    # Minūtes ir izvēlētas "nepopulāras" (nevis :00 un :30): GitHub pilnas stundas un pusstundas laikā plānotos darbus bieži kavē vai izlaiž pavisam.
+    # Pati ielāde notiek tikai tad, ja kādai spēlei tuvāko 6 stundu laikā vēl nav paziņoti tiesneši.
+    # Tāpat darbojas arī ārējā taimera (cron-job.org) palaišanas: ja nekas nav vajadzīgs, darbs ilgst ~10 s (bez Python instalēšanas).
+    - cron: '7,22,37,52 12-23 * * *'
+  workflow_dispatch:   # ārējais taimeris (cron-job.org) un palaišana ar roku
+    inputs:
+      piespiest:
+        description: 'Ielādēt tiesnešus vienmēr (spēlēm tuvāko 30 stundu laikā), arī ja pārbaude saka, ka nevajag'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: nhl-data-update
@@ -26,23 +34,23 @@ jobs:
         run: python3 tiesnesi_planotie.py --parbaude
 
       - name: Set up Python
-        if: steps.check.outputs.needed == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.check.outputs.needed == 'true' || inputs.piespiest
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install dependencies
-        if: steps.check.outputs.needed == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.check.outputs.needed == 'true' || inputs.piespiest
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements_collector.txt
 
       - name: Fetch assigned referees
-        if: steps.check.outputs.needed == 'true' || github.event_name == 'workflow_dispatch'
-        run: python tiesnesi_planotie.py ${{ github.event_name == 'workflow_dispatch' && '--stundas 30 --visas' || '' }}
+        if: steps.check.outputs.needed == 'true' || inputs.piespiest
+        run: python tiesnesi_planotie.py ${{ inputs.piespiest && '--stundas 30 --visas' || '' }}
 
       - name: Commit and push changes if any
-        if: steps.check.outputs.needed == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.check.outputs.needed == 'true' || inputs.piespiest
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
