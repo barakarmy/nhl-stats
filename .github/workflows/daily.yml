@@ -21,6 +21,16 @@ on:
         required: false
         default: false
         type: boolean
+      pedejas:
+        description: 'Tikko beigušās spēles (datumi nav jānorāda): pēdējās 8h, 4h vai 2h. Ja izvēlēts, sākuma/beigu datumi netiek ņemti vērā.'
+        required: false
+        default: 'nē'
+        type: choice
+        options:
+          - 'nē'
+          - 'pēdējās 8h'
+          - 'pēdējās 4h'
+          - 'pēdējās 2h' 
 
 concurrency:
   group: nhl-data-update
@@ -49,7 +59,15 @@ jobs:
         run: python kalendars.py
 
       - name: Run Stats Script
-        run: python nhl_dati.py --vieglais ${{ inputs.sakums }} ${{ inputs.beigas }} ${{ inputs.atjaunot && '--atjaunot' || '' }}
+        env:
+          PEDEJAS: ${{ inputs.pedejas }}
+        run: |
+          case "$PEDEJAS" in
+            *8h) python nhl_dati.py --vieglais --pedejas-stundas=8 ;;
+            *4h) python nhl_dati.py --vieglais --pedejas-stundas=4 ;;
+            *2h) python nhl_dati.py --vieglais --pedejas-stundas=2 ;;
+            *)   python nhl_dati.py --vieglais ${{ inputs.sakums }} ${{ inputs.beigas }} ${{ inputs.atjaunot && '--atjaunot' || '' }} ;;
+          esac
 
       - name: Commit and push changes if any
         run: |
