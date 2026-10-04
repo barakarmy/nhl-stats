@@ -16,7 +16,13 @@ _HTML = r"""<!doctype html>
 <html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-:root { --item: 120px; --pulse: 5.2s; }
+/* Viens kopīgs pulsa "pulkstenis" visam komponentam: --wave mainās uz :root, tāpēc abi logo pulsē tieši vienā fāzē.
+   Katram logo ir tikai amplitūda --amp (0 = nepulsē, 1 = pulsē), kas ieslēdzas/izslēdzas pakāpeniski, tāpēc pulsācija sākas bez lēciena. */
+@property --wave { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --amp { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --k { syntax: '<number>'; inherits: true; initial-value: 0; }
+:root { --item: 120px; --pulse: 5.2s; animation: vilnis var(--pulse) ease-in-out infinite; }
+@keyframes vilnis { 0%, 100% { --wave: 0; } 50% { --wave: 1; } }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: transparent; font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; overflow: hidden; color: #31333f; -webkit-user-select: none; user-select: none; }
 .stage { display: flex; align-items: flex-start; justify-content: center; gap: clamp(8px, 3%, 30px); padding: 6px 4px 8px; }
@@ -31,24 +37,24 @@ html, body { background: transparent; font-family: Inter, system-ui, -apple-syst
 .it { position: relative; height: var(--item); scroll-snap-align: center; scroll-snap-stop: always; }
 /* .lg tiek mērogots ritināšanas laikā; img iekšpusē saņem blur un pulsāciju tikai tad, kad rullītis ir apstājies (.settled) */
 .lg { position: absolute; left: 0; top: 50%; width: 100%; height: var(--logo); margin-top: calc(var(--logo) / -2); will-change: transform; transform-origin: 50% 50%; pointer-events: none; }
-.lg img { width: 100%; height: 100%; object-fit: contain; display: block; -webkit-user-drag: none; transition: filter .25s ease; }
-.reel.settled .it.nb img { filter: blur(var(--b, 2px)); }
-.reel.settled .it.sel img { animation: pulss var(--pulse) ease-in-out infinite; }
-@keyframes pulss { 0%, 100% { transform: scale(1); } 50% { transform: scale(.93); } }       /* minimāla pulsēšana, nepārsniedzot kolonnas platumu */
-@media (prefers-reduced-motion: reduce) { .reel.settled .it.sel img { animation: none; } }
-.name { min-height: 2.4rem; max-width: 100%; text-align: center; font-weight: 700; font-size: .95rem; line-height: 1.2; display: flex; align-items: center; justify-content: center; }
+/* blur: --b = stiprums pēc attāluma līdz centram (jo tuvāk izvēlētajam, jo stiprāk), --k = 0..1 cik "apstājies" rullītis (ātri griežoties 0, apstājoties 1) */
+.lg img { width: 100%; height: 100%; object-fit: contain; display: block; -webkit-user-drag: none;
+  filter: blur(calc(var(--b, 0px) * var(--k))); transform: scale(calc(1 - .07 * var(--wave) * var(--amp))); transition: --amp .6s ease; }
+.reel.settled .it.sel img { --amp: 1; }          /* pulsē tikai izvēlētais, kad rullītis ir pilnībā apstājies */
+@media (prefers-reduced-motion: reduce) { :root { animation: none; } }
+.name { min-height: 2rem; max-width: 100%; text-align: center; font-weight: 700; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; opacity: .6; display: flex; align-items: center; justify-content: center; }
 .vsbox { height: calc(var(--item) * 3); display: flex; align-items: center; }
 .vs { font-family: 'Plus Jakarta Sans', Inter, system-ui, sans-serif; font-weight: 800; font-size: clamp(1.5rem, 6vw, 2.2rem); letter-spacing: .04em; opacity: .55; }
 </style></head>
 <body>
 <div class="stage">
-  <div class="col"><div class="reel-box"><div class="reel" id="ra" tabindex="0"></div></div><div class="name" id="na">&nbsp;</div></div>
+  <div class="col"><div class="reel-box"><div class="reel" id="ra" tabindex="0"></div></div><div class="name" id="na">Mājas</div></div>
   <div class="vsbox"><div class="vs">VS</div></div>
-  <div class="col"><div class="reel-box"><div class="reel" id="rb" tabindex="0"></div></div><div class="name" id="nb">&nbsp;</div></div>
+  <div class="col"><div class="reel-box"><div class="reel" id="rb" tabindex="0"></div></div><div class="name" id="nb">Viesi</div></div>
 </div>
 <script>
 (function () {
-  var COPIES = 7, MID = 3, SETTLE_MS = 700, ITEM = 120, LOGO = 120, teams = [], N = 0, reels = {}, lastSent = '', lastArgs = '', built = false, spinning = 0, lastH = 0;
+  var COPIES = 7, MID = 3, STOP_MS = 140, SETTLE_MS = 700, ITEM = 120, LOGO = 120, teams = [], N = 0, reels = {}, lastSent = '', lastArgs = '', built = false, spinning = 0, lastH = 0;
   function send(type, data) { window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), '*'); }
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
   function frame() {
@@ -77,35 +83,43 @@ html, body { background: transparent; font-family: Inter, system-ui, -apple-syst
   }
   function gidx(el) { return clamp(Math.round(el.scrollTop / ITEM), 0, COPIES * N - 1); }
   function team(el) { return teams[gidx(el) % N]; }
-  function paint(el) {                     // mērogs un caurspīdīgums pēc attāluma līdz centram (ritināšanas laikā; bez blur un pulsācijas)
+  function paint(el) {                     // mērogs, caurspīdīgums un blur stiprums (--b) pēc attāluma līdz centram
     var c = el.scrollTop / ITEM, items = el.querySelectorAll('.it');
     for (var i = Math.max(0, Math.floor(c) - 3); i < Math.min(items.length, Math.ceil(c) + 4); i++) {
-      var d = Math.abs(i - c), lg = items[i].firstChild;
+      var d = Math.abs(i - c), it = items[i], lg = it.firstChild;
       lg.style.transform = 'scale(' + Math.max(.5, 1 - d * .32).toFixed(3) + ')';
       lg.style.opacity = Math.max(.35, 1 - d * .42).toFixed(3);
+      var b = d < 1 ? d * 3.5 : 0.8 + 2.7 * Math.max(0, 1 - (d - 1) / 6);            // centrā 0, blakus esošajiem stiprākais
+      it.style.setProperty('--b', b.toFixed(2) + 'px');
     }
   }
-  function labels() { document.getElementById('na').textContent = team(reels.a).nos; document.getElementById('nb').textContent = team(reels.b).nos; }
+  function labels() {}                     // zem rullīšiem ir pastāvīgi apzīmējumi "Mājas" un "Viesi"
   function emit() {
     var v = { a: team(reels.a).kods, b: team(reels.b).kods }, s = JSON.stringify(v);
     if (s !== lastSent) { lastSent = s; send('streamlit:setComponentValue', { value: v, dataType: 'json' }); }
   }
-  function unsettle(el) { el.classList.remove('settled'); }
-  function settle(el) {                    // rullītis apstājies: pārliek uz vidējo kopiju (nebeidzama ritināšana), uzliek blur kaimiņiem un pulsāciju izvēlētajam
+  function setK(el, k, ms) { el.style.transition = '--k ' + ms + 'ms ' + (ms > 300 ? 'ease-out' : 'linear'); el.style.setProperty('--k', k.toFixed(3)); }
+  function unsettle(el) { el.classList.remove('settled'); clearTimeout(el._t2); }
+  // 1) ritināšana: blur ir vājš, un tas pieaug, rullītim palēninoties (atkarīgs no ātruma)
+  // 2) apstājies (STOP_MS bez kustības): pārliek uz vidējo kopiju, blur pakāpeniski pieaug līdz pilnam SETTLE_MS laikā
+  // 3) pēc tam komanda ir izvēlēta: izvēlētais logo sāk pulsēt (kopējā fāzē ar otru rullīti), vērtība tiek nosūtīta Python
+  function stopped(el) {
     var g = gidx(el), ti = g % N, mid = MID * N + ti;
-    if (g < N * 1.5 || g > N * (COPIES - 1.5)) { el.style.scrollSnapType = 'none'; el.scrollTop = mid * ITEM; el.style.scrollSnapType = ''; g = mid; }
+    if (g < N * 1.5 || g > N * (COPIES - 1.5)) { el._skip = 1; el.style.scrollSnapType = 'none'; el.scrollTop = mid * ITEM; el.style.scrollSnapType = ''; g = mid; }
     var items = el.querySelectorAll('.it');
-    for (var i = Math.max(0, g - 6); i < Math.min(items.length, g + 7); i++) {
-      var d = Math.abs(i - g), it = items[i];
-      it.classList.toggle('sel', d === 0); it.classList.toggle('nb', d !== 0);
-      it.style.setProperty('--b', (0.8 + 2.7 * Math.max(0, 1 - (d - 1) / 6)).toFixed(2) + 'px');     // jo tuvāk izvēlētajam, jo stiprāks blur
-    }
-    paint(el); labels();
-    if (!spinning) { el.classList.add('settled'); emit(); }
+    for (var i = Math.max(0, g - 7); i < Math.min(items.length, g + 8); i++) items[i].classList.toggle('sel', i === g);
+    paint(el); setK(el, 1, SETTLE_MS);
+    clearTimeout(el._t2);
+    el._t2 = setTimeout(function () { if (!spinning) { el.classList.add('settled'); emit(); } }, SETTLE_MS);
   }
   function onScroll(el) {
-    paint(el); labels(); unsettle(el);
-    clearTimeout(el._t); el._t = setTimeout(function () { settle(el); }, SETTLE_MS);
+    if (el._skip) { el._skip = 0; paint(el); return; }          // pašu veikta pārlikšana uz vidējo kopiju: nav lietotāja kustība
+    var now = performance.now(), dt = now - (el._lt || now), dy = Math.abs(el.scrollTop - (el._ly === undefined ? el.scrollTop : el._ly));
+    el._lt = now; el._ly = el.scrollTop;
+    var sp = dt > 0 ? dy / dt : 0; el._sp = el._sp === undefined ? sp : el._sp * .7 + sp * .3;
+    paint(el); unsettle(el);
+    setK(el, .55 * (1 - clamp(el._sp / 1.6, 0, 1)), 180);       // ātri griežoties ~0, palēninoties līdz 0.55
+    clearTimeout(el._t); el._t = setTimeout(function () { el._sp = 0; stopped(el); }, STOP_MS);
   }
   function goTo(el, g, smooth) { el.scrollTo({ top: clamp(g, 0, COPIES * N - 1) * ITEM, behavior: smooth ? 'smooth' : 'auto' }); }
 
@@ -118,7 +132,7 @@ html, body { background: transparent; font-family: Inter, system-ui, -apple-syst
       var k = clamp((ts - t0) / ms, 0, 1), e = 1 - Math.pow(1 - k, 3);
       el.scrollTop = a + (b - a) * e;
       if (k < 1) { requestAnimationFrame(step); }
-      else { el.style.scrollSnapType = ''; el.scrollTop = b; spinning--; clearTimeout(el._t); el._t = setTimeout(function () { settle(el); }, SETTLE_MS); }
+      else { el.style.scrollSnapType = ''; el.scrollTop = b; spinning--; clearTimeout(el._t); el._t = setTimeout(function () { el._sp = 0; stopped(el); }, STOP_MS); }
     }
     requestAnimationFrame(step);
   }
