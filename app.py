@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.10"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.11"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -689,6 +689,12 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .ks-vt.maj { background: rgba(59,130,246,.12); color: #1d4ed8; }
 .tb a.tb-logo-a { display: inline-block; line-height: 0; border-radius: 50%; transition: transform .15s ease; }
 .tb a.tb-logo-a:hover { transform: scale(1.12); }
+/* komandas līderi */
+.ld-v { font-weight: 700; font-size: .9rem; margin-top: .1rem; }
+.ld-v span { font-weight: 400; opacity: .6; font-size: .78rem; }
+.ld-c { display: flex; justify-content: space-between; gap: .5rem; font-size: .8rem; opacity: .75; margin-top: .3rem; padding-top: .3rem;
+  border-top: 1px solid rgba(128,128,128,.15); }
+.ld-c span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* ceļojuma faktors salīdzinājumā */
 .cel { margin: 1.7rem 0 .2rem; }
 .cel-h { text-align: center; font-weight: 800; font-size: .88rem; letter-spacing: .07em; opacity: .9; margin-bottom: .2rem; }
@@ -2090,7 +2096,8 @@ def lapa_komanda():
         return
     st.markdown(f'<div class="kom-nos">{_html.escape(da.pilns_nosaukums(kom))}</div>', unsafe_allow_html=True)
 
-    t_gal, t_par, t_sp, t_nak, t_dz = st.tabs(["Galvenā", "Par komandu", "Aizvadītās spēles", "Nākamās spēles", "Padziļināta statistika"])
+    t_gal, t_lid, t_sp, t_nak, t_dz, t_par = st.tabs(["Statistika", "Spēlētāju statistika", "Aizvadītās spēles", "Nākamās spēles",
+                                                      "Padziļināta statistika", "Par komandu"])
     e = _html.escape
     liga = da.kopsavilkums(DF, "Visas", None)
     kop = liga.loc[kom] if kom in liga.index else da.kopsavilkums(tdf).iloc[0]
@@ -2143,6 +2150,47 @@ def lapa_komanda():
                         f'<div class="kpi-s">{n0["sakums_lv"]:%d.%m(%H:%M)} · {"mājās" if n0["majas_komanda"] == kom else "viesos"} · uzspied, lai salīdzinātu</div></div></div></div>')
         st.markdown(f'<div class="kpi-row"><div class="kn"><div class="kpi-l">Forma (pēdējās 5)</div><div class="fm">{forma}</div></div>{nak_html}</div>',
                     unsafe_allow_html=True)
+
+    with t_lid:                                           # komandas līderi (kā kartītes cilnē Statistika)
+        sk_k = ielasit_papildu("speletaji", VERSIJA)
+        vg_k = ielasit_papildu("vartsargi", VERSIJA)
+        sk_k = sk_k[sk_k["team"] == kom] if sk_k is not None and not sk_k.empty else None
+        vg_k = vg_k[vg_k["team"] == kom] if vg_k is not None and not vg_k.empty else None
+        Lp = da.speletaju_lideri(sk_k) if sk_k is not None and not sk_k.empty else pd.DataFrame()
+        Lg = da.vartsargu_lideri(vg_k) if vg_k is not None and not vg_k.empty else pd.DataFrame()
+        if Lp.empty and Lg.empty:
+            st.info("Šai komandai spēlētāju datu vēl nav.")
+        else:
+            def toi_t(m):
+                return f"{int(m)}:{int(round((m - int(m)) * 60)):02d}" if pd.notna(m) else "–"
+
+            def lideru_karte(nos, tab, kol, vards_kol, fmt_f, augsts=True, min_gp=1, piez=""):
+                if tab.empty or kol not in tab.columns:
+                    return ""
+                t_ = tab[(tab["GP"] >= min_gp) & tab[kol].notna()]
+                if t_.empty:
+                    return ""
+                t_ = t_.sort_values([kol, "GP"], ascending=[not augsts, False]).head(3)
+                r0 = t_.iloc[0]
+                citi = "".join(f'<div class="ld-c"><span>{n + 2}. {e(str(r[vards_kol]))}</span><b>{e(fmt_f(r[kol]))}</b></div>'
+                               for n, (_, r) in enumerate(t_.iloc[1:].iterrows()))
+                return (f'<div class="kpi"><div class="kpi-l">{e(nos)}</div><div class="kpi-v">{e(fmt_f(r0[kol]))}</div>'
+                        f'<div class="ld-v">{e(str(r0[vards_kol]))}<span> · {int(r0["GP"])} sp.{piez}</span></div>{citi}</div>')
+            vesels = lambda v: f"{int(v)}"                                                    # noqa: E731
+            ar_zimi = lambda v: f"{int(v):+d}"                                                # noqa: E731
+            kartes_p = [lideru_karte("Punkti", Lp, "P", "Speletajs", vesels), lideru_karte("Vārti", Lp, "G", "Speletajs", vesels),
+                        lideru_karte("Piespēles", Lp, "A", "Speletajs", vesels), lideru_karte("+/-", Lp, "PM", "Speletajs", ar_zimi),
+                        lideru_karte("Metieni vārtos", Lp, "SOG", "Speletajs", vesels), lideru_karte("Vairākuma vārti", Lp, "PPG", "Speletajs", vesels),
+                        lideru_karte("Sitieni", Lp, "HIT", "Speletajs", vesels), lideru_karte("Bloķētie metieni", Lp, "BLK", "Speletajs", vesels),
+                        lideru_karte("Laiks laukumā (vidēji)", Lp, "TOI", "Speletajs", toi_t), lideru_karte("Sodu minūtes", Lp, "PIM", "Speletajs", vesels)]
+            st.markdown('<p class="mc-dh">Laukuma spēlētāji</p><div class="kpi-grid">' + "".join(x for x in kartes_p if x) + "</div>", unsafe_allow_html=True)
+            if not Lg.empty:
+                min_v = 1 if Lg["GP"].max() < 3 else 2                         # atvairīto % un GAA: vārtsargi ar vismaz 2 spēlēm (sezonas sākumā 1)
+                kartes_g = [lideru_karte("Atvairīto metienu %", Lg, "SVpct", "Vartsargs", lambda v: f"{v:.1f}%", True, min_v),
+                            lideru_karte("Ielaisti vidēji (GAA)", Lg, "GAA", "Vartsargs", lambda v: f"{v:.2f}", False, min_v),
+                            lideru_karte("Uzvaras", Lg, "W", "Vartsargs", vesels),
+                            lideru_karte("Atvairītie metieni", Lg, "SV", "Vartsargs", vesels)]
+                st.markdown('<p class="mc-dh">Vārtsargi</p><div class="kpi-grid">' + "".join(x for x in kartes_g if x) + "</div>", unsafe_allow_html=True)
 
     with t_par:                                           # komandas informācija
         lok = (lokacijas.LOKACIJAS.get(kom, {}) if lokacijas is not None else {})
