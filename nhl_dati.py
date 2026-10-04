@@ -34,7 +34,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import requests
@@ -51,6 +51,9 @@ API_STATS = "https://api.nhle.com/stats/rest/en"
 SPELU_TIPI = (2, 3)
 VIEGLAIS = "--vieglais" in sys.argv   # GitHub Actions: bez lielajām tabulām (notikumi, mainas)
 ATJAUNOT = "--atjaunot" in sys.argv   # pārlasa un pārraksta arī jau esošās spēles norādītajā intervālā
+# --pedejas-stundas=N: tikai spēles, kas beigušās pēdējo N stundu laikā (tās vienmēr tiek pārlasītas), datumi aprēķināti automātiski
+PEDEJAS_STUNDAS = next((float(a.split("=", 1)[1]) for a in sys.argv if a.startswith("--pedejas-stundas=") and a.split("=", 1)[1]), None)
+SPELES_ILGUMS_H = 3.5   # spēle (ar pārtraukumiem un papildlaiku) beidzas ne vēlāk kā ~3,5 h pēc sākuma
 IEGUT_MAINAS = not VIEGLAIS      # maiņu dati (liela tabula)
 LIELAS_TABULAS = ("notikumi", "mainas")
 KAVESANAS = 0.25         # pauze starp pieprasījumiem (sekundes)
@@ -658,7 +661,13 @@ def apstradat_spele(spele, datums):
 def main():
     global kludu_skaits
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if not args:
+    robeza_utc = None
+    if PEDEJAS_STUNDAS:
+        tagad = datetime.now(timezone.utc)
+        robeza_utc = tagad - timedelta(hours=PEDEJAS_STUNDAS + SPELES_ILGUMS_H)     # spēles, kas sākās pēc šī brīža, varēja beigties pēdējo N h laikā
+        no, lidz = robeza_utc.astimezone(ET).date().isoformat(), tagad.astimezone(ET).date().isoformat()
+        print(f"Režīms: spēles, kas beigušās pēdējo {PEDEJAS_STUNDAS:g} h laikā (sākums pēc {robeza_utc:%Y-%m-%d %H:%M} UTC); datumi {no} – {lidz}")
+    elif not args:
         no, lidz = noklusejuma_intervals()
     elif len(args) == 1:
         no = lidz = args[0]
@@ -688,10 +697,19 @@ def main():
             gid = spele.get("id")
             print(f"{teksts((spele.get('awayTeam') or {}).get('abbrev'))} @ "
                   f"{teksts((spele.get('homeTeam') or {}).get('abbrev'))} (ID: {gid})")
-            if str(gid) in gatavas and str(gid) in ar_tiesnesiem and not ATJAUNOT:
+            if robeza_utc is not None:                     # režīms "pēdējās N stundas": tikai nesen beigušās spēles, tās vienmēr pārlasa
+                try:
+                    sak = datetime.fromisoformat(str(spele.get("startTimeUTC")).replace("Z", "+00:00"))
+                except ValueError:
+                    sak = None
+                if sak is None or sak < robeza_utc:
+                    print("  Ārpus izvēlētajām pēdējām stundām, izlaižu.")
+                    continue
+            parrakstit = ATJAUNOT or robeza_utc is not None
+            if str(gid) in gatavas and str(gid) in ar_tiesnesiem and not parrakstit:
                 print("  Jau ir datubāzē, izlaižu.")
                 continue
-            if str(gid) in gatavas and ATJAUNOT:
+            if str(gid) in gatavas and parrakstit:
                 print("  Spēle jau ir - pārrakstu (--atjaunot).")
             elif str(gid) in gatavas:
                 print("  Spēle jau ir, bet trūkst tiesnešu - ielasu atkārtoti.")
@@ -714,7 +732,7 @@ def main():
         for nos in [n for n in TABULAS if n != "speles"] + ["speles"]:
             if VIEGLAIS and nos in LIELAS_TABULAS:
                 continue
-            if ATJAUNOT:
+            if ATJAUNOT or robeza_utc is not None:
                 dzest_spelu_rindas(nos, apstradatie)      # vecās rindas tiek aizstātas ar jaunajām
             n = pievienot(nos, krajums[nos])
             if nos == "speles":
