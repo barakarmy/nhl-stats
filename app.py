@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.2"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.3"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -612,14 +612,21 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .cmp-logo-a { display: block; line-height: 0; border-radius: 50%; transition: transform .15s ease; }
 .cmp-logo-a:hover { transform: scale(1.05); }
 /* taimeris kopš iepriekšējās spēles (back-to-back): lēni un minimāli pulsē */
-.cel-taim { margin-top: .45rem; font-size: .78rem; opacity: .85; }
+.cel-taim { margin-top: .45rem; font-size: .78rem; font-weight: 600; color: #b91c1c; }          /* tāda pati krāsa kā "Kritiski" */
+.cel-taim .tk.stop { animation: none; }
 .cel-taim .tk { display: inline-block; font-variant-numeric: tabular-nums; font-size: .95rem; margin-left: .2rem; animation: tk-pulss 3s ease-in-out infinite; }
 @keyframes tk-pulss { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 @media (prefers-reduced-motion: reduce) { .cel-taim .tk { animation: none; } }
 /* saite tabulā (kalendārs → salīdzinājums) */
 .tb a.tb-saite { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 1.7rem; border-radius: 999px; text-decoration: none;
   background: linear-gradient(135deg, #18233d 0%, #0a0f1c 100%); color: #ffffff !important; font-weight: 700; }
+.tb a.tb-saite { position: relative; }
 .tb a.tb-saite:hover { filter: brightness(1.35); }
+@media (hover: hover) {
+  .tb a.tb-saite[data-tip]:hover::after { content: attr(data-tip); position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%);
+    padding: .25rem .6rem; border-radius: .45rem; background: #262730; color: #fff; font-size: .75rem; font-weight: 600; white-space: nowrap; z-index: 30;
+    box-shadow: 0 4px 12px rgba(0,0,0,.25); pointer-events: none; }
+}
 /* rezultātu kartīte: sākuma laiks un vieta zem iznākuma pogas */
 .mc-info { text-align: center; font-size: .82rem; opacity: .75; margin: .15rem 0 .1rem; }
 /* ceļojuma faktors salīdzinājumā */
@@ -1336,6 +1343,7 @@ CMP_PELD_SKRIPTS = """
   function tikski() {                       // taimeri "kopš iepriekšējās spēles": skaitās uz priekšu līdz spēles sākumam
     d.querySelectorAll('.tk[data-no]').forEach(function (el) {
       var s = Math.max(0, Math.floor((Math.min(Date.now(), +el.dataset.lidz) - (+el.dataset.no)) / 1000));
+      el.classList.toggle('stop', Date.now() >= +el.dataset.lidz);          // spēle sākusies: taimeris apstājas un vairs nepulsē
       var p = function (n) { return (n < 10 ? '0' : '') + n; };
       el.textContent = p(Math.floor(s / 3600)) + ':' + p(Math.floor(s % 3600 / 60)) + ':' + p(s % 60);
     });
@@ -1391,7 +1399,7 @@ def sl_celojums_html(kreisa, laba):
     spele = None
     if KAL is not None and not KAL.empty:
         d = KAL["datums_lv"].dt.date
-        x = KAL[(d >= sod) & (d <= sod + timedelta(days=2))
+        x = KAL[(d >= sod - timedelta(days=1)) & (d <= sod + timedelta(days=2)) & (KAL["sakums_lv"] > pd.Timestamp.now(tz=da.LV_TZ) - pd.Timedelta(hours=2))
                 & (((KAL["majas_komanda"] == kreisa) & (KAL["viesu_komanda"] == laba)) | ((KAL["majas_komanda"] == laba) & (KAL["viesu_komanda"] == kreisa)))]
         if not x.empty:
             spele = x.sort_values("sakums_lv").iloc[0]
@@ -1448,7 +1456,8 @@ def sl_celojums_html(kreisa, laba):
                 beigas_ = pd.Timestamp(iepr) + pd.Timedelta(hours=SPELES_ILGUMS_APTUVENI_H)          # aptuvenas beigas = sākums + 2,5 h
                 no_ms, lidz_ms = int(beigas_.timestamp() * 1000), int(pd.Timestamp(sak).timestamp() * 1000)
                 pag = max(0, min(int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000), lidz_ms) - no_ms) // 1000
-                taim = (f'<div class="cel-taim">Kopš iepriekšējās spēles beigām (~) <b class="tk" data-no="{no_ms}" data-lidz="{lidz_ms}">'
+                apst = " stop" if int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000) >= lidz_ms else ""
+                taim = (f'<div class="cel-taim">Kopš iepriekšējās spēles beigām (~) <b class="tk{apst}" data-no="{no_ms}" data-lidz="{lidz_ms}">'
                         f'{pag // 3600:02d}:{pag % 3600 // 60:02d}:{pag % 60:02d}</b></div>')
         return (f'<div class="cel-c {puse} {cls}"><div class="cel-k">{e(kods)} · {loma}</div><div class="cel-km">{galv}</div>'
                 f'<div class="cel-t">{apaksa}</div><div class="cel-t">{atp}{tz_t}</div>{nozime}{taim}</div>')
@@ -1743,7 +1752,7 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
                 rinda += f'<td><div class="pb"><i style="width:{platums:.0f}%"></i><b>{_fmt_v(v, c["fmt"])}</b></div></td>'
             elif isinstance(v, Saite):
                 rinda += (f'<td class="l"><a class="tb-saite" href="{e(v.href)}" title="{e(v.virsraksts)}" data-tip="{e(v.virsraksts)}"'
-                          f'{" target=_blank rel=noopener" if v.jauna_cilne else " target=_self"}>{e(str(v))}</a></td>')
+                          f'{" target=_blank rel=noopener" if v.jauna_cilne else " target=_top"}>{e(str(v))}</a></td>')
             elif isinstance(v, bool):
                 rinda += f'<td class="l">{"✓" if v else ""}</td>'
             elif isinstance(v, (pd.Timestamp, datetime.date)):
@@ -2137,9 +2146,9 @@ def lapa_kalendars():
                 "Viesi": grupa["viesu_komanda"].map(komandas_etikete),
                 "Mājinieki": grupa["majas_komanda"].map(komandas_etikete),
                 "Galvenie tiesneši": ties_txt})
-            if n_dienas == 0:                                  # tuvākās dienas spēlēm: saite uz komandu salīdzinājumu (mājinieki pa kreisi)
-                tab["Salīdzināt"] = [Saite("⇄", iekseja_saite("salidzinat", a=h, b=v), "Salīdzināt šīs komandas")
-                                     for h, v in zip(grupa["majas_komanda"], grupa["viesu_komanda"])]
+            if n_dienas == 0:                                  # tuvākās dienas spēlēm: saite uz komandu salīdzinājumu tabulas sākumā (mājinieki pa kreisi)
+                tab.insert(0, "", [Saite("⇄", iekseja_saite("salidzinat", a=h, b=v), "Salīdzināt komandas")
+                                   for h, v in zip(grupa["majas_komanda"], grupa["viesu_komanda"])])
             rtabula_bez_kartosanas(tab, hide_index=True, width="stretch")
 
 
