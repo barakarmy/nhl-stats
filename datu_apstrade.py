@@ -688,7 +688,7 @@ def karstuma_teksts(r, metrika="punkti"):
         daļas.append(f"rādītājs {int(r['spel_ar'])} no {int(r['n_w'])} spēlēm")
     if r["serija"] >= 3:
         daļas.append(f"sērija {int(r['serija'])} spēles pēc kārtas")
-    for nos, vieta in (("ser_majas", "mājas"), ("ser_viesos", "izbraukuma")):
+    for nos, vieta in (("ser_majas", "mājas"), ("ser_viesos", "viesu")):
         if int(r.get(nos, 0) or 0) >= VIETAS_SERIJAS_SLIEKSNIS and int(r["serija"]) < int(r.get(nos, 0)):
             daļas.append(f"{int(r[nos])} {vieta} spēles pēc kārtas ar rādītāju (tikai {vieta} spēļu secībā)")
     if r["n_w"] > 0 and r["GP"] > r["n_w"]:
