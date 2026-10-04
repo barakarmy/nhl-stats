@@ -372,6 +372,9 @@ def vartsargu_lideri(vg):
         toi_min=vg["toi"].map(toi_minutes),
         sak=vg["starter"].astype(str).str.lower().eq("true").astype(int),
         uzv=vg["decision"].astype(str).eq("W").astype(int))
+    x = x[x["toi_min"] > 0]                  # rezerves vārtsargi, kas bija pieteikti, bet nespēlēja (TOI 00:00), netiek skaitīti kā aizvadīta spēle
+    if x.empty:
+        return pd.DataFrame()
     out = x.groupby("playerId").agg(
         Vartsargs=("vards", "last"), Komanda=("team", "last"),
         GP=("game_id", "nunique"), GS=("sak", "sum"), W=("uzv", "sum"),
@@ -412,7 +415,7 @@ def _pagajusie_faili():
 def atslega(vards):
     """Vārda atslēga salīdzināšanai: pirmais burts + uzvārds ('Wes McCauley' = 'W. McCauley')."""
     s = unicodedata.normalize("NFKD", str(vards)).encode("ascii", "ignore").decode().lower()
-    s = re.sub(r"[^a-z\s-]", " ", s.replace("'", ""))
+    s = re.sub(r"[^a-z\s]", " ", s.replace("'", ""))          # defise kā atstarpe: 'Samuels-Thomas' = 'Samuels Thomas'; apostrofi tiek izmesti
     dalas = [d for d in s.split() if d not in ("jr", "sr", "ii", "iii")]
     return f"{dalas[0][0]} {dalas[-1]}" if dalas else ""
 
