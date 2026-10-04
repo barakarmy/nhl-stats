@@ -2,7 +2,8 @@ name: NHL Daily Update
 
 on:
   schedule:
-    - cron: '0 8 * * *'
+    # 08:17 UTC (11:17 Rīgā). Pilnas stundas sākumā GitHub plānotos darbus kavē visvairāk; tie var kavēties arī tagad (labākais: ārējs taimeris, sk. README).
+    - cron: '17 8 * * *'
   workflow_dispatch:
     inputs:
       sakums:
