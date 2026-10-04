@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.11"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.12"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -690,6 +690,14 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .tb a.tb-logo-a { display: inline-block; line-height: 0; border-radius: 50%; transition: transform .15s ease; }
 .tb a.tb-logo-a:hover { transform: scale(1.12); }
 /* komandas līderi */
+.ld-h { font-weight: 800; font-size: 1.05rem; margin: 1rem 0 .4rem; }
+.kpi-grid { align-items: start; }
+.ld-x { margin-top: .35rem; }
+.ld-x summary { list-style: none; cursor: pointer; font-size: .76rem; font-weight: 700; color: #1d4ed8; padding-top: .3rem; user-select: none; }
+.ld-x summary::-webkit-details-marker { display: none; }
+.ld-x .ld-z { display: none; }
+.ld-x[open] .ld-a { display: none; }
+.ld-x[open] .ld-z { display: inline; }
 .ld-v { font-weight: 700; font-size: .9rem; margin-top: .1rem; }
 .ld-v span { font-weight: 400; opacity: .6; font-size: .78rem; }
 .ld-c { display: flex; justify-content: space-between; gap: .5rem; font-size: .8rem; opacity: .75; margin-top: .3rem; padding-top: .3rem;
@@ -2170,12 +2178,15 @@ def lapa_komanda():
                 t_ = tab[(tab["GP"] >= min_gp) & tab[kol].notna()]
                 if t_.empty:
                     return ""
-                t_ = t_.sort_values([kol, "GP"], ascending=[not augsts, False]).head(3)
+                t_ = t_.sort_values([kol, "GP"], ascending=[not augsts, False]).head(7)
                 r0 = t_.iloc[0]
-                citi = "".join(f'<div class="ld-c"><span>{n + 2}. {e(str(r[vards_kol]))}</span><b>{e(fmt_f(r[kol]))}</b></div>'
-                               for n, (_, r) in enumerate(t_.iloc[1:].iterrows()))
+                rinda_ = lambda n, r: f'<div class="ld-c"><span>{n}. {e(str(r[vards_kol]))}</span><b>{e(fmt_f(r[kol]))}</b></div>'   # noqa: E731
+                citi = "".join(rinda_(n + 2, r) for n, (_, r) in enumerate(t_.iloc[1:3].iterrows()))
+                vel = "".join(rinda_(n + 4, r) for n, (_, r) in enumerate(t_.iloc[3:7].iterrows()))
+                izvers = (f'<details class="ld-x"><summary><span class="ld-a">Rādīt top 7 ▾</span><span class="ld-z">Paslēpt ▴</span></summary>{vel}</details>'
+                          if vel else "")
                 return (f'<div class="kpi"><div class="kpi-l">{e(nos)}</div><div class="kpi-v">{e(fmt_f(r0[kol]))}</div>'
-                        f'<div class="ld-v">{e(str(r0[vards_kol]))}<span> · {int(r0["GP"])} sp.{piez}</span></div>{citi}</div>')
+                        f'<div class="ld-v">{e(str(r0[vards_kol]))}<span> · {int(r0["GP"])} sp.{piez}</span></div>{citi}{izvers}</div>')
             vesels = lambda v: f"{int(v)}"                                                    # noqa: E731
             ar_zimi = lambda v: f"{int(v):+d}"                                                # noqa: E731
             kartes_p = [lideru_karte("Punkti", Lp, "P", "Speletajs", vesels), lideru_karte("Vārti", Lp, "G", "Speletajs", vesels),
@@ -2183,14 +2194,14 @@ def lapa_komanda():
                         lideru_karte("Metieni vārtos", Lp, "SOG", "Speletajs", vesels), lideru_karte("Vairākuma vārti", Lp, "PPG", "Speletajs", vesels),
                         lideru_karte("Sitieni", Lp, "HIT", "Speletajs", vesels), lideru_karte("Bloķētie metieni", Lp, "BLK", "Speletajs", vesels),
                         lideru_karte("Laiks laukumā (vidēji)", Lp, "TOI", "Speletajs", toi_t), lideru_karte("Sodu minūtes", Lp, "PIM", "Speletajs", vesels)]
-            st.markdown('<p class="mc-dh">Laukuma spēlētāji</p><div class="kpi-grid">' + "".join(x for x in kartes_p if x) + "</div>", unsafe_allow_html=True)
+            st.markdown('<p class="ld-h">Laukuma spēlētāji</p><div class="kpi-grid">' + "".join(x for x in kartes_p if x) + "</div>", unsafe_allow_html=True)
             if not Lg.empty:
                 min_v = 1 if Lg["GP"].max() < 3 else 2                         # atvairīto % un GAA: vārtsargi ar vismaz 2 spēlēm (sezonas sākumā 1)
                 kartes_g = [lideru_karte("Atvairīto metienu %", Lg, "SVpct", "Vartsargs", lambda v: f"{v:.1f}%", True, min_v),
                             lideru_karte("Ielaisti vidēji (GAA)", Lg, "GAA", "Vartsargs", lambda v: f"{v:.2f}", False, min_v),
                             lideru_karte("Uzvaras", Lg, "W", "Vartsargs", vesels),
                             lideru_karte("Atvairītie metieni", Lg, "SV", "Vartsargs", vesels)]
-                st.markdown('<p class="mc-dh">Vārtsargi</p><div class="kpi-grid">' + "".join(x for x in kartes_g if x) + "</div>", unsafe_allow_html=True)
+                st.markdown('<p class="ld-h">Vārtsargi</p><div class="kpi-grid">' + "".join(x for x in kartes_g if x) + "</div>", unsafe_allow_html=True)
 
     with t_par:                                           # komandas informācija
         lok = (lokacijas.LOKACIJAS.get(kom, {}) if lokacijas is not None else {})
