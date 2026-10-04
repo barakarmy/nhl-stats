@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.4"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.5"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -613,10 +613,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .cmp-logo-a:hover { transform: scale(1.05); }
 /* taimeris kopš iepriekšējās spēles (back-to-back): lēni un minimāli pulsē */
 .cel-taim { margin-top: .45rem; font-size: .78rem; font-weight: 600; color: #b91c1c; }          /* tāda pati krāsa kā "Kritiski" */
-.cel-taim .tk.stop { animation: none; }
-.cel-taim .tk { display: inline-block; font-variant-numeric: tabular-nums; font-size: .95rem; margin-left: .2rem; animation: tk-pulss 3s ease-in-out infinite; }
-@keyframes tk-pulss { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-@media (prefers-reduced-motion: reduce) { .cel-taim .tk { animation: none; } }
+.cel-taim .tk { display: inline-block; font-variant-numeric: tabular-nums; font-size: .95rem; margin-left: .2rem; }
 /* saite tabulā (kalendārs → salīdzinājums) */
 .tb a.tb-saite { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 1.7rem; border-radius: 999px; text-decoration: none;
   background: linear-gradient(135deg, #18233d 0%, #0a0f1c 100%); color: #ffffff !important; font-weight: 700; }
@@ -2112,10 +2109,8 @@ def lapa_kalendars():
                "(scoutingtherefs.com) un NHL.")
     try:
         _ts = _planotie_ar_statusu(VERSIJA)[1]
-        _f = lambda t: t.strftime("%d.%m. %H:%M")                                                # noqa: E731
         _parb = _ts["lidz"] - timedelta(hours=30)                                                # pārbaudes brīdis
-        st.caption(f"Tiesneši pārbaudīti {_f(_parb)} spēlēm, kas notiek tagad vai sāksies līdz {_f(_ts['lidz'])}: "
-                   f"no datu faila {_ts['fails']}, tiešsaistē (Scouting The Refs) papildus {_ts['tiessaiste']}"
+        st.caption(f"Tiesneši pārbaudīti {_parb:%d.%m. %H:%M}"
                    + (f" · ⚠️ {_ts['kluda']}" if _ts.get("kluda") else "")
                    + f". Nākamā pārbaude: {_ts['nakama']} (kad lapa tiek atvērta vai atsvaidzināta).")
     except Exception:
@@ -2250,16 +2245,11 @@ def rezultatu_statuss():
     c = da.DATU_MAPE / "speles.csv"
     atjaun = lv(datetime.datetime.fromtimestamp(c.stat().st_mtime, datetime.timezone.utc)) if c.exists() else None
     sak = RAW["datums_lv"].dt.date
-    teksts = (f"Pēdējais NHL Daily Update: {f(atjaun)}" if atjaun else "NHL Daily Update") + f" · rezultāti līdz {sak.max():%d.%m.} ({len(RAW)} spēles)"
-    # pabeigtas spēles (sākums pirms 3,5 h), kuru rezultātu datos vēl nav
-    if KAL is not None and not KAL.empty and "sakums_lv" in KAL.columns:
-        beigusas = KAL[(KAL["sakums_lv"] < pd.Timestamp(tagad) - pd.Timedelta(hours=3.5)) & (~KAL["game_id"].isin(RAW["game_id"]))]
-        if not beigusas.empty:
-            teksts += f" · {len(beigusas)} pabeigtas spēles vēl gaida rezultātu"
+    teksts = (f"Pēdējā atjaunošana: {f(atjaun)} · " if atjaun else "") + f"rezultāti līdz {sak.max():%d.%m.} ({len(RAW)} spēles)"
     nak = lv(tagad).replace(hour=DATU_ATJAUNINASANA[0], minute=DATU_ATJAUNINASANA[1], second=0, microsecond=0)
     if nak <= lv(tagad):
         nak += timedelta(days=1)
-    return teksts + f" · nākamais NHL Daily Update: {f(nak)}."
+    return teksts + f" · nākošā atjaunošana: {f(nak)}."
 
 
 def lapa_rezultati():
