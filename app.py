@@ -1293,7 +1293,7 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
 
 
 def lapa_periodi():
-    c0, c1, c2, c3 = st.columns(4)
+    c0, c1, c2, c3 = st.columns([1, .6, .75, 1.25])        # platums pēc pogu skaita, lai "Kārtot pēc" pogas ietilpst vienā rindā
     with c0:
         p = int(izvele("Hokeja periods", ["1. periods", "2. periods", "3. periods"], key="per_p")[0])
     with c1:
@@ -1301,8 +1301,8 @@ def lapa_periodi():
     with c2:
         logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="per_logs")
     with c3:
-        metrika = izvele("Kārtot pēc", ["Vārtu starpība", "Gūtie", "Ielaistie", "Metieni (SOG)"], key="per_met")
-    kolonna = {"Vārtu starpība": "Starpiba", "Gūtie": "G", "Ielaistie": "Z", "Metieni (SOG)": "SOG_sp"}[metrika]
+        metrika = izvele("Kārtot pēc", ["Vārtu starpība", "Gūtie", "Ielaistie", "SOG"], key="per_met")
+    kolonna = {"Vārtu starpība": "Starpiba", "Gūtie": "G", "Ielaistie": "Z", "SOG": "SOG_sp"}[metrika]
     res = da.periodu_tabula(DF, p, scope, LOGI[logs])
     pask = {
         "Gūti": f"{p}. periodā gūtie vārti (kopā izvēlētajās spēlēs)",
@@ -1336,7 +1336,7 @@ def lapa_forma():
     with c1:
         n = int(izvele("Pēdējās spēles", ["5", "10"], key="fm_n"))
     with c2:
-        kartot = izvele("Kārtot", ["Karstākās (vārti)", "Aukstākās (vārti)", "Visvairāk ielaiž", "Labākā forma (punkti)"],
+        kartot = izvele("", ["Karstākās (vārti)", "Aukstākās (vārti)", "Visvairāk ielaiž", "Labākā forma (punkti)"],
                         key="fm_kartot")
     res = da.kopsavilkums(DF, "Visas", n)
     res["Forma"] = da.forma(DF, n)
@@ -1439,12 +1439,11 @@ def lapa_noraidijumi():
         return f"{mtxt[0].upper() + mtxt[1:]} {ptxt[p]}: {v}, {vtxt}"
 
     if perioda == "Visi periodi":
-        kartot = sledzis("Kārtot pēc", [k for k in pkarte if k != "Kopā"], "Kopā", key="nr_kart")
         kolonnas, pask = {"GP": "Sp."}, {}
         for nos, p in pkarte.items():
             kolonnas[f"{vkods}_{p}"] = nos
             pask[nos] = apraksts(vkods, p)
-        tabula(res, kolonnas, sort_col=f"{vkods}_{pkarte[kartot]}", paskaidr=pask,
+        tabula(res, kolonnas, sort_col=f"{vkods}_kopa", paskaidr=pask,
                config={nos: st.column_config.NumberColumn(format=fm) for nos in pkarte})
     else:
         p = pkarte[perioda]
