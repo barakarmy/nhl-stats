@@ -455,6 +455,16 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .st-key-sl_per, .st-key-sl_viet { display: flex !important; flex-direction: row !important; flex-wrap: wrap; justify-content: center; gap: .5rem !important; margin-bottom: .4rem; }
 .st-key-sl_per > div, .st-key-sl_viet > div { width: auto !important; flex: 0 0 auto; }
 .st-key-sl_viet button { min-height: 2rem; padding: .1rem .9rem; font-size: .85rem; }
+.st-key-sl_poga_josla { display: flex !important; flex-direction: row !important; justify-content: center; margin: .3rem 0 .8rem; }
+.st-key-sl_poga_josla > div { width: auto !important; flex: 0 0 auto; }
+.st-key-sl_poga_josla button { background: linear-gradient(135deg, #18233d 0%, #0a0f1c 100%) !important; border: 1px solid rgba(255,255,255,.14) !important;
+  border-radius: 999px !important; min-height: 3rem; padding: .55rem 2.6rem !important; box-shadow: 0 10px 24px rgba(10,15,28,.35);
+  transition: transform .15s ease, box-shadow .15s ease, background .15s ease; }
+.st-key-sl_poga_josla button p { color: #ffffff !important; font-weight: 700 !important; letter-spacing: .06em; font-size: 1rem;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
+.st-key-sl_poga_josla button:hover:not(:disabled) { transform: translateY(-1px) scale(1.03); box-shadow: 0 14px 30px rgba(10,15,28,.45);
+  background: linear-gradient(135deg, #22304f 0%, #0d1424 100%) !important; }
+.st-key-sl_poga_josla button:disabled { opacity: .45; box-shadow: none; }
 .st-key-sl_citas { display: flex !important; flex-direction: row !important; justify-content: center; margin: .2rem 0 .6rem; }
 .st-key-sl_citas > div { width: auto !important; flex: 0 0 auto; }
 @media (max-width: 640px) {
@@ -529,9 +539,26 @@ def ielasit_tiesnesus(versija):
     return cur, prev, info
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=600)
 def ielasit_planotos(versija):
-    return da.ielasit_planotos_tiesnesus()
+    """
+    Paziņotie tiesneši: fails dati/tiesnesi_planotie.csv (to papildina GitHub Actions) + spēlēm, kurām tur tiesnešu vēl nav, tiešā ielāde no Scouting The Refs.
+    GitHub plānotie darbi bieži kavējas vai tiek izlaisti, tāpēc lietotne tiesnešus meklē arī pati (rezultāts tiek turēts 10 minūtes, lai neslogotu portālu).
+    """
+    plan = da.ielasit_planotos_tiesnesus()
+    kal = ielasit_visu(versija)[2]
+    if kal is None or kal.empty:
+        return plan
+    try:
+        import tiesnesi_planotie as tp
+        esosie = set(plan.loc[plan["loma"] == "referee", "game_id"].astype(int)) if plan is not None and not plan.empty else set()
+        jaunas = tp.dzivie_tiesnesi(kal, esosie)
+    except Exception:                     # bez interneta vai ja portāls nav pieejams: paliek tikai tas, kas ir failā
+        return plan
+    if not jaunas:
+        return plan
+    jauns = pd.DataFrame(jaunas)
+    return jauns if plan is None or plan.empty else pd.concat([plan, jauns], ignore_index=True)
 
 
 @st.cache_data(show_spinner=False)
@@ -923,7 +950,6 @@ def _sl_vieta(v):                 # apakšējais filtrs: mājās vai izbraukumā
 
 
 def lapa_salidzinat():
-    st.title("Komandu salīdzināšana")
     kodi = sorted(da.KOMANDAS, key=lambda k: da.KOMANDAS[k])
     if "sl_a" not in st.session_state:                       # noklusējums: nākamā tuvākā spēle no kalendāra (mājinieki kreisajā pusē)
         nak = da.nakamas_speles(KAL, 1)
@@ -944,7 +970,8 @@ def lapa_salidzinat():
             kom_b = c2.selectbox("Otrā komanda", kodi, index=kodi.index(b0), format_func=komandas_etikete, key="sl_sel_b")
         if kom_a == kom_b:
             st.caption("Izvēlies divas dažādas komandas.")
-        st.button("Salīdzināt", type="primary", width="stretch", disabled=(kom_a == kom_b), on_click=_sl_salidzinat, args=(kom_a, kom_b), key="sl_poga")
+        with st.container(key="sl_poga_josla"):          # moderna tumša poga lapas vidū (nevis pa visu platumu)
+            st.button("Salīdzināt", disabled=(kom_a == kom_b), on_click=_sl_salidzinat, args=(kom_a, kom_b), key="sl_poga")
         return
 
     # 2) salīdzinājums: rullīši pazūd, paliek abi logo ar "VS" (statiski, bez pulsēšanas), poga "Salīdzināt citas komandas" un filtri
