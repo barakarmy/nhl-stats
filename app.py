@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-04.9"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-04.10"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -806,6 +806,9 @@ def _planotie_ar_statusu(versija):
     kludas = []
     try:
         import tiesnesi_planotie as tp
+        if not hasattr(tp, "dzivie_tiesnesi") or not hasattr(tp, "_lejupieladet"):
+            statuss["kluda"] = "repozitorijā ir vecs tiesnesi_planotie.py (augšupielādē jauno), tiešsaistes pārbaude nedarbojas"
+            return plan, statuss
 
         def lej(url, meginajumi=1):                   # tas pats lejupielādētājs, bet neveiksmes tiek pierakstītas statusam
             h = tp._lejupieladet(url, meginajumi=meginajumi)
@@ -815,7 +818,7 @@ def _planotie_ar_statusu(versija):
         esosie = set(plan.loc[plan["loma"] == "referee", "game_id"].astype(int)) if plan is not None and not plan.empty else set()
         jaunas = tp.dzivie_tiesnesi(kal, esosie, lejupieladet=lej)
     except Exception as ex:               # bez interneta vai ja portāls nav pieejams: paliek tikai tas, kas ir failā
-        statuss["kluda"] = type(ex).__name__
+        statuss["kluda"] = f"{type(ex).__name__}: {str(ex)[:80]}"
         return plan, statuss
     if kludas:
         statuss["kluda"] = f"Scouting The Refs nav sasniedzams ({len(kludas)} pieprasījumi neizdevās)"
