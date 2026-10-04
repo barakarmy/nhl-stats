@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.7"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.9"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -655,6 +655,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .ks-d small { display: block; }
 .ks-o { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: .35rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ks-o img { width: 1.6rem; height: 1.6rem; object-fit: contain; flex: none; }
+.ks-v { display: inline-block; width: 1.5rem; text-align: center; flex: none; opacity: .8; }
 .ks-s { font-weight: 800; color: inherit !important; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
 .ks-m { font-size: .78rem; opacity: .6; white-space: nowrap; }
 .ks-c { font-size: .78rem; opacity: .6; margin: .5rem 0 .2rem; }
@@ -666,6 +667,26 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   .ks-r { gap: .45rem; font-size: .82rem; }
   .ks-m { display: none; }
 }
+/* datums ar laiku: datorā 02.10(05:00), telefonā laiks centrēts zem datuma */
+.dt { display: inline-flex; align-items: baseline; white-space: nowrap; }
+@media (max-width: 640px) { .dt { flex-direction: column; align-items: center; line-height: 1.1; } .dt-t { font-size: .9em; } }
+/* U / Z / ZPL paskaidrojumi */
+.l5u, .fm-b { position: relative; cursor: help; }
+@media (hover: hover) {
+  .l5u[data-tip]:hover::after, .fm-b[data-tip]:hover::after, .kn-r a.kn-a[data-tip]:hover::after {
+    content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); padding: .25rem .6rem;
+    border-radius: .45rem; background: #262730; color: #fff; font-size: .74rem; font-weight: 600; white-space: nowrap; z-index: 30;
+    box-shadow: 0 4px 12px rgba(0,0,0,.25); pointer-events: none; text-transform: none; letter-spacing: 0; }
+}
+.l5u:focus::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); padding: .25rem .6rem;
+  border-radius: .45rem; background: #262730; color: #fff; font-size: .72rem; font-weight: 600; white-space: nowrap; z-index: 30; }
+.kn-a { color: inherit !important; text-decoration: none; }
+.kn-r a.kn-a { position: relative; line-height: 0; }
+.kn-r b a.kn-a { text-decoration: underline; text-underline-offset: 3px; line-height: inherit; }
+.ks-o.kn-a { text-decoration: none; }
+.ks-o.kn-a:hover { text-decoration: underline; }
+.ks-vt { font-size: .72rem; font-weight: 700; padding: .1rem .45rem; border-radius: .35rem; background: rgba(128,128,128,.12); }
+.ks-vt.maj { background: rgba(59,130,246,.12); color: #1d4ed8; }
 /* ceļojuma faktors salīdzinājumā */
 .cel { margin: 1.7rem 0 .2rem; }
 .cel-h { text-align: center; font-weight: 800; font-size: .88rem; letter-spacing: .07em; opacity: .9; margin-bottom: .2rem; }
@@ -689,10 +710,14 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .l5c { flex: 1 1 0; min-width: 0; max-width: 26rem; }
 .l5h { font-weight: 800; font-size: .9rem; margin-bottom: .35rem; }
 .l5c.r .l5h { text-align: right; }
-.l5r { display: flex; align-items: center; gap: .55rem; padding: .38rem 0; border-bottom: 1px solid rgba(128,128,128,.2); font-size: .9rem; }
-.l5c.r .l5r { flex-direction: row-reverse; }
-.l5d { opacity: .65; font-size: .8rem; min-width: 5.2rem; white-space: nowrap; }
-.l5d small { font-size: inherit; }
+.l5r { display: grid; grid-template-columns: 5.4rem 1.5rem 1.8rem 4rem 2.8rem; align-items: center; justify-items: center; column-gap: .4rem;
+  padding: .38rem 0; border-bottom: 1px solid rgba(128,128,128,.2); font-size: .9rem; justify-content: start; }
+.l5c.r .l5r { direction: rtl; justify-content: start; }
+.l5c.r .l5r > * { direction: ltr; }
+.l5r .l5d { justify-self: start; }
+.l5c.r .l5r .l5d { justify-self: end; }
+.l5v { font-weight: 600; opacity: .75; }
+.l5d { opacity: .65; font-size: .8rem; white-space: nowrap; }
 .l5o { font-weight: 600; display: inline-flex; align-items: center; gap: .3rem; }
 .l5lg { width: 1.7rem !important; height: 1.7rem !important; max-width: none !important; object-fit: contain; }
 .l5s { font-weight: 800; color: inherit !important; text-decoration: underline; text-underline-offset: 3px; }
@@ -708,9 +733,9 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   .st-key-cmp_vh button, .st-key-cmp_va button { padding: .1rem .45rem !important; min-height: 1.8rem; }
   .st-key-cmp_vh button p, .st-key-cmp_va button p { font-size: .7rem; }
   .cmp-l5 { gap: .6rem; }
-  .l5r { font-size: .78rem; gap: .35rem; }
-  .l5d { min-width: 2.4rem; font-size: .7rem; line-height: 1.15; }
-  .l5d small { display: block; }
+  .l5r { font-size: .76rem; grid-template-columns: 2.4rem 1rem 1.4rem 2.8rem 2rem; column-gap: .25rem; }
+  .l5u { font-size: .62rem; padding: .06rem .3rem; }
+  .l5d { font-size: .68rem; }
 }
 
 /* ===== Mobilā versija ===== */
@@ -1324,6 +1349,21 @@ def sl_komanda_html(kods, kl, gp_kopa, gp_skata, majas_puse):
 
 
 SAKUMI = {}           # game_id -> sākuma laiks (Rīga), aizpildās pirmajā izsaukumā
+REZ_NOZIME = {"U": "Uzvara", "Z": "Zaudējums pamatlaikā", "ZPL": "Zaudējums papildlaikā vai pēc metienu sērijas"}
+
+
+def dt_html(ts, datums=None):
+    """Datums ar laiku: datorā 02.10(05:00), telefonā laiks precīzi centrēts zem datuma."""
+    if ts is not None and pd.notna(ts):
+        return f'<span class="dt"><span class="dt-d">{ts:%d.%m}</span><span class="dt-t">({ts:%H:%M})</span></span>'
+    return f'<span class="dt"><span class="dt-d">{pd.Timestamp(datums):%d.%m}</span></span>' if datums is not None else ""
+
+
+def rez_zime(u, kl="l5u"):
+    """U / Z / ZPL zīme ar paskaidrojumu (uzvedot peli vai pieskaroties)."""
+    if not u:
+        return ""
+    return f'<span class="{kl} {u}" data-tip="{REZ_NOZIME.get(u, "")}" title="{REZ_NOZIME.get(u, "")}" tabindex="0">{u}</span>'
 
 
 def sl_pedejas5_html(kods, puse):
@@ -1338,13 +1378,11 @@ def sl_pedejas5_html(kods, puse):
         bg = da.beigu_etikete(r.beigas)
         rez = f"{int(r.g_tot)}:{int(r.z_tot)}" + (f" {bg}" if bg else "")
         u = iznak.get(r.rez, "")
-        sk_ = SAKUMI.get(r.game_id)
-        laiks_ = f"<small>({sk_:%H:%M})</small>" if sk_ is not None and pd.notna(sk_) else ""
-        rindas += (f'<div class="l5r"><span class="l5d">{pd.Timestamp(r.datums):%d.%m}{laiks_}</span>'
-                   f'<span class="l5o" title="{_html.escape(da.pilns_nosaukums(r.pretinieks))}">{"vs" if r.majas == 1 else "@"} '
-                   f'<img class="l5lg" src="{_html.escape(da.logo_url(r.pretinieks))}" alt="{_html.escape(r.pretinieks)}"></span>'
+        rindas += (f'<div class="l5r"><span class="l5d">{dt_html(SAKUMI.get(r.game_id), r.datums)}</span>'
+                   f'<span class="l5v">{"vs" if r.majas == 1 else "@"}</span>'
+                   f'<img class="l5lg" src="{_html.escape(da.logo_url(r.pretinieks))}" alt="{_html.escape(r.pretinieks)}" title="{_html.escape(da.pilns_nosaukums(r.pretinieks))}">'
                    f'<a class="l5s" href="{_html.escape(speles_saite(r.game_id))}" target="_blank" rel="noopener noreferrer">{rez}</a>'
-                   + (f'<span class="l5u {u}">{u}</span>' if u else "") + "</div>")
+                   f'<span class="l5z">{rez_zime(u)}</span></div>')
     return f'<div class="l5c {puse}"><div class="l5h">Pēdējās 5 spēles</div>{rindas or "<div class=l5r>Nav spēļu</div>"}</div>'
 
 
@@ -2080,16 +2118,21 @@ def lapa_komanda():
         l5 = tdf.sort_values(["datums", "game_id"]).tail(5)
         iznak = {"W": "U", "L": "Z", "OTL": "ZPL"}
         forma = "".join(f'<a class="fm-b {iznak.get(r.rez, "")}" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener" '
-                        f'title="{e(da.pilns_nosaukums(r.pretinieks))}">{iznak.get(r.rez, "")}<small>{int(r.g_tot)}:{int(r.z_tot)}</small></a>'
+                        f'data-tip="{e(REZ_NOZIME.get(iznak.get(r.rez, ""), ""))} · {"vs" if r.majas == 1 else "@"} {e(da.pilns_nosaukums(r.pretinieks))}" '
+                        f'title="{e(REZ_NOZIME.get(iznak.get(r.rez, ""), ""))} · {e(da.pilns_nosaukums(r.pretinieks))}">{iznak.get(r.rez, "")}<small>{int(r.g_tot)}:{int(r.z_tot)}</small></a>'
                         for r in l5.itertuples())
         nak = da.nakamas_speles(KAL, 1, komanda=kom) if KAL is not None else None
         nak_html = ""
         if nak is not None and not nak.empty:
             n0 = nak.iloc[0]
             pret = n0["viesu_komanda"] if n0["majas_komanda"] == kom else n0["majas_komanda"]
-            nak_html = (f'<div class="kn"><div class="kpi-l">Nākamā spēle</div><div class="kn-r"><img src="{e(da.logo_url(pret))}" alt="">'
-                        f'<div><b>{"vs" if n0["majas_komanda"] == kom else "@"} {e(da.pilns_nosaukums(pret))}</b>'
-                        f'<div class="kpi-s">{n0["sakums_lv"]:%d.%m. %H:%M} · {"mājās" if n0["majas_komanda"] == kom else "viesos"}</div></div></div></div>')
+            href_ = e(iekseja_saite("salidzinat", a=n0["majas_komanda"], b=n0["viesu_komanda"]))
+            nak_html = (f'<div class="kn"><div class="kpi-l">Nākamā spēle</div><div class="kn-r">'
+                        f'<a class="kn-a" href="{href_}" target="_blank" rel="noopener" data-tip="Salīdzināt komandas" title="Salīdzināt komandas">'
+                        f'<img src="{e(da.logo_url(pret))}" alt=""></a>'
+                        f'<div><b>{"vs" if n0["majas_komanda"] == kom else "@"} <a class="kn-a" href="{href_}" target="_blank" rel="noopener" '
+                        f'title="Salīdzināt komandas">{e(da.pilns_nosaukums(pret))}</a></b>'
+                        f'<div class="kpi-s">{n0["sakums_lv"]:%d.%m(%H:%M)} · {"mājās" if n0["majas_komanda"] == kom else "viesos"} · uzspied, lai salīdzinātu</div></div></div></div>')
         st.markdown(f'<div class="kpi-row"><div class="kn"><div class="kpi-l">Forma (pēdējās 5)</div><div class="fm">{forma}</div></div>{nak_html}</div>',
                     unsafe_allow_html=True)
 
@@ -2116,11 +2159,16 @@ def lapa_komanda():
                     unsafe_allow_html=True)
         nak = da.nakamas_speles(KAL, 8, komanda=kom) if KAL is not None else None
         if nak is not None and not nak.empty:
-            st.markdown('<p class="mc-dh">Nākamās spēles</p>', unsafe_allow_html=True)
-            rtabula_bez_kartosanas(pd.DataFrame({
-                "Datums": nak["datums_lv"].dt.strftime("%d.%m."), "Laiks (Rīga)": nak["sakums_lv"].dt.strftime("%H:%M"),
-                "Pretinieks": [komandas_etikete(v if m == kom else m) for m, v in zip(nak["majas_komanda"], nak["viesu_komanda"])],
-                "Vieta": ["Mājās" if m == kom else "Viesos" for m in nak["majas_komanda"]]}))
+            rn = ""
+            for s_ in nak.itertuples():
+                maj = s_.majas_komanda == kom
+                pret = s_.viesu_komanda if maj else s_.majas_komanda
+                href_ = e(iekseja_saite("salidzinat", a=s_.majas_komanda, b=s_.viesu_komanda))
+                rn += (f'<div class="ks-r"><span class="ks-d">{dt_html(s_.sakums_lv, s_.datums_lv)}</span>'
+                       f'<a class="ks-o kn-a" href="{href_}" target="_blank" rel="noopener" title="Salīdzināt komandas"><span class="ks-v">{"vs" if maj else "@"}</span>'
+                       f'<img src="{e(da.logo_url(pret))}" alt="">{e(da.pilns_nosaukums(pret))}</a>'
+                       f'<span class="ks-vt {"maj" if maj else "vie"}">{"mājās" if maj else "viesos"}</span></div>')
+            st.markdown(f'<p class="mc-dh">Nākamās spēles</p><div class="ks">{rn}</div>', unsafe_allow_html=True)
 
     with t_sp:                                            # aizvadītās spēles: 5 → "Ielādēt vēl" (+5) → "Visas"
         sk_key = f"kom_sp_n_{kom}"
@@ -2132,11 +2180,11 @@ def lapa_komanda():
             bg = da.beigu_etikete(r.beigas)
             u = iznak.get(r.rez, "")
             s_ = sak.get(r.game_id)
-            dat = f"{s_:%d.%m.}<small>{s_:%H:%M}</small>" if s_ is not None and pd.notna(s_) else f"{pd.Timestamp(r.datums):%d.%m.}"
+            dat = dt_html(s_, r.datums)
             rindas += (f'<div class="ks-r"><span class="ks-d">{dat}</span>'
-                       f'<span class="ks-o">{"vs" if r.majas == 1 else "@"} <img src="{e(da.logo_url(r.pretinieks))}" alt="">{e(da.pilns_nosaukums(r.pretinieks))}</span>'
+                       f'<span class="ks-o"><span class="ks-v">{"vs" if r.majas == 1 else "@"}</span><img src="{e(da.logo_url(r.pretinieks))}" alt="">{e(da.pilns_nosaukums(r.pretinieks))}</span>'
                        f'<a class="ks-s" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener" title="Atvērt spēles protokolu">{int(r.g_tot)}:{int(r.z_tot)}{(" " + bg) if bg else ""}</a>'
-                       f'<span class="l5u {u}">{u}</span>'
+                       f'{rez_zime(u)}'
                        f'<span class="ks-m">metieni {int(r.sog_tot) if pd.notna(r.sog_tot) else "–"}:{int(r.sog_pret) if pd.notna(r.sog_pret) else "–"}</span></div>')
         st.markdown(f'<div class="ks">{rindas}</div><div class="ks-c">Parādītas {min(n_rad, len(visas))} no {len(visas)} spēlēm</div>', unsafe_allow_html=True)
         if n_rad < len(visas):
@@ -2186,16 +2234,12 @@ def lapa_kalendars():
                    + f". Nākamā pārbaude: {_ts['nakama']}.")
     except Exception:
         pass
-    c1, c2 = st.columns([1, 2])
+    c1, _ = st.columns([1, 2])
     dienas = c1.slider("Cik dienas uz priekšu", 1, 14, 5)
-    komanda = c2.selectbox("Komanda", ["Visas komandas"] + sorted(da.KOMANDAS),
-                           format_func=lambda x: x if x == "Visas komandas" else komandas_etikete(x))
     sodien = da.sodien_lv()
     d = KAL["datums_lv"].dt.date
     x = KAL[(d >= sodien) & (d <= sodien + timedelta(days=dienas))]
     x = x[x["sakums_lv"] > pd.Timestamp.now(tz=da.LV_TZ) - pd.Timedelta(hours=2, minutes=30)]      # 2 h 30 min pēc sākuma spēle pazūd
-    if komanda != "Visas komandas":
-        x = x[(x["majas_komanda"] == komanda) | (x["viesu_komanda"] == komanda)]
     if x.empty:
         st.info("Šajā periodā spēļu nav.")
         return
@@ -2212,13 +2256,13 @@ def lapa_kalendars():
                 "Viesi": grupa["viesu_komanda"].map(komandas_etikete),
                 "Mājinieki": grupa["majas_komanda"].map(komandas_etikete),
                 "Galvenie tiesneši": ties_txt})
-            if n_dienas == 0:                                  # tuvākās dienas spēlēm: pogas uz komandu salīdzinājumu virs tabulas (mājinieki pa kreisi)
+            if n_dienas < 2:                                   # pirmās divas redzamās dienas: pogas uz komandu salīdzinājumu virs tabulas (mājinieki pa kreisi)
                 salid = None
-                with st.container(key="pg_kal_salid"):
+                with st.container(key=f"pg_kal_salid{n_dienas}"):
                     st.markdown('<div class="pg-lab">⇄ Salīdzināt komandas</div>', unsafe_allow_html=True)
-                    with st.container(key="pgr_kal_salid"):
-                        for h, v in zip(grupa["majas_komanda"], grupa["viesu_komanda"]):
-                            if st.button(f"⇄ {v} @ {h}", key=f"kals_{h}_{v}", help=None if mobila_ierice() else f"Salīdzināt komandas: {da.pilns_nosaukums(v)} @ {da.pilns_nosaukums(h)}"):
+                    with st.container(key=f"pgr_kal_salid{n_dienas}"):
+                        for h, v, g_ in zip(grupa["majas_komanda"], grupa["viesu_komanda"], grupa["game_id"]):
+                            if st.button(f"⇄ {v} @ {h}", key=f"kals_{g_}", help=None if mobila_ierice() else f"Salīdzināt komandas: {da.pilns_nosaukums(v)} @ {da.pilns_nosaukums(h)}"):
                                 salid = (h, v)
                 if salid and _lapa_pec_nosaukuma("Salīdzināt komandas") is not None:
                     _sl_salidzinat(*salid)
