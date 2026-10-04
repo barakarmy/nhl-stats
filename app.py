@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.9"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.10"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -687,6 +687,8 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .ks-o.kn-a:hover { text-decoration: underline; }
 .ks-vt { font-size: .72rem; font-weight: 700; padding: .1rem .45rem; border-radius: .35rem; background: rgba(128,128,128,.12); }
 .ks-vt.maj { background: rgba(59,130,246,.12); color: #1d4ed8; }
+.tb a.tb-logo-a { display: inline-block; line-height: 0; border-radius: 50%; transition: transform .15s ease; }
+.tb a.tb-logo-a:hover { transform: scale(1.12); }
 /* ceļojuma faktors salīdzinājumā */
 .cel { margin: 1.7rem 0 .2rem; }
 .cel-h { text-align: center; font-weight: 800; font-size: .88rem; letter-spacing: .07em; opacity: .9; margin-bottom: .2rem; }
@@ -1183,6 +1185,7 @@ def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False,
         return
     t = res.sort_values(sort_col, ascending=ascending, kind="stable").reset_index()
     bur = [burbuli.get(k) for k in t["komanda"]] if burbuli else None
+    saites = [iekseja_saite("komanda", kom=k) for k in t["komanda"]]           # logo atver komandas statistiku
     t.insert(0, "Logo", t["komanda"].map(da.logo_url))
     t.insert(1, "Komanda", t["komanda"].map(da.pilns_nosaukums))
     t.insert(0, "#", range(1, len(t) + 1))
@@ -1191,7 +1194,7 @@ def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False,
     cfg.update(config or {})
     fm = {kolonnas[k]: v for k, v in (formati or {}).items() if k in kolonnas}
     pg = {kolonnas[k]: v for k, v in (prog or {}).items() if k in kolonnas}
-    df_html(t, config=cfg_ar_help(list(t.columns), cfg, paskaidr), formati=fm, prog=pg, burbuli=bur, bur_kol=kolonnas.get("GP"))
+    df_html(t, config=cfg_ar_help(list(t.columns), cfg, paskaidr), formati=fm, prog=pg, burbuli=bur, bur_kol=kolonnas.get("GP"), logo_saites=saites)
 
 
 def prognozes_bloks(pr):
@@ -1755,7 +1758,7 @@ def _kartosanas_izvele(key, opcijas, izv):
 
 
 def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=(), burbuli=None, bur_kol=None, platas=(), indekss=False, kartot=True,
-            atgriezt=False):
+            atgriezt=False, logo_saites=None):
     """
     Visas lietotnes tabulas: DataFrame kā caurspīdīga HTML tabula ar paskaidrojumiem virsrakstos (uzvedot peli).
     config: Streamlit column_config (None = kolonna paslēpta; image = logotips; progress = josla; format = skaitļa formāts; width='large' = plata teksta kolonna);
@@ -1803,6 +1806,8 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
             df = df.loc[seciba].reset_index(drop=True)
             if burbuli is not None:
                 burbuli = [burbuli[i] for i in seciba]
+            if logo_saites is not None:
+                logo_saites = [logo_saites[i] for i in seciba]
             if "#" in df.columns:
                 df["#"] = range(1, len(df) + 1)
     # pielīpošās pirmās kolonnas (redzams, kurai komandai / spēlētājam pieder cipari, ritinot pa labi): "#" + logo vai pirmā kolonna
@@ -1820,7 +1825,10 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
             v, k = r[c["k"]], c["k"]
             ns = len(rinda)
             if c["logo"]:
-                rinda += f'<td class="lg"><img class="tb-logo" width="38" height="38" src="{e(str(v))}" alt=""></td>' if isinstance(v, str) and v else '<td class="lg"></td>'
+                img_ = f'<img class="tb-logo" width="38" height="38" src="{e(str(v))}" alt="">' if isinstance(v, str) and v else ""
+                if img_ and logo_saites is not None and logo_saites[i]:
+                    img_ = f'<a class="tb-logo-a" href="{e(logo_saites[i])}" target="_blank" rel="noopener" title="Atvērt komandas statistiku">{img_}</a>'
+                rinda += f'<td class="lg">{img_}</td>'
             elif k == bur_kol and burbuli is not None and burbuli[i]:
                 rinda += f'<td class="tbsp" tabindex="0"><span class="spw">{_fmt_v(v, "{:.0f}")}<span class="bubble">{burbuli[i]}</span></span></td>'
             elif c["prog"] is not None:
@@ -2082,7 +2090,7 @@ def lapa_komanda():
         return
     st.markdown(f'<div class="kom-nos">{_html.escape(da.pilns_nosaukums(kom))}</div>', unsafe_allow_html=True)
 
-    t_gal, t_par, t_sp, t_dz = st.tabs(["Galvenā", "Par komandu", "Aizvadītās spēles", "Padziļināta statistika"])
+    t_gal, t_par, t_sp, t_nak, t_dz = st.tabs(["Galvenā", "Par komandu", "Aizvadītās spēles", "Nākamās spēles", "Padziļināta statistika"])
     e = _html.escape
     liga = da.kopsavilkums(DF, "Visas", None)
     kop = liga.loc[kom] if kom in liga.index else da.kopsavilkums(tdf).iloc[0]
@@ -2157,18 +2165,7 @@ def lapa_komanda():
                 ("Bilance mājās", bil(km)), ("Bilance viesos", bil(kv))]
         st.markdown('<div class="ki">' + "".join(f'<div class="ki-r"><span>{e(l)}</span><b>{e(str(v))}</b></div>' for l, v in info if v) + "</div>",
                     unsafe_allow_html=True)
-        nak = da.nakamas_speles(KAL, 8, komanda=kom) if KAL is not None else None
-        if nak is not None and not nak.empty:
-            rn = ""
-            for s_ in nak.itertuples():
-                maj = s_.majas_komanda == kom
-                pret = s_.viesu_komanda if maj else s_.majas_komanda
-                href_ = e(iekseja_saite("salidzinat", a=s_.majas_komanda, b=s_.viesu_komanda))
-                rn += (f'<div class="ks-r"><span class="ks-d">{dt_html(s_.sakums_lv, s_.datums_lv)}</span>'
-                       f'<a class="ks-o kn-a" href="{href_}" target="_blank" rel="noopener" title="Salīdzināt komandas"><span class="ks-v">{"vs" if maj else "@"}</span>'
-                       f'<img src="{e(da.logo_url(pret))}" alt="">{e(da.pilns_nosaukums(pret))}</a>'
-                       f'<span class="ks-vt {"maj" if maj else "vie"}">{"mājās" if maj else "viesos"}</span></div>')
-            st.markdown(f'<p class="mc-dh">Nākamās spēles</p><div class="ks">{rn}</div>', unsafe_allow_html=True)
+
 
     with t_sp:                                            # aizvadītās spēles: 5 → "Ielādēt vēl" (+5) → "Visas"
         sk_key = f"kom_sp_n_{kom}"
@@ -2192,6 +2189,22 @@ def lapa_komanda():
                 st.button("Ielādēt vēl", key=f"kom_sp_vel_{kom}", on_click=lambda: st.session_state.__setitem__(sk_key, n_rad + 5))
                 if n_rad > 5:
                     st.button("Visas", key=f"kom_sp_visas_{kom}", on_click=lambda: st.session_state.__setitem__(sk_key, len(visas)))
+
+    with t_nak:                                           # nākamās spēles: tīrs saraksts (pretinieks = saite uz salīdzinājumu)
+        nak = da.nakamas_speles(KAL, 10, komanda=kom) if KAL is not None else None
+        if nak is not None and not nak.empty:
+            rn = ""
+            for s_ in nak.itertuples():
+                maj = s_.majas_komanda == kom
+                pret = s_.viesu_komanda if maj else s_.majas_komanda
+                href_ = e(iekseja_saite("salidzinat", a=s_.majas_komanda, b=s_.viesu_komanda))
+                rn += (f'<div class="ks-r"><span class="ks-d">{dt_html(s_.sakums_lv, s_.datums_lv)}</span>'
+                       f'<a class="ks-o kn-a" href="{href_}" target="_blank" rel="noopener" title="Salīdzināt komandas"><span class="ks-v">{"vs" if maj else "@"}</span>'
+                       f'<img src="{e(da.logo_url(pret))}" alt="">{e(da.pilns_nosaukums(pret))}</a>'
+                       f'<span class="ks-vt {"maj" if maj else "vie"}">{"mājās" if maj else "viesos"}</span></div>')
+            st.markdown(f'<div class="ks">{rn}</div>', unsafe_allow_html=True)
+        else:
+            st.info("Kalendārā nav atrastu nākamo spēļu.")
 
     with t_dz:                                            # padziļinātā statistika: visa pieejamā informācija tabulā ar atlasēm
         with st.container(key="frinda_kdz"):
