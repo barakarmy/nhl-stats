@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.5"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.6"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -2105,14 +2105,12 @@ def lapa_kalendars():
     if KAL is None:
         st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts (palaid kalendars.py).")
         return
-    st.caption("Galvenos tiesnešus pirms spēlēm paziņo apmēram 4 stundas pirms dienas pirmās spēles. Dati: Scouting The Refs "
-               "(scoutingtherefs.com) un NHL.")
     try:
         _ts = _planotie_ar_statusu(VERSIJA)[1]
         _parb = _ts["lidz"] - timedelta(hours=30)                                                # pārbaudes brīdis
         st.caption(f"Tiesneši pārbaudīti {_parb:%d.%m. %H:%M}"
                    + (f" · ⚠️ {_ts['kluda']}" if _ts.get("kluda") else "")
-                   + f". Nākamā pārbaude: {_ts['nakama']} (kad lapa tiek atvērta vai atsvaidzināta).")
+                   + f". Nākamā pārbaude: {_ts['nakama']}.")
     except Exception:
         pass
     c1, c2 = st.columns([1, 2])
