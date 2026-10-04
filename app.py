@@ -2,7 +2,9 @@ import datetime
 import hashlib
 import hmac
 import html as _html
+import os
 import re
+import tempfile
 import time
 from datetime import timedelta
 
@@ -72,6 +74,45 @@ def saites_zetons():
     return _auth_zetons(p, (int(time.time()) // 3600 + SAITES_ZETONA_STUNDAS + 1) * 3600) if p else None
 
 
+# Pieteikšanās atcerēšanās pēc lapas atsvaidzināšanas: pēc paroles ievades pārlūka localStorage tiek saglabāts paraksts (HMAC no derīguma
+# laika ar paroli kā atslēgu; pati parole tajā nav). Jaunā sesijā (refresh, jauna cilne) mazs komponents to nolasa un nodod Python, kas to pārbauda.
+# localStorage nav atkarīgs no sīkdatnēm un Streamlit Cloud starpniekservera; paraksts nav redzams adresē. Paroles maiņa visus parakstus anulē.
+ATCERETIES_DIENAS = 30
+_AUTH_HTML = """<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><script>
+(function () {
+  var NOS = 'nhl_auth', atbildets = false;
+  function send(t, d) { window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: t }, d), '*'); }
+  window.addEventListener('message', function (ev) {
+    if (!ev.data || ev.data.type !== 'streamlit:render') return;
+    var a = ev.data.args || {};
+    try { if (a.rakstit) localStorage.setItem(NOS, a.rakstit); } catch (e) {}
+    if (a.lasit && !atbildets) {
+      atbildets = true;
+      var v = '';
+      try { v = localStorage.getItem(NOS) || ''; } catch (e) {}
+      send('streamlit:setComponentValue', { value: v, dataType: 'json' });
+    }
+    send('streamlit:setFrameHeight', { height: 0 });
+  });
+  send('streamlit:componentReady', { apiVersion: 1 });
+})();
+</script></body></html>"""
+
+
+@st.cache_resource(show_spinner=False)
+def _auth_komponents():
+    """Komponents deklarēts vienreiz uz procesu; mapes nosaukums satur satura jaucējkodu (pārlūks neizmanto veco versiju)."""
+    import streamlit.components.v1 as components
+    h = hashlib.md5(_AUTH_HTML.encode("utf-8")).hexdigest()[:10]
+    mape = os.path.join(tempfile.gettempdir(), f"nhl_auth_{h}")
+    os.makedirs(mape, exist_ok=True)
+    fails = os.path.join(mape, "index.html")
+    if not os.path.exists(fails):
+        with open(fails, "w", encoding="utf-8") as f:
+            f.write(_AUTH_HTML)
+    return components.declare_component(f"nhl_auth_{h}", path=mape)
+
+
 LOGIN_CSS = """<style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600&display=swap');
 /* Pieteikšanās ekrāns: fons ir #000066, #000039 un #000024 sajaukums; lauks ir tieši lapas centrā (fiksēts pozicionējums, neatkarīgs no Streamlit izkārtojuma);
@@ -102,6 +143,10 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .stApp [data-testid="stTextInput"]:hover input::placeholder, .stApp [data-testid="stTextInput"]:focus-within input::placeholder {
   color: transparent !important; -webkit-text-fill-color: transparent; opacity: 0; }
 .stApp [data-testid="stTextInput"] button, .stApp [data-testid="InputInstructions"] { display: none !important; }
+.st-key-auth_lasit, .st-key-auth_krat { position: absolute !important; width: 0; height: 0; overflow: hidden; margin: 0 !important; }
+/* kamēr pārlūks vēl nav atbildējis par saglabāto pieteikšanos, paroles lauks parādās ar nelielu aizkavi (lai pēc refresh tas nemirgo) */
+.login-gaida [data-testid="stTextInput"], .stApp:has(.login-gaida) [data-testid="stTextInput"] { animation: login-paradit .25s ease 1.3s both; }
+@keyframes login-paradit { from { opacity: 0; } to { opacity: 1; } }
 .login-err { position: fixed; top: calc(50% + 2.9rem); left: 50%; transform: translateX(-50%); z-index: 1000; white-space: nowrap;
   color: #ffb4b4; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: .85rem; letter-spacing: .04em; }
 </style>"""
@@ -119,18 +164,34 @@ def check_password():
     zet = st.query_params.get("t")                       # saite no citas cilnes (burbulis u.c.): derīgs paraksts aizstāj paroles ievadi
     if zet and _auth_zetons_derigs(zet, parole):
         st.session_state["password_correct"] = True
+        st.session_state["_auth_zetons"] = _auth_zetons(parole, int(time.time()) + ATCERETIES_DIENAS * 86400)
         try:
             del st.query_params["t"]                     # paraksts nepaliek adreses joslā
         except Exception:
             pass
         return True
 
+    saglabats = None                                     # atcerētā pieteikšanās no pārlūka (localStorage); None = pārlūks vēl nav atbildējis
+    try:
+        with st.container(key="auth_lasit"):
+            saglabats = _auth_komponents()(lasit=True, key="nhl_auth_lasit", default=None)
+    except Exception:
+        saglabats = ""
+    if isinstance(saglabats, str) and saglabats and _auth_zetons_derigs(saglabats, parole):
+        st.session_state["password_correct"] = True
+        st.session_state["_auth_zetons"] = _auth_zetons(parole, int(time.time()) + ATCERETIES_DIENAS * 86400)     # termiņš tiek atjaunots
+        return True
+
     def entered():
         ievade = str(st.session_state.get("password", ""))
         st.session_state["password_correct"] = hmac.compare_digest(ievade.encode(), parole.encode())
+        if st.session_state["password_correct"]:
+            st.session_state["_auth_zetons"] = _auth_zetons(parole, int(time.time()) + ATCERETIES_DIENAS * 86400)
         st.session_state.pop("password", None)
 
     st.markdown(LOGIN_CSS, unsafe_allow_html=True)
+    if saglabats is None:
+        st.markdown('<div class="login-gaida"></div>', unsafe_allow_html=True)
     st.text_input("Password", type="password", placeholder="Password", label_visibility="collapsed", on_change=entered, key="password")
     if st.session_state.get("password_correct") is False:
         st.markdown('<div class="login-err">Incorrect password</div>', unsafe_allow_html=True)
@@ -200,6 +261,13 @@ else:
 
 if not check_password():
     st.stop()
+
+if st.session_state.get("_auth_zetons"):
+    try:
+        with st.container(key="auth_krat"):
+            _auth_komponents()(rakstit=st.session_state["_auth_zetons"], key="nhl_auth_rakstit", default=None)
+    except Exception:
+        pass
 
 
 # ============================================================================
@@ -323,6 +391,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .st-key-datums_lauks::after { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-size: 1rem; font-weight: 700; letter-spacing: .01em; }
 .st-key-datums_lauks:hover, .st-key-datums_lauks:focus-within { border-color: #3b82f6; }
+.st-key-auth_krat { position: absolute !important; width: 0; height: 0; overflow: hidden; margin: 0 !important; padding: 0 !important; }
 .st-key-nav_skripts { position: absolute !important; width: 0; height: 0; overflow: hidden; margin: 0 !important; padding: 0 !important; }
 
 /* ===== HTML tabula ar uznirstošajiem burbuļiem (spēļu saraksts, uzvedot peli uz "Sp.") ===== */
