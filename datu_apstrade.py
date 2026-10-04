@@ -249,7 +249,8 @@ def kopsavilkums(df, scope="Visas", n=None):
         return pd.DataFrame()
     s = sub.assign(
         w=(sub["rez"] == "W").astype(int), l=(sub["rez"] == "L").astype(int),
-        otl=(sub["rez"] == "OTL").astype(int), over65=(sub["tot_reg_goals"] > 6.5).astype(int))
+        otl=(sub["rez"] == "OTL").astype(int), over65=(sub["tot_reg_goals"] > 6.5).astype(int),
+        over55=(sub["tot_reg_goals"] > 5.5).astype(int))
     g = s.groupby("komanda")
     out = pd.DataFrame({
         "GP": g.size(),
@@ -261,6 +262,7 @@ def kopsavilkums(df, scope="Visas", n=None):
         "PPG_pret": g["ppg_allowed"].sum(), "PP_opp_pret": g["pp_opp_pret"].sum(min_count=1),
         "PEN_sp": g["pim_count"].mean(), "PIM_sp": g["pim_reg"].mean(), "DRAW_sp": g["pen_draw"].mean(),
         "Over65": g["over65"].mean() * 100,
+        "Over55": g["over55"].mean() * 100,
     })
     for p in (1, 2, 3):
         out[f"G_p{p}"] = g[f"g_p{p}"].mean()
