@@ -533,6 +533,19 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   padding: .45rem .7rem; background: #ffffff; color: #31333f; border: 1px solid rgba(49,51,63,.12); border-radius: .5rem; box-shadow: 0 .25rem 1rem rgba(0,0,0,.18);
   font-size: .8rem; font-weight: 400; line-height: 1.45; text-align: left; white-space: normal; letter-spacing: 0; text-transform: none; }
 .tip:hover .bubble, .tip:focus .bubble, .tip:focus-within .bubble { display: block; }
+/* peldošie logo: kad virsraksta logo vairs nav redzami, mazi logo "brauc līdzi" ekrāna augšā virs attiecīgās puses (ieslēdz skripts) */
+.cmp-float { position: fixed; left: 50%; top: var(--cf-top, .5rem); width: min(900px, calc(100vw - 2rem)); display: flex; z-index: 900; pointer-events: none;
+  opacity: 0; transform: translate(-50%, -16px); transition: opacity .22s ease, transform .22s ease; }
+.cmp-float.on { opacity: 1; transform: translate(-50%, 0); }
+.cf-k { width: 50%; display: flex; justify-content: center; }
+.cf-c { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 8px 5px; border-radius: 14px; background: rgba(255,255,255,.66);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+.cf-c img { width: 2.6rem !important; height: 2.6rem !important; max-width: none !important; object-fit: contain; display: block; }
+.cf-c i { display: block; width: 2.2rem; height: 3px; border-radius: 2px; }
+.cf-c i.a { background: #dc2626; }
+.cf-c i.b { background: #111827; }
+.st-key-cmp_skripts { position: absolute !important; width: 0; height: 0; overflow: hidden; margin: 0 !important; padding: 0 !important; }
+@media (max-width: 640px) { .cf-c { padding: 4px 6px; } .cf-c img { width: 2.1rem !important; height: 2.1rem !important; } .cf-c i { width: 1.8rem; } }
 /* pēdējās 5 spēles abām komandām */
 .cmp-l5 { display: flex; justify-content: space-between; gap: 1.2rem; margin: 1.8rem 0 .5rem; }
 .l5c { flex: 1 1 0; min-width: 0; max-width: 26rem; }
@@ -650,7 +663,7 @@ def tema_css(tumss_css):
     return "@media (prefers-color-scheme: dark) { " + tumss_css + " }"
 
 
-_tumss_tab = tema_css(".tb .bubble, .tip .bubble { background: #262730; color: #fafafa; border-color: rgba(250,250,250,.15); } .tb .bubble a { color: #60a5fa; } .maina-ik { filter: invert(1); }")
+_tumss_tab = tema_css(".cf-c { background: rgba(14,17,23,.62); } .cf-c i.b { background: #d1d5db; } .tb .bubble, .tip .bubble { background: #262730; color: #fafafa; border-color: rgba(250,250,250,.15); } .tb .bubble a { color: #60a5fa; } .maina-ik { filter: invert(1); }")
 if _tumss_tab:
     st.markdown(f"<style>{_tumss_tab}</style>", unsafe_allow_html=True)
 
@@ -1157,6 +1170,46 @@ def _sl_citas():
     st.session_state["sl_rezims"] = "izvele"
 
 
+CMP_PELD_SKRIPTS = """
+<script>
+(function () {
+  var w = window.parent, d = w.document;
+  var vecais = w.__cmpPeld; if (vecais) { try { vecais.stop(); } catch (e) {} }      // iepriekšējā kadra klausītāji tiek noņemti
+  var raf = 0;
+  function noteikt() {
+    raf = 0;
+    var fl = d.querySelectorAll('.cmp-float'); if (!fl.length) return;
+    var logo = d.querySelector('.st-key-cmp_head .cmp-logo') || d.querySelector('.cmp-head .cmp-logo');
+    var josla = d.querySelector('.st-key-topbar'), augsa = 8;
+    if (josla) {                                   // ja augšējā josla ir "pielipusi" ekrāna augšā, logo novieto zem tās
+      var jr = josla.getBoundingClientRect();
+      if (getComputedStyle(josla).position === 'sticky' && jr.top >= -1 && jr.top < 40 && jr.bottom > 0) augsa = Math.max(augsa, jr.bottom + 8);
+    }
+    var redzams = true;
+    if (logo) { var r = logo.getBoundingClientRect(); redzams = r.bottom > augsa + 2; }   // redzama kaut daļa no virsraksta logo
+    fl.forEach(function (f) { f.style.setProperty('--cf-top', augsa + 'px'); f.classList.toggle('on', !redzams); });
+  }
+  function plan() { if (!raf) raf = w.requestAnimationFrame(noteikt); }
+  d.addEventListener('scroll', plan, true);
+  w.addEventListener('resize', plan);
+  var mo = new w.MutationObserver(plan); mo.observe(d.body, { childList: true, subtree: true });
+  w.__cmpPeld = { stop: function () { d.removeEventListener('scroll', plan, true); w.removeEventListener('resize', plan); mo.disconnect();
+    d.querySelectorAll('.cmp-float.on').forEach(function (f) { f.classList.remove('on'); }); } };
+  window.addEventListener('pagehide', function () { try { if (w.__cmpPeld) w.__cmpPeld.stop(); } catch (e) {} });
+  plan();
+})();
+</script>
+"""
+
+
+def sl_peldosie_html(home, away):
+    """Mazie logo, kas parādās ekrāna augšā virs attiecīgās puses, kad virsraksta logo ir aizritināti prom (ar komandas krāsu zem logo)."""
+    e = _html.escape
+    k = lambda kods, kl: (f'<div class="cf-k"><span class="cf-c"><img src="{e(da.logo_url(kods))}" alt="{e(kods)}" title="{e(da.pilns_nosaukums(kods))}">'   # noqa: E731
+                          f'<i class="{kl}"></i></span></div>')
+    return f'<div class="cmp-float" aria-hidden="true">{k(home, "a")}{k(away, "b")}</div>'
+
+
 def sl_kopsavilkums(scope, n):
     """Komandu kopsavilkums salīdzinājumam. Over 5.5 tiek aprēķināts šeit, ja datu_apstrade.py vēl ir vecā versija bez tā."""
     k = da.kopsavilkums(DF, scope, n)
@@ -1227,13 +1280,19 @@ def lapa_salidzinat():
         for p in SL_LOGI:
             st.button(p, key=f"slp_{p}", type="primary" if p == logs else "secondary", on_click=_sl_tog, args=("sl_logs", p))
 
-    rindas = ""
+    rindas = sl_peldosie_html(home, away)
     for grupa, metrikas in SALIDZ_METRIKAS:
         rindas += f'<div class="cmp-group">{_html.escape(grupa.upper())}</div>'
         for nos, pask, k, labak, dec in metrikas:
             rindas += sl_rinda_html(nos, pask, a.get(k) if a is not None else None, b.get(k) if b is not None else None, labak, dec)
     rindas += f'<div class="cmp-l5">{sl_pedejas5_html(home, "l")}{sl_pedejas5_html(away, "r")}</div>'
     st.markdown(f'<div class="cmp-wrap">{rindas}</div>', unsafe_allow_html=True)
+    with st.container(key="cmp_skripts"):                 # peldošo logo skripts (neredzams; stabila vieta)
+        try:
+            import streamlit.components.v1 as components
+            components.html(CMP_PELD_SKRIPTS, height=0)
+        except Exception:
+            pass
 
 
 # ============================================================================
