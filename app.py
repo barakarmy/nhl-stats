@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-04.7"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-04.8"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -515,7 +515,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 /* rezultātu kartīte: iznākuma poga (Pamatlaiks / OT / SO) atver detaļas; tad statistikas rindas pazūd */
 .mc-box { position: relative; }
 .mc-tg { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
-.mc-btn { cursor: pointer; position: relative; user-select: none; transition: background .15s ease, color .15s ease, border-color .15s ease; }
+.mc-btn { cursor: pointer; position: relative; z-index: 5; user-select: none; transition: background .15s ease, color .15s ease, border-color .15s ease; }
 .mc-btn:hover { border-color: #3b82f6 !important; color: #1d4ed8; }
 .mc-tg:checked ~ .mc .mc-btn { background: linear-gradient(135deg, #18233d 0%, #0a0f1c 100%); color: #ffffff; border-color: transparent !important; }
 .mc-det { display: none; margin-top: .4rem; }
@@ -524,9 +524,9 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .mc-det p { margin: .45rem 0; }
 .mc-det .mc-dh { font-weight: 700; margin: .9rem 0 .3rem; }
 @media (hover: hover) {
-  .mc-btn::after { content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); padding: .25rem .6rem;
+  .mc-btn::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); top: auto; transform: translateX(-50%); padding: .25rem .6rem;
     border-radius: .45rem; background: #262730; color: #fff; font-size: .75rem; font-weight: 600; letter-spacing: 0; text-transform: none; white-space: nowrap;
-    opacity: 0; pointer-events: none; transition: opacity .12s ease; z-index: 20; }
+    opacity: 0; pointer-events: none; transition: opacity .12s ease; z-index: 30; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
   .mc-btn:hover::after { opacity: 1; }
   .mc-tg:checked ~ .mc .mc-btn::after { content: "Aizvērt detaļas"; }
 }
@@ -1229,7 +1229,7 @@ def sl_rinda_html(nos, paskaidr, a, b, labak, dec):
 
 def sl_komanda_html(kods, kl, gp_kopa, gp_skata, majas_puse):
     """Logo, komandas krāsa (zem logo, tā platumā) un nosaukums; nospēlēto spēļu skaits mājiniekiem pirms nosaukuma, viesiem aiz tā."""
-    sk = tip_html(gp_kopa, f"Nospēlētās spēles kopā: {gp_kopa}" + (f" · šajā skatā: {gp_skata}" if gp_skata is not None and gp_skata != gp_kopa else ""))
+    sk = tip_html(f"(GP. {gp_kopa})", f"Nospēlētās spēles kopā: {gp_kopa}" + (f" · šajā skatā: {gp_skata}" if gp_skata is not None and gp_skata != gp_kopa else ""))
     nos = _html.escape(da.pilns_nosaukums(kods))
     rinda = f"{sk} {nos}" if majas_puse else f"{nos} {sk}"
     return (f'<div class="cmp-col"><img class="cmp-logo" src="{_html.escape(da.logo_url(kods))}" alt="{_html.escape(kods)}">'
