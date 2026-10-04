@@ -15,7 +15,8 @@ un ierakstīti vairākās CSV tabulās mapē DATU_MAPE:
 
 SVARĪGI: statistikā tiek lietots tikai pamatlaiks (1.-3. periods). Papildlaiks (OT) un pēcspēles metieni (SO)
 tiek tikai saglabāti kolonnās *_ot un kopsummās vizuālai attēlošanai (piem., home_ot, home_sog_ot, home_pen_ot).
-Sodu skaits, sodu minūtes (pim_total), vairākuma rādītāji un tukšo vārtu/mazākuma vārti ir pamatlaika; sog_total ir oficiālā
+Sodu skaits un sodu minūtes (pim_total) ir tikai minor sodi (dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem;
+oficiālās kopējās sodu minūtes ir pim_official), vairākuma rādītāji un tukšo vārtu/mazākuma vārti ir pamatlaika; sog_total ir oficiālā
 kopsumma (arī papildlaiks), tāpēc statistikā jālieto sog_p1..p3.
 
 Lietošana:
@@ -77,8 +78,8 @@ SPELES_KOL = (
     ["datums", "game_id", "sezona", "speles_tips", "sakums_utc", "arena",
      "spele_beidzas", "uzvaretajs", "home_team", "away_team", "home_total", "away_total"]
     + pari("", PERIODI)                         # vārti pa periodiem
-    + pari("pim_", ("total",) + PERIODI)        # sodu minūtes (bez kautiņiem)
-    + pari("pen_", PERIODI)                     # sodu skaits pa periodiem (bez kautiņiem)
+    + pari("pim_", ("total",) + PERIODI)        # minor sodu minūtes (bez major, 10 min disciplinārajiem un kautiņiem)
+    + pari("pen_", PERIODI)                     # minor sodu skaits pa periodiem (dubultais minor = 2)
     + pari("sog_", ("total",) + PERIODI)        # metieni vārtos
     + ["home_ppg", "away_ppg", "home_pp_sog", "away_pp_sog"]
     + pari("", ("pp_opp", "pen_count", "sh_goals", "en_goals", "missed_shots", "pim_official",
@@ -191,6 +192,24 @@ def sadalit_dalu(x):
         return int(a), int(b)
     except (ValueError, AttributeError):
         return None, None
+
+
+def minor_sodu_skaits(det):
+    """
+    Cik minor sodu (2 min) ir šajā sodu notikumā: minor un komandas (bench) minor = 1, dubultais minor (4 min) = 2.
+    0: major (5 min), 10 min disciplinārais (misconduct), spēles disciplinārais (game misconduct), match, kautiņi, soda metiens.
+    Statistikā "noraidījumi" ir tikai minor sodi, jo tieši tie dod pretiniekam vairākumu.
+    """
+    kods = str(det.get("typeCode") or "").upper()
+    desc = str(det.get("descKey") or "").lower()
+    ilgums = det.get("duration") or 0
+    if "misconduct" in desc or "fight" in desc or "match" in desc or kods in ("MAJ", "MIS", "GMIS", "GAM", "MAT", "MATCH", "PS"):
+        return 0
+    if ilgums == 2:
+        return 1
+    if ilgums == 4:
+        return 2
+    return 0
 
 
 def perioda_atslega(pd):
@@ -418,6 +437,7 @@ def apstradat_spele(spele, datums):
     # ---- play-by-play: notikumi, metieni, sodi ----
     notikumu_rindas = []
     kautinu_pim = {"home": 0, "away": 0}
+    citi_pim = {"home": 0, "away": 0}          # sodi, kas nav minor (major, 10 min disciplinārie, spēles disciplinārie, match): netiek skaitīti
     pen_per = {"p1": 0, "p2": 0, "p3": 0}      # abu komandu sodu skaits pa periodiem (tiesnešu statistikai)
     ot_pp_sog = {"home": 0, "away": 0}         # metieni vairākumā papildlaikā (tiek atņemti no PP metieniem)
     for p in plays:
@@ -450,18 +470,19 @@ def apstradat_spele(spele, datums):
             continue
         if tips == "penalty":
             ilgums = det.get("duration", 0) or 0
+            minori = minor_sodu_skaits(det)
             if "fight" in str(det.get("descKey", "")).lower():
                 kautinu_pim[puse] += ilgums
+            elif minori == 0:
+                citi_pim[puse] += ilgums                  # major / 10 min disciplinārais / spēles disciplinārais: nav noraidījums statistikā
             elif pk:
-                r[f"{puse}_pim_{pk}"] += ilgums           # arī papildlaiks (pim_ot), tikai vizuālai attēlošanai
+                r[f"{puse}_pim_{pk}"] += 2 * minori       # minor sodu minūtes (arī papildlaiks pim_ot, tikai vizuālai attēlošanai)
                 if pk in REG_PERIODI:
-                    r[f"{puse}_pim_total"] += ilgums      # kopā = tikai pamatlaiks
-                if ilgums > 0:
-                    if pk in REG_PERIODI:
-                        r[f"{puse}_pen_count"] += 1       # sodu skaits pamatlaikā (bez kautiņiem)
-                    r[f"{puse}_pen_{pk}"] += 1            # sodu skaits pa periodiem (arī pen_ot)
-                    if pk in pen_per:
-                        pen_per[pk] += 1
+                    r[f"{puse}_pim_total"] += 2 * minori  # kopā = tikai pamatlaiks
+                    r[f"{puse}_pen_count"] += minori      # minor sodu skaits pamatlaikā (dubultais minor = 2)
+                r[f"{puse}_pen_{pk}"] += minori           # minor sodu skaits pa periodiem (arī pen_ot)
+                if pk in pen_per:
+                    pen_per[pk] += minori
         elif not pk:
             continue  # pēcspēles metieni netiek skaitīti periodos
         elif tips in ("shot-on-goal", "goal"):
@@ -519,8 +540,9 @@ def apstradat_spele(spele, datums):
             print(f"  Brīdinājums: {puse} metienu summa pa periodiem ({summa}) != kopējie ({oficial})")
 
         off_pim = r[f"{puse}_pim_official"]
-        if isinstance(off_pim, (int, float)) and r[f"{puse}_pim_total"] + r[f"{puse}_pim_ot"] + kautinu_pim[puse] != off_pim:
-            print(f"  Brīdinājums: {puse} PIM {r[f'{puse}_pim_total'] + r[f'{puse}_pim_ot']} + kautiņi {kautinu_pim[puse]} != oficiālie {off_pim}")
+        if isinstance(off_pim, (int, float)) and r[f"{puse}_pim_total"] + r[f"{puse}_pim_ot"] + kautinu_pim[puse] + citi_pim[puse] != off_pim:
+            print(f"  Brīdinājums: {puse} PIM minor {r[f'{puse}_pim_total'] + r[f'{puse}_pim_ot']} + kautiņi {kautinu_pim[puse]} "
+                  f"+ citi {citi_pim[puse]} != oficiālie {off_pim}")
 
     # ---- vārtu pārbaude (SO uzvarētāja vārti nav periodu summā) ----
     starp = {p: r[f"{p}_total"] - sum(r[f"{p}_{k}"] for k in PERIODI) for p in ("home", "away")}
