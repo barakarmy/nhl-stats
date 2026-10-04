@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.3"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.4"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -2146,9 +2146,17 @@ def lapa_kalendars():
                 "Viesi": grupa["viesu_komanda"].map(komandas_etikete),
                 "Mājinieki": grupa["majas_komanda"].map(komandas_etikete),
                 "Galvenie tiesneši": ties_txt})
-            if n_dienas == 0:                                  # tuvākās dienas spēlēm: saite uz komandu salīdzinājumu tabulas sākumā (mājinieki pa kreisi)
-                tab.insert(0, "", [Saite("⇄", iekseja_saite("salidzinat", a=h, b=v), "Salīdzināt komandas")
-                                   for h, v in zip(grupa["majas_komanda"], grupa["viesu_komanda"])])
+            if n_dienas == 0:                                  # tuvākās dienas spēlēm: pogas uz komandu salīdzinājumu virs tabulas (mājinieki pa kreisi)
+                salid = None
+                with st.container(key="pg_kal_salid"):
+                    st.markdown('<div class="pg-lab">⇄ Salīdzināt komandas</div>', unsafe_allow_html=True)
+                    with st.container(key="pgr_kal_salid"):
+                        for h, v in zip(grupa["majas_komanda"], grupa["viesu_komanda"]):
+                            if st.button(f"⇄ {v} @ {h}", key=f"kals_{h}_{v}", help=None if mobila_ierice() else f"Salīdzināt komandas: {da.pilns_nosaukums(v)} @ {da.pilns_nosaukums(h)}"):
+                                salid = (h, v)
+                if salid and _lapa_pec_nosaukuma("Salīdzināt komandas") is not None:
+                    _sl_salidzinat(*salid)
+                    st.switch_page(_lapa_pec_nosaukuma("Salīdzināt komandas"))
             rtabula_bez_kartosanas(tab, hide_index=True, width="stretch")
 
 
