@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.6"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.7"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -626,6 +626,46 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 }
 /* rezultātu kartīte: sākuma laiks un vieta zem iznākuma pogas */
 .mc-info { text-align: center; font-size: .82rem; opacity: .75; margin: .15rem 0 .1rem; }
+/* komandas lapa: galvenie rādītāji, forma, informācija, aizvadītās spēles */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; margin: .4rem 0 .8rem; }
+.kpi, .kn { border: 1px solid rgba(128,128,128,.22); border-radius: 14px; padding: .75rem .9rem; background: rgba(255,255,255,.6); }
+.kpi-l { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .6; }
+.kpi-v { font-size: 1.65rem; font-weight: 800; line-height: 1.2; margin-top: .15rem; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; }
+.kpi-s { font-size: .8rem; opacity: .72; }
+.kpi-r { display: inline-block; margin-top: .35rem; font-size: .72rem; font-weight: 700; padding: .1rem .45rem; border-radius: .35rem; background: rgba(128,128,128,.12); }
+.kpi-r.ok { background: rgba(22,163,74,.14); color: #15803d; }
+.kpi-r.slikti { background: rgba(220,38,38,.12); color: #b91c1c; }
+.kpi-row { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+.fm { display: flex; gap: .4rem; margin-top: .45rem; flex-wrap: wrap; }
+.fm-b { display: inline-flex; flex-direction: column; align-items: center; min-width: 2.6rem; padding: .25rem .4rem; border-radius: .5rem; font-weight: 800;
+  font-size: .85rem; text-decoration: none !important; line-height: 1.15; }
+.fm-b small { font-weight: 600; font-size: .72rem; opacity: .85; }
+.fm-b.U { background: rgba(22,163,74,.14); color: #15803d !important; }
+.fm-b.Z { background: rgba(220,38,38,.12); color: #b91c1c !important; }
+.fm-b.ZPL { background: rgba(245,158,11,.16); color: #b45309 !important; }
+.kn-r { display: flex; align-items: center; gap: .6rem; margin-top: .4rem; }
+.kn-r img { width: 2.4rem; height: 2.4rem; object-fit: contain; }
+.ki { border: 1px solid rgba(128,128,128,.22); border-radius: 14px; background: rgba(255,255,255,.6); padding: .3rem .9rem; max-width: 640px; }
+.ki-r { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; border-bottom: 1px solid rgba(128,128,128,.15); font-size: .92rem; }
+.ki-r:last-child { border-bottom: 0; }
+.ki-r span { opacity: .65; }
+.ks { max-width: 760px; }
+.ks-r { display: flex; align-items: center; gap: .7rem; padding: .5rem 0; border-bottom: 1px solid rgba(128,128,128,.18); font-size: .92rem; }
+.ks-d { min-width: 3.4rem; font-size: .82rem; opacity: .7; line-height: 1.15; }
+.ks-d small { display: block; }
+.ks-o { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: .35rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ks-o img { width: 1.6rem; height: 1.6rem; object-fit: contain; flex: none; }
+.ks-s { font-weight: 800; color: inherit !important; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.ks-m { font-size: .78rem; opacity: .6; white-space: nowrap; }
+.ks-c { font-size: .78rem; opacity: .6; margin: .5rem 0 .2rem; }
+@media (max-width: 640px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .kpi, .kn { padding: .6rem .7rem; }
+  .kpi-v { font-size: 1.35rem; }
+  .kpi-row { grid-template-columns: 1fr; }
+  .ks-r { gap: .45rem; font-size: .82rem; }
+  .ks-m { display: none; }
+}
 /* ceļojuma faktors salīdzinājumā */
 .cel { margin: 1.7rem 0 .2rem; }
 .cel-h { text-align: center; font-weight: 800; font-size: .88rem; letter-spacing: .07em; opacity: .9; margin-bottom: .2rem; }
@@ -1484,8 +1524,10 @@ def lapa_salidzinat():
         st.session_state["sl_qp_apstradats"] = (qa, qb)
         _sl_salidzinat(qa, qb)
     kodi = sorted(da.KOMANDAS, key=lambda k: da.KOMANDAS[k])
-    if "sl_a" not in st.session_state:                       # noklusējums: nākamā tuvākā spēle no kalendāra (mājinieki kreisajā pusē)
-        nak = da.nakamas_speles(KAL, 1)
+    if "sl_a" not in st.session_state:                       # noklusējums: pirmā kalendāra spēle, kas vēl nav sākusies (mājinieki kreisajā pusē)
+        nak = None
+        if KAL is not None and not KAL.empty:
+            nak = KAL[KAL["sakums_lv"] > pd.Timestamp.now(tz=da.LV_TZ)].sort_values("sakums_lv").head(1)
         if nak is not None and not nak.empty:
             st.session_state["sl_a"], st.session_state["sl_b"] = nak.iloc[0]["majas_komanda"], nak.iloc[0]["viesu_komanda"]
         else:
@@ -1967,6 +2009,29 @@ def _lapa_pec_nosaukuma(nosaukums):
     return next((p for p in VISAS_LAPAS if p.title == nosaukums), None)
 
 
+KOMANDU_DIVIZIJAS = {**{k: ("Austrumu", "Atlantijas") for k in ("BOS", "BUF", "DET", "FLA", "MTL", "OTT", "TBL", "TOR")},
+                     **{k: ("Austrumu", "Metropolitēna") for k in ("CAR", "CBJ", "NJD", "NYI", "NYR", "PHI", "PIT", "WSH")},
+                     **{k: ("Rietumu", "Centrālā") for k in ("CHI", "COL", "DAL", "MIN", "NSH", "STL", "UTA", "WPG")},
+                     **{k: ("Rietumu", "Klusā okeāna") for k in ("ANA", "CGY", "EDM", "LAK", "SJS", "SEA", "VAN", "VGK")}}
+KOMANDAS_DZ_METRIKAS = [   # (nosaukums, kolonna, zīmes aiz komata, vai labāk augsts (None = bez vietas))
+    ("Spēles", "GP", 0, None), ("Uzvaras", "W", 0, True), ("Zaudējumi", "L", 0, False), ("Zaudējumi papildlaikā", "OTL", 0, None),
+    ("Punkti", "PTS", 0, True), ("Punkti %", "PTS_pct", 1, True),
+    ("Gūtie vārti", "G", 0, True), ("Ielaistie vārti", "Z", 0, False), ("Vārtu starpība", "Starpiba", 0, True),
+    ("Vārti spēlē", "G_sp", 2, True), ("Ielaisti spēlē", "Z_sp", 2, False),
+    ("Gūti 1. periodā (vidēji)", "G_p1", 2, True), ("Gūti 2. periodā (vidēji)", "G_p2", 2, True), ("Gūti 3. periodā (vidēji)", "G_p3", 2, True),
+    ("Ielaisti 1. periodā (vidēji)", "Z_p1", 2, False), ("Ielaisti 2. periodā (vidēji)", "Z_p2", 2, False), ("Ielaisti 3. periodā (vidēji)", "Z_p3", 2, False),
+    ("Metieni spēlē", "SOG_sp", 1, True), ("Pretinieka metieni spēlē", "SA_sp", 1, False), ("Metienu daļa %", "SOG_dala", 1, True),
+    ("Vairākuma vārti", "PPG", 0, True), ("Vairākuma iespējas", "PP_opp", 0, None), ("Vairākums PP %", "PP_pct", 1, True),
+    ("Vairākuma metieni", "PP_sog", 0, True), ("Ielaisti mazākumā", "PPG_pret", 0, False), ("Mazākuma reizes", "PP_opp_pret", 0, None),
+    ("Mazākums PK %", "PK_pct", 1, True),
+    ("Noraidījumi spēlē", "PEN_sp", 1, False), ("Sodu minūtes spēlē", "PIM_sp", 1, False), ("Izcīnītie noraidījumi spēlē", "DRAW_sp", 1, True),
+    ("Noraidījumu starpība spēlē", "PEN_starpiba", 2, False),
+    ("Over 6.5 %", "Over65", 0, None), ("Over 5.5 %", "Over55", 0, None),
+    ("Sitieni spēlē", "hits", 1, None), ("Bloķētie metieni spēlē", "blocked", 1, None),
+    ("Ripas zaudējumi spēlē", "giveaways", 1, False), ("Ripas atņemšanas spēlē", "takeaways", 1, True), ("Iemetieni %", "fo_pct", 1, True),
+]
+
+
 def lapa_komanda():
     qk = st.query_params.get("kom")                               # saite no salīdzinājuma: /komanda?kom=BUF
     if qk in da.KOMANDAS and st.session_state.get("kom_qp_apstradats") != qk:
@@ -1979,122 +2044,130 @@ def lapa_komanda():
         return
     st.markdown(f'<div class="kom-nos">{_html.escape(da.pilns_nosaukums(kom))}</div>', unsafe_allow_html=True)
 
-    t_par, t_mi, t_sp, t_per, t_nor, t_nak = st.tabs(
-        ["Pārskats", "Mājās / viesos", "Pēdējās spēles", "Periodi", "Noraidījumi un PP", "Nākamās spēles"])
-    kop = da.kopsavilkums(tdf).iloc[0]
+    t_gal, t_par, t_sp, t_dz = st.tabs(["Galvenā", "Par komandu", "Aizvadītās spēles", "Padziļināta statistika"])
+    e = _html.escape
+    liga = da.kopsavilkums(DF, "Visas", None)
+    kop = liga.loc[kom] if kom in liga.index else da.kopsavilkums(tdf).iloc[0]
 
-    with t_par:
-        m = st.columns(4)
-        m[0].metric("Spēles", int(kop["GP"]), border=True)
-        m[1].metric("Bilance (U-Z-ZPL)", f"{int(kop['W'])}-{int(kop['L'])}-{int(kop['OTL'])}", border=True)
-        m[2].metric("Punkti", f"{int(kop['PTS'])} ({kop['PTS_pct']:.0f}%)", border=True)
-        m[3].metric("Vārtu starpība", f"{int(kop['Starpiba']):+d}", border=True)
-        m = st.columns(4)
-        m[0].metric("Vārti spēlē", fmt(kop["G_sp"]), border=True)
-        m[1].metric("Ielaisti spēlē", fmt(kop["Z_sp"]), border=True)
-        m[2].metric("Metieni spēlē", fmt(kop["SOG_sp"], "{:.1f}"), border=True)
-        m[3].metric("Pretinieka metieni", fmt(kop["SA_sp"], "{:.1f}"), border=True)
+    def vieta(k, augsts=True, tab=liga):
+        """Komandas vieta līgā pēc rādītāja (1 = labākā)."""
+        if tab is None or k not in tab.columns or kom not in tab.index or pd.isna(tab.loc[kom, k]):
+            return None
+        return int(tab[k].rank(ascending=not augsts, method="min").loc[kom])
 
-        st.markdown("##### Vidējie vārti (pēdējās 10 spēles) — prognožu pamats")
-        last10 = tdf.tail(10)
-        home10 = tdf[tdf["majas"] == 1].tail(10)
-        away10 = tdf[tdf["majas"] == 0].tail(10)
-        x = st.columns(3)
-        x[0].metric("Kopā", fmt(last10["g_reg"].mean()), border=True)
-        x[1].metric("Mājās", fmt(home10["g_reg"].mean()), border=True)
-        x[2].metric("Viesos", fmt(away10["g_reg"].mean()), border=True)
-        y = st.columns(3)
-        for i, p in enumerate((1, 2, 3)):
-            y[i].metric(f"{p}. periods", fmt(last10[f"g_p{p}"].mean()), border=True)
+    def vieta_html(v, n=None):
+        if v is None:
+            return ""
+        n = n or len(liga)
+        kl = "ok" if v <= n // 4 else ("slikti" if v > n - n // 4 else "")
+        return f'<span class="kpi-r {kl}">{v}. vieta līgā</span>'
 
-    with t_mi:
-        rindas = {}
-        for nos, sc, n in [("Visas", "Visas", None), ("Mājās", "Mājās", None), ("Viesos", "Izbraukumā", None),
-                           ("Pēdējās 5", "Visas", 5), ("Pēdējās 5 mājās", "Mājās", 5),
-                           ("Pēdējās 5 viesos", "Izbraukumā", 5), ("Pēdējās 10", "Visas", 10)]:
-            k = da.kopsavilkums(tdf, sc, n)
-            if not k.empty:
-                rindas[nos] = k.iloc[0]
-        t = pd.DataFrame(rindas).T[["GP", "G_sp", "Z_sp", "SOG_sp", "SA_sp", "PEN_sp", "PIM_sp", "PP_pct", "PK_pct"]]
-        t.columns = ["Sp.", "Vārti/sp", "Ielaisti/sp", "Metieni/sp", "Pretin. metieni/sp",
-                     "Noraid./sp", "PIM min/sp", "PP %", "PK %"]
-        rtabula(t.reset_index().rename(columns={"index": "Skats"}), hide_index=True, width="stretch",
-                     column_config={c: st.column_config.NumberColumn(format="%.2f") for c in t.columns[1:]})
+    with t_gal:                                           # svarīgākie rādītāji
+        kartes = [
+            ("Bilance (U-Z-ZPL)", f"{int(kop['W'])}-{int(kop['L'])}-{int(kop['OTL'])}", f"{int(kop['PTS'])} punkti · {kop['PTS_pct']:.0f}%", vieta("PTS_pct")),
+            ("Vārti spēlē", _sk(kop["G_sp"], 2), f"kopā {int(kop['G'])}", vieta("G_sp")),
+            ("Ielaisti spēlē", _sk(kop["Z_sp"], 2), f"kopā {int(kop['Z'])}", vieta("Z_sp", False)),
+            ("Vārtu starpība", f"{int(kop['Starpiba']):+d}", f"{int(kop['GP'])} spēlēs", vieta("Starpiba")),
+            ("Metieni spēlē", _sk(kop["SOG_sp"], 1), f"pretinieki {_sk(kop['SA_sp'], 1)}", vieta("SOG_sp")),
+            ("Vairākums PP %", _sk(kop["PP_pct"], 1) if pd.notna(kop["PP_pct"]) else "–", f"{int(kop['PPG'])}/{int(kop['PP_opp'])} vārti", vieta("PP_pct")),
+            ("Mazākums PK %", _sk(kop["PK_pct"], 1) if pd.notna(kop["PK_pct"]) else "–", f"ielaisti {int(kop['PPG_pret'])}", vieta("PK_pct")),
+            ("Noraidījumi spēlē", _sk(kop["PEN_sp"], 1), f"izcīnīti {_sk(kop['DRAW_sp'], 1)}", vieta("PEN_sp", False)),
+        ]
+        st.markdown('<div class="kpi-grid">' + "".join(
+            f'<div class="kpi"><div class="kpi-l">{e(l)}</div><div class="kpi-v">{e(v)}</div><div class="kpi-s">{e(s)}</div>{vieta_html(r)}</div>'
+            for l, v, s, r in kartes) + "</div>", unsafe_allow_html=True)
+        # forma: pēdējās 5 spēles
+        l5 = tdf.sort_values(["datums", "game_id"]).tail(5)
+        iznak = {"W": "U", "L": "Z", "OTL": "ZPL"}
+        forma = "".join(f'<a class="fm-b {iznak.get(r.rez, "")}" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener" '
+                        f'title="{e(da.pilns_nosaukums(r.pretinieks))}">{iznak.get(r.rez, "")}<small>{int(r.g_tot)}:{int(r.z_tot)}</small></a>'
+                        for r in l5.itertuples())
+        nak = da.nakamas_speles(KAL, 1, komanda=kom) if KAL is not None else None
+        nak_html = ""
+        if nak is not None and not nak.empty:
+            n0 = nak.iloc[0]
+            pret = n0["viesu_komanda"] if n0["majas_komanda"] == kom else n0["majas_komanda"]
+            nak_html = (f'<div class="kn"><div class="kpi-l">Nākamā spēle</div><div class="kn-r"><img src="{e(da.logo_url(pret))}" alt="">'
+                        f'<div><b>{"vs" if n0["majas_komanda"] == kom else "@"} {e(da.pilns_nosaukums(pret))}</b>'
+                        f'<div class="kpi-s">{n0["sakums_lv"]:%d.%m. %H:%M} · {"mājās" if n0["majas_komanda"] == kom else "viesos"}</div></div></div></div>')
+        st.markdown(f'<div class="kpi-row"><div class="kn"><div class="kpi-l">Forma (pēdējās 5)</div><div class="fm">{forma}</div></div>{nak_html}</div>',
+                    unsafe_allow_html=True)
 
-    with t_sp:
-        lg = tdf.tail(10).iloc[::-1]
-        pedeja = lg.iloc[0]                                              # jaunākā spēle
-        gid = int(pedeja["game_id"])
-        dat_lv = RAW.set_index("game_id")["datums_lv"].get(gid, pedeja["datums"])
-        rez_txt = f"{int(pedeja['g_tot'])}–{int(pedeja['z_tot'])}" + (f" {da.beigu_etikete(pedeja['beigas'])}" if da.beigu_etikete(pedeja["beigas"]) else "")
-        with st.container(key="pedeja_spele_josla"):
-            st.markdown(f"**Pēdējā spēle** · {pd.Timestamp(dat_lv):%d.%m.%Y} · {'vs' if pedeja['majas'] == 1 else '@'} {da.pilns_nosaukums(pedeja['pretinieks'])} ·")
+    with t_par:                                           # komandas informācija
+        lok = (lokacijas.LOKACIJAS.get(kom, {}) if lokacijas is not None else {})
+        konf, div = KOMANDU_DIVIZIJAS.get(kom, ("", ""))
+        tz_t = ""
+        if lok.get("tz"):
             try:
-                atvert = st.button(rez_txt, key="pedeja_spele_saite", type="tertiary", help="Atvērt šīs dienas spēles sadaļā Rezultāti")
-            except TypeError:
-                atvert = st.button(rez_txt, key="pedeja_spele_saite", help="Atvērt šīs dienas spēles sadaļā Rezultāti")
-        if atvert and _lapa_pec_nosaukuma("Rezultāti") is not None:
-            st.session_state["rez_datums_pending"] = pd.Timestamp(dat_lv).date()
-            st.session_state["rez_fokuss"] = gid
-            st.switch_page(_lapa_pec_nosaukuma("Rezultāti"))
-        tab = pd.DataFrame({
-            "Datums": lg["datums"].dt.strftime("%d.%m"),
-            "Pretinieks": lg["majas"].map({1: "vs ", 0: "@ "}) + lg["pretinieks"],
-            "Rez.": lg["rez"].map(da.FORMAS_EMOJI),
-            "Rezultāts": [f"{int(a)}–{int(b)}" + (f" {da.beigu_etikete(e)}" if da.beigu_etikete(e) else "")
-                          for a, b, e in zip(lg["g_tot"].fillna(0), lg["z_tot"].fillna(0), lg["beigas"])],
-            "Metieni": [f"{fmt(a, '{:.0f}')}–{fmt(b, '{:.0f}')}" for a, b in zip(lg["sog_tot"], lg["sog_pret"])],
-            "Noraid.": lg["pim_count"],
-            "PP vārti": lg["ppg"],
-        })
-        rtabula(tab, hide_index=True, width="stretch")
+                from zoneinfo import ZoneInfo
+                tagad_ = datetime.datetime.now(datetime.timezone.utc)
+                st_ = (tagad_.astimezone(ZoneInfo(lok["tz"])).utcoffset() - tagad_.astimezone(da.LV_TZ).utcoffset()).total_seconds() / 3600
+                tz_t = f"{st_:+g} h pret Rīgu"
+            except Exception:
+                pass
+        km = da.kopsavilkums(tdf, "Mājās").iloc[0] if not tdf[tdf["majas"] == 1].empty else None
+        kv = da.kopsavilkums(tdf, "Izbraukumā").iloc[0] if not tdf[tdf["majas"] == 0].empty else None
+        bil = lambda k: f"{int(k['W'])}-{int(k['L'])}-{int(k['OTL'])}" if k is not None else "–"     # noqa: E731
+        info = [("Nosaukums", da.pilns_nosaukums(kom)), ("Saīsinājums", kom), ("Konference", konf), ("Divīzija", div),
+                ("Pilsēta", ", ".join(x for x in (lok.get("pilseta"), lok.get("valsts")) if x)), ("Arēna", lok.get("arena", "")),
+                ("Laika josla", tz_t), ("Sezonā aizvadītas", f"{int(kop['GP'])} spēles"),
+                ("Bilance mājās", bil(km)), ("Bilance viesos", bil(kv))]
+        st.markdown('<div class="ki">' + "".join(f'<div class="ki-r"><span>{e(l)}</span><b>{e(str(v))}</b></div>' for l, v in info if v) + "</div>",
+                    unsafe_allow_html=True)
+        nak = da.nakamas_speles(KAL, 8, komanda=kom) if KAL is not None else None
+        if nak is not None and not nak.empty:
+            st.markdown('<p class="mc-dh">Nākamās spēles</p>', unsafe_allow_html=True)
+            rtabula_bez_kartosanas(pd.DataFrame({
+                "Datums": nak["datums_lv"].dt.strftime("%d.%m."), "Laiks (Rīga)": nak["sakums_lv"].dt.strftime("%H:%M"),
+                "Pretinieks": [komandas_etikete(v if m == kom else m) for m, v in zip(nak["majas_komanda"], nak["viesu_komanda"])],
+                "Vieta": ["Mājās" if m == kom else "Viesos" for m in nak["majas_komanda"]]}))
 
-    with t_per:
-        mh, ma, l10 = tdf[tdf["majas"] == 1], tdf[tdf["majas"] == 0], tdf.tail(10)
-        rindas = []
-        for p in (1, 2, 3):
-            rindas.append({"Periods": f"{p}. periods",
-                           "Starpība (visas)": int(tdf[f"diff_p{p}"].sum()),
-                           "Mājās": int(mh[f"diff_p{p}"].sum()), "Viesos": int(ma[f"diff_p{p}"].sum()),
-                           "Pēdējās 10": int(l10[f"diff_p{p}"].sum()),
-                           "Gūti/sp": tdf[f"g_p{p}"].mean(), "Ielaisti/sp": tdf[f"z_p{p}"].mean(),
-                           "Metieni/sp": tdf[f"sog_p{p}"].mean()})
-        pt = pd.DataFrame(rindas)
-        rtabula(pt, hide_index=True, width="stretch",
-                paskaidr={"Gūti/sp": "Vidēji gūtie vārti attiecīgajā periodā vienā spēlē",
-                          "Ielaisti/sp": "Vidēji ielaistie vārti attiecīgajā periodā vienā spēlē",
-                          "Metieni/sp": "Vidēji metieni vārtos attiecīgajā periodā vienā spēlē"},
-                     column_config={"Gūti/sp": st.column_config.NumberColumn(format="%.2f"),
-                                    "Ielaisti/sp": st.column_config.NumberColumn(format="%.2f"),
-                                    "Metieni/sp": st.column_config.NumberColumn(format="%.1f")})
+    with t_sp:                                            # aizvadītās spēles: 5 → "Ielādēt vēl" (+5) → "Visas"
+        sk_key = f"kom_sp_n_{kom}"
+        n_rad = st.session_state.get(sk_key, 5)
+        visas = tdf.sort_values(["datums", "game_id"]).iloc[::-1]
+        sak = dict(zip(RAW["game_id"], RAW["sakums_lv"])) if "sakums_lv" in RAW.columns else {}
+        rindas = ""
+        for r in visas.head(n_rad).itertuples():
+            bg = da.beigu_etikete(r.beigas)
+            u = iznak.get(r.rez, "")
+            s_ = sak.get(r.game_id)
+            dat = f"{s_:%d.%m.}<small>{s_:%H:%M}</small>" if s_ is not None and pd.notna(s_) else f"{pd.Timestamp(r.datums):%d.%m.}"
+            rindas += (f'<div class="ks-r"><span class="ks-d">{dat}</span>'
+                       f'<span class="ks-o">{"vs" if r.majas == 1 else "@"} <img src="{e(da.logo_url(r.pretinieks))}" alt="">{e(da.pilns_nosaukums(r.pretinieks))}</span>'
+                       f'<a class="ks-s" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener" title="Atvērt spēles protokolu">{int(r.g_tot)}:{int(r.z_tot)}{(" " + bg) if bg else ""}</a>'
+                       f'<span class="l5u {u}">{u}</span>'
+                       f'<span class="ks-m">metieni {int(r.sog_tot) if pd.notna(r.sog_tot) else "–"}:{int(r.sog_pret) if pd.notna(r.sog_pret) else "–"}</span></div>')
+        st.markdown(f'<div class="ks">{rindas}</div><div class="ks-c">Parādītas {min(n_rad, len(visas))} no {len(visas)} spēlēm</div>', unsafe_allow_html=True)
+        if n_rad < len(visas):
+            with st.container(key="pgr_kom_sp"):
+                st.button("Ielādēt vēl", key=f"kom_sp_vel_{kom}", on_click=lambda: st.session_state.__setitem__(sk_key, n_rad + 5))
+                if n_rad > 5:
+                    st.button("Visas", key=f"kom_sp_visas_{kom}", on_click=lambda: st.session_state.__setitem__(sk_key, len(visas)))
 
-    with t_nor:
-        m = st.columns(4)
-        m[0].metric("Noraidījumi/sp", fmt(kop["PEN_sp"], "{:.1f}"), border=True)
-        m[1].metric("Izcīnītie/sp", fmt(kop["DRAW_sp"], "{:.1f}"), border=True)
-        m[2].metric("PP %", fmt(kop["PP_pct"], "{:.1f}"), border=True)
-        m[3].metric("PK %", fmt(kop["PK_pct"], "{:.1f}"), border=True)
-        lg = tdf.tail(5).iloc[::-1]
-        st.markdown("##### Noraidījumi pēdējās 5 spēlēs")
-        rtabula(pd.DataFrame({
-            "Datums": lg["datums"].dt.strftime("%d.%m"),
-            "Pretinieks": lg["majas"].map({1: "vs ", 0: "@ "}) + lg["pretinieks"],
-            "Noraidījumi": lg["pim_count"], "PIM min": lg["pim_reg"],
-            "PIM 1. per.": lg["pim_p1"], "PIM 2. per.": lg["pim_p2"], "PIM 3. per.": lg["pim_p3"]}),
-            hide_index=True, width="stretch")
-
-    with t_nak:
-        nak = da.nakamas_speles(KAL, 8, komanda=kom)
-        if nak.empty:
-            st.info("Kalendārā nav atrastu nākamo spēļu.")
+    with t_dz:                                            # padziļinātā statistika: visa pieejamā informācija tabulā ar atlasēm
+        with st.container(key="frinda_kdz"):
+            scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="kdz_s")
+            logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="kdz_n")
+        n = LOGI[logs]
+        L = da.kopsavilkums(DF, scope, n)
+        sub_ = da.filtret(DF, scope, n)
+        extra = sub_.groupby("komanda")[["hits", "blocked", "giveaways", "takeaways", "fo_pct"]].mean() if not sub_.empty else pd.DataFrame()
+        L = L.join(extra, how="left") if not L.empty else L
+        if L.empty or kom not in L.index:
+            st.info("Šim skatam datu nav.")
         else:
-            rtabula(pd.DataFrame({
-                "Datums": nak["datums_lv"].dt.strftime("%d.%m.%Y"),
-                "Laiks (Rīga)": nak["sakums_lv"].dt.strftime("%H:%M"),
-                "Pretinieks": [komandas_etikete(v if m == kom else m)
-                               for m, v in zip(nak["majas_komanda"], nak["viesu_komanda"])],
-                "Vieta": ["Mājās" if m == kom else "Viesos" for m in nak["majas_komanda"]]}),
-                hide_index=True, width="stretch")
+            rindas_t = []
+            for lbl, k, dec, augsts in KOMANDAS_DZ_METRIKAS:
+                if k not in L.columns:
+                    continue
+                v = L.loc[kom, k]
+                vid = L[k].mean()
+                r_ = vieta(k, augsts, L) if augsts is not None else None
+                rindas_t.append({"Rādītājs": lbl, "Komanda": "–" if pd.isna(v) else _sk(v, dec),
+                                 "Līgas vidējais": "–" if pd.isna(vid) else _sk(vid, max(dec, 1)), "Vieta līgā": f"{r_}." if r_ else ""})
+            rtabula_bez_kartosanas(pd.DataFrame(rindas_t), paskaidr={"Vieta līgā": f"Vieta starp {len(L)} komandām šajā skatā (1. = labākā)"})
+
 
 
 # ============================================================================
