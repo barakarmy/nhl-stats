@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-04.8"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-04.9"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -787,26 +787,43 @@ def ielasit_tiesnesus(versija):
     return cur, prev, info
 
 
-@st.cache_data(show_spinner=False, ttl=600)
 def ielasit_planotos(versija):
+    return _planotie_ar_statusu(versija)[0]
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _planotie_ar_statusu(versija):
     """
     Paziņotie tiesneši: fails dati/tiesnesi_planotie.csv (to papildina GitHub Actions) + spēlēm, kurām tur tiesnešu vēl nav, tiešā ielāde no Scouting The Refs.
     GitHub plānotie darbi bieži kavējas vai tiek izlaisti, tāpēc lietotne tiesnešus meklē arī pati (rezultāts tiek turēts 10 minūtes, lai neslogotu portālu).
     """
     plan = da.ielasit_planotos_tiesnesus()
     kal = ielasit_visu(versija)[2]
+    n_fails = int(plan.loc[plan["loma"] == "referee", "game_id"].nunique()) if plan is not None and not plan.empty else 0
+    statuss = {"fails": n_fails, "tiessaiste": 0, "kluda": None, "laiks": datetime.datetime.now(da.LV_TZ).strftime("%H:%M")}
     if kal is None or kal.empty:
-        return plan
+        return plan, statuss
+    kludas = []
     try:
         import tiesnesi_planotie as tp
+
+        def lej(url, meginajumi=1):                   # tas pats lejupielādētājs, bet neveiksmes tiek pierakstītas statusam
+            h = tp._lejupieladet(url, meginajumi=meginajumi)
+            if h is None:
+                kludas.append(url)
+            return h
         esosie = set(plan.loc[plan["loma"] == "referee", "game_id"].astype(int)) if plan is not None and not plan.empty else set()
-        jaunas = tp.dzivie_tiesnesi(kal, esosie)
-    except Exception:                     # bez interneta vai ja portāls nav pieejams: paliek tikai tas, kas ir failā
-        return plan
+        jaunas = tp.dzivie_tiesnesi(kal, esosie, lejupieladet=lej)
+    except Exception as ex:               # bez interneta vai ja portāls nav pieejams: paliek tikai tas, kas ir failā
+        statuss["kluda"] = type(ex).__name__
+        return plan, statuss
+    if kludas:
+        statuss["kluda"] = f"Scouting The Refs nav sasniedzams ({len(kludas)} pieprasījumi neizdevās)"
     if not jaunas:
-        return plan
+        return plan, statuss
     jauns = pd.DataFrame(jaunas)
-    return jauns if plan is None or plan.empty else pd.concat([plan, jauns], ignore_index=True)
+    statuss["tiessaiste"] = int(jauns.loc[jauns["loma"] == "referee", "game_id"].nunique())
+    return (jauns if plan is None or plan.empty else pd.concat([plan, jauns], ignore_index=True)), statuss
 
 
 @st.cache_data(show_spinner=False)
@@ -2004,6 +2021,12 @@ def lapa_kalendars():
         return
     st.caption("Galvenos tiesnešus pirms spēlēm paziņo apmēram 4 stundas pirms dienas pirmās spēles. Dati: Scouting The Refs "
                "(scoutingtherefs.com) un NHL.")
+    try:
+        _ts = _planotie_ar_statusu(VERSIJA)[1]
+        st.caption(f"Tiesnešu pārbaude {_ts['laiks']}: no datu faila {_ts['fails']} spēlēm, tiešsaistē (Scouting The Refs) papildus {_ts['tiessaiste']}"
+                   + (f" · ⚠️ {_ts['kluda']}" if _ts.get("kluda") else "") + ". Tiešsaistes pārbaude atkārtojas ik 10 minūtes.")
+    except Exception:
+        pass
     c1, c2 = st.columns([1, 2])
     dienas = c1.slider("Cik dienas uz priekšu", 1, 14, 5)
     komanda = c2.selectbox("Komanda", ["Visas komandas"] + sorted(da.KOMANDAS),
