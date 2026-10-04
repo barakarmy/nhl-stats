@@ -1381,7 +1381,7 @@ def lapa_over_under():
 # LAPA: POWERPLAY
 # ============================================================================
 def lapa_powerplay():
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3 = st.columns([.6, .8, 1.7])                  # platums pēc pogu skaita, lai "Kārtot pēc" pogas ietilpst vienā rindā
     with c1:
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="pp_s")
     with c2:
@@ -2033,16 +2033,16 @@ def lapa_karstie():
             "- Punkti = vārti + piespēles (G+A), tāpēc atsevišķa G+A kolonna nav vajadzīga.")
 
     max_gp = int(sk.groupby("playerId").size().max())
-    c1, c2, c3 = st.columns(3)
+    s1, _ = st.columns([1, 2])                              # minimālais spēļu skaits: uzreiz zem skaidrojuma
+    with s1:
+        min_sp = st.slider("Minimālais spēļu skaits logā", 2, 10, max(2, min(3, max_gp)), key="ks_min",
+                               help="Viena spēle nekad netiek ņemta vērā; agrā sezonā logā var būt mazāk spēļu")
+    c1, c2, c3 = st.columns([1, 1.2, .75])                  # Rādītājs, Logs, Pozīcija vienā rindā
     with c1:
         metrika = izvele("Rādītājs", ["Punkti", "Vārti", "Piespēles"], key="ks_m")
     with c2:
         logs_t = izvele("Logs", ["Pēdējās 3", "Pēdējās 5", "Pēdējās 10"], default="Pēdējās 5", key="ks_l")
     with c3:
-        min_sp = st.slider("Minimālais spēļu skaits logā", 2, 10, max(2, min(3, max_gp)), key="ks_min",
-                           help="Viena spēle nekad netiek ņemta vērā; agrā sezonā logā var būt mazāk spēļu")
-    d1, _ = st.columns(2)
-    with d1:
         poz = sledzis("Pozīcija", ["Uzbrucēji", "Aizsargi"], "Visi", key="ks_poz")
 
     mkods = {"Punkti": "punkti", "Vārti": "vardi", "Piespēles": "piespeles"}[metrika]
