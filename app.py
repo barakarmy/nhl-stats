@@ -826,7 +826,7 @@ POMOC = {
     "Metienu daļa %": "Komandas metienu daļa pamatlaikā: SOG par / (SOG par + SOG pret), bez papildlaika",
     "PP %": "Vairākuma (Power Play) efektivitāte pamatlaikā: vārti vairākumā / vairākuma iespējas, bez papildlaika",
     "PK %": "Mazākuma (Penalty Kill) efektivitāte pamatlaikā: neielaisto vārtu daļa, kad komanda spēlē mazākumā, bez papildlaika",
-    "Noraid./sp": "Vidēji noraidījumu (sodu) skaits spēlē pamatlaikā (bez papildlaika un kautiņiem)",
+    "Noraid./sp": "Vidēji noraidījumu skaits spēlē (tikai minor sodi pamatlaikā; dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem)",
     "Forma (5)": "Pēdējo 5 spēļu rezultāti (vecākā → jaunākā): 🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
     "Forma": "Pēdējo spēļu rezultāti (vecākā → jaunākā): 🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
     "Gūti vārti": "Pēdējās izvēlētajās spēlēs gūtie vārti pamatlaikā (kopā)",
@@ -843,7 +843,7 @@ POMOC = {
     "PP iespējas": "Vairākuma iespējas pamatlaikā (reizes, kad komanda spēlēja vairākumā), bez papildlaika",
     "PP metieni": "Metieni vārtos vairākumā pamatlaikā (bez papildlaika)",
     "Ielaisti PP": "Pretinieka vairākumā pamatlaikā gūtie vārti pret šo komandu",
-    "PIM min/sp": "Vidēji sodu minūtes spēlē pamatlaikā (bez papildlaika un kautiņiem)",
+    "PIM min/sp": "Vidēji minor sodu minūtes spēlē (pamatlaikā; bez major, 10 min disciplinārajiem un kautiņiem)",
     "Izcīnīti/sp": "Vidēji pretinieka noraidījumi pret šo komandu spēlē pamatlaikā (bez papildlaika)",
     "Izcīnīti − saņemti": "Izcīnīto un saņemto noraidījumu starpība spēlē; pozitīvs skaitlis = komanda izcīna vairāk, nekā saņem",
     # komandas lapa
@@ -852,9 +852,9 @@ POMOC = {
     "Rez.": "🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
     "Rezultāts": "Spēles rezultāts: komandas vārti–pretinieka vārti (OT/SO = papildlaiks/pēcspēles metieni)",
     "Metieni": "Metieni vārtos visā spēlē (arī papildlaikā, tikai informācijai): komanda–pretinieks",
-    "Noraid.": "Komandas noraidījumu (sodu) skaits spēlē pamatlaikā (bez papildlaika un kautiņiem)",
-    "Noraidījumi": "Komandas noraidījumu (sodu) skaits spēlē pamatlaikā (bez papildlaika un kautiņiem)",
-    "PIM min": "Sodu minūtes spēlē pamatlaikā (bez papildlaika un kautiņiem)",
+    "Noraid.": "Komandas noraidījumu skaits spēlē (tikai minor sodi pamatlaikā; dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem)",
+    "Noraidījumi": "Komandas noraidījumu skaits spēlē (tikai minor sodi pamatlaikā; dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem)",
+    "PIM min": "Minor sodu minūtes spēlē (pamatlaikā; bez major, 10 min disciplinārajiem un kautiņiem)",
     "PIM 1. per.": "Sodu minūtes 1. periodā",
     "PIM 2. per.": "Sodu minūtes 2. periodā",
     "PIM 3. per.": "Sodu minūtes 3. periodā",
@@ -1584,7 +1584,7 @@ def lapa_noraidijumi():
                        "Izcīnītie": st.column_config.NumberColumn(format=fm),
                        "Izcīnīti − saņemti": st.column_config.NumberColumn(format=fm.replace("%", "%+"))})
     st.caption("Saņemtie = paša komandas noraidījumi, izcīnītie = pretinieka noraidījumi pret šo komandu. "
-               "Noraidījumu skaitā kautiņi nav iekļauti. Kopā = 1.–3. periods kopā, papildlaiks netiek ieskaitīts. "
+               "Noraidījumi = tikai minor sodi (dubultais minor = 2); major, 10 min disciplinārie sodi un kautiņi netiek skaitīti. Kopā = 1.–3. periods kopā, papildlaiks netiek ieskaitīts. "
                "Vecākām spēlēm sodu skaits pa periodiem ir aprēķināts kā sodu minūtes / 2, līdz tās tiek atjaunotas.")
 
 
@@ -2104,7 +2104,7 @@ def lapa_tiesnesi():
                                     "Mājas komanda": fm, "Viesu komanda": fm,
                                     "Noraid. 1. per.": fm, "Noraid. 2. per.": fm, "Noraid. 3. per.": fm,
                                     "Pret līgu": st.column_config.NumberColumn(format="%+.2f")})
-        st.caption("Noraidījumi = abu komandu sodu skaits spēles pamatlaikā (bez papildlaika un kautiņiem), ko pieskaita katram spēles tiesnesim. "
+        st.caption("Noraidījumi = abu komandu minor sodu skaits spēles pamatlaikā (dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem), ko pieskaita katram spēles tiesnesim. "
                    "Datu apjoms: Maz datu < 8 spēles, Vidēji 8–19, Pietiekami 20+ (abas sezonas kopā).")
 
     with t_rez:
