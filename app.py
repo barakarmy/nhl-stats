@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-04.10"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-04.11"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -800,7 +800,11 @@ def _planotie_ar_statusu(versija):
     plan = da.ielasit_planotos_tiesnesus()
     kal = ielasit_visu(versija)[2]
     n_fails = int(plan.loc[plan["loma"] == "referee", "game_id"].nunique()) if plan is not None and not plan.empty else 0
-    statuss = {"fails": n_fails, "tiessaiste": 0, "kluda": None, "laiks": datetime.datetime.now(da.LV_TZ).strftime("%H:%M")}
+    tagad = datetime.datetime.now(datetime.timezone.utc)
+    lv = lambda t: t.astimezone(da.LV_TZ)                                                        # noqa: E731
+    # pārbaudītais logs: spēles, kas sākušās pēdējo 4 h laikā (vēl notiek), un nākamās 30 h
+    statuss = {"fails": n_fails, "tiessaiste": 0, "kluda": None, "laiks": lv(tagad).strftime("%H:%M"),
+               "no": lv(tagad - timedelta(hours=4)), "lidz": lv(tagad + timedelta(hours=30)), "nakama": lv(tagad + timedelta(minutes=10)).strftime("%H:%M")}
     if kal is None or kal.empty:
         return plan, statuss
     kludas = []
@@ -816,7 +820,8 @@ def _planotie_ar_statusu(versija):
                 kludas.append(url)
             return h
         esosie = set(plan.loc[plan["loma"] == "referee", "game_id"].astype(int)) if plan is not None and not plan.empty else set()
-        jaunas = tp.dzivie_tiesnesi(kal, esosie, lejupieladet=lej)
+        # dzivie_tiesnesi pārbauda [tagad − 1 h, tagad + stundas]; pārbīdot "tagad" 3 h atpakaļ, logs ir [−4 h, +30 h]
+        jaunas = tp.dzivie_tiesnesi(kal, esosie, stundas=33, tagad=tagad - timedelta(hours=3), lejupieladet=lej)
     except Exception as ex:               # bez interneta vai ja portāls nav pieejams: paliek tikai tas, kas ir failā
         statuss["kluda"] = f"{type(ex).__name__}: {str(ex)[:80]}"
         return plan, statuss
@@ -2026,8 +2031,11 @@ def lapa_kalendars():
                "(scoutingtherefs.com) un NHL.")
     try:
         _ts = _planotie_ar_statusu(VERSIJA)[1]
-        st.caption(f"Tiesnešu pārbaude {_ts['laiks']}: no datu faila {_ts['fails']} spēlēm, tiešsaistē (Scouting The Refs) papildus {_ts['tiessaiste']}"
-                   + (f" · ⚠️ {_ts['kluda']}" if _ts.get("kluda") else "") + ". Tiešsaistes pārbaude atkārtojas ik 10 minūtes.")
+        _f = lambda t: t.strftime("%d.%m. %H:%M")                                                # noqa: E731
+        st.caption(f"Tiesneši pārbaudīti {_ts['laiks']} spēlēm no {_f(_ts['no'])} līdz {_f(_ts['lidz'])}: "
+                   f"no datu faila {_ts['fails']}, tiešsaistē (Scouting The Refs) papildus {_ts['tiessaiste']}"
+                   + (f" · ⚠️ {_ts['kluda']}" if _ts.get("kluda") else "")
+                   + f". Nākamā pārbaude: {_ts['nakama']} (kad lapa tiek atvērta vai atsvaidzināta).")
     except Exception:
         pass
     c1, c2 = st.columns([1, 2])
