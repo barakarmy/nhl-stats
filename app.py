@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.16"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.17"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -713,6 +713,18 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .ld-c { display: flex; justify-content: space-between; gap: .5rem; font-size: .8rem; opacity: .75; margin-top: .3rem; padding-top: .3rem;
   border-top: 1px solid rgba(128,128,128,.15); }
 .ld-c span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* forma kā bumbiņas */
+.fb { display: inline-flex; gap: 5px; align-items: center; }
+.fb i { position: relative; display: inline-block; width: 14px; height: 14px; border-radius: 50%; cursor: help; outline: none;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.10); }
+.fb i.u { background: #16a34a; }
+.fb i.z { background: #dc2626; }
+.fb i.uo { background: linear-gradient(90deg, #f59e0b 0 50%, #16a34a 50% 100%); }
+.fb i.zo { background: linear-gradient(90deg, #f59e0b 0 50%, #dc2626 50% 100%); }
+.fb i:hover::after, .fb i:focus::after { content: attr(data-tip); position: absolute; right: 50%; bottom: calc(100% + 7px); transform: translateX(50%);
+  padding: .3rem .6rem; border-radius: .45rem; background: #262730; color: #fff; font-size: .75rem; font-weight: 600; font-style: normal;
+  white-space: nowrap; z-index: 40; box-shadow: 0 4px 12px rgba(0,0,0,.25); pointer-events: none; }
+.fb i:last-child:hover::after, .fb i:last-child:focus::after { right: 0; transform: none; }
 /* ceļojuma faktors salīdzinājumā */
 .cel { margin: 1.7rem 0 .2rem; }
 .cel-h { text-align: center; font-weight: 800; font-size: .88rem; letter-spacing: .07em; opacity: .9; margin-bottom: .2rem; }
@@ -1076,8 +1088,8 @@ POMOC = {
     "PP %": "Vairākuma (Power Play) efektivitāte pamatlaikā: vārti vairākumā / vairākuma iespējas, bez papildlaika",
     "PK %": "Mazākuma (Penalty Kill) efektivitāte pamatlaikā: neielaisto vārtu daļa, kad komanda spēlē mazākumā, bez papildlaika",
     "Noraid./sp": "Vidēji noraidījumu skaits spēlē (tikai minor sodi pamatlaikā; dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem)",
-    "Forma (5)": "Pēdējo 5 spēļu rezultāti (vecākā → jaunākā): 🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
-    "Forma": "Pēdējo spēļu rezultāti (vecākā → jaunākā): 🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
+    "Forma (5)": "Pēdējās 5 spēles (vecākā → jaunākā): zaļa = uzvara, sarkana = zaudējums, puse oranža = papildlaikā/metienos. Uzved uz bumbiņas, lai redzētu rezultātu un pretinieku",
+    "Forma": "Pēdējās spēles (vecākā → jaunākā): zaļa = uzvara, sarkana = zaudējums, puse oranža = papildlaikā/metienos. Uzved uz bumbiņas, lai redzētu rezultātu un pretinieku",
     "Gūti vārti": "Pēdējās izvēlētajās spēlēs gūtie vārti pamatlaikā (kopā)",
     "Ielaisti vārti": "Pēdējās izvēlētajās spēlēs ielaistie vārti pamatlaikā (kopā)",
     # periodi
@@ -1311,7 +1323,7 @@ def lapa_parskats():
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="pk_scope")
         logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="pk_logs")
     res = da.kopsavilkums(DF, scope, LOGI[logs])
-    res["Forma"] = da.forma(DF, 5)
+    res["Forma"] = forma_bumbas(DF, 5)
     tabula(res, {
         "GP": "Sp.", "W": "U", "L": "Z", "OTL": "ZPL", "PTS": "Punkti", "PTS_pct": "Punkti %",
         "G_sp": "Vārti/sp", "Z_sp": "Ielaisti/sp", "Starpiba": "Starpība",
@@ -1706,6 +1718,34 @@ def iekseja_saite(cels, **param):
     return f"/{cels}" + (f"?{urlencode(param)}" if param else "")
 
 
+class HtmlSuna(str):
+    """Gatavs HTML tabulas šūnai (df_html to neaizvieto ar escape)."""
+
+
+def forma_bumbas(df, n=5):
+    """
+    Pēdējo n spēļu forma kā bumbiņas (vecākā → jaunākā): zaļa = uzvara, sarkana = zaudējums,
+    puse oranža + puse zaļa = uzvara papildlaikā/metienos, puse oranža + puse sarkana = zaudējums papildlaikā/metienos.
+    Uzvedot (vai pieskaroties) bumbiņai: datums, pretinieks un rezultāts.
+    """
+    e = _html.escape
+    sak = dict(zip(RAW["game_id"], RAW["sakums_lv"])) if "sakums_lv" in RAW.columns else {}
+    out = {}
+    for kom, g in df.sort_values(["datums", "game_id"]).groupby("komanda"):
+        bumbas = ""
+        for r in g.tail(n).itertuples():
+            ot = str(r.beigas).upper() in ("OT", "SO")
+            kl = ("uo" if ot else "u") if r.rez == "W" else ("zo" if r.rez == "OTL" or ot else "z")
+            bg = da.beigu_etikete(r.beigas)
+            s_ = sak.get(r.game_id)
+            dat = f"{s_:%d.%m}" if s_ is not None and pd.notna(s_) else f"{pd.Timestamp(r.datums):%d.%m}"
+            iz = {"u": "Uzvara", "uo": "Uzvara papildlaikā/metienos", "z": "Zaudējums", "zo": "Zaudējums papildlaikā/metienos"}[kl]
+            tip = f"{dat} · {'vs' if r.majas == 1 else '@'} {da.pilns_nosaukums(r.pretinieks)} {int(r.g_tot)}:{int(r.z_tot)}{(' ' + bg) if bg else ''} · {iz}"
+            bumbas += f'<i class="{kl}" data-tip="{e(tip)}" title="{e(tip)}" tabindex="0"></i>'
+        out[kom] = HtmlSuna(f'<span class="fb">{bumbas}</span>')
+    return pd.Series(out)
+
+
 class Saite(str):
     """Teksts tabulas šūnā, kas ir saite (df_html to attēlo kā <a>)."""
     def __new__(cls, teksts, href, virsraksts="", jauna_cilne=False):
@@ -1845,7 +1885,8 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
     if kartot and len(df) >= 4:
         _TABULU_SKAITS[0] += 1
         key = f"tbk{_TABULU_SKAITS[0]}_{zlib.crc32('|'.join(map(str, df.columns)).encode()) % 100000}"
-        opcijas = {c["k"]: str(c["label"]) for c in kol if not c["logo"] and str(c["label"]) not in ("#", "") and not c["wide"]}
+        opcijas = {c["k"]: str(c["label"]) for c in kol if not c["logo"] and str(c["label"]) not in ("#", "") and not c["wide"]
+                   and not (len(df) and isinstance(df[c["k"]].iloc[0], HtmlSuna))}
         izv = st.session_state.get(key)
         if izv and izv[0] not in opcijas:
             izv = None
@@ -1888,6 +1929,8 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
                 lo, hi = c["prog"]
                 platums = 0 if pd.isna(v) else max(0, min(100, (v - lo) / (hi - lo) * 100))
                 rinda += f'<td><div class="pb"><i style="width:{platums:.0f}%"></i><b>{_fmt_v(v, c["fmt"])}</b></div></td>'
+            elif isinstance(v, HtmlSuna):
+                rinda += f'<td class="l">{v}</td>'
             elif isinstance(v, Saite):
                 rinda += (f'<td class="l"><a class="tb-saite" href="{e(v.href)}" title="{e(v.virsraksts)}" data-tip="{e(v.virsraksts)}"'
                           f'{" target=_blank rel=noopener" if v.jauna_cilne else " target=_top"}>{e(str(v))}</a></td>')
@@ -1952,7 +1995,7 @@ def lapa_forma():
         n = int(izvele("Pēdējās spēles", ["5", "10"], key="fm_n"))
 
     res = da.kopsavilkums(DF, "Visas", n)
-    res["Forma"] = da.forma(DF, n)
+    res["Forma"] = forma_bumbas(DF, n)
     kol, asc = "G", False                                  # noklusējums: visvairāk gūto vārtu; citu secību - tabulas izvēlnē "Kārtot"
     burbuli = spelu_burbuli("Visas", n, lambda r: (r.g_reg, r.z_reg), f"Pēdējās {n} spēles · pamatlaika vārti (komanda:pretinieks)", set(res.index))
     tabula(res, {"GP": "Sp.", "W": "U", "L": "Z", "OTL": "ZPL", "PTS": "Punkti",
