@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.12"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.13"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -916,11 +916,20 @@ def _planotie_ar_statusu(versija):
             statuss["kluda"] = "repozitorijā ir vecs tiesnesi_planotie.py (augšupielādē jauno), tiešsaistes pārbaude nedarbojas"
             return plan, statuss
 
-        def lej(url, meginajumi=1):                   # tas pats lejupielādētājs, bet neveiksmes tiek pierakstītas statusam
-            h = tp._lejupieladet(url, meginajumi=meginajumi)
-            if h is None:
-                kludas.append(url)
-            return h
+        def lej(url, meginajumi=2):
+            """Lejupielāde statusam: 404 (dienas ieraksts vēl nav publicēts) nav kļūda; kļūda ir tikai, ja vietne neatbild vai atsaka."""
+            import requests
+            for _ in range(meginajumi):
+                try:
+                    r = requests.get(url, headers={"User-Agent": getattr(tp, "STR_UA", "Mozilla/5.0"), "Accept-Language": "en"}, timeout=8)
+                    if r.status_code == 200:
+                        return r.text
+                    if r.status_code == 404:
+                        return None
+                except requests.RequestException:
+                    pass
+            kludas.append(url)
+            return None
         esosie = set(plan.loc[plan["loma"] == "referee", "game_id"].astype(int)) if plan is not None and not plan.empty else set()
         # dzivie_tiesnesi pārbauda [tagad − 1 h, tagad + stundas]; pārbīdot "tagad" 3 h atpakaļ, logs ir [−4 h, +30 h]
         jaunas = tp.dzivie_tiesnesi(kal, esosie, stundas=33, tagad=tagad - timedelta(hours=3), lejupieladet=lej)
