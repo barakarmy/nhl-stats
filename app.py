@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.17"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.18"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1722,6 +1722,13 @@ class HtmlSuna(str):
     """Gatavs HTML tabulas šūnai (df_html to neaizvieto ar escape)."""
 
 
+HTML_ZIME = '<span class="fb">'      # pandas 3 pārvērš str apakšklases par parastu str, tāpēc HTML šūnas atpazīst arī pēc sākuma
+
+
+def ir_html_suna(v):
+    return isinstance(v, HtmlSuna) or (isinstance(v, str) and v.startswith(HTML_ZIME))
+
+
 def forma_bumbas(df, n=5):
     """
     Pēdējo n spēļu forma kā bumbiņas (vecākā → jaunākā): zaļa = uzvara, sarkana = zaudējums,
@@ -1886,7 +1893,7 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
         _TABULU_SKAITS[0] += 1
         key = f"tbk{_TABULU_SKAITS[0]}_{zlib.crc32('|'.join(map(str, df.columns)).encode()) % 100000}"
         opcijas = {c["k"]: str(c["label"]) for c in kol if not c["logo"] and str(c["label"]) not in ("#", "") and not c["wide"]
-                   and not (len(df) and isinstance(df[c["k"]].iloc[0], HtmlSuna))}
+                   and not (len(df) and ir_html_suna(df[c["k"]].iloc[0]))}
         izv = st.session_state.get(key)
         if izv and izv[0] not in opcijas:
             izv = None
@@ -1929,7 +1936,7 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
                 lo, hi = c["prog"]
                 platums = 0 if pd.isna(v) else max(0, min(100, (v - lo) / (hi - lo) * 100))
                 rinda += f'<td><div class="pb"><i style="width:{platums:.0f}%"></i><b>{_fmt_v(v, c["fmt"])}</b></div></td>'
-            elif isinstance(v, HtmlSuna):
+            elif ir_html_suna(v):
                 rinda += f'<td class="l">{v}</td>'
             elif isinstance(v, Saite):
                 rinda += (f'<td class="l"><a class="tb-saite" href="{e(v.href)}" title="{e(v.virsraksts)}" data-tip="{e(v.virsraksts)}"'
