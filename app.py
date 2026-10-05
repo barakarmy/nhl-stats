@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.19"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.20"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -726,6 +726,31 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   padding: .3rem .6rem; border-radius: .45rem; background: #262730; color: #fff; font-size: .75rem; font-weight: 600; font-style: normal;
   white-space: nowrap; z-index: 40; box-shadow: 0 4px 12px rgba(0,0,0,.25); pointer-events: none; }
 .fb i:last-child:hover::after, .fb i:last-child:focus::after { right: 0; transform: none; }
+/* aizvadīto spēļu rezultāts un zīme fiksētās kolonnās; nākamo spēļu vieta */
+.ks-s { min-width: 4.4rem; text-align: right; }
+.ks-z { width: 2.9rem; display: inline-flex; justify-content: center; flex: none; }
+.ks-m { min-width: 5.6rem; text-align: right; }
+.ks-vieta { font-size: .8rem; opacity: .65; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+/* padziļinātā statistika: tēmu kartītes */
+.dz-leg { font-size: .8rem; opacity: .75; margin: .4rem 0 .6rem; }
+.dz-g { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.dz-k { border: 1px solid rgba(128,128,128,.22); border-radius: 14px; background: rgba(255,255,255,.6); padding: .6rem .9rem .4rem; }
+.dz-h { font-weight: 800; font-size: .82rem; letter-spacing: .06em; text-transform: uppercase; opacity: .7; margin-bottom: .3rem; }
+.dz-r { display: grid; grid-template-columns: minmax(0, 1fr) 4.2rem 5.6rem 3rem; align-items: center; gap: .4rem; padding: .38rem 0;
+  border-top: 1px solid rgba(128,128,128,.13); font-size: .9rem; }
+.dz-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dz-v { text-align: right; font-size: 1rem; }
+.dz-a { text-align: right; font-size: .78rem; opacity: .6; }
+.dz-p { text-align: right; }
+.dz-p .kpi-r { margin-top: 0; }
+@media (max-width: 900px) { .dz-g { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .dz-r { grid-template-columns: minmax(0, 1fr) 3.4rem 4.4rem 2.4rem; font-size: .82rem; gap: .3rem; }
+  .ks-s { min-width: 3.6rem; }
+  .ks-z { width: 2.4rem; }
+  .ks-r { flex-wrap: wrap; row-gap: .1rem; }
+  .ks-vieta { flex-basis: 100%; max-width: none; text-align: left; padding-left: 4.1rem; font-size: .74rem; }
+}
 /* ceļojuma faktors salīdzinājumā */
 .cel { margin: 1.7rem 0 .2rem; }
 .cel-h { text-align: center; font-weight: 800; font-size: .88rem; letter-spacing: .07em; opacity: .9; margin-bottom: .2rem; }
@@ -2181,6 +2206,22 @@ KOMANDU_DIVIZIJAS = {**{k: ("Austrumu", "Atlantijas") for k in ("BOS", "BUF", "D
                      **{k: ("Austrumu", "Metropolitēna") for k in ("CAR", "CBJ", "NJD", "NYI", "NYR", "PHI", "PIT", "WSH")},
                      **{k: ("Rietumu", "Centrālā") for k in ("CHI", "COL", "DAL", "MIN", "NSH", "STL", "UTA", "WPG")},
                      **{k: ("Rietumu", "Klusā okeāna") for k in ("ANA", "CGY", "EDM", "LAK", "SJS", "SEA", "VAN", "VGK")}}
+KOMANDAS_DZ_GRUPAS = [   # padziļinātā statistika pa tēmām: (nosaukums, kolonna, zīmes aiz komata, vai labāk augsts (None = bez vietas))
+    ("Rezultāti", [("Spēles", "GP", 0, None), ("Uzvaras", "W", 0, True), ("Zaudējumi", "L", 0, False), ("Zaudējumi papildlaikā", "OTL", 0, None),
+                   ("Punkti", "PTS", 0, True), ("Punkti %", "PTS_pct", 1, True)]),
+    ("Vārti", [("Gūtie vārti", "G", 0, True), ("Ielaistie vārti", "Z", 0, False), ("Vārtu starpība", "Starpiba", 0, True),
+               ("Vārti spēlē", "G_sp", 2, True), ("Ielaisti spēlē", "Z_sp", 2, False), ("Over 6.5 %", "Over65", 0, None), ("Over 5.5 %", "Over55", 0, None)]),
+    ("Vārti pa periodiem (vidēji spēlē)", [("Gūti 1. periodā", "G_p1", 2, True), ("Gūti 2. periodā", "G_p2", 2, True), ("Gūti 3. periodā", "G_p3", 2, True),
+                                           ("Ielaisti 1. periodā", "Z_p1", 2, False), ("Ielaisti 2. periodā", "Z_p2", 2, False), ("Ielaisti 3. periodā", "Z_p3", 2, False)]),
+    ("Metieni", [("Metieni spēlē", "SOG_sp", 1, True), ("Pretinieka metieni spēlē", "SA_sp", 1, False), ("Metienu daļa %", "SOG_dala", 1, True)]),
+    ("Vairākums un mazākums", [("Vairākums PP %", "PP_pct", 1, True), ("Vairākuma vārti", "PPG", 0, True), ("Vairākuma iespējas", "PP_opp", 0, None),
+                               ("Vairākuma metieni", "PP_sog", 0, True), ("Mazākums PK %", "PK_pct", 1, True), ("Ielaisti mazākumā", "PPG_pret", 0, False),
+                               ("Mazākuma reizes", "PP_opp_pret", 0, None)]),
+    ("Noraidījumi", [("Noraidījumi spēlē", "PEN_sp", 1, False), ("Sodu minūtes spēlē", "PIM_sp", 1, False),
+                     ("Izcīnītie noraidījumi spēlē", "DRAW_sp", 1, True), ("Noraidījumu starpība spēlē", "PEN_starpiba", 2, False)]),
+    ("Spēles stils (vidēji spēlē)", [("Sitieni", "hits", 1, None), ("Bloķētie metieni", "blocked", 1, None), ("Ripas zaudējumi", "giveaways", 1, False),
+                                    ("Ripas atņemšanas", "takeaways", 1, True), ("Iemetieni %", "fo_pct", 1, True)]),
+]
 KOMANDAS_DZ_METRIKAS = [   # (nosaukums, kolonna, zīmes aiz komata, vai labāk augsts (None = bez vietas))
     ("Spēles", "GP", 0, None), ("Uzvaras", "W", 0, True), ("Zaudējumi", "L", 0, False), ("Zaudējumi papildlaikā", "OTL", 0, None),
     ("Punkti", "PTS", 0, True), ("Punkti %", "PTS_pct", 1, True),
@@ -2349,7 +2390,7 @@ def lapa_komanda():
             rindas += (f'<div class="ks-r"><span class="ks-d">{dat}</span>'
                        f'<span class="ks-o"><span class="ks-v">{"vs" if r.majas == 1 else "@"}</span><img src="{e(da.logo_url(r.pretinieks))}" alt="">{e(da.pilns_nosaukums(r.pretinieks))}</span>'
                        f'<a class="ks-s" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener" title="Atvērt spēles protokolu">{int(r.g_tot)}:{int(r.z_tot)}{(" " + bg) if bg else ""}</a>'
-                       f'{rez_zime(u)}'
+                       f'<span class="ks-z">{rez_zime(u)}</span>'
                        f'<span class="ks-m">metieni {int(r.sog_tot) if pd.notna(r.sog_tot) else "–"}:{int(r.sog_pret) if pd.notna(r.sog_pret) else "–"}</span></div>')
         st.markdown(f'<div class="ks">{rindas}</div><div class="ks-c">Parādītas {min(n_rad, len(visas))} no {len(visas)} spēlēm</div>', unsafe_allow_html=True)
         if n_rad < len(visas):
@@ -2366,10 +2407,11 @@ def lapa_komanda():
                 maj = s_.majas_komanda == kom
                 pret = s_.viesu_komanda if maj else s_.majas_komanda
                 href_ = e(iekseja_saite("salidzinat", a=s_.majas_komanda, b=s_.viesu_komanda))
+                lok_ = lokacijas.LOKACIJAS.get(s_.majas_komanda, {}) if lokacijas is not None else {}      # spēles vieta = mājinieku arēna
                 rn += (f'<div class="ks-r"><span class="ks-d">{dt_html(s_.sakums_lv, s_.datums_lv)}</span>'
                        f'<a class="ks-o kn-a" href="{href_}" target="_blank" rel="noopener" title="Salīdzināt komandas"><span class="ks-v">{"vs" if maj else "@"}</span>'
                        f'<img src="{e(da.logo_url(pret))}" alt="">{e(da.pilns_nosaukums(pret))}</a>'
-                       f'<span class="ks-vt {"maj" if maj else "vie"}">{"mājās" if maj else "viesos"}</span></div>')
+                       f'<span class="ks-vieta">{e(", ".join(x for x in (lok_.get("arena"), lok_.get("pilseta")) if x))}</span></div>')
             st.markdown(f'<div class="ks">{rn}</div>', unsafe_allow_html=True)
         else:
             st.info("Kalendārā nav atrastu nākamo spēļu.")
@@ -2386,16 +2428,26 @@ def lapa_komanda():
         if L.empty or kom not in L.index:
             st.info("Šim skatam datu nav.")
         else:
-            rindas_t = []
-            for lbl, k, dec, augsts in KOMANDAS_DZ_METRIKAS:
-                if k not in L.columns:
-                    continue
-                v = L.loc[kom, k]
-                vid = L[k].mean()
-                r_ = vieta(k, augsts, L) if augsts is not None else None
-                rindas_t.append({"Rādītājs": lbl, "Komanda": "–" if pd.isna(v) else _sk(v, dec),
-                                 "Līgas vidējais": "–" if pd.isna(vid) else _sk(vid, max(dec, 1)), "Vieta līgā": f"{r_}." if r_ else ""})
-            rtabula_bez_kartosanas(pd.DataFrame(rindas_t), paskaidr={"Vieta līgā": f"Vieta starp {len(L)} komandām šajā skatā (1. = labākā)"})
+            nL = len(L)
+            st.markdown(f'<div class="dz-leg">Komandas vērtība · līgas vidējais · vieta starp {nL} komandām '
+                        f'(<span class="kpi-r ok">zaļa</span> = labākā ceturtdaļa, <span class="kpi-r slikti">sarkana</span> = sliktākā)</div>',
+                        unsafe_allow_html=True)
+            kartes_dz = ""
+            for grupa, metr in KOMANDAS_DZ_GRUPAS:
+                rr = ""
+                for lbl, k, dec, augsts in metr:
+                    if k not in L.columns:
+                        continue
+                    v = L.loc[kom, k]
+                    vid = L[k].mean()
+                    r_ = vieta(k, augsts, L) if augsts is not None else None
+                    kl = "" if r_ is None else ("ok" if r_ <= nL // 4 else ("slikti" if r_ > nL - nL // 4 else ""))
+                    rr += (f'<div class="dz-r"><span class="dz-l">{e(lbl)}</span><b class="dz-v">{"–" if pd.isna(v) else _sk(v, dec)}</b>'
+                           f'<span class="dz-a">{"" if pd.isna(vid) else "līgā " + _sk(vid, max(dec, 1))}</span>'
+                           f'<span class="dz-p">{f'<span class="kpi-r {kl}">{r_}.</span>' if r_ else ""}</span></div>')
+                if rr:
+                    kartes_dz += f'<div class="dz-k"><div class="dz-h">{e(grupa)}</div>{rr}</div>'
+            st.markdown(f'<div class="dz-g">{kartes_dz}</div>', unsafe_allow_html=True)
 
 
 
