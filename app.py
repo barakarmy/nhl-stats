@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.24"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.26"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -615,6 +615,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .cmp-logo-a:hover { transform: scale(1.05); }
 /* taimeris kopš iepriekšējās spēles (back-to-back): lēni un minimāli pulsē */
 .cel-taim { margin-top: .45rem; font-size: .78rem; font-weight: 600; color: #b91c1c; }          /* tāda pati krāsa kā "Kritiski" */
+.cel-pared { margin-top: .45rem; font-size: .78rem; font-weight: 700; color: #b91c1c; }
 .cel-taim .tk { display: inline-block; font-variant-numeric: tabular-nums; font-size: .95rem; margin-left: .2rem; }
 /* saite tabulā (kalendārs → salīdzinājums) */
 .tb a.tb-saite { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 1.7rem; border-radius: 999px; text-decoration: none;
@@ -1536,6 +1537,9 @@ CMP_PELD_SKRIPTS = """
   function plan() { if (!raf) raf = w.requestAnimationFrame(noteikt); }
   function tikski() {                       // taimeri "kopš iepriekšējās spēles": skaitās uz priekšu līdz spēles sākumam
     d.querySelectorAll('.tk[data-no]').forEach(function (el) {
+      var rinda = el.closest('.cel-taim');
+      if (Date.now() < +el.dataset.no) { if (rinda) rinda.style.display = 'none'; return; }
+      if (rinda && rinda.style.display === 'none') rinda.style.display = '';
       var s = Math.max(0, Math.floor((Math.min(Date.now(), +el.dataset.lidz) - (+el.dataset.no)) / 1000));
       el.classList.toggle('stop', Date.now() >= +el.dataset.lidz);          // spēle sākusies: taimeris apstājas un vairs nepulsē
       var p = function (n) { return (n < 10 ? '0' : '') + n; };
@@ -1579,6 +1583,24 @@ def _cel_pilseta(k):
     return lokacijas.LOKACIJAS.get(k, {}).get("pilseta", k) if lokacijas is not None else k
 
 
+def komandas_speles_pirms(kods, lidz):
+    """Komandas spēles pirms brīža `lidz`: aizvadītās (dati) un kalendārā plānotās. Atgriež [(sākums, mājinieki, game_id)] laika secībā."""
+    rindas = {}
+    if RAW is not None and not RAW.empty and "sakums_lv" in RAW.columns:
+        x = RAW[((RAW["home_team"] == kods) | (RAW["away_team"] == kods)) & (RAW["sakums_lv"] < lidz)]
+        for r in x.itertuples():
+            rindas[r.game_id] = (r.sakums_lv, r.home_team, r.game_id)
+    if KAL is not None and not KAL.empty:
+        x = KAL[((KAL["majas_komanda"] == kods) | (KAL["viesu_komanda"] == kods)) & (KAL["sakums_lv"] < lidz)]
+        for r in x.itertuples():
+            rindas.setdefault(r.game_id, (r.sakums_lv, r.majas_komanda, r.game_id))
+    return sorted((v for v in rindas.values() if pd.notna(v[0])), key=lambda v: v[0])
+
+
+def _et_datums(ts):
+    return pd.Timestamp(ts).tz_convert("America/New_York").date()
+
+
 def sl_celojums_html(kreisa, laba):
     """
     Ceļojuma faktors salīdzinājumā (virs pēdējām 5 spēlēm).
@@ -1611,12 +1633,19 @@ def sl_celojums_html(kreisa, laba):
     f = lokacijas.speles_faktori(DF, majas, viesi, sak)
 
     def kolonna(kods, puse):
-        fk = f["majas"] if kods == majas else f["viesi"]
-        b2b, st_h, sp7 = fk.get("back_to_back"), fk.get("stundas_kops_pedejas"), fk.get("speles_pedejas_7_dienas") or 0
-        dienas = fk.get("dienas_starp_spelem")
+        # iepriekšējā spēle: aizvadītā vai jau kalendārā ieplānotā (piem., spēle iepriekšējā vakarā, kas vēl nav notikusi)
+        sak_ts = pd.Timestamp(sak)
+        pirms = komandas_speles_pirms(kods, sak_ts)
+        iepr = pirms[-1] if pirms else None
+        iepr_vieta = iepr[1] if iepr else None
+        dienas = (_et_datums(sak_ts) - _et_datums(iepr[0])).days if iepr else None
+        b2b = dienas == 1
+        st_h = (sak_ts - pd.Timestamp(iepr[0])).total_seconds() / 3600 if iepr else None
+        sp7 = sum(1 for s_ in pirms if (sak_ts - pd.Timestamp(s_[0])).total_seconds() <= 7 * 86400)
+        fk = {"iepriekspeja_vieta": iepr_vieta}
         # sākumpunkts: pēdējās spēles pilsēta; ja kopš tās pagājušas 3+ dienas (vai spēles nav), komanda ceļo no mājām
-        no_majam = not fk.get("iepriekspeja_vieta") or (dienas is not None and dienas >= MAJAS_PEC_DIENAM)
-        no = kods if no_majam else fk["iepriekspeja_vieta"]
+        no_majam = not iepr_vieta or (dienas is not None and dienas >= MAJAS_PEC_DIENAM)
+        no = kods if no_majam else iepr_vieta
         km = int(round(lokacijas.attalums_km(no, majas)))
         laiks = lokacijas.celojuma_laiks_h(km)
         tz = lokacijas.laika_joslu_starpiba_h(no, majas, pd.Timestamp(sak).to_pydatetime())
@@ -1640,18 +1669,29 @@ def sl_celojums_html(kreisa, laba):
         atp = ("spēle otro dienu pēc kārtas" if b2b else (f"atpūta {dienas - 1} d." if dienas else "pirmā spēle"))
         tz_t = f" · laika josla {'+' if tz > 0 else '−'}{abs(tz):g} h" if tz else ""
         cls = "krit" if krit else ("brid" if brid else "")
-        nozime = (f'<div class="cel-b krit">Kritiski: {e("; ".join(krit))}</div>' if krit else
+        pared = ""
+        if iepr and b2b and pd.Timestamp(iepr[0]) > pd.Timestamp.now(tz=da.LV_TZ):    # iepriekšējā spēle vēl tikai paredzēta
+            gm, gv = iepr[1], None
+            if KAL is not None and not KAL.empty:
+                rr_ = KAL[KAL["game_id"] == iepr[2]]
+                if not rr_.empty:
+                    gv = rr_.iloc[0]["viesu_komanda"]
+            pret_ = gv if gm == kods else gm
+            pared = (f'<div class="cel-pared">Paredzēta spēle {pd.Timestamp(iepr[0]).tz_convert(da.LV_TZ):%d.%m(%H:%M)} · '
+                     f'{"vs" if gm == kods else "@"} {e(da.pilns_nosaukums(pret_)) if pret_ else ""} ({e(_cel_pilseta(gm))})</div>')
+        nozime = pared + (f'<div class="cel-b krit">Kritiski: {e("; ".join(krit))}</div>' if krit else
                   (f'<div class="cel-b brid">Jāņem vērā: {e("; ".join(brid))}</div>' if brid else ""))
         loma = "mājās" if kods == majas else "viesos"
         taim = ""
-        if b2b:                                            # otrā spēle pēc kārtas: dzīvs laiks kopš iepriekšējās spēles aptuvenām beigām līdz šīs spēles sākumam
-            iepr = RAW[((RAW["home_team"] == kods) | (RAW["away_team"] == kods)) & (RAW["sakums_lv"] < pd.Timestamp(sak))]["sakums_lv"].max()
-            if pd.notna(iepr):
-                beigas_ = pd.Timestamp(iepr) + pd.Timedelta(hours=SPELES_ILGUMS_APTUVENI_H)          # aptuvenas beigas = sākums + 2,5 h
+        if b2b and iepr:                                   # otrā spēle pēc kārtas: dzīvs laiks kopš iepriekšējās spēles aptuvenām beigām līdz šīs spēles sākumam
+            if True:
+                beigas_ = pd.Timestamp(iepr[0]) + pd.Timedelta(hours=SPELES_ILGUMS_APTUVENI_H)       # aptuvenas beigas = sākums + 2,5 h
                 no_ms, lidz_ms = int(beigas_.timestamp() * 1000), int(pd.Timestamp(sak).timestamp() * 1000)
                 pag = max(0, min(int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000), lidz_ms) - no_ms) // 1000
                 apst = " stop" if int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000) >= lidz_ms else ""
-                taim = (f'<div class="cel-taim">Kopš iepriekšējās spēles beigām (~) <b class="tk{apst}" data-no="{no_ms}" data-lidz="{lidz_ms}">'
+                tagad_ms = int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
+                slept = ' style="display:none"' if tagad_ms < no_ms else ""          # taimeris parādās tikai tad, kad iepriekšējā spēle (aptuveni) beigusies
+                taim = (f'<div class="cel-taim"{slept}>Kopš iepriekšējās spēles beigām (~) <b class="tk{apst}" data-no="{no_ms}" data-lidz="{lidz_ms}">'
                         f'{pag // 3600:02d}:{pag % 3600 // 60:02d}:{pag % 60:02d}</b></div>')
         return (f'<div class="cel-c {puse} {cls}"><div class="cel-k">{e(kods)} · {loma}</div><div class="cel-km">{galv}</div>'
                 f'<div class="cel-t">{apaksa}</div><div class="cel-t">{atp}{tz_t}</div>{nozime}{taim}</div>')
