@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.22"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.23"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -799,7 +799,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   .st-key-cmp_vh button, .st-key-cmp_va button { padding: .1rem .45rem !important; min-height: 1.8rem; }
   .st-key-cmp_vh button p, .st-key-cmp_va button p { font-size: .7rem; }
   .cmp-l5 { gap: .6rem; }
-  .l5r { font-size: .76rem; grid-template-columns: 2.4rem 1rem 1.4rem 2.8rem 2rem; column-gap: .25rem; }
+  .l5r { font-size: .76rem; grid-template-columns: 2.4rem 1rem 1.4rem 2.7rem 2.3rem; column-gap: .22rem; }
   .l5u { font-size: .62rem; padding: .06rem .3rem; }
   .l5d { font-size: .68rem; }
 }
@@ -1102,10 +1102,12 @@ def komandas_etikete(kods):
 POMOC = {
     # līgas / komandu tabulas
     "Sp.": "Nospēlētās spēles",
-    "U": "Uzvaras (arī papildlaikā un pēcspēles metienos)",
-    "Z": "Zaudējumi pamatlaikā",
-    "ZPL": "Zaudējumi papildlaikā vai pēcspēles metienos (komanda saņem 1 punktu)",
-    "Punkti": "Tabulas punkti: uzvara 2, zaudējums papildlaikā/pēcspēles metienos 1, zaudējums pamatlaikā 0",
+    "U": "win (arī OT win un SO win)",
+    "Z": "loss (pamatlaikā)",
+    "ZPL": "OT loss vai SO loss (komanda saņem 1 punktu)",
+    "OTL": "OT loss vai SO loss (komanda saņem 1 punktu)",
+    "L": "loss (pamatlaikā)",
+    "Punkti": "Tabulas punkti: win 2, OT loss / SO loss 1, loss 0",
     "Punkti %": "Iegūto punktu daļa no iespējamajiem: punkti / (2 × spēles)",
     "Vārti/sp": "Vidēji gūtie vārti spēlē pamatlaikā (bez papildlaika un pēcspēles metieniem)",
     "Ielaisti/sp": "Vidēji ielaistie vārti spēlē pamatlaikā",
@@ -1116,8 +1118,8 @@ POMOC = {
     "PP %": "Vairākuma (Power Play) efektivitāte pamatlaikā: vārti vairākumā / vairākuma iespējas, bez papildlaika",
     "PK %": "Mazākuma (Penalty Kill) efektivitāte pamatlaikā: neielaisto vārtu daļa, kad komanda spēlē mazākumā, bez papildlaika",
     "Noraid./sp": "Vidēji noraidījumu skaits spēlē (tikai minor sodi pamatlaikā; dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem)",
-    "Forma (5)": "Pēdējās 5 spēles (vecākā → jaunākā): zaļa = uzvara, sarkana = zaudējums, puse oranža = papildlaikā/metienos. Uzved uz bumbiņas, lai redzētu rezultātu un pretinieku",
-    "Forma": "Pēdējās spēles (vecākā → jaunākā): zaļa = uzvara, sarkana = zaudējums, puse oranža = papildlaikā/metienos. Uzved uz bumbiņas, lai redzētu rezultātu un pretinieku",
+    "Forma (5)": "Pēdējās 5 spēles (vecākā → jaunākā): zaļa = win, sarkana = loss, ar oranžu daļu = OT win / SO win vai OT loss / SO loss. Uzved uz bumbiņas, lai redzētu rezultātu un pretinieku",
+    "Forma": "Pēdējās spēles (vecākā → jaunākā): zaļa = win, sarkana = loss, ar oranžu daļu = OT win / SO win vai OT loss / SO loss. Uzved uz bumbiņas, lai redzētu rezultātu un pretinieku",
     "Gūti vārti": "Pēdējās izvēlētajās spēlēs gūtie vārti pamatlaikā (kopā)",
     "Ielaisti vārti": "Pēdējās izvēlētajās spēlēs ielaistie vārti pamatlaikā (kopā)",
     # periodi
@@ -1138,7 +1140,7 @@ POMOC = {
     # komandas lapa
     "Skats": "Spēļu izlase, kurai parādīta statistika",
     "Pretinieks": "vs = spēle mājās, @ = spēle viesos",
-    "Rez.": "🟩 uzvara, 🟨 zaudējums papildlaikā/pēcspēles metienos, 🟥 zaudējums pamatlaikā",
+    "Rez.": "🟩 win, 🟨 OT loss / SO loss, 🟥 loss",
     "Rezultāts": "Spēles rezultāts: komandas vārti–pretinieka vārti (OT/SO = papildlaiks/pēcspēles metieni)",
     "Metieni": "Metieni vārtos visā spēlē (arī papildlaikā, tikai informācijai): komanda–pretinieks",
     "Noraid.": "Komandas noraidījumu skaits spēlē (tikai minor sodi pamatlaikā; dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem)",
@@ -1199,7 +1201,7 @@ POMOC = {
     "Atvairīti": "Atvairītie metieni",
     "Metieni pret": "Metieni pret vārtsargu šajā spēlē",
     "SV %": "Atvairīto metienu procents: atvairītie / metieni pret",
-    "Iznākums": "W = uzvara, L = zaudējums pamatlaikā, O = zaudējums papildlaikā/pēcspēles metienos",
+    "Iznākums": "W = win, L = loss, O = OT loss / SO loss",
     # spēlētāju tabulas (kolonnu nosaukumi no datu moduļa)
     "Poz": "Pozīcija: C centrs, L/R spārni, D aizsargs",
     "GP": "Nospēlētās spēles",
@@ -1213,7 +1215,7 @@ POMOC = {
     "TOI_kopa": "Kopējais laiks laukumā (minūtes)",
     "P_sp": "Punkti spēlē",
     "GS": "Spēles sākuma sastāvā",
-    "W": "Uzvaras",
+    "W": "win (arī OT win un SO win)",
     "SA": "Metieni pret vārtsargu",
     "SV": "Atvairītie metieni",
     "GA": "Ielaistie vārti",
@@ -1354,7 +1356,7 @@ def lapa_parskats():
     res = da.kopsavilkums(DF, scope, LOGI[logs])
     res["Forma"] = forma_bumbas(DF, 5)
     tabula(res, {
-        "GP": "Sp.", "W": "U", "L": "Z", "OTL": "ZPL", "PTS": "Punkti", "PTS_pct": "Punkti %",
+        "GP": "Sp.", "W": "W", "L": "L", "OTL": "OTL", "PTS": "Punkti", "PTS_pct": "Punkti %",
         "G_sp": "Vārti/sp", "Z_sp": "Ielaisti/sp", "Starpiba": "Starpība",
         "SOG_sp": "Metieni/sp", "SOG_dala": "Metienu daļa %", "PP_pct": "PP %", "PK_pct": "PK %",
         "PEN_sp": "Noraid./sp", "Forma": "Forma (5)"},
@@ -1367,9 +1369,9 @@ def lapa_parskats():
                 "PP %": st.column_config.NumberColumn(format="%.1f"),
                 "PK %": st.column_config.NumberColumn(format="%.1f"),
                 "Noraid./sp": st.column_config.NumberColumn(format="%.1f")})
-    st.caption("U = uzvaras, Z = zaudējumi pamatlaikā, ZPL = zaudējumi papildlaikā/pēcspēles metienos. "
+    st.caption("W = win (arī OT win un SO win), L = loss, OTL = OT loss vai SO loss. "
                "Visi statistikas rādītāji (vārti, metieni, noraidījumi, vairākums) ir pamatlaika, bez papildlaika un pēcspēles metieniem. "
-               "Uzvaras, zaudējumi un punkti ir oficiālie rezultāti. Tabulu var kārtot, klikšķinot uz kolonnas virsraksta.")
+               "Win, loss un punkti ir oficiālie rezultāti. Tabulu var kārtot, klikšķinot uz kolonnas virsraksta.")
 
 
 # ============================================================================
@@ -1446,7 +1448,18 @@ def sl_komanda_html(kods, kl, gp_kopa, gp_skata, majas_puse):
 
 
 SAKUMI = {}           # game_id -> sākuma laiks (Rīga), aizpildās pirmajā izsaukumā
-REZ_NOZIME = {"U": "Uzvara", "Z": "Zaudējums pamatlaikā", "ZPL": "Zaudējums papildlaikā vai pēc metienu sērijas"}
+REZ_NOZIME = {"W": "win", "L": "loss", "OTW": "OT win", "SOW": "SO win", "OTL": "OT loss", "SOL": "SO loss"}
+REZ_KRASA = {"W": "U", "OTW": "U", "SOW": "U", "L": "Z", "OTL": "ZPL", "SOL": "ZPL"}      # CSS klase: zaļa / sarkana / oranža
+
+
+def rez_kods(rez, beigas):
+    """Spēles iznākums: W, L, OTW, SOW, OTL, SOL (pēc oficiālā rezultāta un tā, kā spēle beidzās)."""
+    b = str(beigas).upper()
+    if rez == "W":
+        return {"OT": "OTW", "SO": "SOW"}.get(b, "W")
+    if rez == "OTL":
+        return "SOL" if b == "SO" else "OTL"
+    return "L" if rez == "L" else ""
 
 
 def dt_html(ts, datums=None):
@@ -1457,10 +1470,10 @@ def dt_html(ts, datums=None):
 
 
 def rez_zime(u, kl="l5u"):
-    """U / Z / ZPL zīme ar paskaidrojumu (uzvedot peli vai pieskaroties)."""
+    """W / L / OTW / SOW / OTL / SOL zīme ar paskaidrojumu (uzvedot peli vai pieskaroties)."""
     if not u:
         return ""
-    return f'<span class="{kl} {u}" data-tip="{REZ_NOZIME.get(u, "")}" title="{REZ_NOZIME.get(u, "")}" tabindex="0">{u}</span>'
+    return f'<span class="{kl} {REZ_KRASA.get(u, "")}" data-tip="{REZ_NOZIME.get(u, "")}" title="{REZ_NOZIME.get(u, "")}" tabindex="0">{u}</span>'
 
 
 def sl_pedejas5_html(kods, puse):
@@ -1469,12 +1482,11 @@ def sl_pedejas5_html(kods, puse):
     global SAKUMI
     if not SAKUMI and "sakums_lv" in RAW.columns:
         SAKUMI = dict(zip(RAW["game_id"], RAW["sakums_lv"]))
-    iznak = {"W": "U", "L": "Z", "OTL": "ZPL"}
     rindas = ""
     for r in g.itertuples():
         bg = da.beigu_etikete(r.beigas)
         rez = f"{int(r.g_tot)}:{int(r.z_tot)}" + (f" {bg}" if bg else "")
-        u = iznak.get(r.rez, "")
+        u = rez_kods(r.rez, r.beigas)
         rindas += (f'<div class="l5r"><span class="l5d">{dt_html(SAKUMI.get(r.game_id), r.datums)}</span>'
                    f'<span class="l5v">{"vs" if r.majas == 1 else "@"}</span>'
                    f'<img class="l5lg" src="{_html.escape(da.logo_url(r.pretinieks))}" alt="{_html.escape(r.pretinieks)}" title="{_html.escape(da.pilns_nosaukums(r.pretinieks))}">'
@@ -1760,8 +1772,8 @@ def ir_html_suna(v):
 
 def forma_bumbas(df, n=5):
     """
-    Pēdējo n spēļu forma kā bumbiņas (vecākā → jaunākā): zaļa = uzvara, sarkana = zaudējums,
-    puse oranža + puse zaļa = uzvara papildlaikā/metienos, puse oranža + puse sarkana = zaudējums papildlaikā/metienos.
+    Pēdējo n spēļu forma kā bumbiņas (vecākā → jaunākā): zaļa = win, sarkana = loss,
+    oranža daļa + zaļa = OT win / SO win, oranža daļa + sarkana = OT loss / SO loss.
     Uzvedot (vai pieskaroties) bumbiņai: datums, pretinieks un rezultāts.
     """
     e = _html.escape
@@ -1775,7 +1787,7 @@ def forma_bumbas(df, n=5):
             bg = da.beigu_etikete(r.beigas)
             s_ = sak.get(r.game_id)
             dat = f"{s_:%d.%m}" if s_ is not None and pd.notna(s_) else f"{pd.Timestamp(r.datums):%d.%m}"
-            iz = {"u": "Uzvara", "uo": "Uzvara papildlaikā/metienos", "z": "Zaudējums", "zo": "Zaudējums papildlaikā/metienos"}[kl]
+            iz = REZ_NOZIME.get(rez_kods(r.rez, r.beigas), "")
             tip = f"{dat} · {'vs' if r.majas == 1 else '@'} {da.pilns_nosaukums(r.pretinieks)} {int(r.g_tot)}:{int(r.z_tot)}{(' ' + bg) if bg else ''} · {iz}"
             bumbas += f'<i class="{kl}" data-tip="{e(tip)}" title="{e(tip)}" tabindex="0"></i>'
         out[kom] = HtmlSuna(f'<span class="fb">{bumbas}</span>')
@@ -2034,7 +2046,7 @@ def lapa_forma():
     res["Forma"] = forma_bumbas(DF, n)
     kol, asc = "G", False                                  # noklusējums: visvairāk gūto vārtu; citu secību - tabulas izvēlnē "Kārtot"
     burbuli = spelu_burbuli("Visas", n, lambda r: (r.g_reg, r.z_reg), f"Pēdējās {n} spēles · pamatlaika vārti (komanda:pretinieks)", set(res.index))
-    tabula(res, {"GP": "Sp.", "W": "U", "L": "Z", "OTL": "ZPL", "PTS": "Punkti",
+    tabula(res, {"GP": "Sp.", "W": "W", "L": "L", "OTL": "OTL", "PTS": "Punkti",
                  "G": "Gūti vārti", "Z": "Ielaisti vārti", "Starpiba": "Starpība", "Forma": "Forma"},
            sort_col=kol, ascending=asc, burbuli=burbuli)
 
@@ -2210,7 +2222,7 @@ KOMANDU_DIVIZIJAS = {**{k: ("Austrumu", "Atlantijas") for k in ("BOS", "BUF", "D
                      **{k: ("Rietumu", "Centrālā") for k in ("CHI", "COL", "DAL", "MIN", "NSH", "STL", "UTA", "WPG")},
                      **{k: ("Rietumu", "Klusā okeāna") for k in ("ANA", "CGY", "EDM", "LAK", "SJS", "SEA", "VAN", "VGK")}}
 KOMANDAS_DZ_GRUPAS = [   # padziļinātā statistika pa tēmām: (nosaukums, kolonna, zīmes aiz komata, vai labāk augsts (None = bez vietas))
-    ("Rezultāti", [("Spēles", "GP", 0, None), ("Uzvaras", "W", 0, True), ("Zaudējumi", "L", 0, False), ("Zaudējumi papildlaikā", "OTL", 0, None),
+    ("Rezultāti", [("Spēles", "GP", 0, None), ("Win", "W", 0, True), ("Loss", "L", 0, False), ("OT loss / SO loss", "OTL", 0, None),
                    ("Punkti", "PTS", 0, True), ("Punkti %", "PTS_pct", 1, True)]),
     ("Vārti", [("Gūtie vārti", "G", 0, True), ("Ielaistie vārti", "Z", 0, False), ("Vārtu starpība", "Starpiba", 0, True),
                ("Vārti spēlē", "G_sp", 2, True), ("Ielaisti spēlē", "Z_sp", 2, False), ("Over 6.5 %", "Over65", 0, None), ("Over 5.5 %", "Over55", 0, None)]),
@@ -2226,7 +2238,7 @@ KOMANDAS_DZ_GRUPAS = [   # padziļinātā statistika pa tēmām: (nosaukums, kol
                                     ("Ripas atņemšanas", "takeaways", 1, True), ("Iemetieni %", "fo_pct", 1, True)]),
 ]
 KOMANDAS_DZ_METRIKAS = [   # (nosaukums, kolonna, zīmes aiz komata, vai labāk augsts (None = bez vietas))
-    ("Spēles", "GP", 0, None), ("Uzvaras", "W", 0, True), ("Zaudējumi", "L", 0, False), ("Zaudējumi papildlaikā", "OTL", 0, None),
+    ("Spēles", "GP", 0, None), ("Win", "W", 0, True), ("Loss", "L", 0, False), ("OT loss / SO loss", "OTL", 0, None),
     ("Punkti", "PTS", 0, True), ("Punkti %", "PTS_pct", 1, True),
     ("Gūtie vārti", "G", 0, True), ("Ielaistie vārti", "Z", 0, False), ("Vārtu starpība", "Starpiba", 0, True),
     ("Vārti spēlē", "G_sp", 2, True), ("Ielaisti spēlē", "Z_sp", 2, False),
@@ -2277,7 +2289,7 @@ def lapa_komanda():
 
     with t_gal:                                           # svarīgākie rādītāji
         kartes = [
-            ("Bilance (U-Z-ZPL)", f"{int(kop['W'])}-{int(kop['L'])}-{int(kop['OTL'])}", f"{int(kop['PTS'])} punkti · {kop['PTS_pct']:.0f}%", vieta("PTS_pct")),
+            ("Bilance (W-L-OTL)", f"{int(kop['W'])}-{int(kop['L'])}-{int(kop['OTL'])}", f"{int(kop['PTS'])} punkti · {kop['PTS_pct']:.0f}%", vieta("PTS_pct")),
             ("Vārti spēlē", _sk(kop["G_sp"], 2), f"kopā {int(kop['G'])}", vieta("G_sp")),
             ("Ielaisti spēlē", _sk(kop["Z_sp"], 2), f"kopā {int(kop['Z'])}", vieta("Z_sp", False)),
             ("Vārtu starpība", f"{int(kop['Starpiba']):+d}", f"{int(kop['GP'])} spēlēs", vieta("Starpiba")),
@@ -2291,8 +2303,8 @@ def lapa_komanda():
             if kom in go.index:
                 o = go.loc[kom]
                 rot = lambda kol, aug=True: int(go[kol].rank(ascending=not aug, method="min").loc[kom])     # noqa: E731
-                kartes += [("Papildlaiks (OT)", o["OT_bil"], f"{int(o['OT_W'] + o['OT_L'])} spēles izšķīrās papildlaikā", rot("OT_W")),
-                           ("Metienu sērija (SO)", o["SO_bil"], f"{int(o['SO_W'] + o['SO_L'])} metienu sērijas", rot("SO_W"))]
+                kartes += [("OT win – OT loss", o["OT_bil"], f"{int(o['OT_W'] + o['OT_L'])} spēles izšķīrās papildlaikā", rot("OT_W")),
+                           ("SO win – SO loss", o["SO_bil"], f"{int(o['SO_W'] + o['SO_L'])} metienu sērijas", rot("SO_W"))]
         except Exception:
             pass
         st.markdown('<div class="kpi-grid">' + "".join(
@@ -2300,10 +2312,9 @@ def lapa_komanda():
             for l, v, s, r in kartes) + "</div>", unsafe_allow_html=True)
         # forma: pēdējās 5 spēles
         l5 = tdf.sort_values(["datums", "game_id"]).tail(5)
-        iznak = {"W": "U", "L": "Z", "OTL": "ZPL"}
-        forma = "".join(f'<a class="fm-b {iznak.get(r.rez, "")}" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener" '
-                        f'data-tip="{e(REZ_NOZIME.get(iznak.get(r.rez, ""), ""))} · {"vs" if r.majas == 1 else "@"} {e(da.pilns_nosaukums(r.pretinieks))}" '
-                        f'title="{e(REZ_NOZIME.get(iznak.get(r.rez, ""), ""))} · {e(da.pilns_nosaukums(r.pretinieks))}">{iznak.get(r.rez, "")}<small>{int(r.g_tot)}:{int(r.z_tot)}</small></a>'
+        forma = "".join(f'<a class="fm-b {REZ_KRASA.get(rez_kods(r.rez, r.beigas), "")}" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener" '
+                        f'data-tip="{e(REZ_NOZIME.get(rez_kods(r.rez, r.beigas), ""))} · {"vs" if r.majas == 1 else "@"} {e(da.pilns_nosaukums(r.pretinieks))}" '
+                        f'title="{e(REZ_NOZIME.get(rez_kods(r.rez, r.beigas), ""))} · {e(da.pilns_nosaukums(r.pretinieks))}">{rez_kods(r.rez, r.beigas)}<small>{int(r.g_tot)}:{int(r.z_tot)}</small></a>'
                         for r in l5.itertuples())
         nak = da.nakamas_speles(KAL, 1, komanda=kom) if KAL is not None else None
         nak_html = ""
@@ -2361,7 +2372,7 @@ def lapa_komanda():
                 min_v = 1 if Lg["GP"].max() < 3 else 2                         # atvairīto % un GAA: vārtsargi ar vismaz 2 spēlēm (sezonas sākumā 1)
                 kartes_g = [lideru_karte("Atvairīto metienu %", Lg, "SVpct", "Vartsargs", lambda v: f"{v:.1f}%", True, min_v),
                             lideru_karte("Ielaisti vidēji (GAA)", Lg, "GAA", "Vartsargs", lambda v: f"{v:.2f}", False, min_v),
-                            lideru_karte("Uzvaras", Lg, "W", "Vartsargs", vesels),
+                            lideru_karte("Win", Lg, "W", "Vartsargs", vesels),
                             lideru_karte("Atvairītie metieni", Lg, "SV", "Vartsargs", vesels)]
                 st.markdown('<p class="ld-h">Vārtsargi</p><div class="kpi-grid">' + "".join(x for x in kartes_g if x) + "</div>", unsafe_allow_html=True)
 
@@ -2396,7 +2407,7 @@ def lapa_komanda():
         rindas = ""
         for r in visas.head(n_rad).itertuples():
             bg = da.beigu_etikete(r.beigas)
-            u = iznak.get(r.rez, "")
+            u = rez_kods(r.rez, r.beigas)
             s_ = sak.get(r.game_id)
             dat = dt_html(s_, r.datums)
             rindas += (f'<div class="ks-r"><span class="ks-d">{dat}</span>'
@@ -2548,9 +2559,9 @@ def lapa_otso():
     tw = g.sort_values(["W_kopa", "W_pct"], ascending=False).head(7)
     tg = g.sort_values(["OTG", "GP"], ascending=[False, True]).head(7)
     tp = g[g["OTG"] > 0].sort_values(["W_pct", "OTG"], ascending=False).head(7)
-    kartes = [("Uzvaras OT/SO", karte(tw, "W_kopa", lambda v: f"{int(v)}", lambda k: f" · bilance {g.loc[k, 'Kopa_bil']}")),
+    kartes = [("OT win + SO win", karte(tw, "W_kopa", lambda v: f"{int(v)}", lambda k: f" · bilance {g.loc[k, 'Kopa_bil']}")),
               ("Visbiežāk līdz papildlaikam", karte(tg, "OTG", lambda v: f"{int(v)}", lambda k: f" · {g.loc[k, 'OT_pct']:.0f}% spēļu")),
-              ("Uzvaru % OT/SO", karte(tp, "W_pct", lambda v: f"{v:.0f}%", lambda k: f" · {int(g.loc[k, 'OTG'])} sp."))]
+              ("Win % OT/SO", karte(tp, "W_pct", lambda v: f"{v:.0f}%", lambda k: f" · {int(g.loc[k, 'OTG'])} sp."))]
     v = _varti_df()
     if v is not None:
         pari, _ = _apakskopa_pari(scope, n)
@@ -2565,14 +2576,14 @@ def lapa_otso():
             kartes.append(("Punkti papildlaikā", [(f"{s} ({kk})", f"{c}", "") for (s, kk), c in tpun.items()]))
     st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
     st.markdown('<p class="ld-h">Komandu bilances</p>', unsafe_allow_html=True)
-    tabula(g, {"GP": "Sp.", "OTG": "Līdz papildl.", "OT_pct": "Papildl. %", "OT_bil": "OT U-Z", "SO_bil": "SO U-Z", "Kopa_bil": "Kopā U-Z",
-               "W_pct": "Uzvaru %", "G_OT": "Gūti OT", "Z_OT": "Ielaisti OT", "S_OT": "Metieni OT", "SA_OT": "Pret. metieni OT"},
+    tabula(g, {"GP": "Sp.", "OTG": "Līdz papildl.", "OT_pct": "Papildl. %", "OT_bil": "OT W-L", "SO_bil": "SO W-L", "Kopa_bil": "Kopā W-L",
+               "W_pct": "Win %", "G_OT": "Gūti OT", "Z_OT": "Ielaisti OT", "S_OT": "Metieni OT", "SA_OT": "Pret. metieni OT"},
            sort_col="W_kopa",
-           config={"Papildl. %": st.column_config.NumberColumn(format="%.0f"), "Uzvaru %": st.column_config.NumberColumn(format="%.0f")},
+           config={"Papildl. %": st.column_config.NumberColumn(format="%.0f"), "Win %": st.column_config.NumberColumn(format="%.0f")},
            paskaidr={"Līdz papildl.": "Spēles, kas pēc pamatlaika bija neizšķirtas (papildlaiks un/vai metienu sērija)",
-                     "Papildl. %": "Cik % spēļu aizgāja līdz papildlaikam", "OT U-Z": "Uzvaras-zaudējumi spēlēs, kas izšķīrās papildlaikā",
-                     "SO U-Z": "Uzvaras-zaudējumi pēcspēles metienu sērijās", "Kopā U-Z": "Visas papildlaika un metienu sēriju spēles",
-                     "Uzvaru %": "Uzvaru daļa spēlēs, kas aizgāja līdz papildlaikam", "Gūti OT": "Papildlaikā gūtie vārti",
+                     "Papildl. %": "Cik % spēļu aizgāja līdz papildlaikam", "OT W-L": "OT win – OT loss (spēles, kas izšķīrās papildlaikā)",
+                     "SO W-L": "SO win – SO loss (pēcspēles metienu sērijas)", "Kopā W-L": "(OT win + SO win) – (OT loss + SO loss)",
+                     "Win %": "OT win un SO win daļa spēlēs, kas aizgāja līdz papildlaikam", "Gūti OT": "Papildlaikā gūtie vārti",
                      "Ielaisti OT": "Papildlaikā ielaistie vārti", "Metieni OT": "Metieni vārtos papildlaikā", "Pret. metieni OT": "Pretinieka metieni papildlaikā"})
     st.caption("Papildlaika un pēcspēles metienu sēriju statistika tiek krāta atsevišķi; pārējās sadaļās un prognozēs tiek izmantots tikai pamatlaiks.")
 
