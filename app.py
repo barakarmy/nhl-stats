@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.23"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.24"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -753,6 +753,16 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   .ks-r { flex-wrap: wrap; row-gap: .1rem; }
   .ks-vieta { flex-basis: 100%; max-width: none; text-align: left; padding-left: 4.1rem; font-size: .74rem; }
 }
+/* rezultātu kvadrāti (W / L) visur vienādi: krāsas kā formas bumbiņām; OT/SO = kreisie 30 % oranži */
+.l5u.rw, .l5u.rwo, .l5u.rl, .l5u.rlo, .fm-b.rw, .fm-b.rwo, .fm-b.rl, .fm-b.rlo {
+  display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; min-width: 1.6rem; padding: 0 !important;
+  border-radius: .3rem; color: #ffffff !important; font-weight: 800; font-size: .8rem; line-height: 1; text-decoration: none !important;
+  text-shadow: 0 1px 1px rgba(0,0,0,.25); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.l5u.rw, .fm-b.rw { background: #00a83f; }
+.l5u.rl, .fm-b.rl { background: #dc0000; }
+.l5u.rwo, .fm-b.rwo { background: linear-gradient(90deg, #f3a000 0 30%, #00a83f 30% 100%); }
+.l5u.rlo, .fm-b.rlo { background: linear-gradient(90deg, #f3a000 0 30%, #dc0000 30% 100%); }
+.fm { gap: .35rem; }
 /* ceļojuma faktors salīdzinājumā */
 .cel { margin: 1.7rem 0 .2rem; }
 .cel-h { text-align: center; font-weight: 800; font-size: .88rem; letter-spacing: .07em; opacity: .9; margin-bottom: .2rem; }
@@ -800,7 +810,6 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   .st-key-cmp_vh button p, .st-key-cmp_va button p { font-size: .7rem; }
   .cmp-l5 { gap: .6rem; }
   .l5r { font-size: .76rem; grid-template-columns: 2.4rem 1rem 1.4rem 2.7rem 2.3rem; column-gap: .22rem; }
-  .l5u { font-size: .62rem; padding: .06rem .3rem; }
   .l5d { font-size: .68rem; }
 }
 
@@ -1449,7 +1458,8 @@ def sl_komanda_html(kods, kl, gp_kopa, gp_skata, majas_puse):
 
 SAKUMI = {}           # game_id -> sākuma laiks (Rīga), aizpildās pirmajā izsaukumā
 REZ_NOZIME = {"W": "win", "L": "loss", "OTW": "OT win", "SOW": "SO win", "OTL": "OT loss", "SOL": "SO loss"}
-REZ_KRASA = {"W": "U", "OTW": "U", "SOW": "U", "L": "Z", "OTL": "ZPL", "SOL": "ZPL"}      # CSS klase: zaļa / sarkana / oranža
+REZ_KRASA = {"W": "rw", "OTW": "rwo", "SOW": "rwo", "L": "rl", "OTL": "rlo", "SOL": "rlo"}   # CSS: zaļš, sarkans, 30 % oranžs + zaļš/sarkans
+REZ_BURTS = {"W": "W", "OTW": "W", "SOW": "W", "L": "L", "OTL": "L", "SOL": "L"}          # kvadrātā tikai W vai L
 
 
 def rez_kods(rez, beigas):
@@ -1473,7 +1483,7 @@ def rez_zime(u, kl="l5u"):
     """W / L / OTW / SOW / OTL / SOL zīme ar paskaidrojumu (uzvedot peli vai pieskaroties)."""
     if not u:
         return ""
-    return f'<span class="{kl} {REZ_KRASA.get(u, "")}" data-tip="{REZ_NOZIME.get(u, "")}" title="{REZ_NOZIME.get(u, "")}" tabindex="0">{u}</span>'
+    return f'<span class="{kl} {REZ_KRASA.get(u, "")}" data-tip="{REZ_NOZIME.get(u, "")}" title="{REZ_NOZIME.get(u, "")}" tabindex="0">{REZ_BURTS.get(u, "")}</span>'
 
 
 def sl_pedejas5_html(kods, puse):
@@ -2313,8 +2323,8 @@ def lapa_komanda():
         # forma: pēdējās 5 spēles
         l5 = tdf.sort_values(["datums", "game_id"]).tail(5)
         forma = "".join(f'<a class="fm-b {REZ_KRASA.get(rez_kods(r.rez, r.beigas), "")}" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener" '
-                        f'data-tip="{e(REZ_NOZIME.get(rez_kods(r.rez, r.beigas), ""))} · {"vs" if r.majas == 1 else "@"} {e(da.pilns_nosaukums(r.pretinieks))}" '
-                        f'title="{e(REZ_NOZIME.get(rez_kods(r.rez, r.beigas), ""))} · {e(da.pilns_nosaukums(r.pretinieks))}">{rez_kods(r.rez, r.beigas)}<small>{int(r.g_tot)}:{int(r.z_tot)}</small></a>'
+                        f'data-tip="{e(REZ_NOZIME.get(rez_kods(r.rez, r.beigas), ""))} {int(r.g_tot)}:{int(r.z_tot)} · {"vs" if r.majas == 1 else "@"} {e(da.pilns_nosaukums(r.pretinieks))}" '
+                        f'title="{e(REZ_NOZIME.get(rez_kods(r.rez, r.beigas), ""))} {int(r.g_tot)}:{int(r.z_tot)} · {e(da.pilns_nosaukums(r.pretinieks))}">{REZ_BURTS.get(rez_kods(r.rez, r.beigas), "")}</a>'
                         for r in l5.itertuples())
         nak = da.nakamas_speles(KAL, 1, komanda=kom) if KAL is not None else None
         nak_html = ""
