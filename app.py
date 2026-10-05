@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.12"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.14"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -889,6 +889,9 @@ def ielasit_tiesnesus(versija):
     return cur, prev, info
 
 
+TIESSAISTES_LIMITS_S = 8          # tiešsaistes tiesnešu pārbaude nekad nebloķē lapu ilgāk
+
+
 def ielasit_planotos(versija):
     return _planotie_ar_statusu(versija)[0]
 
@@ -916,14 +919,40 @@ def _planotie_ar_statusu(versija):
             statuss["kluda"] = "repozitorijā ir vecs tiesnesi_planotie.py (augšupielādē jauno), tiešsaistes pārbaude nedarbojas"
             return plan, statuss
 
-        def lej(url, meginajumi=1):                   # tas pats lejupielādētājs, bet neveiksmes tiek pierakstītas statusam
-            h = tp._lejupieladet(url, meginajumi=meginajumi)
-            if h is None:
-                kludas.append(url)
-            return h
+        def lej(url, meginajumi=2):
+            """Lejupielāde statusam: 404 (dienas ieraksts vēl nav publicēts) nav kļūda; kļūda ir tikai, ja vietne neatbild vai atsaka."""
+            import requests
+            for _ in range(meginajumi):
+                try:
+                    r = requests.get(url, headers={"User-Agent": getattr(tp, "STR_UA", "Mozilla/5.0"), "Accept-Language": "en"}, timeout=(3, 5))
+                    if r.status_code == 200:
+                        return r.text
+                    if r.status_code == 404:
+                        return None
+                except requests.RequestException:
+                    pass
+            kludas.append(url)
+            return None
         esosie = set(plan.loc[plan["loma"] == "referee", "game_id"].astype(int)) if plan is not None and not plan.empty else set()
-        # dzivie_tiesnesi pārbauda [tagad − 1 h, tagad + stundas]; pārbīdot "tagad" 3 h atpakaļ, logs ir [−4 h, +30 h]
-        jaunas = tp.dzivie_tiesnesi(kal, esosie, stundas=33, tagad=tagad - timedelta(hours=3), lejupieladet=lej)
+        # dzivie_tiesnesi pārbauda [tagad − 1 h, tagad + stundas]; pārbīdot "tagad" 3 h atpakaļ, logs ir [−4 h, +30 h].
+        # Darbojas atsevišķā pavedienā ar laika limitu: ja vietne atbild lēni, lapa neiestrēgst (izmanto failā esošos tiesnešus).
+        import threading
+        rez_ = {}
+
+        def darbs():
+            try:
+                rez_["j"] = tp.dzivie_tiesnesi(kal, esosie, stundas=33, tagad=tagad - timedelta(hours=3), lejupieladet=lej)
+            except Exception as ex_:
+                rez_["ex"] = ex_
+        pav = threading.Thread(target=darbs, daemon=True)
+        pav.start()
+        pav.join(TIESSAISTES_LIMITS_S)
+        if pav.is_alive():
+            statuss["kluda"] = "Scouting The Refs neatbildēja laikā, rādīti tiesneši no datu faila"
+            return plan, statuss
+        if "ex" in rez_:
+            raise rez_["ex"]
+        jaunas = rez_.get("j") or []
     except Exception as ex:               # bez interneta vai ja portāls nav pieejams: paliek tikai tas, kas ir failā
         statuss["kluda"] = f"{type(ex).__name__}: {str(ex)[:80]}"
         return plan, statuss
