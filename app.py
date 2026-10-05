@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.14"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.15"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -689,6 +689,16 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .ks-vt.maj { background: rgba(59,130,246,.12); color: #1d4ed8; }
 .tb a.tb-logo-a { display: inline-block; line-height: 0; border-radius: 50%; transition: transform .15s ease; }
 .tb a.tb-logo-a:hover { transform: scale(1.12); }
+/* komandas līderi: spēlētāja foto kartītes augšējā labajā stūrī (datorā lielāks) */
+.kpi.ld-k { position: relative; }
+.ld-top { position: relative; min-height: 5.9rem; padding-right: 6.2rem; }           /* vieta foto: nākamās rindas sākas zem tā */
+.ld-foto { position: absolute; top: 0; right: 0; width: 5.6rem; height: 5.6rem; border-radius: 50%; background-color: #e8eef6;
+  background-size: cover, cover; background-position: center top, center; background-repeat: no-repeat; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+@media (max-width: 640px) {
+  .ld-top { min-height: 0; padding-right: 0; }
+  .ld-foto { width: 2.5rem; height: 2.5rem; top: -.1rem; right: -.1rem; }
+  .ld-top .kpi-l { padding-right: 2.6rem; }
+}
 /* komandas līderi */
 .ld-h { font-weight: 800; font-size: 1.05rem; margin: 1rem 0 .4rem; }
 .kpi-grid { align-items: start; }
@@ -2098,6 +2108,24 @@ def _lapa_pec_nosaukuma(nosaukums):
     return next((p for p in VISAS_LAPAS if p.title == nosaukums), None)
 
 
+SILUETS = ("data:image/svg+xml;base64," + __import__("base64").b64encode(
+    b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='#dfe6f0'/>"
+    b"<circle cx='50' cy='38' r='18' fill='#a9b6c8'/><path d='M18 92c4-20 18-30 32-30s28 10 32 30z' fill='#a9b6c8'/></svg>").decode())
+
+
+def spel_foto_html(player_id, komanda, vards=""):
+    """Spēlētāja oficiālais NHL foto (assets.nhle.com). Ja foto nav, redzams neitrāls siluets (otrais fona slānis)."""
+    try:
+        pid = int(player_id)
+    except (TypeError, ValueError):
+        return ""
+    sod = da.sodien_lv()
+    sez = sod.year if sod.month >= 9 else sod.year - 1
+    url = f"https://assets.nhle.com/mugs/nhl/{sez}{sez + 1}/{komanda}/{pid}.png"
+    return (f'<div class="ld-foto" role="img" aria-label="{_html.escape(vards)}" '
+            f'style="background-image:url(\'{url}\'), url(\'{SILUETS}\')"></div>')
+
+
 KOMANDU_DIVIZIJAS = {**{k: ("Austrumu", "Atlantijas") for k in ("BOS", "BUF", "DET", "FLA", "MTL", "OTT", "TBL", "TOR")},
                      **{k: ("Austrumu", "Metropolitēna") for k in ("CAR", "CBJ", "NJD", "NYI", "NYR", "PHI", "PIT", "WSH")},
                      **{k: ("Rietumu", "Centrālā") for k in ("CHI", "COL", "DAL", "MIN", "NSH", "STL", "UTA", "WPG")},
@@ -2214,8 +2242,9 @@ def lapa_komanda():
                 vel = "".join(rinda_(n + 4, r) for n, (_, r) in enumerate(t_.iloc[3:7].iterrows()))
                 izvers = (f'<details class="ld-x"><summary><span class="ld-a">Rādīt top 7 ▾</span><span class="ld-z">Paslēpt ▴</span></summary>{vel}</details>'
                           if vel else "")
-                return (f'<div class="kpi"><div class="kpi-l">{e(nos)}</div><div class="kpi-v">{e(fmt_f(r0[kol]))}</div>'
-                        f'<div class="ld-v">{e(str(r0[vards_kol]))}<span> · {int(r0["GP"])} sp.{piez}</span></div>{citi}{izvers}</div>')
+                foto = spel_foto_html(r0.get("playerId"), kom, str(r0[vards_kol]))
+                return (f'<div class="kpi ld-k"><div class="ld-top">{foto}<div class="kpi-l">{e(nos)}</div><div class="kpi-v">{e(fmt_f(r0[kol]))}</div>'
+                        f'<div class="ld-v">{e(str(r0[vards_kol]))}<span> · {int(r0["GP"])} sp.{piez}</span></div></div>{citi}{izvers}</div>')
             vesels = lambda v: f"{int(v)}"                                                    # noqa: E731
             ar_zimi = lambda v: f"{int(v):+d}"                                                # noqa: E731
             kartes_p = [lideru_karte("Punkti", Lp, "P", "Speletajs", vesels), lideru_karte("Vārti", Lp, "G", "Speletajs", vesels),
