@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.15"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.16"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -693,7 +693,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .kpi.ld-k { position: relative; }
 .ld-top { position: relative; min-height: 5.9rem; padding-right: 6.2rem; }           /* vieta foto: nākamās rindas sākas zem tā */
 .ld-foto { position: absolute; top: 0; right: 0; width: 5.6rem; height: 5.6rem; border-radius: 50%; background-color: #e8eef6;
-  background-size: cover, cover; background-position: center top, center; background-repeat: no-repeat; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  background-size: 150% auto; background-position: 50% 12%; background-repeat: no-repeat; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
 @media (max-width: 640px) {
   .ld-top { min-height: 0; padding-right: 0; }
   .ld-foto { width: 2.5rem; height: 2.5rem; top: -.1rem; right: -.1rem; }
@@ -2114,7 +2114,7 @@ SILUETS = ("data:image/svg+xml;base64," + __import__("base64").b64encode(
 
 
 def spel_foto_html(player_id, komanda, vards=""):
-    """Spēlētāja oficiālais NHL foto (assets.nhle.com). Ja foto nav, redzams neitrāls siluets (otrais fona slānis)."""
+    """Spēlētāja oficiālais NHL foto (assets.nhle.com), pietuvināts sejai. Ja foto nav, paliek tukšs gaišs aplis."""
     try:
         pid = int(player_id)
     except (TypeError, ValueError):
@@ -2123,7 +2123,7 @@ def spel_foto_html(player_id, komanda, vards=""):
     sez = sod.year if sod.month >= 9 else sod.year - 1
     url = f"https://assets.nhle.com/mugs/nhl/{sez}{sez + 1}/{komanda}/{pid}.png"
     return (f'<div class="ld-foto" role="img" aria-label="{_html.escape(vards)}" '
-            f'style="background-image:url(\'{url}\'), url(\'{SILUETS}\')"></div>')
+            f'style="background-image:url(\'{url}\')"></div>')
 
 
 KOMANDU_DIVIZIJAS = {**{k: ("Austrumu", "Atlantijas") for k in ("BOS", "BUF", "DET", "FLA", "MTL", "OTT", "TBL", "TOR")},
