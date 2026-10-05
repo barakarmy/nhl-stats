@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.18"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.19"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -717,10 +717,11 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .fb { display: inline-flex; gap: 5px; align-items: center; }
 .fb i { position: relative; display: inline-block; width: 14px; height: 14px; border-radius: 50%; cursor: help; outline: none;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.10); }
-.fb i.u { background: #16a34a; }
-.fb i.z { background: #dc2626; }
-.fb i.uo { background: linear-gradient(90deg, #f59e0b 0 50%, #16a34a 50% 100%); }
-.fb i.zo { background: linear-gradient(90deg, #f59e0b 0 50%, #dc2626 50% 100%); }
+/* Flashscore formas krāsas: uzvara #00a83f, zaudējums #dc0000, papildlaiks/metieni #f3a000 (30 % oranžs, 70 % iznākuma krāsa) */
+.fb i.u { background: #00a83f; }
+.fb i.z { background: #dc0000; }
+.fb i.uo { background: linear-gradient(90deg, #f3a000 0 30%, #00a83f 30% 100%); }
+.fb i.zo { background: linear-gradient(90deg, #f3a000 0 30%, #dc0000 30% 100%); }
 .fb i:hover::after, .fb i:focus::after { content: attr(data-tip); position: absolute; right: 50%; bottom: calc(100% + 7px); transform: translateX(50%);
   padding: .3rem .6rem; border-radius: .45rem; background: #262730; color: #fff; font-size: .75rem; font-weight: 600; font-style: normal;
   white-space: nowrap; z-index: 40; box-shadow: 0 4px 12px rgba(0,0,0,.25); pointer-events: none; }
