@@ -196,7 +196,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.21"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-05.22"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1270,7 +1270,7 @@ def rtabula(df, column_config=None, paskaidr=None, **kw):
             indekss=(kw.get("hide_index") is False and not isinstance(df.index, pd.RangeIndex)), kartot=kw.get("kartot", True))
 
 
-def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False, paskaidr=None, burbuli=None, formati=None, prog=None):
+def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False, paskaidr=None, burbuli=None, formati=None, prog=None, numurs_no=1):
     """Komandu rangu tabula ar logotipiem. res: DataFrame ar indeksu 'komanda'; kolonnas: {iekšējais: virsraksts}.
     burbuli: {komanda: HTML} spēļu saraksts burbulī uz kolonnas "Sp."; formati/prog: {iekšējais: formāts / (min, max)}. (Grafiki lietotnē vairs netiek rādīti.)"""
     if res is None or res.empty:
@@ -1281,13 +1281,14 @@ def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False,
     saites = [iekseja_saite("komanda", kom=k) for k in t["komanda"]]           # logo atver komandas statistiku
     t.insert(0, "Logo", t["komanda"].map(da.logo_url))
     t.insert(1, "Komanda", t["komanda"].map(da.pilns_nosaukums))
-    t.insert(0, "#", range(1, len(t) + 1))
+    t.insert(0, "#", range(numurs_no, numurs_no + len(t)))
     t = t[["#", "Logo", "Komanda"] + list(kolonnas)].rename(columns=kolonnas)
     cfg = {"Logo": st.column_config.ImageColumn("", width="small"), "#": st.column_config.NumberColumn("#", width="small")}
     cfg.update(config or {})
     fm = {kolonnas[k]: v for k, v in (formati or {}).items() if k in kolonnas}
     pg = {kolonnas[k]: v for k, v in (prog or {}).items() if k in kolonnas}
-    df_html(t, config=cfg_ar_help(list(t.columns), cfg, paskaidr), formati=fm, prog=pg, burbuli=bur, bur_kol=kolonnas.get("GP"), logo_saites=saites)
+    df_html(t, config=cfg_ar_help(list(t.columns), cfg, paskaidr), formati=fm, prog=pg, burbuli=bur, bur_kol=kolonnas.get("GP"), logo_saites=saites,
+            numurs_no=numurs_no)
 
 
 def prognozes_bloks(pr):
@@ -1886,7 +1887,7 @@ def _kartosanas_izvele(key, opcijas, izv):
 
 
 def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=(), burbuli=None, bur_kol=None, platas=(), indekss=False, kartot=True,
-            atgriezt=False, logo_saites=None):
+            atgriezt=False, logo_saites=None, numurs_no=1):
     """
     Visas lietotnes tabulas: DataFrame kā caurspīdīga HTML tabula ar paskaidrojumiem virsrakstos (uzvedot peli).
     config: Streamlit column_config (None = kolonna paslēpta; image = logotips; progress = josla; format = skaitļa formāts; width='large' = plata teksta kolonna);
@@ -1938,7 +1939,7 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
             if logo_saites is not None:
                 logo_saites = [logo_saites[i] for i in seciba]
             if "#" in df.columns:
-                df["#"] = range(1, len(df) + 1)
+                df["#"] = range(numurs_no, numurs_no + len(df))
     # pielīpošās pirmās kolonnas (redzams, kurai komandai / spēlētājam pieder cipari, ritinot pa labi): "#" + logo vai pirmā kolonna
     pielip = 2 if (len(kol) > 1 and str(kol[0]["label"]) == "#" and kol[1]["logo"]) else 1
     for n_, c in enumerate(kol):
@@ -2605,7 +2606,7 @@ def lapa_mazakums():
     if len(r) > 10:
         with st.expander(f"Pārējās komandas ({len(r) - 10})"):
             t2 = r.iloc[10:]
-            tabula(t2, kol, sort_col="PK_pct", config=cfg, paskaidr=pask)
+            tabula(t2, kol, sort_col="PK_pct", config=cfg, paskaidr=pask, numurs_no=11)
     # spēlētāji: punkti mazākumā (vārti + rezultatīvas piespēles), tikai pamatlaiks
     st.markdown('<p class="ld-h">Top spēlētāji mazākumā</p>', unsafe_allow_html=True)
     if sh.empty:
