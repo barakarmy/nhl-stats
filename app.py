@@ -73,7 +73,7 @@ try:
 except ImportError:
     rulli = None
 
-st.set_page_config(page_title="NHL analītika", page_icon=":material/sports_hockey:", layout="wide",
+st.set_page_config(page_title="NHL stats", page_icon=":material/sports_hockey:", layout="wide",
                    initial_sidebar_state="collapsed")
 
 
@@ -238,7 +238,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.2"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.3"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -807,6 +807,15 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .l5u.rwo, .fm-b.rwo { background: linear-gradient(90deg, #f3a000 0 30%, #00a83f 30% 100%); }
 .l5u.rlo, .fm-b.rlo { background: linear-gradient(90deg, #f3a000 0 30%, #dc0000 30% 100%); }
 .fm { gap: .35rem; }
+/* topu vērtības ar paskaidrojumu (uzvedot / pieskaroties) */
+.ld-tip { position: relative; cursor: help; text-decoration: underline dotted rgba(128,128,128,.7); text-underline-offset: 3px; outline: none; }
+.ld-tip:hover::after, .ld-tip:focus::after { content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 6px); padding: .28rem .6rem;
+  border-radius: .45rem; background: #262730; color: #fff; font-size: .74rem; font-weight: 600; white-space: nowrap; z-index: 40;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25); pointer-events: none; }
+/* logo kājenē */
+.st-key-kaj_logo { display: flex !important; justify-content: center; align-items: center; margin-top: 1.4rem; }
+.st-key-kaj_logo [data-testid="stMarkdownContainer"] { text-align: center; margin-bottom: 0 !important; }
+.st-key-kaj_logo [data-testid="stIconMaterial"], .st-key-kaj_logo span[translate="no"] { font-size: 2.8rem !important; opacity: .55; line-height: 1; }
 /* kājene: paskaidrojums par lapu */
 .kaj { max-width: 900px; margin: 3rem auto 0; padding-top: 1rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .8rem; line-height: 1.55; opacity: .75; }
 .kaj p { margin: 0 0 .7rem; }
@@ -2103,11 +2112,20 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
 
 def lapa_periodi():
     st.title("Periodi")
+    augsa = st.container()
     with st.container(key="frinda_per"):
         p = int(izvele("Hokeja periods", ["1. periods", "2. periods", "3. periods"], key="per_p")[0])
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="per_scope")
         logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="per_logs")
     kolonna = "Starpiba"                                   # noklusējuma secība; citu secību izvēlas tabulas izvēlnē "Kārtot"
+    kartes_p = []
+    for pp in (1, 2, 3):                                   # labākās komandas katrā periodā pēc vidēji gūtajiem vārtiem
+        tp_ = da.periodu_tabula(DF, pp, scope, LOGI[logs])
+        kartes_p.append(kom_kartes(tp_, "G_sp", f"{pp}. periods – vidēji gūti", lambda v: _sk(v, 2)))
+    kp_ = da.kopsavilkums(DF, scope, LOGI[logs])
+    kartes_p.append(kom_kartes(kp_, "G_sp", "Pamatlaikā kopā – vidēji gūti", lambda v: _sk(v, 2)))
+    with augsa:
+        st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes_p), unsafe_allow_html=True)
     res = da.periodu_tabula(DF, p, scope, LOGI[logs])
     pask = {
         "Gūti": f"{p}. periodā gūtie vārti (kopā izvēlētajās spēlēs)",
@@ -2172,7 +2190,6 @@ def lapa_over_under():
            config={"Over %": st.column_config.ProgressColumn("Over %", min_value=0, max_value=100, format="%.0f"),
                    "Under %": st.column_config.ProgressColumn("Under %", min_value=0, max_value=100, format="%.0f"),
                    "Vid. vārti spēlē": st.column_config.NumberColumn(format="%.2f")})
-    st.caption("Skaita abu komandu vārtus pamatlaikā (bez papildlaika un pēcspēles metieniem).")
 
 
 # ============================================================================
@@ -2180,6 +2197,7 @@ def lapa_over_under():
 # ============================================================================
 def lapa_powerplay():
     st.title("Vairākums")
+    augsa = st.container()
     with st.container(key="frinda_pp"):
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="pp_s")
         logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="pp_n")
@@ -2194,27 +2212,61 @@ def lapa_powerplay():
     kartes = [spel_kartes(tp, "P", "Punkti vairākumā", lambda r: f" · {int(r.G)} v. + {int(r.A)} p."),
               spel_kartes(tp, "G", "Vārti vairākumā"), spel_kartes(tp, "A", "Piespēles vairākumā"),
               kom_kartes(res, "PP_pct", "PP % (komandas)", lambda v: f"{v:.1f}%", lambda k: f" · {int(res.loc[k, 'PPG'])}/{int(res.loc[k, 'PP_opp'])}",
-                         filtrs=lambda x: x["PP_opp"] > 0),
+                         filtrs=lambda x: x["PP_opp"] > 0,
+                         tip_f=lambda k: f"{int(res.loc[k, 'PPG'])} vārti no {int(res.loc[k, 'PP_opp'])} vairākumiem"),
               kom_kartes(res, "PPG", "PP vārti (komandas)", lambda v: f"{int(v)}")]
-    st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
+    with augsa:
+        st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
     burbuli = None
     if n_ in (5, 10):
         burbuli = spelu_burbuli(scope, n_, lambda r: (r.ppg, r.ppg_allowed),
                                 f"Pēdējās {n_} spēles{vietas_teksts(scope)} · vairākuma vārti (par:pret)", set(res.index))
-    st.markdown('<p class="ld-h">Komandas</p>', unsafe_allow_html=True)
     tabula(res, {"PPG": "PP vārti", "PP_opp": "PP iespējas", "PP_pct": "PP %",
                  "PP_sog": "PP metieni", "PPG_pret": "Ielaisti PP"},
            sort_col=kol, burbuli=burbuli, formati={"PP_pct": "{:.1f}"},
            config={"PP %": st.column_config.NumberColumn(format="%.1f")})
-    st.caption("PP % = vārti vairākumā / vairākuma iespējas. Ielaisti PP = pretinieka vairākuma vārti pret šo komandu. "
-               "Visi rādītāji ir pamatlaika (bez papildlaika).")
 
 
 # ============================================================================
 # LAPA: NORAIDĪJUMI
 # ============================================================================
+def noraidijumu_topi_html(scope, n):
+    """Noraidījumu topi: komandas (vidēji spēlē un pa periodiem) un spēlētāji (vidēji spēlē, kopā, sodu minūtes)."""
+    t = da.noraidijumu_tabula(DF, scope, n, "skaits", True)
+    kartes = []
+    if t is not None and not t.empty:
+        f2 = lambda v: _sk(v, 2)                                                                  # noqa: E731
+        kartes += [kom_kartes(t, "s_kopa", "Noraidījumi spēlē (komandas)", f2),
+                   kom_kartes(t, "s_1", "1. periodā (komandas, vidēji)", f2),
+                   kom_kartes(t, "s_2", "2. periodā (komandas, vidēji)", f2),
+                   kom_kartes(t, "s_3", "3. periodā (komandas, vidēji)", f2)]
+    sk_ = ielasit_papildu("speletaji", VERSIJA)
+    if sk_ is not None and not sk_.empty:
+        pari, _ = _apakskopa_pari(scope, n)
+        x = sk_[pd.Series([(gi, kk) in pari for gi, kk in zip(sk_["game_id"], sk_["team"])], index=sk_.index)]
+        if not x.empty:
+            agg = {"vards": ("vards", "last"), "GP": ("game_id", "nunique"), "PIM": ("pim", "sum")}
+            if "noraid" in x.columns and x["noraid"].notna().any():
+                agg["N"] = ("noraid", "sum")
+            g = x.groupby(["playerId", "team"]).agg(**agg).reset_index()
+            def spl(kol, nos, fmt, filtrs=None, tip=None):
+                y = g if filtrs is None else g[filtrs(g)]
+                y = y[y[kol] > 0].sort_values([kol, "GP"], ascending=[False, True]).head(10)
+                return (nos, [(f"{r.vards} ({r.team})", fmt(getattr(r, kol)), f" · {int(r.GP)} sp.", spel_foto_html(r.playerId, r.team, r.vards) if i_ == 0 else "",
+                               tip(r) if tip else "") for i_, r in enumerate(y.itertuples())])
+            if "N" in g.columns:
+                g["N_sp"] = g["N"] / g["GP"]
+                min_gp = 3 if g["GP"].max() >= 5 else 1
+                kartes += [spl("N_sp", "Noraidījumi vidēji spēlē (spēlētājs)", lambda v: _sk(v, 2), filtrs=lambda y: y["GP"] >= min_gp,
+                               tip=lambda r: f"{int(r.N)} noraidījumi {int(r.GP)} spēlēs"),
+                           spl("N", "Visvairāk noraidījumu (spēlētājs)", lambda v: f"{int(v)}")]
+            kartes.append(spl("PIM", "Visvairāk sodu minūšu (spēlētājs)", lambda v: f"{int(v)}"))
+    return top_kartes_html(kartes)
+
+
 def lapa_noraidijumi():
     st.title("Noraidījumi")
+    augsa = st.container()
     with st.container(key="frinda_nr"):
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="nr_s")
         logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="nr_n")
@@ -2255,9 +2307,8 @@ def lapa_noraidijumi():
                config={"Saņemtie": st.column_config.NumberColumn(format=fm),
                        "Izcīnītie": st.column_config.NumberColumn(format=fm),
                        "Izcīnīti − saņemti": st.column_config.NumberColumn(format=fm.replace("%", "%+"))})
-    st.caption("Saņemtie = paša komandas noraidījumi, izcīnītie = pretinieka noraidījumi pret šo komandu. "
-               "Noraidījumi = tikai minor sodi (dubultais minor = 2); major, 10 min disciplinārie sodi un kautiņi netiek skaitīti. Kopā = 1.–3. periods kopā, papildlaiks netiek ieskaitīts. "
-               "Vecākām spēlēm sodu skaits pa periodiem ir aprēķināts kā sodu minūtes / 2, līdz tās tiek atjaunotas.")
+    with augsa:
+        st.markdown('<p class="ld-h">Topi</p>' + noraidijumu_topi_html(scope, LOGI[logs]), unsafe_allow_html=True)
 
 
 # ============================================================================
@@ -2612,7 +2663,9 @@ def top_kartes_html(kartes, top=10):
         if not saraksts:
             continue
         v0 = saraksts[0]
-        rinda_ = lambda n, r: f'<div class="ld-c"><span>{n}. {e(r[0])}</span><b>{e(r[1])}</b></div>'   # noqa: E731
+        def tip_(r):                                     # papildinformācija, uzvedot uz vērtības (piem., 12/13 izturēti)
+            return f' class="ld-tip" data-tip="{e(r[4])}" title="{e(r[4])}" tabindex="0"' if len(r) > 4 and r[4] else ""
+        rinda_ = lambda n, r: f'<div class="ld-c"><span>{n}. {e(r[0])}</span><b{tip_(r)}>{e(r[1])}</b></div>'   # noqa: E731
         citi = "".join(rinda_(i + 2, r) for i, r in enumerate(saraksts[1:3]))
         vel = "".join(rinda_(i + 4, r) for i, r in enumerate(saraksts[3:top]))
         izv = (f'<details class="ld-x"><summary><span class="ld-a">Rādīt top {top} ▾</span><span class="ld-z">Paslēpt ▴</span></summary>{vel}</details>'
@@ -2669,13 +2722,14 @@ def spel_kartes(t, kol, nos, piez_f=lambda r: "", top=10):
     return (nos, rindas)
 
 
-def kom_kartes(g, kol, nos, fmt, piez_f=lambda k: "", aug=True, top=10, filtrs=None):
-    """Viena topa kartīte no komandu tabulas (līderim logo)."""
+def kom_kartes(g, kol, nos, fmt, piez_f=lambda k: "", aug=True, top=10, filtrs=None, tip_f=None):
+    """Viena topa kartīte no komandu tabulas (līderim logo). tip_f(k): paskaidrojums uz vērtības visām vietām (piem., procentiem)."""
     if g is None or g.empty or kol not in g.columns:
         return (nos, [])
     x = g if filtrs is None else g[filtrs(g)]
     x = x[x[kol].notna()].sort_values(kol, ascending=not aug).head(top)
-    return (nos, [(da.pilns_nosaukums(k), fmt(v), piez_f(k), komandas_logo_foto(k) if n == 0 else "") for n, (k, v) in enumerate(x[kol].items())])
+    return (nos, [(da.pilns_nosaukums(k), fmt(v), piez_f(k), komandas_logo_foto(k) if n == 0 else "", tip_f(k) if tip_f else "")
+                  for n, (k, v) in enumerate(x[kol].items())])
 
 
 def otso_kopsavilkums(scope="Visas", n=None):
@@ -2748,6 +2802,7 @@ def situacijas_spelētaji(stiprums, pari, nos):
 
 def lapa_otso():
     st.title("OT / SO")
+    augsa = st.container()                                 # topi (aizpildās pēc filtru nolasīšanas, bet tiek rādīti virs tiem)
     with st.container(key="frinda_otso"):
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="otso_s")
         logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="otso_n")
@@ -2759,12 +2814,13 @@ def lapa_otso():
     # topi (komandas ar logo, spēlētāji ar foto)
     kartes = [kom_kartes(g, "W_kopa", "OT win + SO win", lambda v: f"{int(v)}", lambda k: f" · bilance {g.loc[k, 'Kopa_bil']}"),
               kom_kartes(g, "OTG", "Visbiežāk līdz papildlaikam", lambda v: f"{int(v)}", lambda k: f" · {g.loc[k, 'OT_pct']:.0f}% spēļu"),
-              kom_kartes(g, "W_pct", "Win % OT/SO", lambda v: f"{v:.0f}%", lambda k: f" · {int(g.loc[k, 'OTG'])} sp.", filtrs=lambda x: x["OTG"] > 0)]
+              kom_kartes(g, "W_pct", "Win % OT/SO", lambda v: f"{v:.0f}%", lambda k: f" · {int(g.loc[k, 'OTG'])} sp.", filtrs=lambda x: x["OTG"] > 0,
+                         tip_f=lambda k: f"{int(g.loc[k, 'W_kopa'])} win no {int(g.loc[k, 'OTG'])} spēlēm līdz papildlaikam")]
     pari, _ = _apakskopa_pari(scope, n)
     to = spelētaju_situacijas_topi(None, pari, "OT")
     kartes += [spel_kartes(to, "G", "Vārti papildlaikā"), spel_kartes(to, "P", "Punkti papildlaikā")]
-    st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
-    st.markdown('<p class="ld-h">Komandu bilances</p>', unsafe_allow_html=True)
+    with augsa:
+        st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
     tabula(g, {"GP": "Sp.", "OTG": "Līdz papildl.", "OT_pct": "Papildl. %", "OT_bil": "OT W-L", "SO_bil": "SO W-L", "Kopa_bil": "Kopā W-L",
                "W_pct": "Win %", "G_OT": "Gūti OT", "Z_OT": "Ielaisti OT", "S_OT": "Metieni OT", "SA_OT": "Pret. metieni OT"},
            sort_col="W_kopa",
@@ -2774,11 +2830,11 @@ def lapa_otso():
                      "SO W-L": "SO win – SO loss (pēcspēles metienu sērijas)", "Kopā W-L": "(OT win + SO win) – (OT loss + SO loss)",
                      "Win %": "OT win un SO win daļa spēlēs, kas aizgāja līdz papildlaikam", "Gūti OT": "Papildlaikā gūtie vārti",
                      "Ielaisti OT": "Papildlaikā ielaistie vārti", "Metieni OT": "Metieni vārtos papildlaikā", "Pret. metieni OT": "Pretinieka metieni papildlaikā"})
-    st.caption("Papildlaika un pēcspēles metienu sēriju statistika tiek krāta atsevišķi; pārējās sadaļās un prognozēs tiek izmantots tikai pamatlaiks.")
 
 
 def lapa_mazakums():
     st.title("Mazākums")
+    augsa = st.container()
     with st.container(key="frinda_mz"):
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="mz_s")
         logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="mz_n")
@@ -2804,14 +2860,14 @@ def lapa_mazakums():
             "Noraid/v.": "Vidēji saņemtie noraidījumi spēlē (pamatlaikā)"}
     tsh = spelētaju_situacijas_topi("sh", pari)
     kartes = [kom_kartes(res, "PK_pct", "PK % (komandas)", lambda v: f"{v:.1f}%", lambda k: f" · {int(res.loc[k, 'PK_nosargati'])}/{int(res.loc[k, 'PP_opp_pret'])}",
-                         filtrs=lambda x: x["PP_opp_pret"] > 0),
+                         filtrs=lambda x: x["PP_opp_pret"] > 0,
+                         tip_f=lambda k: f"{int(res.loc[k, 'PK_nosargati'])} no {int(res.loc[k, 'PP_opp_pret'])} mazākumiem izturēti"),
               kom_kartes(res, "SHG", "Gūti mazākumā (komandas)", lambda v: f"{int(v)}", filtrs=lambda x: x["SHG"] > 0),
               spel_kartes(tsh, "P", "Punkti mazākumā", lambda r: f" · {int(r.G)} v. + {int(r.A)} p."),
               spel_kartes(tsh, "G", "Vārti mazākumā")]
-    st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
-    st.markdown('<p class="ld-h">Komandas</p>', unsafe_allow_html=True)
+    with augsa:
+        st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
     tabula(res, kol, sort_col="PK_pct", config=cfg, paskaidr=pask)
-    st.caption("Visi rādītāji ir pamatlaika (bez papildlaika). Spēlētājiem pieejami tikai mazākumā gūtie vārti un piespēles.")
 
 
 # ============================================================================
@@ -3431,7 +3487,7 @@ def augseja_josla(aktiva):
     pedejais = len(STRUKTURA) - 1
     with st.container(key="topbar"):
         with st.container(key="brand"):
-            st.page_link(VISAS_LAPAS[0], label="NHL analītika")
+            st.page_link(VISAS_LAPAS[0], label="NHL stats", icon=":material/sports_hockey:")
         for i, (tips, nosaukums, saraksts) in enumerate(STRUKTURA):
             if tips == "lapa":
                 akt = saraksts[0][1].title == aktiva.title
@@ -3522,6 +3578,8 @@ Tā nav garantija un nav ieteikums.</p>
 
 
 st.markdown(kajene_html(), unsafe_allow_html=True)
-st.markdown(f'<div style="text-align:center;font-size:.7rem;opacity:.35;margin-top:1rem">versija {APP_VERSIJA}</div>', unsafe_allow_html=True)
+with st.container(key="kaj_logo"):                         # logo (tas pats, kas cilnē) virs versijas
+    st.markdown(":material/sports_hockey:")
+st.markdown(f'<div style="text-align:center;font-size:.7rem;opacity:.35;margin-top:.2rem">versija {APP_VERSIJA}</div>', unsafe_allow_html=True)
 
 # ===== app.py beigas (ja šī rinda redzama GitHub failā, fails ir augšupielādēts pilnīgi) =====
