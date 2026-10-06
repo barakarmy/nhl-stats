@@ -41,6 +41,8 @@ html, body { background: transparent; font-family: Inter, system-ui, -apple-syst
 .lg img { width: 100%; height: 100%; object-fit: contain; display: block; -webkit-user-drag: none;
   filter: blur(calc(var(--b, 0px) * var(--k))); transform: scale(calc(1 - .07 * var(--wave) * var(--amp))); transition: --amp .6s ease; }
 .reel.settled .it.sel img { --amp: 1; }          /* pulsē tikai izvēlētais, kad rullītis ir pilnībā apstājies */
+/* tumšajā motīvā (klasi "tumss" pieliek galvenās lapas skripts): ap logo viegla gaiša kontūra, lai tumšie logo būtu saskatāmi */
+html.tumss .lg img { filter: blur(calc(var(--b, 0px) * var(--k))) drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.18)); }
 @media (prefers-reduced-motion: reduce) { :root { animation: none; } }
 .name { min-height: 2rem; max-width: 100%; text-align: center; font-weight: 700; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; opacity: .6; display: flex; align-items: center; justify-content: center; }
 .vsbox { height: calc(var(--item) * 3); display: flex; align-items: center; }
