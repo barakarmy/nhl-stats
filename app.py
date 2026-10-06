@@ -238,7 +238,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.3"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.4"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -813,7 +813,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   border-radius: .45rem; background: #262730; color: #fff; font-size: .74rem; font-weight: 600; white-space: nowrap; z-index: 40;
   box-shadow: 0 4px 12px rgba(0,0,0,.25); pointer-events: none; }
 /* logo kājenē */
-.st-key-kaj_logo { display: flex !important; justify-content: center; align-items: center; margin-top: 1.4rem; }
+.st-key-kaj_logo { display: flex !important; justify-content: center; align-items: center; margin-top: 3.2rem; margin-bottom: -1.7rem; }   /* kopējā atstarpe no teksta līdz versijai saglabāta, logo tuvāk versijai */
 .st-key-kaj_logo [data-testid="stMarkdownContainer"] { text-align: center; margin-bottom: 0 !important; }
 .st-key-kaj_logo [data-testid="stIconMaterial"], .st-key-kaj_logo span[translate="no"] { font-size: 2.8rem !important; opacity: .55; line-height: 1; }
 /* kājene: paskaidrojums par lapu */
