@@ -242,14 +242,14 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.6"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.7"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
     # atsevišķas pogas joslā (bez izvēlnes)
     {"lapa": ("lapa_karstie", "Karstākie spēlētāji", "hot-players", "local_fire_department")},
     {"lapa": ("lapa_prognozes", "Prognozes", "predictions", "insights")},
-    {"lapa": ("lapa_fakti", "Interesanti fakti", "facts", "lightbulb")},
+    {"lapa": ("lapa_fakti", "Fakti", "facts", "lightbulb")},
     # grupas ar izvēlni (funkcija, nosaukums, url, Material ikona)
     {"grupa": "Komandas", "lapas": [
         ("lapa_parskats", "Līgas pārskats", "standings", "leaderboard"),
@@ -2674,7 +2674,7 @@ def fakti_dati(versija):
 
 
 def lapa_fakti():
-    st.title("Interesanti fakti")
+    st.title("Fakti")
     gaita, kops, js, ier = fakti_dati(VERSIJA)
     if gaita is None:
         st.info("Šai sadaļai vajag failu fakti.py un vārtu datus (dati/varti.csv).")
@@ -2769,22 +2769,28 @@ def lapa_fakti():
                    paskaidr={"Sp.": f"Spēles, kurās komanda {apraksts}", "W": "win (arī OT win un SO win)", "L": "loss",
                              "OTL": "OT loss vai SO loss", "Win %": "Uzvaru daļa šajās spēlēs", "Punkti %": "Izcīnīto punktu daļa (win 2, OT/SO loss 1)"})
 
-    # --- comebacks ---
+    # --- comebacks: atverams saraksts ar visām spēlēm un atlasi pēc komandas ---
     if cb:
-        rn = ""
-        for r in cb:
-            kom, pret = r["komanda"], r["pretinieks"]
-            h_, a_ = r["gala"].split(":")
-            savi, pretv = (h_, a_) if r["majas"] else (a_, h_)
-            db = r["deficita_rezultats"].split(":") if r["deficita_rezultats"] else ["", ""]
-            d_savi, d_pret = (db[0], db[1]) if r["majas"] else (db[1], db[0])
-            rn += (f'<div class="fk-r"><span class="ks-d">{dt_html(SAKUMI.get(r["game_id"]) if SAKUMI else None, r["datums"])}</span>'
-                   f'<span class="ks-o"><img src="{e(da.logo_url(kom))}" alt="">{e(da.pilns_nosaukums(kom))}'
-                   f'<span class="ks-v">{"vs" if r["majas"] else "@"}</span><img src="{e(da.logo_url(pret))}" alt="" title="{e(da.pilns_nosaukums(pret))}"></span>'
-                   f'<span class="fk-def" title="Lielākais deficīts: {d_savi}:{d_pret}, {r["deficita_brids"][0]}. periodā {r["deficita_brids"][1]}">−{r["max_deficits"]}</span>'
-                   f'<a class="ks-s" href="{e(speles_saite(r["game_id"]))}" target="_blank" rel="noopener">{savi}:{pretv}{(" " + r["beigas"]) if r["beigas"] != "REG" else ""}</a>'
-                   f'<span class="ks-z">{rez_zime(fakti_rez_kods(r))}</span></div>')
-        st.markdown(f'<p class="ld-h">Comebacks (uzvara pēc ≥ {fakti.MIN_DEFICITS} vārtu deficīta)</p><div class="ks">{rn}</div>', unsafe_allow_html=True)
+        with st.expander(f"Comebacks · {len(cb)} {'spēle' if len(cb) == 1 else 'spēles'} (uzvara pēc ≥ {fakti.MIN_DEFICITS} vārtu deficīta)"):
+            skaits = pd.Series([r["komanda"] for r in cb]).value_counts()
+            opc = ["Visas komandas"] + sorted(skaits.index, key=lambda kk: da.pilns_nosaukums(kk))
+            izv_kom = st.selectbox("Komanda", opc, key="fk_cb_kom",
+                                   format_func=lambda kk: kk if kk == "Visas komandas" else f"{da.pilns_nosaukums(kk)} ({int(skaits[kk])})")
+            rindas_cb = cb if izv_kom == "Visas komandas" else [r for r in cb if r["komanda"] == izv_kom]
+            rn = ""
+            for r in rindas_cb:
+                kom, pret = r["komanda"], r["pretinieks"]
+                h_, a_ = r["gala"].split(":")
+                savi, pretv = (h_, a_) if r["majas"] else (a_, h_)
+                db = r["deficita_rezultats"].split(":") if r["deficita_rezultats"] else ["", ""]
+                d_savi, d_pret = (db[0], db[1]) if r["majas"] else (db[1], db[0])
+                rn += (f'<div class="fk-r"><span class="ks-d">{dt_html(SAKUMI.get(r["game_id"]) if SAKUMI else None, r["datums"])}</span>'
+                       f'<span class="ks-o"><img src="{e(da.logo_url(kom))}" alt="">{e(da.pilns_nosaukums(kom))}'
+                       f'<span class="ks-v">{"vs" if r["majas"] else "@"}</span><img src="{e(da.logo_url(pret))}" alt="" title="{e(da.pilns_nosaukums(pret))}"></span>'
+                       f'<span class="fk-def" title="Lielākais deficīts: {d_savi}:{d_pret}, {r["deficita_brids"][0]}. periodā {r["deficita_brids"][1]}">−{r["max_deficits"]}</span>'
+                       f'<a class="ks-s" href="{e(speles_saite(r["game_id"]))}" target="_blank" rel="noopener">{savi}:{pretv}{(" " + r["beigas"]) if r["beigas"] != "REG" else ""}</a>'
+                       f'<span class="ks-z">{rez_zime(fakti_rez_kods(r))}</span></div>')
+            st.markdown(f'<div class="ks">{rn}</div>', unsafe_allow_html=True)
 
     # --- izcēlumi: komandas, kas kādā rādītājā ļoti atšķiras no līgas ---
     izc = fakti.izcelumi(ier)
