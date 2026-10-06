@@ -247,7 +247,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.16"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.18"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -760,7 +760,8 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   .ld-top .kpi-l { padding-right: 2.6rem; }
 }
 /* komandas līderi */
-.ld-foto.ld-logo { background-size: 72% auto; background-position: center; background-color: #ffffff; }
+.ld-foto.ld-logo { display: flex; align-items: center; justify-content: center; background-image: none; background-color: #ffffff; }
+.ld-logo-img { width: 72%; height: 72%; object-fit: contain; }
 .ld-h { font-weight: 800; font-size: 1.05rem; margin: 1rem 0 .4rem; }
 .kpi-grid { align-items: start; }
 .ld-x { margin-top: .35rem; }
@@ -1080,8 +1081,12 @@ html.tumss [data-testid="stMetric"] { background: rgba(37,49,68,.55); }
 html.tumss :is([data-testid="stTickBar"] *, [data-testid="stThumbValue"], [data-testid="stSliderTickBarMin"], [data-testid="stSliderTickBarMax"]) { color: var(--t-blavs) !important; }
 html.tumss :is(.stDownloadButton, .stButton) button:not([kind="primary"]) { background: #22304a; color: var(--t-teksts); border-color: var(--t-mala); }
 html.tumss .kaj { color: var(--t-blavs); }
-html.tumss :is(.ld-foto, .fk-foto):not(.ld-logo) { background-color: #2c3c57; }   /* spēlētāju foto aplis tumšajā motīvā */
-html.tumss :is(.tb-logo, .ks-o img, .l5lg, .cmp-logo, .kn-r img, .fk-iz img, .mc img) { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.18)); }   /* tumšas krāsas logo (melni elementi) ir saskatāmi uz tumšā fona */
+html.tumss :is([class*="st-key-rmb_"], .st-key-rez_fokuss_kartite) { border: 1px solid rgba(255,255,255,.16) !important; }   /* rezultātu, kalendāra, prognožu rāmji */
+html.tumss .stTabs *:has(> [data-baseweb="tab-list"]) > :not([data-baseweb="tab-list"]) {     /* cilņu ritināšanas bultiņas: tumši zilas, nevis baltas */
+  background: #22304a !important; background-image: none !important; color: var(--t-zils) !important; border-color: var(--t-mala) !important; }
+html.tumss .stTabs *:has(> [data-baseweb="tab-list"]) > :not([data-baseweb="tab-list"]) :is(button, svg, span) { background: transparent !important; color: var(--t-zils) !important; fill: currentColor; }
+html.tumss :is(.ld-foto, .fk-foto) { background-color: #2c3c57 !important; }   /* spēlētāju foto un komandu logo aplis tumšajā motīvā */
+html.tumss :is(.tb-logo, .ks-o img, .l5lg, .cmp-logo, .kn-r img, .fk-iz img, .mc img, .ld-logo-img) { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.18)); }   /* tumšas krāsas logo (melni elementi) ir saskatāmi uz tumšā fona */
 /* slēdzis saule / mēness (ievieto skripts augšējā joslā) */
 .tema-sw { position: absolute; top: 50%; right: .7rem; transform: translateY(-50%); width: 3.1rem; height: 1.65rem; border-radius: 999px; border: 1px solid rgba(255,255,255,.18);
   background: #1e293b; cursor: pointer; padding: 0; z-index: 20; }
@@ -1509,7 +1514,7 @@ def lapa_prognozes():
     for _, r in nak.iterrows():
         home, away = r["majas_komanda"], r["viesu_komanda"]
         laiks = r["sakums_lv"].strftime("%H:%M") if pd.notna(r["sakums_lv"]) else ""
-        with st.container(border=True):
+        with st.container(border=True, key=f"rmb_prog_{r['game_id']}"):
             c1, c2 = st.columns([3, 1])
             c1.markdown(f"**{komandas_etikete(away)}** @ **{komandas_etikete(home)}**")
             c2.caption(f"{r['datums_lv']:%d.%m.%Y} {laiks} (Rīga)")
@@ -2999,7 +3004,8 @@ def top_kartes_html(kartes, top=10):
 
 def komandas_logo_foto(kods):
     """Komandas logo apaļajā līdera vietā (komandu topiem)."""
-    return f'<div class="ld-foto ld-logo" role="img" aria-label="{_html.escape(kods)}" style="background-image:url(\'{da.logo_url(kods)}\')"></div>'
+    return (f'<div class="ld-foto ld-logo" role="img" aria-label="{_html.escape(kods)}">'
+            f'<img class="ld-logo-img" src="{_html.escape(da.logo_url(kods))}" alt=""></div>')
 
 
 def spelētaju_situacijas_topi(stiprums, pari, perioda_tips="REG", top=10):
@@ -3217,7 +3223,7 @@ def lapa_kalendars():
         st.info("Šajā periodā spēļu nav.")
         return
     for n_dienas, (dat, grupa) in enumerate(x.groupby(x["datums_lv"].dt.date)):
-        with st.container(border=True):
+        with st.container(border=True, key=f"rmb_kal_{dat:%Y%m%d}"):
             st.markdown(f"**{da.DIENAS[dat.weekday()]}, {dat:%d.%m.%Y}** · {len(grupa)} spēles")
             plan = ielasit_planotos(VERSIJA)
             ties_txt = []
@@ -3411,7 +3417,7 @@ def lapa_rezultati():
         ht, at = int(r["home_total"]), int(r["away_total"])
         et = da.beigu_etikete(r["spele_beidzas"])
         ir_fokuss = fokuss is not None and r["game_id"] == fokuss
-        with (st.container(border=True, key="rez_fokuss_kartite") if ir_fokuss else st.container(border=True)):
+        with (st.container(border=True, key="rez_fokuss_kartite") if ir_fokuss else st.container(border=True, key=f"rmb_rez_{r['game_id']}")):
             periodi = " · ".join(f"{p}P {int(r[f'away_p{p}'])}:{int(r[f'home_p{p}'])}" for p in (1, 2, 3))
             if (r.get("home_ot", 0) or 0) + (r.get("away_ot", 0) or 0) > 0:
                 periodi += f" · OT/SO {int(r['away_ot'])}:{int(r['home_ot'])}"
