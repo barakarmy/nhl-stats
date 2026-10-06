@@ -1,3 +1,6 @@
+# NHL Referees: pirms spēlēm paziņotie tiesneši no Scouting The Refs (rezerve: NHL right-rail) → dati/tiesnesi_planotie.csv.
+# Palaiž: cron-job.org ik 30 min 14:00–23:30 (Europe/Riga, workflow_dispatch) + GitHub grafiks zemāk (rezerve).
+# Katra palaišana vispirms ātri pārbauda, vai ielāde vajadzīga. !!! cron-job.org žetons derīgs līdz 2027-07-30.
 name: NHL Referees (pirms spēlēm)
 
 on:
