@@ -247,7 +247,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.20"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.21"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1082,6 +1082,20 @@ html.tumss [data-testid="stMetric"] { background: rgba(37,49,68,.55); }
 html.tumss :is([data-testid="stTickBar"] *, [data-testid="stThumbValue"], [data-testid="stSliderTickBarMin"], [data-testid="stSliderTickBarMax"]) { color: var(--t-blavs) !important; }
 html.tumss :is(.stDownloadButton, .stButton) button:not([kind="primary"]) { background: #22304a; color: var(--t-teksts); border-color: var(--t-mala); }
 html.tumss .kaj { color: var(--t-blavs); }
+/* izvēlnes (selectbox): lauks, izvēlētā vērtība un nolaižamais saraksts tumšajā motīvā */
+html.tumss [data-baseweb="select"] > div { background-color: var(--t-karte2) !important; border-color: var(--t-mala) !important; }
+html.tumss [data-baseweb="select"] :is(div, span, input) { color: var(--t-teksts) !important; -webkit-text-fill-color: var(--t-teksts) !important; opacity: 1 !important; }
+html.tumss [data-baseweb="select"] svg { color: var(--t-zils) !important; }
+html.tumss [data-baseweb="popover"] > div, html.tumss [data-baseweb="popover"] :is([data-baseweb="menu"], [role="listbox"], ul),
+html.tumss [data-testid="stSelectboxVirtualDropdown"] { background-color: var(--t-karte2) !important; }
+html.tumss [data-baseweb="popover"] :is(li, [role="option"]) { background-color: transparent !important; color: var(--t-teksts) !important; }
+html.tumss [data-baseweb="popover"] :is(li, [role="option"]) * { color: var(--t-teksts) !important; -webkit-text-fill-color: var(--t-teksts) !important; }
+html.tumss [data-baseweb="popover"] :is(li, [role="option"]):hover, html.tumss [data-baseweb="popover"] :is(li, [role="option"])[aria-selected="true"] { background-color: #2e3f5c !important; }
+/* izvēršamie bloki (Comebacks, SHUTOUT): virsraksta josla tumša, teksts labi salasāms */
+html.tumss [data-testid="stExpander"] details > summary { background-color: rgba(37,49,68,.95) !important; }
+html.tumss [data-testid="stExpander"] details > summary:hover { background-color: #2e3f5c !important; }
+html.tumss [data-testid="stExpander"] summary :is(p, span, div) { color: var(--t-teksts) !important; -webkit-text-fill-color: var(--t-teksts) !important; opacity: 1 !important; }
+html.tumss [data-testid="stExpander"] summary svg { color: var(--t-zils) !important; }
 html.tumss :is([class*="st-key-rmb_"], .st-key-rez_fokuss_kartite) { border: 1px solid rgba(255,255,255,.16) !important; }   /* rezultātu, kalendāra, prognožu rāmji */
 html.tumss .stTabs *:has(> [data-baseweb="tab-list"]) > :not([data-baseweb="tab-list"]) {     /* cilņu ritināšanas bultiņas: tumši zilas, nevis baltas */
   background: #22304a !important; background-image: none !important; color: var(--t-zils) !important; border-color: var(--t-mala) !important; }
