@@ -14,6 +14,7 @@ Lietotne pati NHL datus nevāc: tā tikai nolasa CSV failus no repozitorija mape
        a) cron-job.org katru dienu 08:40 pēc Rīgas laika (workflow_dispatch caur GitHub API) – galvenais, precīzs grafiks;
        b) GitHub paša grafiks '15 8 * * *' (UTC) = 11:15 Rīgā vasaras laikā / 10:15 ziemas laikā – rezerve (var kavēties).
    - Ar roku (Actions → Run workflow): datumu intervāls, "atjaunot" (pārrakstīt) vai "pēdējās 8h / 4h / 2h".
+   - Veiksmīgas palaišanas laiku raksta dati/pedeja_atjaunosana.json (lietotnē: "Pēdējā atjaunošana").
    - Statistika lietotnē = tikai pamatlaiks; papildlaiks un metienu sērijas tiek krāti atsevišķi (sadaļa OT / SO).
 
 2) NHL Referees (.github/workflows/referees.yml → python tiesnesi_planotie.py)
@@ -32,7 +33,7 @@ Lietotne pati NHL datus nevāc: tā tikai nolasa CSV failus no repozitorija mape
 
 CITI SVARĪGI FAKTI
 ------------------
-- Parole: Streamlit Secrets → APP_PASSWORD. Pieteikšanās tiek atcerēta pārlūkā 30 dienas (localStorage paraksts);
+- Parole: Streamlit Secrets → APP_PASSWORD. Pieteikšanās tiek atcerēta pārlūkā 3 dienas (localStorage paraksts, termiņš netiek pagarināts);
   saitēm uz jaunām cilnēm tiek pievienots īslaicīgs paraksts ?t=...
 - Motīvs vienmēr gaišs (.streamlit/config.toml: base = "light").
 - Noraidījumi = tikai minor sodi (dubultais minor = 2); bez major, 10 min disciplinārajiem un kautiņiem.
@@ -121,7 +122,7 @@ def saites_zetons():
 # Pieteikšanās atcerēšanās pēc lapas atsvaidzināšanas: pēc paroles ievades pārlūka localStorage tiek saglabāts paraksts (HMAC no derīguma
 # laika ar paroli kā atslēgu; pati parole tajā nav). Jaunā sesijā (refresh, jauna cilne) mazs komponents to nolasa un nodod Python, kas to pārbauda.
 # localStorage nav atkarīgs no sīkdatnēm un Streamlit Cloud starpniekservera; paraksts nav redzams adresē. Paroles maiņa visus parakstus anulē.
-ATCERETIES_DIENAS = 30
+ATCERETIES_DIENAS = 3          # pēc paroles ievades pārlūks to atceras 3 dienas (termiņš netiek pagarināts, lietojot lapu)
 _AUTH_HTML = """<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0"><script>
 (function () {
   var NOS = 'nhl_auth', atbildets = false;
@@ -207,8 +208,7 @@ def check_password():
 
     zet = st.query_params.get("t")                       # saite no citas cilnes (burbulis u.c.): derīgs paraksts aizstāj paroles ievadi
     if zet and _auth_zetons_derigs(zet, parole):
-        st.session_state["password_correct"] = True
-        st.session_state["_auth_zetons"] = _auth_zetons(parole, int(time.time()) + ATCERETIES_DIENAS * 86400)
+        st.session_state["password_correct"] = True          # saite uz jaunu cilni: saglabāto pieteikšanos nepagarina
         try:
             del st.query_params["t"]                     # paraksts nepaliek adreses joslā
         except Exception:
@@ -222,8 +222,7 @@ def check_password():
     except Exception:
         saglabats = ""
     if isinstance(saglabats, str) and saglabats and _auth_zetons_derigs(saglabats, parole):
-        st.session_state["password_correct"] = True
-        st.session_state["_auth_zetons"] = _auth_zetons(parole, int(time.time()) + ATCERETIES_DIENAS * 86400)     # termiņš tiek atjaunots
+        st.session_state["password_correct"] = True          # termiņš netiek pagarināts: parole jāievada vismaz reizi 3 dienās
         return True
 
     def entered():
@@ -233,16 +232,20 @@ def check_password():
             st.session_state["_auth_zetons"] = _auth_zetons(parole, int(time.time()) + ATCERETIES_DIENAS * 86400)
         st.session_state.pop("password", None)
 
-    st.markdown(LOGIN_CSS, unsafe_allow_html=True)
     if saglabats is None:
-        st.markdown('<div class="login-gaida"></div>', unsafe_allow_html=True)
+        # pārlūks vēl nav atbildējis, vai pieteikšanās ir saglabāta: neko nerāda (bez zilā fona un paroles lauka mirgošanas).
+        # Rezerve: ja atbilde nepienāk 4 s laikā, lauks parādās pats.
+        st.markdown('<style>.stApp [data-testid="stTextInput"] { visibility: hidden; animation: login-rezerve 0s linear 4s forwards; }'
+                    '@keyframes login-rezerve { to { visibility: visible; } }</style>', unsafe_allow_html=True)
+    else:
+        st.markdown(LOGIN_CSS, unsafe_allow_html=True)
     st.text_input("Password", type="password", placeholder="Password", label_visibility="collapsed", on_change=entered, key="password")
     if st.session_state.get("password_correct") is False:
         st.markdown('<div class="login-err">Incorrect password</div>', unsafe_allow_html=True)
     return False
 
 
-APP_VERSIJA = "v1.1.8"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.9"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -835,6 +838,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .fk-r .ks-o img { width: 1.6rem; height: 1.6rem; object-fit: contain; }
 .fk-def { min-width: 2.6rem; text-align: center; font-weight: 800; color: #b91c1c; background: rgba(220,38,38,.10); border-radius: .35rem; padding: .1rem .35rem; cursor: help; }
 @media (max-width: 640px) { .fk-r { gap: .4rem; font-size: .8rem; } }
+.fm-dir { display: flex; justify-content: space-between; max-width: calc(5 * 1.6rem + 4 * .35rem); font-size: .68rem; opacity: .6; margin-top: .3rem; }
 /* kājene: paskaidrojums par lapu */
 .kaj { max-width: 900px; margin: 3rem auto 0; padding-top: 1rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .8rem; line-height: 1.55; opacity: .75; }
 .kaj p { margin: 0 0 .7rem; }
@@ -2511,7 +2515,8 @@ def lapa_komanda():
                         f'<div><b>{"vs" if n0["majas_komanda"] == kom else "@"} <a class="kn-a" href="{href_}" target="_blank" rel="noopener" '
                         f'title="Salīdzināt komandas">{e(da.pilns_nosaukums(pret))}</a></b>'
                         f'<div class="kpi-s">{n0["sakums_lv"]:%d.%m(%H:%M)} · {"mājās" if n0["majas_komanda"] == kom else "viesos"} · uzspied, lai salīdzinātu</div></div></div></div>')
-        st.markdown(f'<div class="kpi-row"><div class="kn"><div class="kpi-l">Forma (pēdējās 5)</div><div class="fm">{forma}</div></div>{nak_html}</div>',
+        st.markdown(f'<div class="kpi-row"><div class="kn"><div class="kpi-l">Forma (pēdējās 5)</div><div class="fm">{forma}</div>'
+                    f'<div class="fm-dir"><span>← vecākā</span><span>jaunākā →</span></div></div>{nak_html}</div>',
                     unsafe_allow_html=True)
 
     with t_lid:                                           # komandas līderi (kā kartītes cilnē Statistika)
@@ -2583,9 +2588,15 @@ def lapa_komanda():
 
 
     with t_sp:                                            # aizvadītās spēles: 5 → "Ielādēt vēl" (+5) → "Visas"
-        sk_key = f"kom_sp_n_{kom}"
-        n_rad = st.session_state.get(sk_key, 5)
+        with st.container(key="frinda_kom_sp"):
+            vieta_sp = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="kom_sp_vieta")
+        sk_key = f"kom_sp_n_{kom}_{vieta_sp}"
+        n_rad = st.session_state.get(sk_key, 10)
         visas = tdf.sort_values(["datums", "game_id"]).iloc[::-1]
+        if vieta_sp == "Mājās":
+            visas = visas[visas["majas"] == 1]
+        elif vieta_sp == "Izbraukumā":
+            visas = visas[visas["majas"] == 0]
         sak = dict(zip(RAW["game_id"], RAW["sakums_lv"])) if "sakums_lv" in RAW.columns else {}
         rindas = ""
         for r in visas.head(n_rad).itertuples():
@@ -2601,8 +2612,8 @@ def lapa_komanda():
         st.markdown(f'<div class="ks">{rindas}</div><div class="ks-c">Parādītas {min(n_rad, len(visas))} no {len(visas)} spēlēm</div>', unsafe_allow_html=True)
         if n_rad < len(visas):
             with st.container(key="pgr_kom_sp"):
-                st.button("Ielādēt vēl", key=f"kom_sp_vel_{kom}", on_click=lambda: st.session_state.__setitem__(sk_key, n_rad + 5))
-                if n_rad > 5:
+                st.button("Ielādēt vēl", key=f"kom_sp_vel_{kom}", on_click=lambda: st.session_state.__setitem__(sk_key, n_rad + 10))
+                if n_rad > 10:
                     st.button("Visas", key=f"kom_sp_visas_{kom}", on_click=lambda: st.session_state.__setitem__(sk_key, len(visas)))
 
     with t_nak:                                           # nākamās spēles: tīrs saraksts (pretinieks = saite uz salīdzinājumu)
@@ -3200,8 +3211,14 @@ def rezultatu_statuss():
     lv = lambda t: t.astimezone(da.LV_TZ)                                                       # noqa: E731
     f = lambda t: t.strftime("%d.%m. %H:%M")                                                     # noqa: E731
     tagad = datetime.datetime.now(datetime.timezone.utc)
-    c = da.DATU_MAPE / "speles.csv"
-    atjaun = lv(datetime.datetime.fromtimestamp(c.stat().st_mtime, datetime.timezone.utc)) if c.exists() else None
+    atjaun = None                                       # tikai no veiksmīgas NHL Daily Update palaišanas (nhl_dati.py raksta šo failu)
+    c = da.DATU_MAPE / "pedeja_atjaunosana.json"
+    if c.exists():
+        try:
+            import json as _json
+            atjaun = lv(pd.Timestamp(_json.loads(c.read_text(encoding="utf-8"))["utc"]).to_pydatetime())
+        except Exception:
+            atjaun = None
     sak = RAW["datums_lv"].dt.date
     teksts = (f"Pēdējā atjaunošana: {f(atjaun)} · " if atjaun else "") + f"Rezultāti līdz {sak.max():%d.%m.} ({len(RAW)} spēles)"
     kandidati = []                                     # nākamie ieplānotie laiki šodien un rīt (abi grafiki), agrākais pēc tagad
