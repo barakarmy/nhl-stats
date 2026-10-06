@@ -247,7 +247,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.13"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.14"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -846,6 +846,13 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .fk-def { min-width: 2.6rem; text-align: center; font-weight: 800; color: #b91c1c; background: rgba(220,38,38,.10); border-radius: .35rem; padding: .1rem .35rem; cursor: help; }
 @media (max-width: 640px) { .fk-r { gap: .4rem; font-size: .8rem; } }
 .fm-dir { display: flex; justify-content: space-between; max-width: calc(5 * 1.6rem + 4 * .35rem); font-size: .68rem; opacity: .6; margin-top: .3rem; }
+/* fakti: sausās sērijas */
+.fk-foto { position: static !important; width: 1.9rem; height: 1.9rem; border-radius: 50%; flex: none; background-color: #e8eef6;
+  background-size: 150% auto; background-position: 50% 12%; background-repeat: no-repeat; }
+.fk-pie { font-size: .78rem; opacity: .7; white-space: nowrap; }
+.fk-ser { min-width: 5.4rem; text-align: center; font-weight: 800; border-radius: .35rem; padding: .12rem .4rem; background: rgba(128,128,128,.14); }
+.fk-ser.akt { background: rgba(0,168,63,.14); color: #15803d; }
+@media (max-width: 640px) { .fk-pie { display: none; } .fk-ser { min-width: 4.4rem; } }
 /* kājene: paskaidrojums par lapu */
 .kaj { max-width: 900px; margin: 3rem auto 0; padding-top: 1rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .8rem; line-height: 1.55; opacity: .75; }
 .kaj p { margin: 0 0 .7rem; }
@@ -2691,6 +2698,15 @@ def fakti_dati(versija):
     return gaita, kops, fakti.fakti_json(sp, v, indent=2), ier
 
 
+@st.cache_data(show_spinner=False)
+def sausas_serijas_dati(versija):
+    v = ielasit_papildu("varti", versija)
+    vg = ielasit_papildu("vartsargi", versija)
+    if fakti is None or v is None or vg is None or v.empty or vg.empty:
+        return []
+    return fakti.sausas_serijas(vg, v)
+
+
 def lapa_fakti():
     gaita, kops, js, ier = fakti_dati(VERSIJA)
     if gaita is None:
@@ -2822,6 +2838,28 @@ def lapa_fakti():
                     for nr in range(1, lapas_n + 1):
                         st.button(str(nr), key=f"fk_cb_l{nr}", type="primary" if nr == lapa else "secondary",
                                   on_click=lambda n_=nr: st.session_state.__setitem__("fk_cb_lapa", n_))
+
+    # --- SHUTOUT: vārtsargu sausās sērijas ≥ 120 min (aktīvās; pārtrauktā paliek līdz vārtsarga nākamajai spēlei) ---
+    ser = sausas_serijas_dati(VERSIJA)
+    akt_n = sum(1 for x in ser if x["aktiva"])
+    with st.expander(f"SHUTOUT · {akt_n} {'aktīva sērija' if akt_n == 1 else 'aktīvas sērijas'} (vārtsargs bez ielaistiem vārtiem ≥ 120 min)"):
+        if not ser:
+            st.markdown('<div class="fk-liga">Pašlaik nevienam vārtsargam nav sausās sērijas, kas ilgāka par 120 minūtēm.</div>', unsafe_allow_html=True)
+        else:
+            rn = ""
+            for x in ser:
+                mm = f"{x['sek'] // 60}:{x['sek'] % 60:02d}"
+                if x["aktiva"]:
+                    stat = f'<span class="fk-ser akt" title="Sērija turpinās kopš {pd.Timestamp(x["sakums"]):%d.%m.}">{mm} min</span>'
+                    pie = f"aktīva · kopš {pd.Timestamp(x['sakums']):%d.%m.}" if x.get("sakums") else "aktīva"
+                else:
+                    stat = f'<span class="fk-ser" title="Sērija pārtraukta">{mm} min</span>'
+                    pie = f"pārtraukta {pd.Timestamp(x['partraukta']):%d.%m.} · {x['partraukta_brids']}"
+                rn += (f'<div class="fk-r"><span class="ks-d">{dt_html(None, x["pedeja_spele"])}</span>'
+                       f'<span class="ks-o">{spel_foto_html(x["playerId"], x["komanda"], x["vards"]).replace("ld-foto", "fk-foto")}'
+                       f'{e(x["vards"])}<img src="{e(da.logo_url(x["komanda"]))}" alt="" title="{e(da.pilns_nosaukums(x["komanda"]))}"></span>'
+                       f'<span class="fk-pie">{e(pie)}</span>{stat}</div>')
+            st.markdown(f'<div class="ks">{rn}</div>', unsafe_allow_html=True)
 
     # --- izcēlumi: komandas, kas kādā rādītājā ļoti atšķiras no līgas ---
     izc = fakti.izcelumi(ier)
@@ -3364,7 +3402,7 @@ def lapa_rezultati():
 # ============================================================================
 # LAPA: SPĒLĒTĀJI
 # ============================================================================
-def lapa_speletaji():
+def lapa_speletaji():  # noqa: C901
     st.title("Spēlētāji")
     sk = ielasit_papildu("speletaji", VERSIJA)
     vg = ielasit_papildu("vartsargi", VERSIJA)
@@ -3392,10 +3430,13 @@ def lapa_speletaji():
                 L = L[L["Poz"] == "D"]
             L = L.sort_values(kartot, ascending=False).head(60).copy()
             L["Komanda"] = L["Komanda"].map(da.logo_url)                       # komandas saīsinājuma vietā logotips
+            L = L[[c for c in ["playerId", "Speletajs", "Komanda", "Poz", "GP", "G", "A", "P", "P_sp", "PM", "PIM", "SOG", "HIT", "BLK", "PPG", "TOI"]
+                   if c in L.columns]]
             rtabula(L, hide_index=True, width="stretch", kartot=False,
-                         column_config={"playerId": None, "Komanda": st.column_config.ImageColumn("Komanda", width="small"),
-                                        "TOI": st.column_config.NumberColumn("TOI (min)", format="%.1f"),
-                                        "P_sp": st.column_config.NumberColumn("P/sp", format="%.2f")})
+                         column_config={"playerId": None, "Komanda": st.column_config.ImageColumn("TEAM", width="small"),
+                                        "Poz": st.column_config.TextColumn("POS"),
+                                        "TOI": st.column_config.NumberColumn("TOI AVG", format="%.1f"),
+                                        "P_sp": st.column_config.NumberColumn("P AVG", format="%.2f")})
     with t_vart:
         G = da.vartsargu_lideri(vg)
         if G.empty:
@@ -3404,17 +3445,24 @@ def lapa_speletaji():
             c1, c2 = st.columns(2)
             kom = c1.selectbox("Komanda", komandas, key="vg_kom",
                                format_func=lambda x: x if x == "Visas komandas" else komandas_etikete(x))
-            min_sp = c2.slider("Minimālais spēļu skaits", 1, 10, 1, key="vg_min")
+            kart_opc = {"SV %": ("SVpct", False), "GAA": ("GAA", True), "W": ("W", False), "SHUTOUT": ("SHUT", False), "GP": ("GP", False),
+                        "SA": ("SA", False), "SV": ("SV", False), "GA": ("GA", True), "TOI": ("TOI", False)}
+            kart_v = c2.selectbox("Kārtot pēc", list(kart_opc), key="vg_kart")
             if kom != "Visas komandas":
                 G = G[G["Komanda"] == kom]
-            G = G[G["GP"] >= min_sp]
-            G = G.sort_values("SVpct", ascending=False).rename(columns={"TOI": "TOI_kopa"}).copy()
+            G = G.copy()
+            G["SHUT"] = G["playerId"].map(fakti.shutouts(vg)).fillna(0).astype(int) if fakti is not None else 0
+            kol_, aug_ = kart_opc[kart_v]
+            G = G.sort_values([kol_, "GP"], ascending=[aug_, False]).rename(columns={"TOI": "TOI_kopa"})
             G["Komanda"] = G["Komanda"].map(da.logo_url)
+            G = G[[c for c in ["playerId", "Vartsargs", "Komanda", "GP", "GS", "W", "SA", "SV", "GA", "GAA", "SVpct", "SHUT", "TOI_kopa"] if c in G.columns]]
             rtabula(G, hide_index=True, width="stretch", kartot=False,
-                         column_config={"playerId": None, "Komanda": st.column_config.ImageColumn("Komanda", width="small"),
+                         paskaidr={"SHUTOUT": "Sausās spēles: uzvaras bez ielaistiem vārtiem, nostāvot visu spēli vienam"},
+                         column_config={"playerId": None, "Komanda": st.column_config.ImageColumn("TEAM", width="small"),
                                         "SVpct": st.column_config.NumberColumn("SV %", format="%.1f"),
                                         "GAA": st.column_config.NumberColumn("GAA", format="%.2f"),
-                                        "TOI_kopa": st.column_config.NumberColumn("TOI kopā (min)", format="%.0f")})
+                                        "SHUT": st.column_config.NumberColumn("SHUTOUT", format="%d"),
+                                        "TOI_kopa": st.column_config.NumberColumn("TOI", format="%.0f")})
 
 
 
