@@ -247,7 +247,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.18"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.19"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1021,7 +1021,8 @@ if FONS_DATA_URI:
 
 st.markdown(r"""<style>
 /* ============================================================================
-   TUMŠAIS MOTĪVS (ieslēdz slēdzis saule/mēness augšējās joslas labajā stūrī; izvēle saglabājas pārlūkā)
+   TUMŠAIS MOTĪVS: automātiski pēc ierīces laika 23:01–07:59 (08:00–23:00 gaišais); slēdzis saule/mēness augšējās joslas
+   labajā stūrī to maina līdz nākamajai automātiskajai maiņai
    Krāsas: tumši zili pelēks fons (nevis melns), gaišs teksts, kartītes nedaudz gaišākas par fonu.
    ============================================================================ */
 html.tumss { --t-fons: #1a2433; --t-karte: rgba(37,49,68,.92); --t-karte2: #22304a; --t-mala: rgba(255,255,255,.12);
@@ -3881,7 +3882,22 @@ IZVELNES_SKRIPTS = """
   w.__nhlIzv = { reg: reg };
   var b0 = josla(); if (b0) b0.classList.remove('nav-aizvert');          // jauns kadrs = tīrs sākums
   // ---- tumšais motīvs: slēdzis saule/mēness joslas labajā stūrī; izvēle glabājas pārlūkā (localStorage "nhl_tema") ----
-  function tumss() { try { return w.localStorage.getItem('nhl_tema') === 'tumss'; } catch (e) { return false; } }
+  // Automātiski pēc ierīces vietējā laika: 08:00–23:00 gaišais, 23:01–07:59 tumšais.
+  // Ar slēdzi izvēlētais motīvs ir spēkā līdz nākamajai automātiskajai maiņai (08:00 vai 23:01).
+  function autoTumss(dt) { var m = dt.getHours() * 60 + dt.getMinutes(); return m >= 23 * 60 + 1 || m < 8 * 60; }
+  function nakamaMaina(dt) {
+    var n = new Date(dt.getTime()); n.setSeconds(0, 0);
+    var m = dt.getHours() * 60 + dt.getMinutes();
+    if (m < 8 * 60) { n.setHours(8, 0); } else if (m < 23 * 60 + 1) { n.setHours(23, 1); } else { n.setDate(n.getDate() + 1); n.setHours(8, 0); }
+    return n.getTime();
+  }
+  function tumss() {
+    try {
+      var v = w.localStorage.getItem('nhl_tema'), lidz = +(w.localStorage.getItem('nhl_tema_lidz') || 0);
+      if ((v === 'tumss' || v === 'gaiss') && Date.now() < lidz) return v === 'tumss';
+    } catch (e) {}
+    return autoTumss(new Date());
+  }
   var IFR_CSS = 'html.tumss body{color:#e6ebf2!important;background:transparent!important}html.tumss .lbl,html.tumss .nos,html.tumss span,html.tumss div{color:#e6ebf2}';
   function iframes(t) {                    // tās pašas izcelsmes komponenti (piem., rullīši): tāda pati klase un gaišs teksts
     d.querySelectorAll('iframe').forEach(function (f) {
@@ -3891,7 +3907,31 @@ IZVELNES_SKRIPTS = """
       } catch (e) {}
     });
   }
-  function piemerot() { var t = tumss(); d.documentElement.classList.toggle('tumss', t); iframes(t);
+  function gaissFons(el) {
+    var cs = w.getComputedStyle(el), bg = cs.backgroundColor || '', bi = cs.backgroundImage || '';
+    return /rgba?\\((25[0-5]|24\\d), *(25[0-5]|24\\d), *(25[0-5]|24\\d)(, *(1|0?\\.[5-9]\\d*))?\\)/.test(bg) || /gradient/.test(bi) && /(255, 255, 255|white)/.test(bi);
+  }
+  function tabuBultas(t) {                  // cilņu ritināšanas bultiņas tumšajā motīvā – tumši zilas
+    d.querySelectorAll('.stTabs').forEach(function (tb) {
+      tb.querySelectorAll('*').forEach(function (el) {
+        if (el.closest('[data-baseweb="tab-panel"]') || el.closest('[role="tab"]') || el.matches('[data-baseweb="tab-list"], [data-baseweb="tab-highlight"], [data-baseweb="tab-border"]')) return;
+        if (t) {
+          if (el.dataset.nhlBulta === '1' || (el.getBoundingClientRect().width < 90 && gaissFons(el))) {
+            if (el.dataset.nhlBulta !== '1') el.dataset.nhlOrig = el.getAttribute('style') || '';     // oriģinālais stils atjaunošanai
+            el.dataset.nhlBulta = '1';
+            el.style.setProperty('background', '#22304a', 'important'); el.style.setProperty('background-image', 'none', 'important');
+            el.style.setProperty('color', '#93c5fd', 'important');
+            el.querySelectorAll('svg, path').forEach(function (s) { s.style.setProperty('fill', '#93c5fd', 'important'); s.style.setProperty('color', '#93c5fd', 'important'); });
+          }
+        } else if (el.dataset.nhlBulta === '1') {
+          el.setAttribute('style', el.dataset.nhlOrig || ''); delete el.dataset.nhlOrig;
+          el.querySelectorAll('svg, path').forEach(function (s) { s.style.removeProperty('fill'); s.style.removeProperty('color'); });
+          delete el.dataset.nhlBulta;
+        }
+      });
+    });
+  }
+  function piemerot() { var t = tumss(); d.documentElement.classList.toggle('tumss', t); iframes(t); tabuBultas(t);
     var sw = d.querySelector('.tema-sw'); if (sw) { sw.setAttribute('aria-pressed', t ? 'true' : 'false'); sw.title = t ? 'Gaišais motīvs' : 'Tumšais motīvs'; } }
   function sledzis(atjaunot) {
     var b = josla(); if (!b) return;
@@ -3902,13 +3942,15 @@ IZVELNES_SKRIPTS = """
       + '<path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg>'
       + '<svg class="m" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1z"/></svg>';
     sw.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation();
-      try { w.localStorage.setItem('nhl_tema', tumss() ? 'gaiss' : 'tumss'); } catch (e2) {}
+      try { w.localStorage.setItem('nhl_tema', tumss() ? 'gaiss' : 'tumss'); w.localStorage.setItem('nhl_tema_lidz', String(nakamaMaina(new Date()))); } catch (e2) {}
       piemerot(); });
     b.appendChild(sw); piemerot();
   }
   piemerot(); sledzis(true);
   if (w.__nhlTemaMO) { try { w.__nhlTemaMO.disconnect(); } catch (e) {} }   // vecā kadra novērotāju aizstāj ar šī kadra
-  w.__nhlTemaMO = new w.MutationObserver(function () { if (josla() && !d.querySelector('.tema-sw')) sledzis(false); if (tumss()) iframes(true); });
+  w.__nhlTemaMO = new w.MutationObserver(function () { if (josla() && !d.querySelector('.tema-sw')) sledzis(false); if (tumss()) { iframes(true); tabuBultas(true); } });
+  if (w.__nhlTemaInt) w.clearInterval(w.__nhlTemaInt);    // automātiskā maiņa (08:00 / 23:01) arī tad, ja lapa ir atvērta
+  w.__nhlTemaInt = w.setInterval(function () { if (d.documentElement.classList.contains('tumss') !== tumss()) piemerot(); }, 60000);
   w.__nhlTemaMO.observe(d.body, { childList: true, subtree: true });
   function tirit() {                       // kadrs tiek likvidēts: noņem savus klausītājus un iestrēgušo stāvokli
     try { reg.forEach(function (n) { d.removeEventListener(n[0], n[1], true); }); if (w.__nhlIzv && w.__nhlIzv.reg === reg) w.__nhlIzv = null; var b = josla(); if (b) b.classList.remove('nav-aizvert'); } catch (e) {}
