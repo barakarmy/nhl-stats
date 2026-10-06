@@ -61,6 +61,10 @@ import modelis  # Puasona prognožu modelis
 # Neobligātie moduļi: ja fails nav augšupielādēts repozitorijā, lietotne darbojas bez attiecīgās funkcijas (nevis apstājas ar kļūdu)
 cats = None          # čata sadaļa netiek rādīta (lietotājs nolēma to nelikt), arī ja cats.py ir repozitorijā
 try:
+    import fakti         # "Interesanti fakti": comebacks un 3. perioda statistika (fakti.py)
+except ImportError:
+    fakti = None
+try:
     import lokacijas     # ceļojuma un atpūtas faktori
 except ImportError:
     lokacijas = None
@@ -238,13 +242,14 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.4"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.6"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
     # atsevišķas pogas joslā (bez izvēlnes)
     {"lapa": ("lapa_karstie", "Karstākie spēlētāji", "hot-players", "local_fire_department")},
     {"lapa": ("lapa_prognozes", "Prognozes", "predictions", "insights")},
+    {"lapa": ("lapa_fakti", "Interesanti fakti", "facts", "lightbulb")},
     # grupas ar izvēlni (funkcija, nosaukums, url, Material ikona)
     {"grupa": "Komandas", "lapas": [
         ("lapa_parskats", "Līgas pārskats", "standings", "leaderboard"),
@@ -816,6 +821,20 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .st-key-kaj_logo { display: flex !important; justify-content: center; align-items: center; margin-top: 3.2rem; margin-bottom: -1.7rem; }   /* kopējā atstarpe no teksta līdz versijai saglabāta, logo tuvāk versijai */
 .st-key-kaj_logo [data-testid="stMarkdownContainer"] { text-align: center; margin-bottom: 0 !important; }
 .st-key-kaj_logo [data-testid="stIconMaterial"], .st-key-kaj_logo span[translate="no"] { font-size: 2.8rem !important; opacity: .55; line-height: 1; }
+/* interesanti fakti: comeback saraksts */
+.fk-liga { font-size: .85rem; opacity: .8; margin: .2rem 0 .5rem; }
+.fk-izl { color: #b45309; background: rgba(245,158,11,.14); }
+.fk-izc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.fk-iz { display: flex; gap: .6rem; align-items: center; border: 1px solid rgba(128,128,128,.22); border-left: 4px solid #00a83f; border-radius: 12px;
+  padding: .55rem .8rem; background: rgba(255,255,255,.6); font-size: .86rem; }
+.fk-iz.zem { border-left-color: #dc0000; }
+.fk-iz img { width: 2rem; height: 2rem; object-fit: contain; flex: none; }
+.fk-iz span { display: block; opacity: .8; }
+@media (max-width: 640px) { .fk-izc { grid-template-columns: 1fr; } }
+.fk-r { display: flex; align-items: center; gap: .7rem; padding: .5rem 0; border-bottom: 1px solid rgba(128,128,128,.18); font-size: .92rem; max-width: 760px; }
+.fk-r .ks-o img { width: 1.6rem; height: 1.6rem; object-fit: contain; }
+.fk-def { min-width: 2.6rem; text-align: center; font-weight: 800; color: #b91c1c; background: rgba(220,38,38,.10); border-radius: .35rem; padding: .1rem .35rem; cursor: help; }
+@media (max-width: 640px) { .fk-r { gap: .4rem; font-size: .8rem; } }
 /* kājene: paskaidrojums par lapu */
 .kaj { max-width: 900px; margin: 3rem auto 0; padding-top: 1rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .8rem; line-height: 1.55; opacity: .75; }
 .kaj p { margin: 0 0 .7rem; }
@@ -2631,11 +2650,158 @@ def lapa_komanda():
                     kl = "" if r_ is None else ("ok" if r_ <= nL // 4 else ("slikti" if r_ > nL - nL // 4 else ""))
                     rr += (f'<div class="dz-r"><span class="dz-l">{e(lbl)}</span><b class="dz-v">{"–" if pd.isna(v) else _sk(v, dec)}</b>'
                            f'<span class="dz-a">{"" if pd.isna(vid) else "līgā " + _sk(vid, max(dec, 1))}</span>'
-                           f'<span class="dz-p">{f'<span class="kpi-r {kl}">{r_}.</span>' if r_ else ""}</span></div>')
+                           f'<span class="dz-p">{("<span class=" + chr(34) + "kpi-r " + kl + chr(34) + ">" + str(r_) + ".</span>") if r_ else ""}</span></div>')
                 if rr:
                     kartes_dz += f'<div class="dz-k"><div class="dz-h">{e(grupa)}</div>{rr}</div>'
             st.markdown(f'<div class="dz-g">{kartes_dz}</div>', unsafe_allow_html=True)
 
+
+
+# ============================================================================
+# LAPA: INTERESANTI FAKTI (comebacks, 3. perioda karaļi) – loģika failā fakti.py
+# ============================================================================
+@st.cache_data(show_spinner=False)
+def fakti_dati(versija):
+    v = ielasit_papildu("varti", versija)
+    if fakti is None or v is None or v.empty:
+        return None, None, None, None
+    sp = RAW[["game_id", "datums", "home_team", "away_team", "home_total", "away_total", "spele_beidzas",
+              "home_p1", "home_p2", "home_p3", "away_p1", "away_p2", "away_p3"]].dropna(subset=["home_total", "away_total"])
+    gaita = fakti.spelu_gaita(sp, v)
+    kops = fakti.komandu_kopsavilkums(gaita, fakti.tresa_perioda_stat(sp))
+    ier = fakti.spelu_ieraksti(sp, v)
+    return gaita, kops, fakti.fakti_json(sp, v, indent=2), ier
+
+
+def lapa_fakti():
+    st.title("Interesanti fakti")
+    gaita, kops, js, ier = fakti_dati(VERSIJA)
+    if gaita is None:
+        st.info("Šai sadaļai vajag failu fakti.py un vārtu datus (dati/varti.csv).")
+        return
+    e = _html.escape
+    cb = fakti.comebacks(gaita)
+    k = kops.copy()
+    pv, lpv = fakti.situaciju_tabula(ier, "pirmie", "vad")
+    pi, lpi = fakti.situaciju_tabula(ier, "pirmie", "iedz")
+    vel_notik, vel = fakti.velie_izlidzinajumi(ier)
+    min_sp = 2 if k["iedz_sp"].max() >= 3 else 1
+
+    def pct_karte(t, nos, kontekts, min_n):
+        return kom_kartes(t, "win_pct", nos, lambda v: f"{v:.0f}%", filtrs=lambda x: x["sp"] >= min_n,
+                          piez_f=lambda kk: f" · {int(t.loc[kk, 'W'])} no {int(t.loc[kk, 'sp'])}",
+                          tip_f=lambda kk: f"{int(t.loc[kk, 'W'])} win, {int(t.loc[kk, 'OTL'])} OT/SO loss, {int(t.loc[kk, 'L'])} loss {kontekts}")
+    # --- topi: tikai dominējošās komandas katrā rādītājā ---
+    kartes = [
+        ("Lielākie comebacks", [(f"{da.pilns_nosaukums(r['komanda'])} pret {r['pretinieks']}", f"−{r['max_deficits']}",
+                                f" · {pd.Timestamp(r['datums']):%d.%m.} · {r['gala'].replace(':', '–')}{' ' + r['beigas'] if r['beigas'] != 'REG' else ''}",
+                                komandas_logo_foto(r["komanda"]) if i_ == 0 else "",
+                                f"Uzvara pēc {r['max_deficits']} vārtu deficīta ({r['deficita_brids'][0]}. periodā {r['deficita_brids'][1]})")
+                               for i_, r in enumerate(cb[:10])]),
+        pct_karte(pv, "Iemet pirmie → win %", "spēlēs, kurās guva pirmos vārtus", min_sp),
+        pct_karte(pi, "Ielaiž pirmie → win %", "spēlēs, kurās ielaida pirmos vārtus", min_sp),
+        kom_kartes(k, "iedz_pct", "3. perioda karaļi (win %)", lambda v: f"{v:.0f}%", filtrs=lambda x: x["iedz_sp"] >= min_sp,
+                   piez_f=lambda kk: f" · {int(k.loc[kk, 'iedz_W'])} no {int(k.loc[kk, 'iedz_sp'])}",
+                   tip_f=lambda kk: f"{int(k.loc[kk, 'iedz_W'])} win no {int(k.loc[kk, 'iedz_sp'])} spēlēm, kurās pēc 2. perioda bija iedzinējos"),
+        kom_kartes(k, "vad_pct", "Noturīgākie līderi (win %)", lambda v: f"{v:.0f}%", filtrs=lambda x: x["vad_sp"] >= min_sp,
+                   piez_f=lambda kk: f" · {int(k.loc[kk, 'vad_W'])} no {int(k.loc[kk, 'vad_sp'])}",
+                   tip_f=lambda kk: f"{int(k.loc[kk, 'vad_W'])} win no {int(k.loc[kk, 'vad_sp'])} spēlēm, kurās pēc 2. perioda vadīja"),
+        kom_kartes(vel, "izlidzinaja", "Izlīdzinājumi beigās", lambda v: f"{int(v)}", filtrs=lambda x: x["izlidzinaja"] > 0,
+                   piez_f=lambda kk: f" · {int(vel.loc[kk, 'izl_W'])} no tām win"),
+        kom_kartes(k, "comebacks", "Visvairāk comebacks", lambda v: f"{int(v)}", filtrs=lambda x: x["comebacks"] > 0,
+                   piez_f=lambda kk: f" · lielākais −{int(k.loc[kk, 'lielakais_cb'])}"),
+        kom_kartes(k, "izlaistas_vadibas", "Izlaistas 2+ vārtu vadības", lambda v: f"{int(v)}", filtrs=lambda x: x["izlaistas_vadibas"] > 0),
+    ]
+    st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
+
+    # --- situāciju pārlūks: izvēlies, ko tieši skatīties ---
+    st.markdown('<p class="ld-h">Situācijas</p>', unsafe_allow_html=True)
+    with st.container(key="frinda_fk"):
+        brids = izvele("Brīdis", ["Pirmie vārti", "Pēc 1. perioda", "Pēc 2. perioda", "Izlīdzinājumi beigās"], key="fk_br")
+        stav, starp = None, None
+        if brids == "Pirmie vārti":
+            stav = {"Iemet pirmie": "vad", "Ielaiž pirmie": "iedz"}[izvele("Kurš guva pirmos", ["Iemet pirmie", "Ielaiž pirmie"], key="fk_pv")]
+        elif brids in ("Pēc 1. perioda", "Pēc 2. perioda"):
+            stav = {"Vadībā": "vad", "Iedzinējos": "iedz", "Neizšķirts": "neizs"}[izvele("Stāvoklis", ["Vadībā", "Iedzinējos", "Neizšķirts"], key="fk_st")]
+            if stav != "neizs":
+                starp = {"1 vārts": 1, "2 vārti": 2, "3+ vārti": 3}.get(
+                    sledzis("Starpība", ["1 vārts", "2 vārti", "3+ vārti"], "Jebkura", key="fk_sp"))
+    if brids == "Izlīdzinājumi beigās":
+        t = vel[vel["izlidzinaja"] + vel["pret_izlidzinaja"] > 0]
+        st.markdown(f'<div class="fk-liga">Izlīdzinājumi 3. perioda pēdējās 2 minūtēs: kopā {len(vel_notik)} '
+                    f'(no tām {sum(1 for r in vel_notik if r["iznakums"] == "W")} beidzās ar win)</div>', unsafe_allow_html=True)
+        if not t.empty:
+            tabula(t, {"izlidzinaja": "Izlīdzināja", "izl_W": "No tām win", "pret_izlidzinaja": "Pret to izlīdzināja"}, sort_col="izlidzinaja",
+                   paskaidr={"Izlīdzināja": "Vārti 3. perioda pēdējās 2 minūtēs, kas izlīdzināja rezultātu",
+                             "No tām win": "Spēles, kuras pēc izlīdzinājuma komanda arī uzvarēja (OT/SO)",
+                             "Pret to izlīdzināja": "Reizes, kad pretinieks izlīdzināja pēdējās 2 minūtēs"})
+        rn = "".join(
+            f'<div class="fk-r"><span class="ks-d">{dt_html(SAKUMI.get(r["game_id"]) if SAKUMI else None, r["datums"])}</span>'
+            f'<span class="ks-o"><img src="{e(da.logo_url(r["komanda"]))}" alt="">{e(da.pilns_nosaukums(r["komanda"]))}'
+            f'<span class="ks-v">{"vs" if r["majas"] else "@"}</span><img src="{e(da.logo_url(r["pretinieks"]))}" alt=""></span>'
+            f'<span class="fk-def fk-izl" title="Izlīdzinājums 3. periodā">{e(r["laiks"])}</span>'
+            f'<a class="ks-s" href="{e(speles_saite(r["game_id"]))}" target="_blank" rel="noopener">{e(r["gala"])}{(" " + r["beigas"]) if r["beigas"] != "REG" else ""}</a>'
+            f'<span class="ks-z">{rez_zime(rez_kods(r["iznakums"], r["beigas"]))}</span></div>'
+            for r in vel_notik)
+        if rn:
+            st.markdown(f'<div class="ks">{rn}</div>', unsafe_allow_html=True)
+    else:
+        br_kods = {"Pirmie vārti": "pirmie", "Pēc 1. perioda": "p1", "Pēc 2. perioda": "p2"}[brids]
+        t, liga = fakti.situaciju_tabula(ier, br_kods, stav, starp)
+        t = t[t["sp"] > 0]
+        starp_t = ""
+        if starp:
+            starp_t = " ar " + str(starp) + ("+" if starp == 3 else "") + " vārtu"
+        if br_kods == "pirmie":
+            apr = {"vad": "guva pirmos vārtus", "iedz": "ielaida pirmos vārtus"}
+        else:
+            apr = {"vad": brids.lower() + " vadīja" + (starp_t + " pārsvaru" if starp_t else ""),
+                   "iedz": brids.lower() + " bija iedzinējos" + (starp_t + " deficītu" if starp_t else ""),
+                   "neizs": brids.lower() + " bija neizšķirts"}
+        apraksts = apr[stav]
+        if t.empty:
+            st.info("Šādā situācijā vēl nav nevienas spēles.")
+        else:
+            st.markdown(f'<div class="fk-liga">Spēles, kurās komanda {e(apraksts)}: kopā {int(t["sp"].sum())} · '
+                        f'līgā vidēji <b>{liga:.0f}%</b> win</div>', unsafe_allow_html=True)
+            tabula(t, {"sp": "Sp.", "W": "W", "L": "L", "OTL": "OTL", "win_pct": "Win %", "pts_pct": "Punkti %"}, sort_col="win_pct",
+                   prog={"win_pct": (0, 100), "pts_pct": (0, 100)}, formati={"win_pct": "{:.0f}", "pts_pct": "{:.0f}"},
+                   paskaidr={"Sp.": f"Spēles, kurās komanda {apraksts}", "W": "win (arī OT win un SO win)", "L": "loss",
+                             "OTL": "OT loss vai SO loss", "Win %": "Uzvaru daļa šajās spēlēs", "Punkti %": "Izcīnīto punktu daļa (win 2, OT/SO loss 1)"})
+
+    # --- comebacks ---
+    if cb:
+        rn = ""
+        for r in cb:
+            kom, pret = r["komanda"], r["pretinieks"]
+            h_, a_ = r["gala"].split(":")
+            savi, pretv = (h_, a_) if r["majas"] else (a_, h_)
+            db = r["deficita_rezultats"].split(":") if r["deficita_rezultats"] else ["", ""]
+            d_savi, d_pret = (db[0], db[1]) if r["majas"] else (db[1], db[0])
+            rn += (f'<div class="fk-r"><span class="ks-d">{dt_html(SAKUMI.get(r["game_id"]) if SAKUMI else None, r["datums"])}</span>'
+                   f'<span class="ks-o"><img src="{e(da.logo_url(kom))}" alt="">{e(da.pilns_nosaukums(kom))}'
+                   f'<span class="ks-v">{"vs" if r["majas"] else "@"}</span><img src="{e(da.logo_url(pret))}" alt="" title="{e(da.pilns_nosaukums(pret))}"></span>'
+                   f'<span class="fk-def" title="Lielākais deficīts: {d_savi}:{d_pret}, {r["deficita_brids"][0]}. periodā {r["deficita_brids"][1]}">−{r["max_deficits"]}</span>'
+                   f'<a class="ks-s" href="{e(speles_saite(r["game_id"]))}" target="_blank" rel="noopener">{savi}:{pretv}{(" " + r["beigas"]) if r["beigas"] != "REG" else ""}</a>'
+                   f'<span class="ks-z">{rez_zime(fakti_rez_kods(r))}</span></div>')
+        st.markdown(f'<p class="ld-h">Comebacks (uzvara pēc ≥ {fakti.MIN_DEFICITS} vārtu deficīta)</p><div class="ks">{rn}</div>', unsafe_allow_html=True)
+
+    # --- izcēlumi: komandas, kas kādā rādītājā ļoti atšķiras no līgas ---
+    izc = fakti.izcelumi(ier)
+    st.markdown('<p class="ld-h">Izcēlumi</p>', unsafe_allow_html=True)
+    if izc:
+        st.markdown('<div class="fk-izc">' + "".join(
+            f'<div class="fk-iz {"aug" if x["augstak"] else "zem"}"><img src="{e(da.logo_url(x["komanda"]))}" alt="">'
+            f'<div><b>{e(da.pilns_nosaukums(x["komanda"]))}</b><span>{e(x["teksts"])}</span></div></div>' for x in izc) + "</div>",
+            unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="fk-liga">Pagaidām neviena komanda būtiski neizceļas. Izcēlumam vajag vismaz {fakti.IZCELUMA_MIN_SP} spēles situācijā '
+                    f'un vismaz {int(fakti.IZCELUMA_MIN_STARP * 100)} procentpunktu atšķirību no līgas vidējā.</div>', unsafe_allow_html=True)
+    st.download_button("Lejupielādēt datus (JSON)", data=js, file_name="nhl_fakti.json", mime="application/json", key="fakti_json")
+
+
+def fakti_rez_kods(r):
+    return {"REG": "W", "OT": "OTW", "SO": "SOW"}.get(r["beigas"], "W")
 
 
 # ============================================================================
