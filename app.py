@@ -238,7 +238,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-06.1"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.1"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -2111,24 +2111,24 @@ def lapa_periodi():
         "Gūti": f"{p}. periodā gūtie vārti (kopā izvēlētajās spēlēs)",
         "Ielaisti": f"{p}. periodā ielaistie vārti (kopā izvēlētajās spēlēs)",
         "Starpība": f"Gūto un ielaisto vārtu starpība {p}. periodā (kopā izvēlētajās spēlēs)",
-        "Gūti/sp": f"Vidēji gūtie vārti {p}. periodā vienā spēlē",
-        "Ielaisti/sp": f"Vidēji ielaistie vārti {p}. periodā vienā spēlē",
-        "Metieni/sp": f"Vidēji metieni vārtos {p}. periodā vienā spēlē",
-        "Pretin. metieni/sp": f"Pretinieka vidējie metieni vārtos pret šo komandu {p}. periodā vienā spēlē",
+        "Gūti/v.": f"Vidēji gūtie vārti {p}. periodā vienā spēlē",
+        "Ielaisti/v.": f"Vidēji ielaistie vārti {p}. periodā vienā spēlē",
+        "Metieni/v.": f"Vidēji metieni vārtos {p}. periodā vienā spēlē",
+        "Metieni pret/v.": f"Pretinieka vidējie metieni vārtos pret šo komandu {p}. periodā vienā spēlē",
     }
     n_ = LOGI[logs]
     burbuli = None
     if n_ in (5, 10) and not res.empty:        # "Visa sezona": spēļu saraksta burbuļus nerāda
         burbuli = spelu_burbuli(scope, n_, lambda r: (getattr(r, f"g_p{p}"), getattr(r, f"z_p{p}")),
                                 f"{p}. periods · pēdējās {n_} spēles{vietas_teksts(scope)} (komanda:pretinieks)", set(res.index))
-    tabula(res, {"GP": "Sp.", "G": "Gūti", "Z": "Ielaisti", "Starpiba": "Starpība",
-                 "G_sp": "Gūti/sp", "Z_sp": "Ielaisti/sp", "SOG_sp": "Metieni/sp", "SA_sp": "Pretin. metieni/sp"},
+    tabula(res, {"G": "Gūti", "Z": "Ielaisti", "Starpiba": "Starpība",
+                 "G_sp": "Gūti/v.", "Z_sp": "Ielaisti/v.", "SOG_sp": "Metieni/v.", "SA_sp": "Metieni pret/v."},
            sort_col=kolonna, paskaidr=pask, burbuli=burbuli,
            formati={"G_sp": "{:.2f}", "Z_sp": "{:.2f}", "SOG_sp": "{:.1f}", "SA_sp": "{:.1f}"},
-           config={"Gūti/sp": st.column_config.NumberColumn(format="%.2f"),
-                   "Ielaisti/sp": st.column_config.NumberColumn(format="%.2f"),
-                   "Metieni/sp": st.column_config.NumberColumn(format="%.1f"),
-                   "Pretin. metieni/sp": st.column_config.NumberColumn(format="%.1f")})
+           config={"Gūti/v.": st.column_config.NumberColumn(format="%.2f"),
+                   "Ielaisti/v.": st.column_config.NumberColumn(format="%.2f"),
+                   "Metieni/v.": st.column_config.NumberColumn(format="%.1f"),
+                   "Metieni pret/v.": st.column_config.NumberColumn(format="%.1f")})
 
 
 # ============================================================================
@@ -2142,7 +2142,7 @@ def lapa_forma():
     res["Forma"] = forma_bumbas(DF, n)
     kol, asc = "G", False                                  # noklusējums: visvairāk gūto vārtu; citu secību - tabulas izvēlnē "Kārtot"
     burbuli = spelu_burbuli("Visas", n, lambda r: (r.g_reg, r.z_reg), f"Pēdējās {n} spēles · pamatlaika vārti (komanda:pretinieks)", set(res.index))
-    tabula(res, {"GP": "Sp.", "W": "W", "L": "L", "OTL": "OTL", "PTS": "Punkti",
+    tabula(res, {"W": "W", "L": "L", "OTL": "OTL", "PTS": "Punkti",
                  "G": "Gūti vārti", "Z": "Ielaisti vārti", "Starpiba": "Starpība", "Forma": "Forma"},
            sort_col=kol, ascending=asc, burbuli=burbuli)
 
@@ -2162,7 +2162,7 @@ def lapa_over_under():
     if n_ in (5, 10) and not res.empty:
         burbuli = spelu_burbuli(scope, n_, lambda r: (r.g_reg, r.z_reg),
                                 f"Pēdējās {n_} spēles{vietas_teksts(scope)} · pamatlaika vārti (komanda:pretinieks)", set(res.index))
-    tabula(res, {"GP": "Sp.", "Over": f"Over {linija}", "Over_pct": "Over %",
+    tabula(res, {"Over": f"Over {linija}", "Over_pct": "Over %",
                  "Under": f"Under {linija}", "Under_pct": "Under %", "Vid_kopa": "Vid. vārti spēlē"},
            sort_col=kol, burbuli=burbuli, formati={"Vid_kopa": "{:.2f}"}, prog={"Over_pct": (0, 100), "Under_pct": (0, 100)},
            config={"Over %": st.column_config.ProgressColumn("Over %", min_value=0, max_value=100, format="%.0f"),
@@ -2185,13 +2185,14 @@ def lapa_powerplay():
     if n_ in (5, 10) and not res.empty:
         burbuli = spelu_burbuli(scope, n_, lambda r: (r.ppg, r.ppg_allowed),
                                 f"Pēdējās {n_} spēles{vietas_teksts(scope)} · vairākuma vārti (par:pret)", set(res.index))
-    tabula(res, {"GP": "Sp.", "PPG": "PP vārti", "PP_opp": "PP iespējas", "PP_pct": "PP %",
-                 "PP_sog": "PP metieni", "PPG_pret": "Ielaisti PP", "PK_pct": "PK %"},
-           sort_col=kol, burbuli=burbuli, formati={"PP_pct": "{:.1f}", "PK_pct": "{:.1f}"},
-           config={"PP %": st.column_config.NumberColumn(format="%.1f"),
-                   "PK %": st.column_config.NumberColumn(format="%.1f")})
-    st.caption("PP % = vārti vairākumā / vairākuma iespējas. PK % = mazākumā neielaisto vārtu daļa. "
-               "Ielaisti PP = pretinieka vairākuma vārti pret šo komandu.")
+    tabula(res, {"PPG": "PP vārti", "PP_opp": "PP iespējas", "PP_pct": "PP %",
+                 "PP_sog": "PP metieni", "PPG_pret": "Ielaisti PP"},
+           sort_col=kol, burbuli=burbuli, formati={"PP_pct": "{:.1f}"},
+           config={"PP %": st.column_config.NumberColumn(format="%.1f")})
+    pari, _ = _apakskopa_pari(scope, LOGI[logs])
+    situacijas_spelētaji("pp", pari, "vairākumā")
+    st.caption("PP % = vārti vairākumā / vairākuma iespējas. Ielaisti PP = pretinieka vairākuma vārti pret šo komandu. "
+               "Visi rādītāji ir pamatlaika (bez papildlaika).")
 
 
 # ============================================================================
@@ -2222,15 +2223,15 @@ def lapa_noraidijumi():
         return f"{mtxt[0].upper() + mtxt[1:]} {ptxt[p]}: {v}, {vtxt}"
 
     if perioda == "Visi periodi":
-        kolonnas, pask = {"GP": "Sp."}, {}
-        for nos, p in pkarte.items():
+        kolonnas, pask = {}, {}
+        for nos, p in [("1. periods", 1), ("2. periods", 2), ("3. periods", 3), ("Kopā", "kopa")]:      # Kopā – pēdējā kolonna
             kolonnas[f"{vkods}_{p}"] = nos
             pask[nos] = apraksts(vkods, p)
         tabula(res, kolonnas, sort_col=f"{vkods}_kopa", paskaidr=pask,
                config={nos: st.column_config.NumberColumn(format=fm) for nos in pkarte})
     else:
         p = pkarte[perioda]
-        kolonnas = {"GP": "Sp.", f"s_{p}": "Saņemtie", f"i_{p}": "Izcīnītie", f"r_{p}": "Izcīnīti − saņemti"}
+        kolonnas = {f"s_{p}": "Saņemtie", f"i_{p}": "Izcīnītie", f"r_{p}": "Izcīnīti − saņemti"}
         pask = {"Saņemtie": apraksts("s", p), "Izcīnītie": apraksts("i", p),
                 "Izcīnīti − saņemti": f"Izcīnīto un saņemto starpība ({ptxt[p]}, {mtxt}, {vtxt}); "
                                       "pozitīvs skaitlis = komanda izcīna vairāk, nekā saņem"}
@@ -2641,6 +2642,34 @@ def otso_kopsavilkums(scope="Visas", n=None):
     return g
 
 
+def situacijas_spelētaji(stiprums, pari, nos):
+    """Top spēlētāji vairākumā ("pp") vai mazākumā ("sh"): vārti + rezultatīvas piespēles pamatlaikā; top 10 + izvēršams līdz 20."""
+    st.markdown(f'<p class="ld-h">Top spēlētāji {nos}</p>', unsafe_allow_html=True)
+    v = _varti_df()
+    x = pd.DataFrame()
+    if v is not None:
+        x = v[(v["strength"].astype(str).str.lower() == stiprums) & (v["period_type"].astype(str).str.upper() == "REG")
+              & pd.Series([(gi, kk) in pari for gi, kk in zip(v["game_id"], v["komanda"])], index=v.index)]
+    if x.empty:
+        st.info(f"Šajā atlasē {nos} gūtu vārtu vēl nav.")
+        return
+    ieraksti = pd.concat([x[["scorer", "komanda"]].rename(columns={"scorer": "v"}).assign(G=1, A=0),
+                          x[["assist1", "komanda"]].rename(columns={"assist1": "v"}).assign(G=0, A=1),
+                          x[["assist2", "komanda"]].rename(columns={"assist2": "v"}).assign(G=0, A=1)])
+    ieraksti = ieraksti[ieraksti["v"].notna() & (ieraksti["v"].astype(str) != "")]
+    tp = ieraksti.groupby(["v", "komanda"]).agg(G=("G", "sum"), A=("A", "sum")).reset_index()
+    tp["P"] = tp["G"] + tp["A"]
+    tp = tp.sort_values(["P", "G"], ascending=False).head(20).reset_index(drop=True)
+    tab = pd.DataFrame({"#": range(1, len(tp) + 1), "Logo": tp["komanda"].map(da.logo_url), "Spēlētājs": tp["v"],
+                        "Vārti": tp["G"], "Piespēles": tp["A"], "Punkti": tp["P"]})
+    cfgp = {"Logo": st.column_config.ImageColumn("", width="small")}
+    paskp = {"Punkti": f"Vārti + rezultatīvas piespēles {nos} (pamatlaikā)"}
+    rtabula(tab.head(10), column_config=cfgp, paskaidr=paskp, hide_index=True)
+    if len(tab) > 10:
+        with st.expander(f"Rādīt līdz top {len(tab)}"):
+            rtabula(tab.iloc[10:], column_config=cfgp, paskaidr=paskp, hide_index=True)
+
+
 def lapa_otso():
     with st.container(key="frinda_otso"):
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="otso_s")
@@ -2702,11 +2731,12 @@ def lapa_mazakums():
     res["SHG"] = sh.groupby("komanda").size() if not sh.empty else 0
     res["SHG"] = res["SHG"].fillna(0)
     res["PK_nosargati"] = res["PP_opp_pret"] - res["PPG_pret"]
-    kol = {"GP": "Sp.", "PK_pct": "PK %", "PP_opp_pret": "Mazākuma reizes", "PK_nosargati": "Nosargāti", "PPG_pret": "Ielaisti",
-           "SHG": "Gūti mazākumā", "PEN_sp": "Noraid./sp"}
-    cfg = {"PK %": st.column_config.NumberColumn(format="%.1f"), "Noraid./sp": st.column_config.NumberColumn(format="%.1f")}
+    kol = {"PP_opp_pret": "Mazākuma reizes", "PK_nosargati": "Nosargāti", "PPG_pret": "Ielaisti",
+           "SHG": "Gūti mazākumā", "PEN_sp": "Noraid/v.", "PK_pct": "PK %"}
+    cfg = {"PK %": st.column_config.NumberColumn(format="%.1f"), "Noraid/v.": st.column_config.NumberColumn(format="%.1f")}
     pask = {"PK %": "Nosargāto mazākumu daļa (pamatlaikā)", "Mazākuma reizes": "Cik reizes komanda spēlēja mazākumā (pamatlaikā)",
-            "Nosargāti": "Mazākumi bez ielaistiem vārtiem", "Ielaisti": "Mazākumā ielaistie vārti", "Gūti mazākumā": "Mazākumā gūtie vārti (pamatlaikā)"}
+            "Nosargāti": "Mazākumi bez ielaistiem vārtiem", "Ielaisti": "Mazākumā ielaistie vārti", "Gūti mazākumā": "Mazākumā gūtie vārti (pamatlaikā)",
+            "Noraid/v.": "Vidēji saņemtie noraidījumi spēlē (pamatlaikā)"}
     r = res.sort_values(["PK_pct", "PP_opp_pret"], ascending=[False, False])
     st.markdown('<p class="ld-h">Top 10 komandas mazākumā</p>', unsafe_allow_html=True)
     tabula(r.head(10), kol, sort_col="PK_pct", config=cfg, paskaidr=pask)
@@ -2714,26 +2744,7 @@ def lapa_mazakums():
         with st.expander(f"Pārējās komandas ({len(r) - 10})"):
             t2 = r.iloc[10:]
             tabula(t2, kol, sort_col="PK_pct", config=cfg, paskaidr=pask, numurs_no=11)
-    # spēlētāji: punkti mazākumā (vārti + rezultatīvas piespēles), tikai pamatlaiks
-    st.markdown('<p class="ld-h">Top spēlētāji mazākumā</p>', unsafe_allow_html=True)
-    if sh.empty:
-        st.info("Šajā atlasē mazākumā gūtu vārtu vēl nav.")
-    else:
-        ieraksti = pd.concat([sh[["scorer", "komanda"]].rename(columns={"scorer": "v"}).assign(G=1, A=0),
-                              sh[["assist1", "komanda"]].rename(columns={"assist1": "v"}).assign(G=0, A=1),
-                              sh[["assist2", "komanda"]].rename(columns={"assist2": "v"}).assign(G=0, A=1)])
-        ieraksti = ieraksti[ieraksti["v"].notna() & (ieraksti["v"].astype(str) != "")]
-        tp = ieraksti.groupby(["v", "komanda"]).agg(G=("G", "sum"), A=("A", "sum")).reset_index()
-        tp["P"] = tp["G"] + tp["A"]
-        tp = tp.sort_values(["P", "G"], ascending=False).head(20).reset_index(drop=True)
-        tab = pd.DataFrame({"#": range(1, len(tp) + 1), "Logo": tp["komanda"].map(da.logo_url), "Spēlētājs": tp["v"],
-                            "Vārti": tp["G"], "Piespēles": tp["A"], "Punkti": tp["P"]})
-        cfgp = {"Logo": st.column_config.ImageColumn("", width="small")}
-        paskp = {"Punkti": "Vārti + rezultatīvas piespēles mazākumā (pamatlaikā)"}
-        rtabula(tab.head(10), column_config=cfgp, paskaidr=paskp, hide_index=True)
-        if len(tab) > 10:
-            with st.expander(f"Rādīt līdz top {len(tab)}"):
-                rtabula(tab.iloc[10:], column_config=cfgp, paskaidr=paskp, hide_index=True)
+    situacijas_spelētaji("sh", pari, "mazākumā")         # spēlētāji: vārti + piespēles mazākumā, tikai pamatlaiks
     st.caption("Visi rādītāji ir pamatlaika (bez papildlaika). Spēlētājiem pieejami tikai mazākumā gūtie vārti un piespēles.")
 
 
@@ -3436,8 +3447,7 @@ def kajene_html():
 un pēcspēles metienu sērijas netiek ieskaitīti; tās ir apkopotas atsevišķi sadaļā OT / SO. Vidējie ir kopsumma, dalīta ar
 izvēlēto spēļu skaitu (visa sezona, pēdējās 5 vai pēdējās 10, visas vai tikai mājās / viesos). Noraidījumi ir minor sodi
 (dubultais minor = 2), bez lielajiem un disciplinārajiem sodiem. Bilance (win, loss, OT loss) un punkti ir oficiālie rezultāti.</p>
-<p><b>Pieejamie dati.</b> {periods}; nākamo spēļu kalendārs uz priekšu; tiesnešu statistikā arī pagājušās sezonas dati.
-Sezonas sākumā spēļu ir maz, tāpēc vidējie un vietas tabulās var strauji mainīties.</p>
+<p><b>Pieejamie dati.</b> {periods}; nākamo spēļu kalendārs uz priekšu; tiesnešu statistikā arī pagājušās sezonas dati.</p>
 <p><b>Datu avoti.</b> NHL oficiālā statistika (rezultāti, spēlētāji, vārtsargi, notikumi, kalendārs, tiesneši pēc spēles)
 un Scouting The Refs (pirms spēlēm paziņotie tiesneši). Dati tiek atjaunināti automātiski katru dienu.</p>
 <p class="kaj-pied">Visa informācija ir tikai informatīva un balstīta uz matemātiskiem aprēķiniem no pieejamajiem datiem.
