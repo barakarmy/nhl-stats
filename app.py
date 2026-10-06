@@ -232,20 +232,22 @@ def check_password():
             st.session_state["_auth_zetons"] = _auth_zetons(parole, int(time.time()) + ATCERETIES_DIENAS * 86400)
         st.session_state.pop("password", None)
 
-    if saglabats is None:
-        # pārlūks vēl nav atbildējis, vai pieteikšanās ir saglabāta: neko nerāda (bez zilā fona un paroles lauka mirgošanas).
-        # Rezerve: ja atbilde nepienāk 4 s laikā, lauks parādās pats.
-        st.markdown('<style>.stApp [data-testid="stTextInput"] { visibility: hidden; animation: login-rezerve 0s linear 4s forwards; }'
-                    '@keyframes login-rezerve { to { visibility: visible; } }</style>', unsafe_allow_html=True)
-    else:
-        st.markdown(LOGIN_CSS, unsafe_allow_html=True)
+    if saglabats is None and st.query_params.get("ievade") != "1":
+        # Pārlūks vēl nav atbildējis, vai pieteikšanās ir saglabāta: paroles lauks netiek veidots vispār
+        # (citādi pēc atbildes tas uz mirkli paliek redzams, kamēr lapa pārzīmējas).
+        # Rezerve vienā elementā (pats sevi slēpj): ja atbilde nepienāk 4 s laikā, parādās saite uz paroles ievadi.
+        st.markdown('<div style="visibility:hidden;animation:login-rezerve 0s linear 4s forwards;text-align:center;margin-top:35vh;font-size:.9rem">'
+                    '<style>@keyframes login-rezerve { to { visibility: visible; } }</style>'
+                    '<a href="?ievade=1" target="_top">Ievadīt paroli</a></div>', unsafe_allow_html=True)
+        return False
+    st.markdown(LOGIN_CSS, unsafe_allow_html=True)
     st.text_input("Password", type="password", placeholder="Password", label_visibility="collapsed", on_change=entered, key="password")
     if st.session_state.get("password_correct") is False:
         st.markdown('<div class="login-err">Incorrect password</div>', unsafe_allow_html=True)
     return False
 
 
-APP_VERSIJA = "v1.1.9"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.10"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
