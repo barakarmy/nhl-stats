@@ -247,7 +247,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.19"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.20"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1085,7 +1085,8 @@ html.tumss .kaj { color: var(--t-blavs); }
 html.tumss :is([class*="st-key-rmb_"], .st-key-rez_fokuss_kartite) { border: 1px solid rgba(255,255,255,.16) !important; }   /* rezultātu, kalendāra, prognožu rāmji */
 html.tumss .stTabs *:has(> [data-baseweb="tab-list"]) > :not([data-baseweb="tab-list"]) {     /* cilņu ritināšanas bultiņas: tumši zilas, nevis baltas */
   background: #22304a !important; background-image: none !important; color: var(--t-zils) !important; border-color: var(--t-mala) !important; }
-html.tumss .stTabs *:has(> [data-baseweb="tab-list"]) > :not([data-baseweb="tab-list"]) :is(button, svg, span) { background: transparent !important; color: var(--t-zils) !important; fill: currentColor; }
+html.tumss .stTabs *:has(> [data-baseweb="tab-list"]) > :not([data-baseweb="tab-list"]) :is(button, span) { background: transparent !important; color: var(--t-zils) !important; }
+html.tumss .stTabs *:has(> [data-baseweb="tab-list"]) > :not([data-baseweb="tab-list"]) svg { color: var(--t-zils) !important; }
 html.tumss :is(.ld-foto, .fk-foto) { background-color: #2c3c57 !important; }   /* spēlētāju foto un komandu logo aplis tumšajā motīvā */
 html.tumss :is(.tb-logo, .ks-o img, .l5lg, .cmp-logo, .kn-r img, .fk-iz img, .mc img, .ld-logo-img) { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.18)); }   /* tumšas krāsas logo (melni elementi) ir saskatāmi uz tumšā fona */
 /* slēdzis saule / mēness (ievieto skripts augšējā joslā) */
@@ -3921,11 +3922,12 @@ IZVELNES_SKRIPTS = """
             el.dataset.nhlBulta = '1';
             el.style.setProperty('background', '#22304a', 'important'); el.style.setProperty('background-image', 'none', 'important');
             el.style.setProperty('color', '#93c5fd', 'important');
-            el.querySelectorAll('svg, path').forEach(function (s) { s.style.setProperty('fill', '#93c5fd', 'important'); s.style.setProperty('color', '#93c5fd', 'important'); });
+            // krāsa tikai pašam svg (ceļi to manto); ceļus neaiztiek, jo ikonām ir caurspīdīgs fona kvadrāts (fill="none")
+            el.querySelectorAll('svg').forEach(function (s) { s.style.setProperty('color', '#93c5fd', 'important'); s.style.setProperty('fill', 'currentColor', 'important'); });
           }
         } else if (el.dataset.nhlBulta === '1') {
           el.setAttribute('style', el.dataset.nhlOrig || ''); delete el.dataset.nhlOrig;
-          el.querySelectorAll('svg, path').forEach(function (s) { s.style.removeProperty('fill'); s.style.removeProperty('color'); });
+          el.querySelectorAll('svg').forEach(function (s) { s.style.removeProperty('fill'); s.style.removeProperty('color'); });
           delete el.dataset.nhlBulta;
         }
       });
