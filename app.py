@@ -247,7 +247,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.21"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.22"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -3926,6 +3926,33 @@ IZVELNES_SKRIPTS = """
     var cs = w.getComputedStyle(el), bg = cs.backgroundColor || '', bi = cs.backgroundImage || '';
     return /rgba?\\((25[0-5]|24\\d), *(25[0-5]|24\\d), *(25[0-5]|24\\d)(, *(1|0?\\.[5-9]\\d*))?\\)/.test(bg) || /gradient/.test(bi) && /(255, 255, 255|white)/.test(bi);
   }
+  function krasa(s) {                      // "rgb(a)(...)" → {g: gaisums 0–255, a: alfa, pel: vai pelēcīga (nav krāsaina)}
+    var m = (s || '').match(/rgba?\\(([\\d.]+),\\s*([\\d.]+),\\s*([\\d.]+)(?:,\\s*([\\d.]+))?\\)/);
+    if (!m) return null;
+    var r = +m[1], g = +m[2], b = +m[3];
+    return { g: 0.299 * r + 0.587 * g + 0.114 * b, a: m[4] === undefined ? 1 : +m[4], pel: Math.max(r, g, b) - Math.min(r, g, b) < 40 };
+  }
+  var LAUKU_ZONAS = '.stSelectbox, .stMultiSelect, [data-baseweb="popover"], [data-testid="stSelectboxVirtualDropdown"], [role="listbox"]';
+  function tumsieLauki(t) {                 // izvēlnes un to saraksti: Streamlit krāsas nāk no iekšējām klasēm, tāpēc pārkrāso pēc aprēķinātās krāsas
+    d.querySelectorAll(LAUKU_ZONAS).forEach(function (z) {
+      [z].concat(Array.prototype.slice.call(z.querySelectorAll('*'))).forEach(function (el) {
+        if (el instanceof w.SVGElement) return;
+        if (t) {
+          var cs = w.getComputedStyle(el), bg = krasa(cs.backgroundColor), tx = krasa(cs.color), mainits = false;
+          if (el.dataset.nhlLauks !== '1') el.dataset.nhlOrigL = el.getAttribute('style') || '';
+          if (bg && bg.a > 0.3 && bg.g > 185) {                    // gaišs fons → tumši zils (izceltā rinda nedaudz gaišāka)
+            el.style.setProperty('background-color', bg.g > 238 ? '#22304a' : '#2e3f5c', 'important'); mainits = true;
+          }
+          if (tx && tx.g < 140 && tx.pel) {                        // tumšs pelēks teksts → gaišs (krāsainu tekstu neaiztiek)
+            el.style.setProperty('color', '#e6ebf2', 'important'); el.style.setProperty('-webkit-text-fill-color', '#e6ebf2', 'important'); mainits = true;
+          }
+          if (mainits) el.dataset.nhlLauks = '1'; else if (el.dataset.nhlLauks !== '1') delete el.dataset.nhlOrigL;
+        } else if (el.dataset.nhlLauks === '1') {
+          el.setAttribute('style', el.dataset.nhlOrigL || ''); delete el.dataset.nhlOrigL; delete el.dataset.nhlLauks;
+        }
+      });
+    });
+  }
   function tabuBultas(t) {                  // cilņu ritināšanas bultiņas tumšajā motīvā – tumši zilas
     d.querySelectorAll('.stTabs').forEach(function (tb) {
       tb.querySelectorAll('*').forEach(function (el) {
@@ -3947,7 +3974,7 @@ IZVELNES_SKRIPTS = """
       });
     });
   }
-  function piemerot() { var t = tumss(); d.documentElement.classList.toggle('tumss', t); iframes(t); tabuBultas(t);
+  function piemerot() { var t = tumss(); d.documentElement.classList.toggle('tumss', t); iframes(t); tabuBultas(t); tumsieLauki(t);
     var sw = d.querySelector('.tema-sw'); if (sw) { sw.setAttribute('aria-pressed', t ? 'true' : 'false'); sw.title = t ? 'Gaišais motīvs' : 'Tumšais motīvs'; } }
   function sledzis(atjaunot) {
     var b = josla(); if (!b) return;
@@ -3964,7 +3991,7 @@ IZVELNES_SKRIPTS = """
   }
   piemerot(); sledzis(true);
   if (w.__nhlTemaMO) { try { w.__nhlTemaMO.disconnect(); } catch (e) {} }   // vecā kadra novērotāju aizstāj ar šī kadra
-  w.__nhlTemaMO = new w.MutationObserver(function () { if (josla() && !d.querySelector('.tema-sw')) sledzis(false); if (tumss()) { iframes(true); tabuBultas(true); } });
+  w.__nhlTemaMO = new w.MutationObserver(function () { if (josla() && !d.querySelector('.tema-sw')) sledzis(false); if (tumss()) { iframes(true); tabuBultas(true); tumsieLauki(true); } });
   if (w.__nhlTemaInt) w.clearInterval(w.__nhlTemaInt);    // automātiskā maiņa (08:00 / 23:01) arī tad, ja lapa ir atvērta
   w.__nhlTemaInt = w.setInterval(function () { if (d.documentElement.classList.contains('tumss') !== tumss()) piemerot(); }, 60000);
   w.__nhlTemaMO.observe(d.body, { childList: true, subtree: true });
