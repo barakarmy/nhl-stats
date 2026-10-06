@@ -120,7 +120,7 @@ MAINU_KOL = ["datums", "game_id", "team", "playerId", "vards", "period", "shiftN
              "startTime", "endTime", "duration"]
 
 TABULAS = {
-    "speletaji": ("speletaji.csv", SPELETAJA_PAMATS + SKATER_STAT),
+    "speletaji": ("speletaji.csv", SPELETAJA_PAMATS + SKATER_STAT + ["noraid"]),      # noraid = minor noraidījumi pamatlaikā
     "vartsargi": ("vartsargi.csv", SPELETAJA_PAMATS + GOALIE_STAT),
     "varti": ("varti.csv", VARTU_KOL),
     "notikumi": ("notikumi.csv", NOTIKUMU_KOL),
@@ -443,6 +443,7 @@ def apstradat_spele(spele, datums):
     # ---- play-by-play: notikumi, metieni, sodi ----
     notikumu_rindas = []
     kautinu_pim = {"home": 0, "away": 0}
+    spel_noraid = {}                           # spēlētāja minor sodu skaits pamatlaikā (playerId → skaits; dubultais minor = 2)
     citi_pim = {"home": 0, "away": 0}          # sodi, kas nav minor (major, 10 min disciplinārie, spēles disciplinārie, match): netiek skaitīti
     pen_per = {"p1": 0, "p2": 0, "p3": 0}      # abu komandu sodu skaits pa periodiem (tiesnešu statistikai)
     ot_pp_sog = {"home": 0, "away": 0}         # metieni vairākumā papildlaikā (tiek atņemti no PP metieniem)
@@ -486,6 +487,9 @@ def apstradat_spele(spele, datums):
                 if pk in REG_PERIODI:
                     r[f"{puse}_pim_total"] += 2 * minori  # kopā = tikai pamatlaiks
                     r[f"{puse}_pen_count"] += minori      # minor sodu skaits pamatlaikā (dubultais minor = 2)
+                    pid_ = det.get("committedByPlayerId")
+                    if pid_:                              # komandas (bench) sodam spēlētāja nav
+                        spel_noraid[pid_] = spel_noraid.get(pid_, 0) + minori
                 r[f"{puse}_pen_{pk}"] += minori           # minor sodu skaits pa periodiem (arī pen_ot)
                 if pk in pen_per:
                     pen_per[pk] += minori
@@ -590,6 +594,7 @@ def apstradat_spele(spele, datums):
                 rinda = pamats(pl)
                 for k in SKATER_STAT:
                     rinda[k] = pl.get(k)
+                rinda["noraid"] = spel_noraid.get(pl.get("playerId"), 0)     # minor noraidījumi pamatlaikā (no play-by-play)
                 speletaju_rindas.append(rinda)
 
         pret = "away" if puse == "home" else "home"   # metieni pret šīs komandas vārtsargu = pretinieka metieni
