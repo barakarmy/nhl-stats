@@ -247,7 +247,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.22"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.23"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1102,7 +1102,7 @@ html.tumss .stTabs *:has(> [data-baseweb="tab-list"]) > :not([data-baseweb="tab-
 html.tumss .stTabs *:has(> [data-baseweb="tab-list"]) > :not([data-baseweb="tab-list"]) :is(button, span) { background: transparent !important; color: var(--t-zils) !important; }
 html.tumss .stTabs *:has(> [data-baseweb="tab-list"]) > :not([data-baseweb="tab-list"]) svg { color: var(--t-zils) !important; }
 html.tumss :is(.ld-foto, .fk-foto) { background-color: #2c3c57 !important; }   /* spēlētāju foto un komandu logo aplis tumšajā motīvā */
-html.tumss :is(.tb-logo, .ks-o img, .l5lg, .cmp-logo, .kn-r img, .fk-iz img, .mc img, .ld-logo-img) { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.18)); }   /* tumšas krāsas logo (melni elementi) ir saskatāmi uz tumšā fona */
+html.tumss :is(.tb-logo, .ks-o img, .l5lg, .cmp-logo, .cf-c img, .kn-r img, .fk-iz img, .mc img, .ld-logo-img) { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.18)); }   /* tumšas krāsas logo (melni elementi) ir saskatāmi uz tumšā fona */
 /* slēdzis saule / mēness (ievieto skripts augšējā joslā) */
 .tema-sw { position: absolute; top: 50%; right: .7rem; transform: translateY(-50%); width: 3.1rem; height: 1.65rem; border-radius: 999px; border: 1px solid rgba(255,255,255,.18);
   background: #1e293b; cursor: pointer; padding: 0; z-index: 20; }
