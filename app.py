@@ -247,7 +247,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.14"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.16"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1016,6 +1016,83 @@ if FONS_DATA_URI:
   background: url("{FONS_DATA_URI}") center / cover no-repeat; opacity: {FONA_CAURSPIDIBA_GAISS}; }}
 {_tumss_fons}
 .stApp [data-testid="stAppViewContainer"], .stApp [data-testid="stMain"], .stApp section.stMain {{ background: transparent !important; }}
+</style>""", unsafe_allow_html=True)
+
+st.markdown(r"""<style>
+/* ============================================================================
+   TUMŠAIS MOTĪVS (ieslēdz slēdzis saule/mēness augšējās joslas labajā stūrī; izvēle saglabājas pārlūkā)
+   Krāsas: tumši zili pelēks fons (nevis melns), gaišs teksts, kartītes nedaudz gaišākas par fonu.
+   ============================================================================ */
+html.tumss { --t-fons: #1a2433; --t-karte: rgba(37,49,68,.92); --t-karte2: #22304a; --t-mala: rgba(255,255,255,.12);
+  --t-teksts: #e6ebf2; --t-blavs: #aab6c8; --t-zils: #93c5fd; --t-zals: #4ade80; --t-sarkans: #f87171; --t-oranzs: #fbbf24; --t-viesi: #cbd5e1; }
+html.tumss, html.tumss body, html.tumss .stApp { background-color: var(--t-fons) !important; color: var(--t-teksts); color-scheme: dark; }
+html.tumss .stApp::before { opacity: .07 !important; }
+html.tumss .stApp :is(h1, h2, h3, h4, h5, h6, [data-testid="stMarkdownContainer"], [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] label,
+  [data-testid="stCaptionContainer"], [data-testid="stText"], [data-testid="stMetricLabel"], [data-testid="stMetricValue"], .stMarkdown) { color: var(--t-teksts); }
+html.tumss .stApp [data-testid="stCaptionContainer"], html.tumss .stApp .kpi-s, html.tumss .stApp .kpi-l { color: var(--t-blavs); }
+html.tumss .stApp a { color: var(--t-zils); }
+/* kartītes un bloki */
+html.tumss :is(.kpi, .kn, .ki, .dz-k, .fk-iz, .cel-c, .cel-one, .cf-c) { background: var(--t-karte) !important; border-color: var(--t-mala) !important; }
+html.tumss :is(.ki-r, .ks-r, .fk-r, .l5r, .dz-r, .ld-c, .kaj) { border-color: rgba(255,255,255,.10) !important; }
+html.tumss .kpi-r { background: rgba(255,255,255,.10); color: var(--t-teksts); }
+html.tumss .kpi-r.ok { background: rgba(74,222,128,.16); color: var(--t-zals); }
+html.tumss .kpi-r.slikti { background: rgba(248,113,113,.16); color: var(--t-sarkans); }
+html.tumss :is(.cel-taim, .cel-pared, .fk-def, .cel-b.krit) { color: var(--t-sarkans) !important; }
+html.tumss .cel-b.krit, html.tumss .fk-def { background: rgba(248,113,113,.14) !important; }
+html.tumss .cel-b.brid, html.tumss .fk-izl { color: var(--t-oranzs) !important; background: rgba(251,191,36,.14) !important; }
+html.tumss .fk-ser.akt { color: var(--t-zals); background: rgba(74,222,128,.15); }
+html.tumss .ks-vt.maj { color: var(--t-zils); background: rgba(147,197,253,.14); }
+html.tumss .ld-x summary { color: var(--t-zils); }
+html.tumss :is(.fm-b, .l5u) { box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+/* viesu komandas krāsa (bija gandrīz melna) */
+html.tumss :is(.cf-c i.b, .cmp-krasa.b, .cmp-bar i.b) { background: var(--t-viesi) !important; }
+html.tumss .cel-c.r { border-top-color: var(--t-viesi) !important; }
+/* tabulas */
+html.tumss .tb, html.tumss .tb :is(th, td) { color: var(--t-teksts); border-color: rgba(255,255,255,.09) !important; }
+html.tumss .tb thead th, html.tumss .tb :is(td.c0, th.c0, td.c1, th.c1) { background: #1f2b3e !important; }
+html.tumss .tb tbody tr:hover, html.tumss .tb tbody tr:hover td { background: rgba(147,197,253,.08) !important; }
+html.tumss .tb .bubble a, html.tumss .mc-det a { color: var(--t-zils) !important; }
+/* paskaidrojumi */
+html.tumss :is(.ld-tip, .fb i, .l5u, .fm-b, .kn-r a.kn-a, .tb a.tb-saite)[data-tip]:hover::after,
+html.tumss :is(.ld-tip, .fb i):focus::after { background: #0e1626 !important; border: 1px solid rgba(255,255,255,.14); }
+html.tumss :is(.tip .bubble, .tb .bubble) { background: #0e1626 !important; color: var(--t-teksts) !important; border-color: rgba(255,255,255,.14) !important; }
+/* rezultātu kartītes */
+html.tumss .mc-btn { color: var(--t-zils); border-color: rgba(147,197,253,.45) !important; }
+html.tumss :is(.mc-lines, .mc-info, .mc-det) { color: var(--t-teksts); }
+/* Streamlit logrīki */
+html.tumss [data-baseweb="select"] > div, html.tumss [data-baseweb="input"], html.tumss [data-baseweb="base-input"],
+html.tumss [data-baseweb="textarea"], html.tumss .stDateInput [data-baseweb="input"] { background-color: var(--t-karte2) !important; border-color: var(--t-mala) !important; }
+html.tumss [data-baseweb="select"] *, html.tumss [data-baseweb="input"] input, html.tumss [data-baseweb="base-input"] input { color: var(--t-teksts) !important; }
+html.tumss [data-baseweb="popover"] :is(ul, [role="listbox"], [data-baseweb="menu"], [data-baseweb="calendar"]),
+html.tumss [data-testid="stPopoverBody"] { background-color: var(--t-karte2) !important; color: var(--t-teksts) !important; }
+html.tumss [data-baseweb="popover"] [role="option"] { color: var(--t-teksts) !important; }
+html.tumss [data-baseweb="popover"] [role="option"]:hover, html.tumss [data-baseweb="popover"] [aria-selected="true"] { background-color: #2e3f5c !important; }
+html.tumss [data-baseweb="calendar"] * { color: var(--t-teksts); }
+html.tumss [data-testid="stExpander"] details { background: rgba(37,49,68,.55); border-color: var(--t-mala) !important; }
+html.tumss [data-testid="stExpander"] summary, html.tumss [data-testid="stExpander"] summary * { color: var(--t-teksts) !important; }
+html.tumss [data-baseweb="tab-list"] { border-color: rgba(255,255,255,.12) !important; }
+html.tumss [data-baseweb="tab"] p { color: var(--t-blavs) !important; }
+html.tumss [data-baseweb="tab"][aria-selected="true"] p { color: var(--t-zils) !important; }
+html.tumss [data-testid="stAlertContainer"] { background-color: rgba(147,197,253,.12) !important; color: var(--t-teksts) !important; }
+html.tumss [data-testid="stAlertContainer"] * { color: var(--t-teksts) !important; }
+html.tumss :is([data-testid="stVerticalBlockBorderWrapper"], [data-testid="stVerticalBlock"][style*="border"], [data-testid="stMetric"]) { border-color: var(--t-mala) !important; }
+html.tumss [data-testid="stMetric"] { background: rgba(37,49,68,.55); }
+html.tumss :is([data-testid="stTickBar"] *, [data-testid="stThumbValue"], [data-testid="stSliderTickBarMin"], [data-testid="stSliderTickBarMax"]) { color: var(--t-blavs) !important; }
+html.tumss :is(.stDownloadButton, .stButton) button:not([kind="primary"]) { background: #22304a; color: var(--t-teksts); border-color: var(--t-mala); }
+html.tumss .kaj { color: var(--t-blavs); }
+html.tumss :is(.ld-foto, .fk-foto):not(.ld-logo) { background-color: #2c3c57; }   /* spēlētāju foto aplis tumšajā motīvā */
+html.tumss :is(.tb-logo, .ks-o img, .l5lg, .cmp-logo, .kn-r img, .fk-iz img, .mc img) { filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.18)); }   /* tumšas krāsas logo (melni elementi) ir saskatāmi uz tumšā fona */
+/* slēdzis saule / mēness (ievieto skripts augšējā joslā) */
+.tema-sw { position: absolute; top: 50%; right: .7rem; transform: translateY(-50%); width: 3.1rem; height: 1.65rem; border-radius: 999px; border: 1px solid rgba(255,255,255,.18);
+  background: #1e293b; cursor: pointer; padding: 0; z-index: 20; }
+.tema-sw svg { position: absolute; top: 50%; width: .95rem; height: .95rem; transform: translateY(-50%); pointer-events: none; }
+.tema-sw .s { left: .4rem; color: #fbbf24; } .tema-sw .m { right: .4rem; color: #c7d2fe; }
+.tema-sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: calc(1.65rem - 6px); height: calc(1.65rem - 6px); border-radius: 50%;
+  background: #f8fafc; box-shadow: 0 1px 3px rgba(0,0,0,.4); transition: transform .2s ease; }
+html.tumss .tema-sw::after { transform: translateX(1.45rem); background: #e0e7ff; }
+.tema-sw:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.st-key-topbar { padding-right: 4.2rem !important; }
+@media (max-width: 640px) { .tema-sw { top: .55rem; transform: none; right: .55rem; } }
 </style>""", unsafe_allow_html=True)
 
 # ============================================================================
@@ -3797,6 +3874,36 @@ IZVELNES_SKRIPTS = """
   plan();
   w.__nhlIzv = { reg: reg };
   var b0 = josla(); if (b0) b0.classList.remove('nav-aizvert');          // jauns kadrs = tīrs sākums
+  // ---- tumšais motīvs: slēdzis saule/mēness joslas labajā stūrī; izvēle glabājas pārlūkā (localStorage "nhl_tema") ----
+  function tumss() { try { return w.localStorage.getItem('nhl_tema') === 'tumss'; } catch (e) { return false; } }
+  var IFR_CSS = 'html.tumss body{color:#e6ebf2!important;background:transparent!important}html.tumss .lbl,html.tumss .nos,html.tumss span,html.tumss div{color:#e6ebf2}';
+  function iframes(t) {                    // tās pašas izcelsmes komponenti (piem., rullīši): tāda pati klase un gaišs teksts
+    d.querySelectorAll('iframe').forEach(function (f) {
+      try { var dd = f.contentDocument; if (!dd || !dd.documentElement) return;
+        dd.documentElement.classList.toggle('tumss', t);
+        if (!dd.getElementById('nhl-tumss')) { var s = dd.createElement('style'); s.id = 'nhl-tumss'; s.textContent = IFR_CSS; (dd.head || dd.documentElement).appendChild(s); }
+      } catch (e) {}
+    });
+  }
+  function piemerot() { var t = tumss(); d.documentElement.classList.toggle('tumss', t); iframes(t);
+    var sw = d.querySelector('.tema-sw'); if (sw) { sw.setAttribute('aria-pressed', t ? 'true' : 'false'); sw.title = t ? 'Gaišais motīvs' : 'Tumšais motīvs'; } }
+  function sledzis(atjaunot) {
+    var b = josla(); if (!b) return;
+    var vecais_sw = b.querySelector('.tema-sw');
+    if (vecais_sw) { if (!atjaunot) return; vecais_sw.remove(); }       // jauns skripta kadrs: slēdzis ar dzīvu klikšķa apstrādi
+    var sw = d.createElement('button'); sw.type = 'button'; sw.className = 'tema-sw'; sw.setAttribute('aria-label', 'Gaišais / tumšais motīvs');
+    sw.innerHTML = '<svg class="s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/>'
+      + '<path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg>'
+      + '<svg class="m" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1z"/></svg>';
+    sw.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation();
+      try { w.localStorage.setItem('nhl_tema', tumss() ? 'gaiss' : 'tumss'); } catch (e2) {}
+      piemerot(); });
+    b.appendChild(sw); piemerot();
+  }
+  piemerot(); sledzis(true);
+  if (w.__nhlTemaMO) { try { w.__nhlTemaMO.disconnect(); } catch (e) {} }   // vecā kadra novērotāju aizstāj ar šī kadra
+  w.__nhlTemaMO = new w.MutationObserver(function () { if (josla() && !d.querySelector('.tema-sw')) sledzis(false); if (tumss()) iframes(true); });
+  w.__nhlTemaMO.observe(d.body, { childList: true, subtree: true });
   function tirit() {                       // kadrs tiek likvidēts: noņem savus klausītājus un iestrēgušo stāvokli
     try { reg.forEach(function (n) { d.removeEventListener(n[0], n[1], true); }); if (w.__nhlIzv && w.__nhlIzv.reg === reg) w.__nhlIzv = null; var b = josla(); if (b) b.classList.remove('nav-aizvert'); } catch (e) {}
   }
