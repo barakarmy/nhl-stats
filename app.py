@@ -242,7 +242,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.7"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.8"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -2777,8 +2777,15 @@ def lapa_fakti():
             izv_kom = st.selectbox("Komanda", opc, key="fk_cb_kom",
                                    format_func=lambda kk: kk if kk == "Visas komandas" else f"{da.pilns_nosaukums(kk)} ({int(skaits[kk])})")
             rindas_cb = cb if izv_kom == "Visas komandas" else [r for r in cb if r["komanda"] == izv_kom]
+            rindas_cb = sorted(rindas_cb, key=lambda r: (r["datums"], r["game_id"]), reverse=True)    # secīgi pēc notikuma laika (jaunākās vispirms)
+            # lapošana pa 10 spēlēm; mainot komandu, sāk no 1. lapas
+            if st.session_state.get("fk_cb_pedeja_kom") != izv_kom:
+                st.session_state["fk_cb_pedeja_kom"] = izv_kom
+                st.session_state["fk_cb_lapa"] = 1
+            lapas_n = max(1, -(-len(rindas_cb) // CB_LAPA))
+            lapa = min(max(1, st.session_state.get("fk_cb_lapa", 1)), lapas_n)
             rn = ""
-            for r in rindas_cb:
+            for r in rindas_cb[(lapa - 1) * CB_LAPA: lapa * CB_LAPA]:
                 kom, pret = r["komanda"], r["pretinieks"]
                 h_, a_ = r["gala"].split(":")
                 savi, pretv = (h_, a_) if r["majas"] else (a_, h_)
@@ -2791,6 +2798,13 @@ def lapa_fakti():
                        f'<a class="ks-s" href="{e(speles_saite(r["game_id"]))}" target="_blank" rel="noopener">{savi}:{pretv}{(" " + r["beigas"]) if r["beigas"] != "REG" else ""}</a>'
                        f'<span class="ks-z">{rez_zime(fakti_rez_kods(r))}</span></div>')
             st.markdown(f'<div class="ks">{rn}</div>', unsafe_allow_html=True)
+            if lapas_n > 1:
+                st.markdown(f'<div class="fk-liga">Lapa {lapa} no {lapas_n} · spēles {(lapa - 1) * CB_LAPA + 1}–{min(lapa * CB_LAPA, len(rindas_cb))} no {len(rindas_cb)}</div>',
+                            unsafe_allow_html=True)
+                with st.container(key="pgr_fk_cb"):
+                    for nr in range(1, lapas_n + 1):
+                        st.button(str(nr), key=f"fk_cb_l{nr}", type="primary" if nr == lapa else "secondary",
+                                  on_click=lambda n_=nr: st.session_state.__setitem__("fk_cb_lapa", n_))
 
     # --- izcēlumi: komandas, kas kādā rādītājā ļoti atšķiras no līgas ---
     izc = fakti.izcelumi(ier)
@@ -2804,6 +2818,9 @@ def lapa_fakti():
         st.markdown(f'<div class="fk-liga">Pagaidām neviena komanda būtiski neizceļas. Izcēlumam vajag vismaz {fakti.IZCELUMA_MIN_SP} spēles situācijā '
                     f'un vismaz {int(fakti.IZCELUMA_MIN_STARP * 100)} procentpunktu atšķirību no līgas vidējā.</div>', unsafe_allow_html=True)
     st.download_button("Lejupielādēt datus (JSON)", data=js, file_name="nhl_fakti.json", mime="application/json", key="fakti_json")
+
+
+CB_LAPA = 10        # comebacks sarakstā spēles vienā lapā
 
 
 def fakti_rez_kods(r):
