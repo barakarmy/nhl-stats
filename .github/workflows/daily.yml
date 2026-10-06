@@ -1,9 +1,12 @@
+# NHL Daily Update: vāc NHL oficiālos datus (api-web.nhle.com) → dati/*.csv un nhl_kalendars.csv.
+# Palaiž: cron-job.org katru dienu 08:40 (Europe/Riga, caur GitHub API workflow_dispatch) + GitHub grafiks zemāk (rezerve).
+# !!! cron-job.org izmanto GitHub fine-grained žetonu, kas derīgs līdz 2027-07-30 – pirms tam jāatjauno.
 name: NHL Daily Update
 
 on:
   schedule:
-    # 08:17 UTC (11:17 Rīgā). Pilnas stundas sākumā GitHub plānotos darbus kavē visvairāk; tie var kavēties arī tagad (labākais: ārējs taimeris, sk. README).
-    - cron: '17 8 * * *'
+    # Rezerve: 08:15 UTC = 11:15 Rīgā vasaras laikā (10:15 ziemas laikā). Galvenā palaišana: cron-job.org 08:40 (Europe/Riga) caur workflow_dispatch.
+    - cron: '15 8 * * *'
   workflow_dispatch:
     inputs:
       sakums:
