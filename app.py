@@ -247,14 +247,15 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.10"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.13"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
-    # atsevišķas pogas joslā (bez izvēlnes)
+    # zīmols "NHL stats" ved uz Fakti (atsevišķas pogas joslā tiem nav); sākumlapa vienmēr ir Karstākie spēlētāji
+    {"zimols": ("lapa_fakti", "Fakti", "facts", "lightbulb")},
+    # atsevišķas pogas joslā (bez izvēlnes); pirmā no tām (Karstākie spēlētāji) ir sākumlapa
     {"lapa": ("lapa_karstie", "Karstākie spēlētāji", "hot-players", "local_fire_department")},
     {"lapa": ("lapa_prognozes", "Prognozes", "predictions", "insights")},
-    {"lapa": ("lapa_fakti", "Fakti", "facts", "lightbulb")},
     # grupas ar izvēlni (funkcija, nosaukums, url, Material ikona)
     {"grupa": "Komandas", "lapas": [
         ("lapa_parskats", "Līgas pārskats", "standings", "leaderboard"),
@@ -295,14 +296,18 @@ def _lapa(rec, noklusejuma):
 
 
 STRUKTURA, _pirma = [], True            # [(tips, nosaukums, [(ieraksts, st.Page), ...]), ...]
+ZIMOLA_LAPA = None
 for _ier in NAV:
+    if "zimols" in _ier:                                  # lapa zem zīmola (nav sākumlapa)
+        ZIMOLA_LAPA = _lapa(_ier["zimols"], False)
+        continue
     _recs = _ier["lapas"] if "grupa" in _ier else [_ier["lapa"]]
     _lapas = []
     for _rec in _recs:
         _lapas.append((_rec, _lapa(_rec, _pirma)))
         _pirma = False
     STRUKTURA.append(("grupa", _ier["grupa"], _lapas) if "grupa" in _ier else ("lapa", _recs[0][1], _lapas))
-VISAS_LAPAS = [p for _, _, saraksts in STRUKTURA for _, p in saraksts]
+VISAS_LAPAS = [p for _, _, saraksts in STRUKTURA for _, p in saraksts] + ([ZIMOLA_LAPA] if ZIMOLA_LAPA else [])   # [0] = sākumlapa
 
 
 
@@ -310,7 +315,7 @@ VISAS_LAPAS = [p for _, _, saraksts in STRUKTURA for _, p in saraksts]
 if NAV_REZIMS == "pielagots":
     lapas = st.navigation(VISAS_LAPAS, position="hidden")
 else:
-    lapas = st.navigation({n: [p for _, p in s] for t, n, s in STRUKTURA}, position="top")
+    lapas = st.navigation({**({"NHL stats": [ZIMOLA_LAPA]} if ZIMOLA_LAPA else {}), **{n: [p for _, p in s] for t, n, s in STRUKTURA}}, position="top")
 
 if not check_password():
     st.stop()
@@ -2687,7 +2692,6 @@ def fakti_dati(versija):
 
 
 def lapa_fakti():
-    st.title("Fakti")
     gaita, kops, js, ier = fakti_dati(VERSIJA)
     if gaita is None:
         st.info("Šai sadaļai vajag failu fakti.py un vārtu datus (dati/varti.csv).")
@@ -3695,7 +3699,7 @@ def augseja_josla(aktiva):
     pedejais = len(STRUKTURA) - 1
     with st.container(key="topbar"):
         with st.container(key="brand"):
-            st.page_link(VISAS_LAPAS[0], label="NHL stats", icon=":material/sports_hockey:")
+            st.page_link(ZIMOLA_LAPA or VISAS_LAPAS[0], label="NHL stats", icon=":material/sports_hockey:")
         for i, (tips, nosaukums, saraksts) in enumerate(STRUKTURA):
             if tips == "lapa":
                 akt = saraksts[0][1].title == aktiva.title
