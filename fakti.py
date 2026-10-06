@@ -291,6 +291,78 @@ def izcelumi(ier, min_sp=IZCELUMA_MIN_SP, min_starp=IZCELUMA_MIN_STARP, max_skai
     return sorted(rez, key=lambda x: -abs(x["z"]))[:max_skaits]
 
 
+# ============================================================================
+# VĀRTSARGU SAUSĀS SĒRIJAS (shutout streaks): minūtes pēc kārtas bez ielaistiem vārtiem
+# ============================================================================
+SAUSAS_MIN_SEK = 120 * 60        # sadaļā rāda sērijas, kas sasniegušas vismaz 120 minūtes
+
+
+def _toi_sek(toi):
+    try:
+        m, s_ = str(toi).split(":")
+        return int(m) * 60 + int(s_)
+    except (ValueError, AttributeError):
+        return 0
+
+
+def sausas_serijas(vartsargi, varti, min_sek=SAUSAS_MIN_SEK):
+    """
+    Katram vārtsargam iet cauri viņa spēlēm hronoloģiski un skaita laiku laukumā bez ielaistiem vārtiem.
+    Vārtsarga laiks spēlē: sākumā stājies vārtos (starter) – no 0 līdz savam TOI; maiņā ienākušais – no sākumsarga TOI beigām.
+    Vārti, kas gūti, kamēr vārtsargs nebija laukumā (piem., tukšos vārtos), viņa sēriju nepārtrauc. Metienu sērija netiek skaitīta.
+    Atgriež sarakstu: aktīvās sērijas ≥ min_sek un sērijas ≥ min_sek, kas pārtrauktas vārtsarga pēdējā spēlē.
+    """
+    v = varti[varti["period_type"].astype(str).str.upper() != "SO"].copy()
+    v["sek"] = [(int(p_) - 1) * 1200 + _laiks_sek(t) for p_, t in zip(v["period"], v["laiks"])]
+    vg = vartsargi.copy()
+    vg["toi_s"] = vg["toi"].map(_toi_sek)
+    vg = vg[vg["toi_s"] > 0]
+    starta = vg[vg["starter"].astype(str).str.lower().isin(["true", "1"])].set_index(["game_id", "team"])["toi_s"].to_dict()
+    rez = []
+    for pid, g in vg.sort_values(["datums", "game_id"]).groupby("playerId"):
+        cur, sakums, pedeja_partr, pedeja_spele = 0, None, None, None
+        for r in g.itertuples(index=False):
+            is_starter = str(r.starter).lower() in ("true", "1")
+            no = 0 if is_starter else starta.get((r.game_id, r.team), 0)
+            lidz = no + r.toi_s
+            pret = v[(v["game_id"] == r.game_id) & (v["komanda"] != r.team) & (v["sek"] >= no) & (v["sek"] < lidz)]["sek"].sort_values()
+            punkts, partr_speles = no, None
+            if cur == 0:
+                sakums = (str(r.datums)[:10], int(r.game_id))
+            for s_ in pret:
+                cur += s_ - punkts
+                if cur >= min_sek and (partr_speles is None or cur > partr_speles["sek"]):
+                    per = min(int(s_ // 1200) + 1, 4)
+                    t_ = int(s_ - (per - 1) * 1200)
+                    partr_speles = {"sek": cur, "datums": str(r.datums)[:10], "game_id": int(r.game_id),
+                                    "brids": f"{per if per <= 3 else 'OT'}{'. periods' if per <= 3 else ''} {t_ // 60:02d}:{t_ % 60:02d}"}
+                cur, punkts = 0, s_
+                sakums = (str(r.datums)[:10], int(r.game_id))
+            cur += lidz - punkts
+            pedeja_partr = partr_speles                   # tikai pēdējā spēlē pārtrauktā sērija paliek redzama
+            pedeja_spele = r
+        if pedeja_spele is None:
+            continue
+        pamats = {"playerId": int(pid), "vards": pedeja_spele.vards, "komanda": pedeja_spele.team,
+                  "pedeja_spele": str(pedeja_spele.datums)[:10], "pedeja_game_id": int(pedeja_spele.game_id)}
+        if cur >= min_sek:
+            rez.append(dict(pamats, aktiva=True, sek=int(cur), sakums=sakums[0] if sakums else None))
+        if pedeja_partr:
+            rez.append(dict(pamats, aktiva=False, sek=int(pedeja_partr["sek"]), partraukta=pedeja_partr["datums"],
+                            partraukta_game_id=pedeja_partr["game_id"], partraukta_brids=pedeja_partr["brids"]))
+    return sorted(rez, key=lambda x: (not x["aktiva"], -x["sek"]))
+
+
+def shutouts(vartsargi):
+    """Shutout (sausā spēle) katram vārtsargam: uzvara bez ielaistiem vārtiem, nostāvot visu spēli vienam (playerId → skaits)."""
+    vg = vartsargi.copy()
+    vg["toi_s"] = vg["toi"].map(_toi_sek)
+    sp = vg[vg["toi_s"] > 0]
+    vieni = sp.groupby(["game_id", "team"])["playerId"].transform("count") == 1
+    so = sp[vieni & (sp["goalsAgainst"].fillna(1) == 0) & (sp["decision"].astype(str).str.upper() == "W")]
+    return so.groupby("playerId").size()
+
+
 if __name__ == "__main__":                  # python fakti.py → dati/fakti.json
     import os
     mape = os.environ.get("NHL_DATU_MAPE", "dati")
