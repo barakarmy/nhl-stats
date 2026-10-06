@@ -1,3 +1,45 @@
+"""
+NHL analītika – Streamlit lietotne (nhl-stats-lv.streamlit.app, repozitorijs barakarmy/nhl-stats).
+
+KĀ DATI NONĀK LIETOTNĒ
+----------------------
+Lietotne pati NHL datus nevāc: tā tikai nolasa CSV failus no repozitorija mapes dati/ un nhl_kalendars.csv.
+Šos failus atjaunina divas GitHub Actions darbplūsmas (.github/workflows/), un katru no tām palaiž divi grafiki:
+
+1) NHL Daily Update (.github/workflows/daily.yml → python nhl_dati.py --vieglais, pēc tam kalendars.py)
+   - Avots: NHL oficiālā statistika (api-web.nhle.com: score, landing, boxscore, play-by-play, right-rail).
+   - Raksta: dati/speles.csv (spēles, periodi, metieni, minor sodi, vairākums), dati/speletaji.csv, dati/vartsargi.csv,
+     dati/varti.csv, dati/tiesnesi.csv (faktiskie tiesneši) un nhl_kalendars.csv (nākamās spēles).
+   - Palaišana:
+       a) cron-job.org katru dienu 08:40 pēc Rīgas laika (workflow_dispatch caur GitHub API) – galvenais, precīzs grafiks;
+       b) GitHub paša grafiks '15 8 * * *' (UTC) = 11:15 Rīgā vasaras laikā / 10:15 ziemas laikā – rezerve (var kavēties).
+   - Ar roku (Actions → Run workflow): datumu intervāls, "atjaunot" (pārrakstīt) vai "pēdējās 8h / 4h / 2h".
+   - Statistika lietotnē = tikai pamatlaiks; papildlaiks un metienu sērijas tiek krāti atsevišķi (sadaļa OT / SO).
+
+2) NHL Referees (.github/workflows/referees.yml → python tiesnesi_planotie.py)
+   - Avots: Scouting The Refs (dienas ieraksts "Tonight's NHL Referees and Linespersons"), rezerve: NHL right-rail.
+   - Raksta: dati/tiesnesi_planotie.csv (pirms spēlēm paziņotie tiesneši).
+   - Palaišana:
+       a) cron-job.org ik 30 minūtes 14:00–23:30 pēc Rīgas laika (workflow_dispatch) – galvenais;
+       b) GitHub grafiks '7,22,37,52 12-23 * * *' (UTC) – rezerve.
+   - Katra palaišana vispirms ātri pārbauda (~10 s), vai kādai spēlei tuvāko 6 stundu laikā trūkst tiesnešu;
+     pilna ielāde notiek tikai tad (taupa GitHub Actions minūtes). Piespiedu ielāde: Run workflow → "Ielādēt tiesnešus vienmēr".
+   - Lietotne papildus pati (tiešsaistē, ik 10 min, ar 8 s laika limitu) pārbauda Scouting The Refs spēlēm, kurām failā tiesnešu vēl nav.
+
+!!! cron-job.org darbi izmanto GitHub "fine-grained" žetonu (tikai Actions: Read and write repozitorijam nhl-stats),
+!!! kura derīgums beidzas 2027-07-30. Līdz tam jāizveido jauns žetons (github.com/settings/personal-access-tokens/new)
+!!! un jānomaina abu cron-job.org darbu galvenē "Authorization: Bearer ...". Citādi automātiskā atjaunināšana apstāsies.
+
+CITI SVARĪGI FAKTI
+------------------
+- Parole: Streamlit Secrets → APP_PASSWORD. Pieteikšanās tiek atcerēta pārlūkā 30 dienas (localStorage paraksts);
+  saitēm uz jaunām cilnēm tiek pievienots īslaicīgs paraksts ?t=...
+- Motīvs vienmēr gaišs (.streamlit/config.toml: base = "light").
+- Noraidījumi = tikai minor sodi (dubultais minor = 2); bez major, 10 min disciplinārajiem un kautiņiem.
+- Moduļi: datu_apstrade.py (aprēķini), lokacijas.py (attālumi, laika joslas), modelis.py (Puasona prognozes),
+  rulli.py (komandu izvēle ar rullīšiem), fons.py (fona attēls), tiesnesi_planotie.py (tiesneši), nhl_dati.py (datu vākšana).
+- APP_VERSIJA (zemāk) redzama katras lapas apakšā – palielini to pēc katras izmaiņas, lai pārbaudītu, vai Streamlit rāda jauno failu.
+"""
 import datetime
 import hashlib
 import hmac
@@ -196,7 +238,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "2026-10-05.26"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "2026-10-06.1"      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -212,11 +254,11 @@ NAV = [
     {"grupa": "Statistika", "lapas": [
         ("lapa_periodi", "Periodi", "periodi", "view_timeline"),
         ("lapa_forma", "Forma un vārti", "forma", "trending_up"),
-        ("lapa_over_under", "Over / Under", "over-under", "swap_vert"),
-        ("lapa_powerplay", "Powerplay", "powerplay", "bolt"),
-        ("lapa_noraidijumi", "Noraidījumi", "noraidijumi", "gavel"),
+        ("lapa_over_under", "Vairāk / Mazāk", "over-under", "swap_vert"),
+        ("lapa_powerplay", "Vairākums", "powerplay", "bolt"),
         ("lapa_mazakums", "Mazākums", "mazakums", "shield"),
         ("lapa_otso", "OT / SO", "ot-so", "timer"),
+        ("lapa_noraidijumi", "Noraidījumi", "noraidijumi", "gavel"),
     ]},
     {"grupa": "Spēlētāji un tiesneši", "lapas": [
         ("lapa_speletaji", "Spēlētāji", "speletaji", "person"),
@@ -764,6 +806,10 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .l5u.rwo, .fm-b.rwo { background: linear-gradient(90deg, #f3a000 0 30%, #00a83f 30% 100%); }
 .l5u.rlo, .fm-b.rlo { background: linear-gradient(90deg, #f3a000 0 30%, #dc0000 30% 100%); }
 .fm { gap: .35rem; }
+/* kājene: paskaidrojums par lapu */
+.kaj { max-width: 900px; margin: 3rem auto 0; padding-top: 1rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .8rem; line-height: 1.55; opacity: .75; }
+.kaj p { margin: 0 0 .7rem; }
+.kaj-pied { font-style: italic; opacity: .85; }
 /* ceļojuma faktors salīdzinājumā */
 .cel { margin: 1.7rem 0 .2rem; }
 .cel-h { text-align: center; font-weight: 800; font-size: .88rem; letter-spacing: .07em; opacity: .9; margin-bottom: .2rem; }
@@ -2822,7 +2868,9 @@ def rez_kartite_html(away, home, at, ht, ra, rh, iznakums, linijas, uid="g", det
         + beigas)
 
 
-DATU_ATJAUNINASANA = (11, 15)      # ikdienas datu atjaunināšana (cron-job.org → NHL Daily Update), pēc Rīgas laika
+# Ikdienas datu atjaunināšana (NHL Daily Update): cron-job.org 08:40 pēc Rīgas laika un GitHub rezerve 08:15 UTC (11:15 Rīgā vasaras laikā)
+DATU_ATJAUNINASANA_LV = [(8, 40)]                 # cron-job.org (darba laika josla Europe/Riga)
+DATU_ATJAUNINASANA_UTC = [(8, 15)]                # GitHub grafiks daily.yml: '15 8 * * *' (UTC)
 
 
 def rezultatu_statuss():
@@ -2833,11 +2881,15 @@ def rezultatu_statuss():
     c = da.DATU_MAPE / "speles.csv"
     atjaun = lv(datetime.datetime.fromtimestamp(c.stat().st_mtime, datetime.timezone.utc)) if c.exists() else None
     sak = RAW["datums_lv"].dt.date
-    teksts = (f"Pēdējā atjaunošana: {f(atjaun)} · " if atjaun else "") + f"rezultāti līdz {sak.max():%d.%m.} ({len(RAW)} spēles)"
-    nak = lv(tagad).replace(hour=DATU_ATJAUNINASANA[0], minute=DATU_ATJAUNINASANA[1], second=0, microsecond=0)
-    if nak <= lv(tagad):
-        nak += timedelta(days=1)
-    return teksts + f" · nākošā atjaunošana: {f(nak)}."
+    teksts = (f"Pēdējā atjaunošana: {f(atjaun)} · " if atjaun else "") + f"Rezultāti līdz {sak.max():%d.%m.} ({len(RAW)} spēles)"
+    kandidati = []                                     # nākamie ieplānotie laiki šodien un rīt (abi grafiki), agrākais pēc tagad
+    for d_ in (0, 1):
+        for h, m in DATU_ATJAUNINASANA_LV:
+            kandidati.append((lv(tagad) + timedelta(days=d_)).replace(hour=h, minute=m, second=0, microsecond=0))
+        for h, m in DATU_ATJAUNINASANA_UTC:
+            kandidati.append(lv((tagad + timedelta(days=d_)).replace(hour=h, minute=m, second=0, microsecond=0)))
+    nak = min(k for k in kandidati if k > lv(tagad))
+    return teksts + f" · Nākošā atjaunošana: {f(nak)}."
 
 
 def lapa_rezultati():
@@ -3370,6 +3422,30 @@ if NAV_REZIMS == "pielagots":
         except Exception:       # skripts ir tikai uzlabojums: bez tā izvēlne aizveras, nospiežot jebkur citur
             pass
 lapas.run()
-st.markdown(f'<div style="text-align:center;font-size:.7rem;opacity:.35;margin-top:2rem">versija {APP_VERSIJA}</div>', unsafe_allow_html=True)
+
+
+def kajene_html():
+    """Lapas apakšā: kā tiek rēķināts, kādi dati pieejami, no kurienes tie nāk un ka tie ir tikai informatīvi."""
+    try:
+        d_ = RAW["datums_lv"].dt.date
+        periods = f"šīs sezonas spēles no {d_.min():%d.%m.%Y} līdz {d_.max():%d.%m.%Y} ({len(RAW)} spēles)"
+    except Exception:
+        periods = "šīs sezonas aizvadītās spēles"
+    return f'''<div class="kaj">
+<p><b>Kā tiek rēķināts.</b> Visi rādītāji (vārti, metieni, noraidījumi, vairākums, periodi) ir tikai par pamatlaiku – papildlaiks
+un pēcspēles metienu sērijas netiek ieskaitīti; tās ir apkopotas atsevišķi sadaļā OT / SO. Vidējie ir kopsumma, dalīta ar
+izvēlēto spēļu skaitu (visa sezona, pēdējās 5 vai pēdējās 10, visas vai tikai mājās / viesos). Noraidījumi ir minor sodi
+(dubultais minor = 2), bez lielajiem un disciplinārajiem sodiem. Bilance (win, loss, OT loss) un punkti ir oficiālie rezultāti.</p>
+<p><b>Pieejamie dati.</b> {periods}; nākamo spēļu kalendārs uz priekšu; tiesnešu statistikā arī pagājušās sezonas dati.
+Sezonas sākumā spēļu ir maz, tāpēc vidējie un vietas tabulās var strauji mainīties.</p>
+<p><b>Datu avoti.</b> NHL oficiālā statistika (rezultāti, spēlētāji, vārtsargi, notikumi, kalendārs, tiesneši pēc spēles)
+un Scouting The Refs (pirms spēlēm paziņotie tiesneši). Dati tiek atjaunināti automātiski katru dienu.</p>
+<p class="kaj-pied">Visa informācija ir tikai informatīva un balstīta uz matemātiskiem aprēķiniem no pieejamajiem datiem.
+Tā nav garantija un nav ieteikums.</p>
+</div>'''
+
+
+st.markdown(kajene_html(), unsafe_allow_html=True)
+st.markdown(f'<div style="text-align:center;font-size:.7rem;opacity:.35;margin-top:1rem">versija {APP_VERSIJA}</div>', unsafe_allow_html=True)
 
 # ===== app.py beigas (ja šī rinda redzama GitHub failā, fails ir augšupielādēts pilnīgi) =====
