@@ -747,6 +747,13 @@ def main():
     print(f"\nGatavs. Jaunas spēles: {pievienotas}. Kļūdas: {kludu_skaits}. Mape: {DATU_MAPE}")
     if kludu_skaits:
         sys.exit(1)
+    # veiksmīgas atjaunināšanas laiks (lietotne to rāda kā "Pēdējā atjaunošana"; neveiksmīga palaišana to nemaina)
+    try:
+        with open(os.path.join(DATU_MAPE, "pedeja_atjaunosana.json"), "w", encoding="utf-8") as f:
+            json.dump({"utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "jaunas_speles": pievienotas,
+                       "rezims": (f"pedejas {PEDEJAS_STUNDAS:g}h" if PEDEJAS_STUNDAS else ("atjaunot" if ATJAUNOT else "parasts"))}, f)
+    except OSError as ex:
+        print("Neizdevās saglabāt atjaunināšanas laiku:", ex)
 
 
 if __name__ == "__main__":
