@@ -69,13 +69,14 @@ html.tumss .lg img { filter: blur(calc(var(--b, 0px) * var(--k))) drop-shadow(0 
     document.documentElement.style.setProperty('--logo', LOGO + 'px');
     document.documentElement.style.setProperty('--item', ITEM + 'px');
   }
-  function build(el) {
+  function build(el, list) {               // katram rullītim savs saraksts: visas komandas, izņemot otrā rullītī izvēlēto
+    el._list = list; el._n = list.length;
     el.innerHTML = '';
     var sp = function () { var d = document.createElement('div'); d.className = 'sp'; return d; };
     el.appendChild(sp());
     for (var c = 0; c < COPIES; c++) {
-      teams.forEach(function (t, i) {
-        var it = document.createElement('div'); it.className = 'it'; it.dataset.g = c * N + i;
+      list.forEach(function (t, i) {
+        var it = document.createElement('div'); it.className = 'it'; it.dataset.g = c * el._n + i;
         var lg = document.createElement('div'); lg.className = 'lg';
         var img = document.createElement('img'); img.src = t.logo; img.alt = t.kods; img.draggable = false;
         lg.appendChild(img); it.appendChild(lg); el.appendChild(it);
@@ -83,8 +84,30 @@ html.tumss .lg img { filter: blur(calc(var(--b, 0px) * var(--k))) drop-shadow(0 
     }
     el.appendChild(sp());
   }
-  function gidx(el) { return clamp(Math.round(el.scrollTop / ITEM), 0, COPIES * N - 1); }
-  function team(el) { return teams[gidx(el) % N]; }
+  function gidx(el) { return clamp(Math.round(el.scrollTop / ITEM), 0, COPIES * el._n - 1); }
+  function team(el) { return el._list[gidx(el) % el._n]; }
+  function otrs(el) { return el === reels.a ? reels.b : reels.a; }
+  function bez(kods) { return teams.filter(function (t) { return t.kods !== kods; }); }
+  function iezimet(el) {                   // izvēlētais vienums un tā kaimiņu izskats pēc pašreizējās pozīcijas
+    var g = gidx(el), items = el.querySelectorAll('.it');
+    for (var i = Math.max(0, g - 7); i < Math.min(items.length, g + 8); i++) items[i].classList.toggle('sel', i === g);
+    paint(el);
+  }
+  // Kad viens rullītis apstājas uz komandas, otrā rullītī šī komanda vairs nav redzama (otru pārbūvē, saglabājot tā izvēli).
+  // Ja otrs rullītis tobrīd kustas, pārbūve notiek, kad tas apstājas (tad tas pārbūvē šo).
+  function sinhronizet(el) {
+    var o = otrs(el); if (!o || !o._list) return;
+    var izv = team(el).kods;
+    if (o._list.length === N - 1 && !o._list.some(function (t) { return t.kods === izv; })) return;     // jau sakārtots
+    if (o._kustas || o.classList.contains('drag')) return;
+    var cur = team(o).kods;
+    if (cur === izv) { var j = teams.findIndex(function (t) { return t.kods === izv; }); cur = teams[(j + 1) % N].kods; }   // drošībai
+    var list = bez(izv), ti = list.findIndex(function (t) { return t.kods === cur; });
+    o._skip = 1; o.style.scrollSnapType = 'none';
+    build(o, list);
+    o.scrollTop = (MID * o._n + Math.max(0, ti)) * ITEM; o.style.scrollSnapType = '';
+    iezimet(o); setK(o, 1, 0); o.classList.add('settled');
+  }
   function paint(el) {                     // mērogs, caurspīdīgums un blur stiprums (--b) pēc attāluma līdz centram
     var c = el.scrollTop / ITEM, items = el.querySelectorAll('.it');
     for (var i = Math.max(0, Math.floor(c) - 3); i < Math.min(items.length, Math.ceil(c) + 4); i++) {
@@ -106,11 +129,11 @@ html.tumss .lg img { filter: blur(calc(var(--b, 0px) * var(--k))) drop-shadow(0 
   // 2) apstājies (STOP_MS bez kustības): pārliek uz vidējo kopiju, blur pakāpeniski pieaug līdz pilnam SETTLE_MS laikā
   // 3) pēc tam komanda ir izvēlēta: izvēlētais logo sāk pulsēt (kopējā fāzē ar otru rullīti), vērtība tiek nosūtīta Python
   function stopped(el) {
-    var g = gidx(el), ti = g % N, mid = MID * N + ti;
-    if (g < N * 1.5 || g > N * (COPIES - 1.5)) { el._skip = 1; el.style.scrollSnapType = 'none'; el.scrollTop = mid * ITEM; el.style.scrollSnapType = ''; g = mid; }
-    var items = el.querySelectorAll('.it');
-    for (var i = Math.max(0, g - 7); i < Math.min(items.length, g + 8); i++) items[i].classList.toggle('sel', i === g);
-    paint(el); setK(el, 1, SETTLE_MS);
+    var n = el._n, g = gidx(el), ti = g % n, mid = MID * n + ti;
+    el._kustas = false;
+    if (g < n * 1.5 || g > n * (COPIES - 1.5)) { el._skip = 1; el.style.scrollSnapType = 'none'; el.scrollTop = mid * ITEM; el.style.scrollSnapType = ''; g = mid; }
+    iezimet(el); setK(el, 1, SETTLE_MS);
+    sinhronizet(el);
     clearTimeout(el._t2);
     el._t2 = setTimeout(function () { if (!spinning) { el.classList.add('settled'); emit(); } }, SETTLE_MS);
   }
@@ -119,16 +142,16 @@ html.tumss .lg img { filter: blur(calc(var(--b, 0px) * var(--k))) drop-shadow(0 
     var now = performance.now(), dt = now - (el._lt || now), dy = Math.abs(el.scrollTop - (el._ly === undefined ? el.scrollTop : el._ly));
     el._lt = now; el._ly = el.scrollTop;
     var sp = dt > 0 ? dy / dt : 0; el._sp = el._sp === undefined ? sp : el._sp * .7 + sp * .3;
-    paint(el); unsettle(el);
+    paint(el); unsettle(el); el._kustas = true;
     setK(el, .55 * (1 - clamp(el._sp / 1.6, 0, 1)), 180);       // ātri griežoties ~0, palēninoties līdz 0.55
     clearTimeout(el._t); el._t = setTimeout(function () { el._sp = 0; stopped(el); }, STOP_MS);
   }
-  function goTo(el, g, smooth) { el.scrollTo({ top: clamp(g, 0, COPIES * N - 1) * ITEM, behavior: smooth ? 'smooth' : 'auto' }); }
+  function goTo(el, g, smooth) { el.scrollTo({ top: clamp(g, 0, COPIES * el._n - 1) * ITEM, behavior: smooth ? 'smooth' : 'auto' }); }
 
   // sākuma "griešanās": rullītis izripo pilnu apli līdz izvēlētajai komandai
   function spin(el, ti, ms) {
-    var b = (MID * N + ti) * ITEM, a = b - (N + 9) * ITEM, t0 = null;
-    el.style.scrollSnapType = 'none'; spinning++; unsettle(el); el.scrollTop = a;
+    var b = (MID * el._n + ti) * ITEM, a = b - (el._n + 9) * ITEM, t0 = null;
+    el.style.scrollSnapType = 'none'; spinning++; unsettle(el); el._kustas = true; el.scrollTop = a;
     function step(ts) {
       if (t0 === null) t0 = ts;
       var k = clamp((ts - t0) / ms, 0, 1), e = 1 - Math.pow(1 - k, 3);
@@ -145,7 +168,7 @@ html.tumss .lg img { filter: blur(calc(var(--b, 0px) * var(--k))) drop-shadow(0 
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         var base = el._tgt === undefined ? gidx(el) : el._tgt;
-        el._tgt = clamp(base + (e.key === 'ArrowDown' ? 1 : -1), 0, COPIES * N - 1);
+        el._tgt = clamp(base + (e.key === 'ArrowDown' ? 1 : -1), 0, COPIES * el._n - 1);
         goTo(el, el._tgt, true);
       }
     });
@@ -174,16 +197,25 @@ html.tumss .lg img { filter: blur(calc(var(--b, 0px) * var(--k))) drop-shadow(0 
     if (!built) {
       teams = args.komandas || []; N = teams.length;
       reels.a = document.getElementById('ra'); reels.b = document.getElementById('rb');
-      sizes(); build(reels.a); build(reels.b); attach(reels.a); attach(reels.b);
+      var s = (args.sakuma || []).slice();
+      if (!s[0] || !teams.some(function (t) { return t.kods === s[0]; })) s[0] = teams[0].kods;
+      if (!s[1] || s[1] === s[0] || !teams.some(function (t) { return t.kods === s[1]; })) s[1] = teams.find(function (t) { return t.kods !== s[0]; }).kods;
+      sizes(); build(reels.a, bez(s[1])); build(reels.b, bez(s[0])); attach(reels.a); attach(reels.b);
       built = true; frame();
-      var ix = function (k) { var i = teams.findIndex(function (t) { return t.kods === k; }); return i < 0 ? 0 : i; };
-      var s = args.sakuma || [];
-      setTimeout(function () { sizes(); frame(); spin(reels.a, ix(s[0]), 1000); spin(reels.b, ix(s[1]), 1250); }, 60);
+      var ix = function (el, k) { var i = el._list.findIndex(function (t) { return t.kods === k; }); return i < 0 ? 0 : i; };
+      setTimeout(function () { sizes(); frame(); spin(reels.a, ix(reels.a, s[0]), 1000); spin(reels.b, ix(reels.b, s[1]), 1250); }, 60);
       lastArgs = key;
     } else if (key !== lastArgs) {              // Python nomainīja sākuma izvēli: pārliek bez griešanās
       lastArgs = key;
       var s2 = args.sakuma || [];
-      [reels.a, reels.b].forEach(function (r, n) { var i = teams.findIndex(function (t) { return t.kods === s2[n]; }); if (i >= 0) goTo(r, MID * N + i, false); });
+      if (s2[0] && s2[1] && s2[0] !== s2[1]) {
+        [reels.a, reels.b].forEach(function (r, n) {
+          var list = bez(s2[1 - n]), i = list.findIndex(function (t) { return t.kods === s2[n]; });
+          if (i < 0) return;
+          r._skip = 1; build(r, list); r.scrollTop = (MID * r._n + i) * ITEM; iezimet(r);
+        });
+        emit();
+      }
     }
   }
 
