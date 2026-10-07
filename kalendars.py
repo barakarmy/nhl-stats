@@ -1,5 +1,5 @@
 """
-kalendars.py – nākamo NHL spēļu kalendārs → nhl_kalendars.csv (repozitorija saknē; to lasa lietotne).
+kalendars.py – nākamo NHL spēļu kalendārs → sezonas/nhl_kalendars.csv (to lasa lietotne un tiesnesi_planotie.py).
 
 Palaiž NHL Daily Update darbplūsma (pirms nhl_dati.py; ja kalendārs neizdodas, datu atjaunināšana tik un tā turpinās). Avots: NHL oficiālais kalendārs (api-web.nhle.com/v1/schedule/{datums}),
 kas atgriež 7 dienu "gameWeek"; skripts iet pa nedēļām 60 dienas uz priekšu.
@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-CSV_KALENDARS = "nhl_kalendars.csv"
+CSV_KALENDARS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sezonas", "nhl_kalendars.csv")
 DIENAS_UZ_PRIEKSU = 60
 SPELU_TIPI = {2: "RS", 3: "PO"}              # gameType → regulārā sezona / play-off
 IZLAIST_STAVOKLI = {"CNCL", "PPD"}            # gameScheduleState: atcelta / atlikta
@@ -101,6 +101,7 @@ def atjaunot_kalendaru():
         return
 
     rindas = sorted(speles.values(), key=lambda x: (x["datums"], x["sakuma_laiks_utc"], x["game_id"]))
+    os.makedirs(os.path.dirname(CSV_KALENDARS), exist_ok=True)
     tmp = CSV_KALENDARS + ".tmp"                  # vispirms pagaidu fails, tad aizstāj (fails nekad nepaliek pa pusei uzrakstīts)
     with open(tmp, mode="w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=KOLONNAS)
