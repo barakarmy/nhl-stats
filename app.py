@@ -3,23 +3,23 @@ NHL analītika – Streamlit lietotne (nhl-stats-lv.streamlit.app, repozitorijs 
 
 KĀ DATI NONĀK LIETOTNĒ
 ----------------------
-Lietotne pati NHL datus nevāc: tā tikai nolasa CSV failus no repozitorija mapes dati/ un nhl_kalendars.csv.
+Lietotne pati NHL datus nevāc: tā tikai nolasa CSV failus no repozitorija mapes sezonas/ (aktīvā sezona; iepriekšējās – sezonas/vesture/<sezona>/).
 Šos failus atjaunina divas GitHub Actions darbplūsmas (.github/workflows/), un katru no tām palaiž divi grafiki:
 
 1) NHL Daily Update (.github/workflows/daily.yml → python kalendars.py, pēc tam python nhl_dati.py --vieglais)
    - Avots: NHL oficiālā statistika (api-web.nhle.com: score, landing, boxscore, play-by-play, right-rail).
-   - Raksta: dati/speles.csv (spēles, periodi, metieni, minor sodi, vairākums), dati/speletaji.csv, dati/vartsargi.csv,
-     dati/varti.csv, dati/tiesnesi.csv (faktiskie tiesneši) un nhl_kalendars.csv (nākamās RS un PO spēles 60 dienas uz priekšu).
+   - Raksta: sezonas/speles.csv (spēles, periodi, metieni, minor sodi, vairākums), sezonas/speletaji.csv, sezonas/vartsargi.csv,
+     sezonas/varti.csv, sezonas/tiesnesi.csv (faktiskie tiesneši) un sezonas/nhl_kalendars.csv (nākamās RS un PO spēles 60 dienas uz priekšu).
    - Palaišana:
        a) cron-job.org katru dienu 08:40 pēc Rīgas laika (workflow_dispatch caur GitHub API) – galvenais, precīzs grafiks;
        b) GitHub paša grafiks '15 8 * * *' (UTC) = 11:15 Rīgā vasaras laikā / 10:15 ziemas laikā – rezerve (var kavēties).
    - Ar roku (Actions → Run workflow): datumu intervāls, "atjaunot" (pārrakstīt) vai "pēdējās 8h / 4h / 2h".
-   - Veiksmīgas palaišanas laiku raksta dati/pedeja_atjaunosana.json (lietotnē: "Pēdējā atjaunošana").
+   - Veiksmīgas palaišanas laiku raksta sezonas/pedeja_atjaunosana.json (lietotnē: "Pēdējā atjaunošana").
    - Statistika lietotnē = tikai pamatlaiks; papildlaiks un metienu sērijas tiek krāti atsevišķi (sadaļa OT / SO).
 
 2) NHL Referees (.github/workflows/referees.yml → python tiesnesi_planotie.py)
    - Avots: Scouting The Refs (dienas ieraksts "Tonight's NHL Referees and Linespersons"), rezerve: NHL right-rail.
-   - Raksta: dati/tiesnesi_planotie.csv (pirms spēlēm paziņotie tiesneši).
+   - Raksta: sezonas/tiesnesi_planotie.csv (pirms spēlēm paziņotie tiesneši).
    - Palaišana:
        a) cron-job.org ik 30 minūtes 14:00–23:30 pēc Rīgas laika (workflow_dispatch) – galvenais;
        b) GitHub grafiks '7,22,37,52 12-23 * * *' (UTC) – rezerve.
@@ -40,6 +40,7 @@ CITI SVARĪGI FAKTI
 - Regulārā sezona (RS) un play-off (PO) vienmēr tiek skaitīti atsevišķi (speles.csv: speles_tips 2 = RS, 3 = PO; sezona, piem., 20262027).
   Statistikas lapās pārslēdzējs "Regulārā sezona · Play-off" parādās tikai tad, kad datos ir PO spēles; Līgas pārskats vienmēr RS;
   Rezultāti, Kalendārs, Prognozes, Karstākie spēlētāji un Tiesneši izmanto visas šīs sezonas spēles. Play-off zaudējums papildlaikā = loss.
+- Vēsture: vesture.py (palaiž lokāli) lejupielādē iepriekšējās sezonas uz sezonas/vesture/<sezona>/; --arhivet pārvieto aktīvo sezonu uz arhīvu.
 - Moduļi: datu_apstrade.py (aprēķini), lokacijas.py (attālumi, laika joslas), modelis.py (Puasona prognozes),
   rulli.py (komandu izvēle ar rullīšiem), fons.py (fona attēls), tiesnesi_planotie.py (tiesneši), nhl_dati.py (datu vākšana).
 - APP_VERSIJA (zemāk) redzama katras lapas apakšā – palielini to pēc katras izmaiņas, lai pārbaudītu, vai Streamlit rāda jauno failu.
@@ -248,7 +249,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.26"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.27"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1110,7 +1111,7 @@ def ielasit_planotos(versija):
 @st.cache_data(show_spinner=False, ttl=600)
 def _planotie_ar_statusu(versija):
     """
-    Paziņotie tiesneši: fails dati/tiesnesi_planotie.csv (to papildina GitHub Actions) + spēlēm, kurām tur tiesnešu vēl nav, tiešā ielāde no Scouting The Refs.
+    Paziņotie tiesneši: fails sezonas/tiesnesi_planotie.csv (to papildina GitHub Actions) + spēlēm, kurām tur tiesnešu vēl nav, tiešā ielāde no Scouting The Refs.
     GitHub plānotie darbi bieži kavējas vai tiek izlaisti, tāpēc lietotne tiesnešus meklē arī pati (rezultāts tiek turēts 10 minūtes, lai neslogotu portālu).
     """
     plan = da.ielasit_planotos_tiesnesus()
@@ -1197,7 +1198,7 @@ RAW, DF, KAL = ielasit_visu(VERSIJA)
 SPELU_ID = None            # spēļu atlase (sezona + RS/PO); tiek iestatīta pirms lapas palaišanas (sk. "SEZONA UN RS / PO")
 SEZ_DALA = da.TIPS_RS
 if RAW is None or DF.empty:
-    st.error("Nav atrasts datu fails 'dati/speles.csv' (vai vecais 'nhl_sezona.csv'). "
+    st.error("Nav atrasts datu fails 'sezonas/speles.csv' (vai vecais 'nhl_sezona.csv'). "
              "Palaid nhl_dati.py un ieliec CSV failus repozitorijā.")
     st.stop()
 
@@ -1452,7 +1453,7 @@ def lapa_prognozes():
         return
     st.success("Modelis ir aktīvs. Prognozes tiek aprēķinātas pēc Puasona sadalījuma.")
     if KAL is None:
-        st.warning("Nav atrasts 'nhl_kalendars.csv' (palaid kalendars.py).")
+        st.warning("Nav atrasts 'sezonas/nhl_kalendars.csv' (palaid kalendars.py).")
         return
     skaits = st.slider("Cik tuvākās spēles rādīt", 3, 15, 7)
     nak = da.nakamas_speles(KAL, skaits)
@@ -2806,7 +2807,7 @@ def sausas_serijas_dati(versija, dala=None):
 def lapa_fakti():
     gaita, kops, js, ier = fakti_dati(VERSIJA, SEZ_DALA)
     if gaita is None:
-        st.info("Šai sadaļai vajag failu fakti.py un vārtu datus (dati/varti.csv).")
+        st.info("Šai sadaļai vajag failu fakti.py un vārtu datus (sezonas/varti.csv).")
         return
     e = _html.escape
     cb = fakti.comebacks(gaita)
@@ -3189,7 +3190,7 @@ def lapa_mazakums():
 def lapa_kalendars():
     st.title("Spēļu kalendārs")
     if KAL is None:
-        st.warning("Kalendāra fails 'nhl_kalendars.csv' nav atrasts (palaid kalendars.py).")
+        st.warning("Kalendāra fails 'sezonas/nhl_kalendars.csv' nav atrasts (palaid kalendars.py).")
         return
     try:
         _ts = _planotie_ar_statusu(VERSIJA)[1]
@@ -3475,7 +3476,7 @@ def lapa_speletaji():  # noqa: C901
     sk = ielasit_papildu("speletaji", VERSIJA)
     vg = ielasit_papildu("vartsargi", VERSIJA)
     if sk is None and vg is None:
-        st.info("Spēlētāju dati (dati/speletaji.csv un dati/vartsargi.csv) vēl nav pieejami.")
+        st.info("Spēlētāju dati (sezonas/speletaji.csv un sezonas/vartsargi.csv) vēl nav pieejami.")
         return
     t_lauk, t_vart = st.tabs(["Laukuma spēlētāji", "Vārtsargi"])
     komandas = ["Visas komandas"] + sorted(da.KOMANDAS)
@@ -3544,7 +3545,7 @@ def lapa_tiesnesi():
         st.warning(info)
     if cur is None and prev is None:
         st.info("Tiesnešu dati vēl nav pieejami. Tie parādīsies pēc nākamās datu atjaunināšanas "
-                "(dati/tiesnesi.csv). Pagājušās sezonas datus liec failā dati/referees_lastseason.csv.")
+                "(sezonas/tiesnesi.csv). Pagājušās sezonas datus liec failā sezonas/vesture/referees_lastseason.csv.")
         return
 
     with st.expander("Aprēķina iestatījumi", expanded=False):
@@ -3560,7 +3561,7 @@ def lapa_tiesnesi():
         st.info("Nav tiesnešu datu.")
         return
     if prev is None:
-        st.caption("Pagājušās sezonas fails (dati/referees_lastseason.csv) nav ielādēts, tāpēc tiek lietota tikai šī sezona.")
+        st.caption("Pagājušās sezonas fails (sezonas/vesture/referees_lastseason.csv) nav ielādēts, tāpēc tiek lietota tikai šī sezona.")
 
     m = st.columns(4)
     m[0].metric("Līgas vidējais šosezon", fmt(liga["t"]["kopa"]), border=True)
@@ -3623,7 +3624,7 @@ def lapa_tiesnesi():
 def lapa_karstie():
     sk = ielasit_papildu("speletaji", VERSIJA)
     if sk is None:
-        st.info("Spēlētāju dati (dati/speletaji.csv) vēl nav pieejami.")
+        st.info("Spēlētāju dati (sezonas/speletaji.csv) vēl nav pieejami.")
         return
 
     with st.expander("Kā tiek noteikts, ka spēlētājs ir karsts?"):
