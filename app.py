@@ -37,6 +37,9 @@ CITI SVARĪGI FAKTI
   saitēm uz jaunām cilnēm tiek pievienots īslaicīgs paraksts ?t=...
 - Motīvs vienmēr gaišs (.streamlit/config.toml: base = "light").
 - Noraidījumi = tikai minor sodi (dubultais minor = 2); bez major, 10 min disciplinārajiem un kautiņiem.
+- Regulārā sezona (RS) un play-off (PO) vienmēr tiek skaitīti atsevišķi (speles.csv: speles_tips 2 = RS, 3 = PO; sezona, piem., 20262027).
+  Statistikas lapās pārslēdzējs "Regulārā sezona · Play-off" parādās tikai tad, kad datos ir PO spēles; Līgas pārskats vienmēr RS;
+  Rezultāti, Kalendārs, Prognozes, Karstākie spēlētāji un Tiesneši izmanto visas šīs sezonas spēles. Play-off zaudējums papildlaikā = loss.
 - Moduļi: datu_apstrade.py (aprēķini), lokacijas.py (attālumi, laika joslas), modelis.py (Puasona prognozes),
   rulli.py (komandu izvēle ar rullīšiem), fons.py (fona attēls), tiesnesi_planotie.py (tiesneši), nhl_dati.py (datu vākšana).
 - APP_VERSIJA (zemāk) redzama katras lapas apakšā – palielini to pēc katras izmaiņas, lai pārbaudītu, vai Streamlit rāda jauno failu.
@@ -245,7 +248,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.25"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.26"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -836,6 +839,9 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .h2h-l { margin-top: 1.2rem; }
 .h2h-l .ks { max-width: none; }
 .h2h-k img { width: 1.5rem; height: 1.5rem; object-fit: contain; }
+/* regulārā sezona / play-off */
+.st-key-pgr_sez_dala { justify-content: center; margin: -.4rem 0 .6rem; }
+.sez-piez { text-align: center; font-size: .78rem; opacity: .65; margin: -.4rem 0 .5rem; }
 /* kājene: paskaidrojums par lapu */
 .kaj { max-width: 900px; margin: 3rem auto 0; padding-top: 1rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .8rem; line-height: 1.55; opacity: .75; }
 .kaj p { margin: 0 0 .7rem; }
@@ -1075,8 +1081,16 @@ def ielasit_visu(versija):
 
 
 @st.cache_data(show_spinner=False)
-def ielasit_papildu(nos, versija):
+def _ielasit_papildu_visu(nos, versija):
     return da.ielasit_tabulu(nos)
+
+
+def ielasit_papildu(nos, versija):
+    """Spēlētāji / vārtsargi / vārti / tiesneši: tikai spēles, kas ietilpst pašreizējā atlasē (šī sezona un RS vai PO)."""
+    t = _ielasit_papildu_visu(nos, versija)
+    if t is None or t.empty or SPELU_ID is None or "game_id" not in t.columns:
+        return t
+    return t[t["game_id"].isin(SPELU_ID)]
 
 
 @st.cache_data(show_spinner=False)
@@ -1180,6 +1194,8 @@ def speles_tiesnesi(game_id):
 
 
 RAW, DF, KAL = ielasit_visu(VERSIJA)
+SPELU_ID = None            # spēļu atlase (sezona + RS/PO); tiek iestatīta pirms lapas palaišanas (sk. "SEZONA UN RS / PO")
+SEZ_DALA = da.TIPS_RS
 if RAW is None or DF.empty:
     st.error("Nav atrasts datu fails 'dati/speles.csv' (vai vecais 'nhl_sezona.csv'). "
              "Palaid nhl_dati.py un ieliec CSV failus repozitorijā.")
@@ -1760,8 +1776,10 @@ def _cel_pilseta(k):
 def komandas_speles_pirms(kods, lidz):
     """Komandas spēles pirms brīža `lidz`: aizvadītās (dati) un kalendārā plānotās. Atgriež [(sākums, mājinieki, game_id)] laika secībā."""
     rindas = {}
-    if RAW is not None and not RAW.empty and "sakums_lv" in RAW.columns:
-        x = RAW[((RAW["home_team"] == kods) | (RAW["away_team"] == kods)) & (RAW["sakums_lv"] < lidz)]
+    raw_ = globals().get("RAW_VISS")                       # ceļojumam vienmēr visas spēles (RS un PO), neatkarīgi no atlases
+    raw_ = RAW if raw_ is None else raw_
+    if raw_ is not None and not raw_.empty and "sakums_lv" in raw_.columns:
+        x = raw_[((raw_["home_team"] == kods) | (raw_["away_team"] == kods)) & (raw_["sakums_lv"] < lidz)]
         for r in x.itertuples():
             rindas[r.game_id] = (r.sakums_lv, r.home_team, r.game_id)
     if KAL is not None and not KAL.empty:
@@ -2764,7 +2782,7 @@ def lapa_komanda():
 # LAPA: INTERESANTI FAKTI (comebacks, 3. perioda karaļi) – loģika failā fakti.py
 # ============================================================================
 @st.cache_data(show_spinner=False)
-def fakti_dati(versija):
+def fakti_dati(versija, dala=None):
     v = ielasit_papildu("varti", versija)
     if fakti is None or v is None or v.empty:
         return None, None, None, None
@@ -2777,7 +2795,7 @@ def fakti_dati(versija):
 
 
 @st.cache_data(show_spinner=False)
-def sausas_serijas_dati(versija):
+def sausas_serijas_dati(versija, dala=None):
     v = ielasit_papildu("varti", versija)
     vg = ielasit_papildu("vartsargi", versija)
     if fakti is None or v is None or vg is None or v.empty or vg.empty:
@@ -2786,7 +2804,7 @@ def sausas_serijas_dati(versija):
 
 
 def lapa_fakti():
-    gaita, kops, js, ier = fakti_dati(VERSIJA)
+    gaita, kops, js, ier = fakti_dati(VERSIJA, SEZ_DALA)
     if gaita is None:
         st.info("Šai sadaļai vajag failu fakti.py un vārtu datus (dati/varti.csv).")
         return
@@ -2918,7 +2936,7 @@ def lapa_fakti():
                                   on_click=lambda n_=nr: st.session_state.__setitem__("fk_cb_lapa", n_))
 
     # --- SHUTOUT: vārtsargu sausās sērijas ≥ 120 min (aktīvās; pārtrauktā paliek līdz vārtsarga nākamajai spēlei) ---
-    ser = sausas_serijas_dati(VERSIJA)
+    ser = sausas_serijas_dati(VERSIJA, SEZ_DALA)
     akt_n = sum(1 for x in ser if x["aktiva"])
     with st.expander(f"SHUTOUT · {akt_n} {'aktīva sērija' if akt_n == 1 else 'aktīvas sērijas'} (vārtsargs bez ielaistiem vārtiem ≥ 120 min)"):
         if not ser:
@@ -3864,6 +3882,41 @@ if NAV_REZIMS == "pielagots":
             components.html(IZVELNES_SKRIPTS, height=0)
         except Exception:       # skripts ir tikai uzlabojums: bez tā izvēlne aizveras, nospiežot jebkur citur
             pass
+# ============================================================================
+# SEZONA UN RS / PO: statistika vienmēr tiek skaitīta atsevišķi regulārajai sezonai un play-off.
+# Pārslēdzējs "Regulārā sezona · Play-off" parādās tikai tad, kad datos ir play-off spēles.
+# Rezultāti, Kalendārs, Prognozes, Karstākie spēlētāji un Tiesneši izmanto visas šīs sezonas spēles; Līgas pārskats – tikai RS.
+# ============================================================================
+SEZ_DALAS = {da.TIPS_RS: "Regulārā sezona", da.TIPS_PO: "Play-off"}
+LAPAS_VISAS_SPELES = {"Rezultāti", "Kalendārs", "Prognozes", "Karstākie spēlētāji", "Tiesneši"}
+RAW_VISS, DF_VISS = RAW, DF
+if RAW_VISS is not None and not RAW_VISS.empty:
+    SEZONA = int(RAW_VISS["sezona"].max())
+    RAW_VISS = RAW_VISS[RAW_VISS["sezona"] == SEZONA]
+    DF_VISS = DF_VISS[DF_VISS["sezona"].fillna(SEZONA) == SEZONA] if DF_VISS is not None and not DF_VISS.empty else DF_VISS
+    PO_IR = bool((RAW_VISS["tips"] == da.TIPS_PO).any())
+else:
+    SEZONA, PO_IR = None, False
+_lapa_nos = getattr(lapas, "title", "")
+if _lapa_nos in LAPAS_VISAS_SPELES:
+    SEZ_DALA = None
+elif _lapa_nos == "Līgas pārskats" or not PO_IR:
+    SEZ_DALA = da.TIPS_RS
+else:
+    SEZ_DALA = st.session_state.get("sez_dala", da.TIPS_RS) if st.session_state.get("sez_dala") in SEZ_DALAS else da.TIPS_RS
+if RAW_VISS is not None and not RAW_VISS.empty:
+    RAW = RAW_VISS if SEZ_DALA is None else RAW_VISS[RAW_VISS["tips"] == SEZ_DALA]
+    DF = DF_VISS if SEZ_DALA is None else DF_VISS[DF_VISS["tips"] == SEZ_DALA]
+    SPELU_ID = set(RAW["game_id"])
+if PO_IR and _lapa_nos not in LAPAS_VISAS_SPELES:
+    if _lapa_nos == "Līgas pārskats":
+        st.markdown('<div class="sez-piez">Līgas tabula: tikai regulārā sezona</div>', unsafe_allow_html=True)
+    else:
+        with st.container(key="pgr_sez_dala"):
+            for _k, _nos in SEZ_DALAS.items():
+                st.button(_nos, key=f"sezd_{_k}", type="primary" if SEZ_DALA == _k else "secondary",
+                          on_click=lambda k_=_k: st.session_state.__setitem__("sez_dala", k_))
+
 lapas.run()
 
 
