@@ -46,6 +46,7 @@ NOKLUSETIE = {
     "periodu_dalas": [0.31, 0.34, 0.35],
     "totali_kappa": 1.0,              # gaidāmo vārtu kopsummas "pievilkšana" pie līgas vidējā (1 = bez, 0.5 = uz pusi)
     "nb_r": 0.0,                      # vārtu izkliede: 0 = Puasons, >0 = negatīvais binomiālais (mazāks = lielāka izkliede)
+    "totali_kal": {},                 # totālu kalibrācija pēc vēstures: {"5.5": [a, b]} → over = σ(a + b·logit(over_modelis))
     "noraid_k": 10.0,                 # komandas noraidījumu biežuma pievilkšana pie līgas (spēles)
 }
 GARS_CELS_KM = 1500
@@ -262,6 +263,15 @@ def ot_majas_iespeja(lh, la, p):
     return 1 / (1 + math.exp(-z))
 
 
+def _kal_over(over, p, lin):
+    """Totāla over/under; ja ir kalibrācija pēc vēstures, Puasona varbūtība tiek pielāgota reālajam vārtu sadalījumam."""
+    ab = (p.get("totali_kal") or {}).get(str(lin))
+    if ab:
+        o = min(1 - 1e-6, max(1e-6, over))
+        over = 1 / (1 + math.exp(-(ab[0] + ab[1] * math.log(o / (1 - o)))))
+    return {"over": float(over), "under": float(1 - over)}
+
+
 def tirgi(lh, la, p):
     """Visas varbūtības no λ: 1X2 (pamatlaiks), uzvarētājs ar OT, totāli, ±1.5, top rezultāti, periodi."""
     m = rezultatu_matrica(lh, la, float(p["neizskirts_rho"]), float(p.get("nb_r", 0.0)))
@@ -282,7 +292,7 @@ def tirgi(lh, la, p):
         "lh": lh, "la": la,
         "1x2": {"1": h, "X": d, "2": a},
         "ar_ot": {"1": h + d * pot, "2": a + d * (1 - pot)},
-        "totali": {lin: {"over": float(tot[int(lin) + 1:].sum()), "under": float(tot[:int(lin) + 1].sum())} for lin in (4.5, 5.5, 6.5)},
+        "totali": {lin: _kal_over(float(tot[int(lin) + 1:].sum()), p, lin) for lin in (4.5, 5.5, 6.5)},
         "plus_minus": {"1 −1.5": p_starp(lambda s: s >= 2), "2 +1.5": p_starp(lambda s: s <= 1),
                        "2 −1.5": p_starp(lambda s: s <= -2), "1 +1.5": p_starp(lambda s: s >= -1)},
         "top": sorted(((float(m[i, j]), f"{i}:{j}") for i in range(MAX_V) for j in range(MAX_V)), reverse=True)[:3],
@@ -370,7 +380,7 @@ def atpakal_parbaude(g, p, sezona, solis_dienas=3, h2h=False):
                            "beigas": r.beigas, "uzv_majas": r.uzv_majas, "lh": t["lh"], "la": t["la"],
                            "lh0": t["lh0"], "la0": t["la0"], "liga_kopa": t["liga_kopa"],
                            "p1": t["1x2"]["1"], "pX": t["1x2"]["X"], "p2": t["1x2"]["2"], "ml1": t["ar_ot"]["1"],
-                           "o55": t["totali"][5.5]["over"], "o65": t["totali"][6.5]["over"]})
+                           "o45": t["totali"][4.5]["over"], "o55": t["totali"][5.5]["over"], "o65": t["totali"][6.5]["over"]})
     return pd.DataFrame(rindas)
 
 
@@ -391,6 +401,19 @@ def metrikas(bt):
     }
 
 
+def pa_sezonas_dalam(bt, ref, dienas=45):
+    """Precizitāte sezonas sākumā (pirmās N dienas) un pārējā sezonā, salīdzinot ar godīgo bāzi."""
+    if bt.empty:
+        return {}
+    sak = bt["datums"].min()
+    out = {}
+    for nos, m in (("sakums", bt["datums"] < sak + pd.Timedelta(days=dienas)), ("parejais", bt["datums"] >= sak + pd.Timedelta(days=dienas))):
+        x = bt[m]
+        if len(x) >= 50:
+            out[nos] = {"speles": int(len(x)), "logloss_1x2": metrikas(x)["logloss_1x2"], "baze_1x2": bazes_metrikas(x, ref)["logloss_1x2"]}
+    return out
+
+
 def kalibracija(bt, kol, fakts, grupas=(0, .2, .3, .4, .5, .6, .7, 1.01)):
     """Prognozētā varbūtība grupās pret faktisko biežumu (vai 60% prognozes piepildās ~60% gadījumu)."""
     out = []
@@ -402,13 +425,19 @@ def kalibracija(bt, kol, fakts, grupas=(0, .2, .3, .4, .5, .6, .7, 1.01)):
     return out
 
 
-def bazes_metrikas(bt):
-    """Bāze: visām spēlēm vienādas līgas varbūtības (no pašas pārbaudes kopas)."""
+def bazes_metrikas(bt, ref=None):
+    """
+    Bāze: visām spēlēm vienādas līgas varbūtības. ref – iepriekšējo sezonu spēles (godīga bāze, zināma pirms sezonas);
+    bez ref – biežumi no pašas pārbaudes sezonas (bāze, kas "zina nākotni", tikai salīdzināšanai).
+    """
     iz = np.where(bt["hg"] > bt["ag"], "1", np.where(bt["hg"] == bt["ag"], "X", "2"))
-    f = {k: float((iz == k).mean()) for k in ("1", "X", "2")}
-    o = float(((bt["hg"] + bt["ag"]) > 5.5).mean())
+    avots = bt if ref is None or ref.empty else ref
+    iz_r = np.where(avots["hg"] > avots["ag"], "1", np.where(avots["hg"] == avots["ag"], "X", "2"))
+    f = {k: float((iz_r == k).mean()) for k in ("1", "X", "2")}
+    o = float(((avots["hg"] + avots["ag"]) > 5.5).mean())
     return {"logloss_1x2": float(np.mean([_ll(f[x]) for x in iz])),
-            "logloss_o55": float(np.mean([_ll(o if y else 1 - o) for y in (bt["hg"] + bt["ag"]) > 5.5]))}
+            "logloss_o55": float(np.mean([_ll(o if y else 1 - o) for y in (bt["hg"] + bt["ag"]) > 5.5])),
+            "biezumi": f, "over55": o}
 
 
 def parrekinat(bt, p):
@@ -417,16 +446,31 @@ def parrekinat(bt, p):
     for lh0, la0, L in zip(bt["lh0"], bt["la0"], bt["liga_kopa"]):
         lh, la = saspiest(lh0, la0, p, L)
         t = tirgi(lh, la, p)
-        rind.append((t["1x2"]["1"], t["1x2"]["X"], t["1x2"]["2"], t["ar_ot"]["1"], t["totali"][5.5]["over"], t["totali"][6.5]["over"], lh, la))
+        rind.append((t["1x2"]["1"], t["1x2"]["X"], t["1x2"]["2"], t["ar_ot"]["1"], t["totali"][4.5]["over"], t["totali"][5.5]["over"],
+                     t["totali"][6.5]["over"], lh, la))
     out = bt.copy()
-    out[["p1", "pX", "p2", "ml1", "o55", "o65", "lh", "la"]] = pd.DataFrame(rind, index=bt.index)
+    out[["p1", "pX", "p2", "ml1", "o45", "o55", "o65", "lh", "la"]] = pd.DataFrame(rind, index=bt.index)
     return out
 
 
+def _platt(p_mod, y):
+    """Loģistiskā pārkalibrēšana: atrod a, b, lai σ(a + b·logit(p)) vislabāk atbilst faktiem (log loss)."""
+    z = np.log(np.clip(p_mod, 1e-6, 1 - 1e-6) / (1 - np.clip(p_mod, 1e-6, 1 - 1e-6)))
+    y = np.asarray(y, float)
+
+    def f(ab):
+        q = 1 / (1 + np.exp(-(ab[0] + ab[1] * z)))
+        q = np.clip(q, 1e-9, 1 - 1e-9)
+        return -np.mean(y * np.log(q) + (1 - y) * np.log(1 - q)) + 1e-3 * ((ab[0]) ** 2 + (ab[1] - 1) ** 2)
+    ab = minimize(f, np.array([0.0, 1.0]), method="Nelder-Mead").x
+    return [float(ab[0]), float(max(0.05, ab[1]))]
+
+
 def _izveleties_papildu(bt, p):
-    """No pārbaudes prognozēm: kopsummas pievilkšana un izkliede (pēc O/U 5.5 log loss), tad neizšķirtu korekcija un OT."""
+    """No pārbaudes prognozēm: kopsummas pievilkšana un izkliede (pēc O/U 5.5 log loss), tad neizšķirtu korekcija, OT un totālu kalibrācija."""
+    p = dict(p, totali_kal={})
     labakais = (1e9, p["totali_kappa"], p["nb_r"])
-    for kappa in (1.0, 0.8, 0.6, 0.4):
+    for kappa in (1.0, 0.8, 0.6, 0.4, 0.2, 0.0):
         for r in (0.0, 60.0, 30.0, 15.0):
             pp = dict(p, totali_kappa=kappa, nb_r=r)
             ll = metrikas(parrekinat(bt, pp))["logloss_o55"]
@@ -441,6 +485,10 @@ def _izveleties_papildu(bt, p):
         p["ot_majas"] = float(min(0.6, max(0.4, (ot["uzv_majas"].sum() + 25 * 0.52) / (len(ot) + 25))))   # pievilkts pie 52%
         p["ot_stiprums"] = min((np.mean([_ll(ot_majas_iespeja(a, b, dict(p, ot_stiprums=k)) if y else 1 - ot_majas_iespeja(a, b, dict(p, ot_stiprums=k)))
                                          for a, b, y in zip(ot["lh"], ot["la"], ot["uzv_majas"])]), k) for k in (0.0, 0.2, 0.35, 0.5, 0.75, 1.0))[1]
+    # totālu kalibrācija: Puasona forma neatbilst reālajam vārtu sadalījumam (piem., vārti tukšos vārtos) – pielāgo pēc vēstures
+    b2 = parrekinat(bt, p)
+    tot = b2["hg"] + b2["ag"]
+    p["totali_kal"] = {str(lin): _platt(b2[kol].to_numpy(), (tot > lin).to_numpy()) for lin, kol in ((4.5, "o45"), (5.5, "o55"), (6.5, "o65"))}
     return p
 
 
@@ -473,19 +521,22 @@ def kalibret(g, sezonas, izvade=PARAMETRU_FAILS, rezgis=None):
     tot = g[["g_p1", "g_p2", "g_p3"]].sum()
     p["periodu_dalas"] = [float(x) for x in (tot / tot.sum()).round(4)]
     print(f"  izvēlēts: kopsummas pievilkšana {p['totali_kappa']}, izkliede {'Puasons' if not p['nb_r'] else p['nb_r']}, "
-          f"neizšķirtu korekcija {p['neizskirts_rho']:.2f}, OT mājiniekiem {p['ot_majas']:.3f}")
+          f"neizšķirtu korekcija {p['neizskirts_rho']:.2f}, OT mājiniekiem {p['ot_majas']:.3f}, "
+          f"totālu kalibrācija 5.5: a={p['totali_kal']['5.5'][0]:+.2f}, b={p['totali_kal']['5.5'][1]:.2f}")
     # godīga pārbaude uz pēdējās sezonas: bez un ar H2H
     bt = atpakal_parbaude(g, p, sez_test, solis_dienas=3, h2h=False)
     bt_h = atpakal_parbaude(g, p, sez_test, solis_dienas=3, h2h=True)
-    met, met_h, baze = metrikas(bt), metrikas(bt_h), bazes_metrikas(bt)
+    ref = g[g["sezona"] < sez_test]                       # godīgā bāze: tikai tas, kas bija zināms pirms pārbaudes sezonas
+    met, met_h, baze, baze_nak = metrikas(bt), metrikas(bt_h), bazes_metrikas(bt, ref), bazes_metrikas(bt)
     p["h2h_lietot"] = bool(met_h["logloss_1x2"] <= met["logloss_1x2"] + 1e-4)
     gala = bt_h if p["h2h_lietot"] else bt
     # gala parametri lietotnei: korekcijas no abām sezonām kopā (vairāk datu; pārbaudes rezultāts paliek godīgs)
-    p_gala = _izveleties_papildu(pd.concat([lab_bt, gala], ignore_index=True), dict(p, neizskirts_rho=NOKLUSETIE["neizskirts_rho"]))
+    p_gala = _izveleties_papildu(pd.concat([lab_bt, gala], ignore_index=True), dict(p, neizskirts_rho=NOKLUSETIE["neizskirts_rho"], totali_kal={}))
     p_gala["h2h_lietot"] = p["h2h_lietot"]
     rez = {
         "parametri": p_gala, "parametri_parbaudei": p, "regulesanas_sezona": sez_reg, "parbaudes_sezona": sez_test,
-        "parbaude": metrikas(gala), "parbaude_bez_h2h": met, "parbaude_ar_h2h": met_h, "baze": baze,
+        "parbaude": metrikas(gala), "parbaude_bez_h2h": met, "parbaude_ar_h2h": met_h, "baze": baze, "baze_zina_nakotni": baze_nak,
+        "pa_sezonas_dalam": pa_sezonas_dalam(gala, ref),
         "kalibracija_1": kalibracija(gala, "p1", (gala["hg"] > gala["ag"]).astype(float)),
         "kalibracija_o55": kalibracija(gala, "o55", ((gala["hg"] + gala["ag"]) > 5.5).astype(float)),
         "izveidots": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d %H:%M UTC"),
@@ -494,9 +545,16 @@ def kalibret(g, sezonas, izvade=PARAMETRU_FAILS, rezgis=None):
     with open(izvade, "w", encoding="utf-8") as f:
         json.dump(rez, f, ensure_ascii=False, indent=2, default=float)
     m = rez["parbaude"]
-    print(f"\nPārbaude {sez_test} ({m['speles']} spēles): log loss 1X2 {m['logloss_1x2']:.4f} (bāze {baze['logloss_1x2']:.4f}), "
-          f"O/U 5.5 {m['logloss_o55']:.4f} (bāze {baze['logloss_o55']:.4f}); neizšķirti {m['neizskirti_prog']:.1%} prognoze / "
-          f"{m['neizskirti_fakt']:.1%} fakts; H2H {'uzlabo – tiek lietots' if p['h2h_lietot'] else 'neuzlabo – netiek lietots'}.")
+    print(f"\nPārbaude {sez_test} ({m['speles']} spēles), log loss (mazāk = labāk):")
+    print(f"  1X2:     modelis {m['logloss_1x2']:.4f} | bāze no iepriekšējām sezonām {baze['logloss_1x2']:.4f} | "
+          f"bāze, kas zina šīs sezonas biežumus {baze_nak['logloss_1x2']:.4f}")
+    print(f"  O/U 5.5: modelis {m['logloss_o55']:.4f} | bāze no iepriekšējām sezonām {baze['logloss_o55']:.4f} | "
+          f"bāze, kas zina šīs sezonas biežumus {baze_nak['logloss_o55']:.4f}")
+    for nos, v in rez["pa_sezonas_dalam"].items():
+        print(f"  {'Sezonas sākums (45 d)' if nos == 'sakums' else 'Pārējā sezona':22s}: modelis {v['logloss_1x2']:.4f} | bāze {v['baze_1x2']:.4f} ({v['speles']} spēles)")
+    print(f"  Neizšķirti pamatlaikā: prognoze {m['neizskirti_prog']:.1%}, fakts {m['neizskirti_fakt']:.1%} "
+          f"(iepriekšējās sezonās {baze['biezumi']['X']:.1%}); over 5.5 iepriekš {baze['over55']:.1%}, šosezon "
+          f"{baze_nak['over55']:.1%}. H2H {'uzlabo – tiek lietots' if p['h2h_lietot'] else 'neuzlabo – netiek lietots'}.")
     print(f"Gala parametri (no abām sezonām): neizšķirtu korekcija {p_gala['neizskirts_rho']:.2f}, kopsummas pievilkšana "
           f"{p_gala['totali_kappa']}, izkliede {'Puasons' if not p_gala['nb_r'] else p_gala['nb_r']}.\nSaglabāts: {izvade}")
     return 0
