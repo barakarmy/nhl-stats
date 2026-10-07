@@ -251,7 +251,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.30"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.31"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1573,14 +1573,16 @@ def lapa_prognozes():
             "Šīs sezonas spēles sver vairāk, iepriekšējās sezonas (DB) – mazāk; sezonas sākumā prognoze balstās galvenokārt uz DB.\n"
             "- **Korekcijas:** mājas priekšrocība, otrā spēle pēc kārtas, garš ceļš, play-off, H2H (ja pārbaude rāda, ka tā uzlabo), "
             "tiesneši – noraidījumiem.\n"
-            "- **Visi tirgi** ir no vienas pamatlaika rezultātu matricas (ar neizšķirtu korekciju); “ar OT” – neizšķirta gadījumā pēc vēstures. "
+            "- **Visi tirgi** ir no vienas pamatlaika rezultātu matricas (ar neizšķirtu korekciju; gaidāmo vārtu kopsumma piesardzīgi pievilkta "
+            "pie līgas vidējā, ja pārbaude to rāda); “ar OT” – neizšķirta gadījumā pēc vēstures. "
             "Koeficients = 1 / varbūtība (taisnīgais, bez bukmeikera uzcenojuma).")
         if meta:
             mt, bz = meta.get("parbaude", {}), meta.get("baze", {})
             st.markdown(
                 f"**Pārbaude pret vēsturi** ({str(meta.get('parbaudes_sezona'))[:4]}/{str(meta.get('parbaudes_sezona'))[6:]}, "
                 f"{mt.get('speles', 0)} spēles, katra prognozēta tikai no datiem pirms tās): log loss 1X2 **{mt.get('logloss_1x2', float('nan')):.4f}** "
-                f"(bāze bez modeļa {bz.get('logloss_1x2', float('nan')):.4f}; mazāk = labāk); neizšķirti pamatlaikā "
+                f"(bāze bez modeļa {bz.get('logloss_1x2', float('nan')):.4f}; mazāk = labāk), totāls 5.5 **{mt.get('logloss_o55', float('nan')):.4f}** "
+                f"(bāze {bz.get('logloss_o55', float('nan')):.4f}); neizšķirti pamatlaikā "
                 f"{mt.get('neizskirti_prog', 0):.1%} prognoze / {mt.get('neizskirti_fakt', 0):.1%} fakts; vidēji vārti "
                 f"{mt.get('videji_varti_prog', 0):.2f} / {mt.get('videji_varti_fakt', 0):.2f}. "
                 f"H2H korekcija: {'tiek lietota' if p.get('h2h_lietot') else 'netiek lietota (neuzlaboja prognozes)'}. Kalibrēts: {meta.get('izveidots', '')}.")
