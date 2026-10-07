@@ -43,7 +43,7 @@ import requests
 # IESTATĪJUMI
 # ----------------------------------------------------------------------------
 DATU_MAPE = os.environ.get("NHL_DATU_MAPE") or os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "dati")   # pēc noklusējuma: mape "dati" blakus skriptam
+    os.path.dirname(os.path.abspath(__file__)), "sezonas")   # aktīvā sezona; vēsturei (vesture.py) mapi norāda NHL_DATU_MAPE
 API_WEB = "https://api-web.nhle.com/v1"
 API_STATS = "https://api.nhle.com/stats/rest/en"
 
