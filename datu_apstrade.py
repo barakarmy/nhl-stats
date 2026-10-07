@@ -89,6 +89,9 @@ def _lv_laiks(df, utc_kol, datuma_kol):
 # ----------------------------------------------------------------------------
 # IELĀDE
 # ----------------------------------------------------------------------------
+TIPS_RS, TIPS_PO = "RS", "PO"       # regulārā sezona / play-off (statistika vienmēr tiek skaitīta atsevišķi)
+
+
 def ielasit_speles():
     """Viena rinda uz spēli; pievieno 'sakums_lv' un 'datums_lv' (Rīgas laiks)."""
     fails = next((c for c in (DATU_MAPE / "speles.csv", BASE / "nhl_sezona.csv") if c.exists()), None)
@@ -111,6 +114,13 @@ def ielasit_speles():
              (df["home_total"] != reg("home")) | (df["away_total"] != reg("away"))
         df["spele_beidzas"] = np.where(ot, "OT/SO", "REG")
     df["spele_beidzas"] = df["spele_beidzas"].fillna("REG")
+    # sezona un spēles tips: NHL gameType 2 = regulārā sezona (RS), 3 = play-off (PO); trūkstošās vērtības – RS un pēc datuma aprēķināta sezona
+    gads = df["datums"].dt.year
+    sez_pec_datuma = np.where(df["datums"].dt.month >= 7, gads * 10000 + gads + 1, (gads - 1) * 10000 + gads)
+    df["sezona"] = pd.to_numeric(df["sezona"], errors="coerce").fillna(pd.Series(sez_pec_datuma, index=df.index)).astype(int) \
+        if "sezona" in df.columns else sez_pec_datuma
+    tips_kods = pd.to_numeric(df["speles_tips"], errors="coerce") if "speles_tips" in df.columns else pd.Series(np.nan, index=df.index)
+    df["tips"] = np.where(tips_kods == 3, TIPS_PO, TIPS_RS)
     return df.sort_values(["datums_lv", "sakums_lv", "game_id"]).reset_index(drop=True)
 
 
@@ -167,6 +177,7 @@ def _komandas_puse(df, puse, pret):
         "komanda": df[f"{puse}_team"], "pretinieks": df[f"{pret}_team"],
         "majas": 1 if puse == "home" else 0,
         "beigas": df["spele_beidzas"],
+        "tips": _kol(df, "tips").fillna(TIPS_RS), "sezona": _kol(df, "sezona"),
         "g_tot": p("total"), "z_tot": q("total"),
         "sog_tot": p("sog_total"), "sog_pret": q("sog_total"),
         "ppg": p("ppg"), "pp_sog": p("pp_sog"), "pp_opp": p("pp_opp"),
@@ -215,7 +226,8 @@ def sagatavot_vienoto_tabulu(df):
     c = c.drop(columns="_pret_sk")
 
     uzvara = c["g_tot"] > c["z_tot"]
-    c["rez"] = np.where(uzvara, "W", np.where(c["beigas"].isin(["OT", "SO", "OT/SO"]), "OTL", "L"))
+    papildl = c["beigas"].isin(["OT", "SO", "OT/SO"]) & (c["tips"] != TIPS_PO)        # play-off nav OT loss: zaudējums ir zaudējums
+    c["rez"] = np.where(uzvara, "W", np.where(papildl, "OTL", "L"))
     c["pts"] = c["rez"].map({"W": 2, "OTL": 1, "L": 0})
 
     pret = c[["game_id", "komanda", "ppg", "pp_opp"]].rename(
