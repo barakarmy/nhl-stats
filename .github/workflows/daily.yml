@@ -59,6 +59,8 @@ jobs:
           pip install -r requirements_collector.txt
 
       - name: Run Calendar Script
+        # ja kalendārs neielādējas, vecais fails paliek un datu atjaunināšana tik un tā turpinās (palaišanā redzams brīdinājums)
+        continue-on-error: true
         run: python kalendars.py
 
       - name: Run Stats Script
