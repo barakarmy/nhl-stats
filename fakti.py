@@ -2,9 +2,9 @@
 fakti.py – "Interesanti fakti": nestandarta spēļu gaitas statistika no vārtu notikumiem (goal by goal).
 
 Ievade (tie paši CSV, ko raksta nhl_dati.py):
-  - speles  (dati/speles.csv):  game_id, datums, home_team, away_team, home_total, away_total,
+  - speles  (sezonas/speles.csv):  game_id, datums, home_team, away_team, home_total, away_total,
                                 home_p1..p3, away_p1..p3, spele_beidzas (REG / OT / SO)
-  - varti   (dati/varti.csv):   game_id, period, period_type (REG / OT / SO), laiks "MM:SS", komanda,
+  - varti   (sezonas/varti.csv):   game_id, period, period_type (REG / OT / SO), laiks "MM:SS", komanda,
                                 home_score, away_score (rezultāts pēc šiem vārtiem)
 
 Izvade: Python saraksti/vārdnīcas, kas gatavi JSON (front-end tabulām), un pandas DataFrame lietotnei.
@@ -363,9 +363,9 @@ def shutouts(vartsargi):
     return so.groupby("playerId").size()
 
 
-if __name__ == "__main__":                  # python fakti.py → dati/fakti.json
+if __name__ == "__main__":                  # python fakti.py → sezonas/fakti.json
     import os
-    mape = os.environ.get("NHL_DATU_MAPE", "dati")
+    mape = os.environ.get("NHL_DATU_MAPE", "sezonas")
     sp = pd.read_csv(os.path.join(mape, "speles.csv"))
     va = pd.read_csv(os.path.join(mape, "varti.csv"))
     with open(os.path.join(mape, "fakti.json"), "w", encoding="utf-8") as f:
