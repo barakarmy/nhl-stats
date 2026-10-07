@@ -25,7 +25,7 @@ import sys
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
-from scipy.stats import poisson
+from scipy.stats import nbinom, poisson
 
 NHL_KOMANDAS_SARAKSTS = [
     "ANA", "BOS", "BUF", "CGY", "CAR", "CHI", "COL", "CBJ", "DAL", "DET",
@@ -44,9 +44,12 @@ NOKLUSETIE = {
     "h2h_k": 12.0,                    # H2H atlikumu "pievilkšana" (gaidāmo vārtu ekvivalents)
     "h2h_max": 0.08,                  # H2H korekcijas griesti (±8%)
     "periodu_dalas": [0.31, 0.34, 0.35],
+    "totali_kappa": 1.0,              # gaidāmo vārtu kopsummas "pievilkšana" pie līgas vidējā (1 = bez, 0.5 = uz pusi)
+    "nb_r": 0.0,                      # vārtu izkliede: 0 = Puasons, >0 = negatīvais binomiālais (mazāks = lielāka izkliede)
     "noraid_k": 10.0,                 # komandas noraidījumu biežuma pievilkšana pie līgas (spēles)
 }
 GARS_CELS_KM = 1500
+KOMANDU_PECTECI = {"ARI": "UTA"}      # Arizona Coyotes (līdz 2023/24) → Utah: sastāvs pārcēlās, modelim tā ir viena komanda
 PARAMETRU_FAILS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sezonas", "vesture", "modelis_parametri.json")
 MAX_V = 13
 
@@ -79,7 +82,7 @@ def spelu_tabula(raw):
         "datums": pd.to_datetime(r["datums"]).dt.normalize(),
         "sezona": pd.to_numeric(r["sezona"], errors="coerce").fillna(0).astype(int),
         "po": (r["tips"] == "PO").astype(int) if "tips" in r.columns else 0,
-        "home": r["home_team"], "away": r["away_team"],
+        "home": r["home_team"].replace(KOMANDU_PECTECI), "away": r["away_team"].replace(KOMANDU_PECTECI),
         "hg": r[["home_p1", "home_p2", "home_p3"]].fillna(0).sum(axis=1).astype(int),
         "ag": r[["away_p1", "away_p2", "away_p3"]].fillna(0).sum(axis=1).astype(int),
         "beigas": r["spele_beidzas"].astype(str).str.upper() if "spele_beidzas" in r.columns else "REG",
@@ -193,7 +196,7 @@ def aprekinat_reitingus(g, uz_datumu=None, sezona_tagad=None, p=None):
     sez_mask = (g["sezona"] == sezona_tagad).to_numpy()
     hs, as_ = g["home"].to_numpy()[sez_mask], g["away"].to_numpy()[sez_mask]
     n_sez = {k: int((hs == k).sum() + (as_ == k).sum()) for k in komandas}
-    return {"mu": x[0], "majas": x[1], "b2b_att": x[2], "b2b_def": x[3], "cels_att": x[4], "cels_def": x[5], "po": x[6],
+    return {"liga_kopa": 2 * sv, "mu": x[0], "majas": x[1], "b2b_att": x[2], "b2b_def": x[3], "cels_att": x[4], "cels_def": x[5], "po": x[6],
             "att": dict(zip(komandas, x[7:7 + n])), "def": dict(zip(komandas, x[7 + n:])),
             "n_sez": n_sez, "sezona": sezona_tagad, "uz_datumu": uz_datumu}
 
@@ -231,9 +234,25 @@ def h2h_koeficienti(mod, g, home, away, p):
 # ----------------------------------------------------------------------------
 # VARBŪTĪBAS
 # ----------------------------------------------------------------------------
-def rezultatu_matrica(lh, la, rho):
+def _sadalijums(lam, r):
     i = np.arange(MAX_V)
-    m = np.outer(poisson.pmf(i, lh), poisson.pmf(i, la))
+    if r and r > 0:                                # negatīvais binomiālais ar vidējo lam un izkliedi r
+        return nbinom.pmf(i, r, r / (r + lam))
+    return poisson.pmf(i, lam)
+
+
+def saspiest(lh, la, p, liga_kopa):
+    """Gaidāmo vārtu kopsummu pievelk pie līgas vidējā (totali_kappa), saglabājot komandu attiecību."""
+    k = float(p.get("totali_kappa", 1.0))
+    if k >= 0.999 or not liga_kopa:
+        return lh, la
+    tot = lh + la
+    s = (liga_kopa + k * (tot - liga_kopa)) / tot
+    return lh * s, la * s
+
+
+def rezultatu_matrica(lh, la, rho, r=0.0):
+    m = np.outer(_sadalijums(lh, r), _sadalijums(la, r))
     m[np.diag_indices(MAX_V)] *= rho
     return m / m.sum()
 
@@ -245,7 +264,7 @@ def ot_majas_iespeja(lh, la, p):
 
 def tirgi(lh, la, p):
     """Visas varbūtības no λ: 1X2 (pamatlaiks), uzvarētājs ar OT, totāli, ±1.5, top rezultāti, periodi."""
-    m = rezultatu_matrica(lh, la, float(p["neizskirts_rho"]))
+    m = rezultatu_matrica(lh, la, float(p["neizskirts_rho"]), float(p.get("nb_r", 0.0)))
     h, d, a = float(np.tril(m, -1).sum()), float(np.trace(m)), float(np.triu(m, 1).sum())
     pot = ot_majas_iespeja(lh, la, p)
     ii, jj = np.indices(m.shape)
@@ -311,7 +330,10 @@ def prognoze(mod, g, home, away, p, b2b_h=0, b2b_a=0, cels_h=0, cels_a=0, po=0, 
     if h2h:
         kh, ka, n_h2h = h2h_koeficienti(mod, g, home, away, p)
         lh, la = lh * kh, la * ka
+    lh0, la0 = lh, la
+    lh, la = saspiest(lh, la, p, mod.get("liga_kopa"))
     t = tirgi(lh, la, p)
+    t["lh0"], t["la0"], t["liga_kopa"] = lh0, la0, mod.get("liga_kopa")
     t["ticamiba"], t["n_min"] = ticamiba(mod, home, away)
     t["faktori"] = {"b2b_h": b2b_h, "b2b_a": b2b_a, "cels_h": cels_h, "cels_a": cels_a, "po": po, "h2h": (kh, ka, n_h2h)}
     return t
@@ -346,6 +368,7 @@ def atpakal_parbaude(g, p, sezona, solis_dienas=3, h2h=False):
             t = prognoze(mod, g, r.home, r.away, p, r.b2b_h, r.b2b_a, r.cels_h, r.cels_a, r.po, h2h=h2h)
             rindas.append({"game_id": r.game_id, "datums": d, "home": r.home, "away": r.away, "hg": r.hg, "ag": r.ag,
                            "beigas": r.beigas, "uzv_majas": r.uzv_majas, "lh": t["lh"], "la": t["la"],
+                           "lh0": t["lh0"], "la0": t["la0"], "liga_kopa": t["liga_kopa"],
                            "p1": t["1x2"]["1"], "pX": t["1x2"]["X"], "p2": t["1x2"]["2"], "ml1": t["ar_ot"]["1"],
                            "o55": t["totali"][5.5]["over"], "o65": t["totali"][6.5]["over"]})
     return pd.DataFrame(rindas)
@@ -388,14 +411,56 @@ def bazes_metrikas(bt):
             "logloss_o55": float(np.mean([_ll(o if y else 1 - o) for y in (bt["hg"] + bt["ag"]) > 5.5]))}
 
 
+def parrekinat(bt, p):
+    """Varbūtības no saglabātajām λ ar citiem rho / kappa / nb_r (bez modeļa pārrēķināšanas)."""
+    rind = []
+    for lh0, la0, L in zip(bt["lh0"], bt["la0"], bt["liga_kopa"]):
+        lh, la = saspiest(lh0, la0, p, L)
+        t = tirgi(lh, la, p)
+        rind.append((t["1x2"]["1"], t["1x2"]["X"], t["1x2"]["2"], t["ar_ot"]["1"], t["totali"][5.5]["over"], t["totali"][6.5]["over"], lh, la))
+    out = bt.copy()
+    out[["p1", "pX", "p2", "ml1", "o55", "o65", "lh", "la"]] = pd.DataFrame(rind, index=bt.index)
+    return out
+
+
+def _izveleties_papildu(bt, p):
+    """No pārbaudes prognozēm: kopsummas pievilkšana un izkliede (pēc O/U 5.5 log loss), tad neizšķirtu korekcija un OT."""
+    labakais = (1e9, p["totali_kappa"], p["nb_r"])
+    for kappa in (1.0, 0.8, 0.6, 0.4):
+        for r in (0.0, 60.0, 30.0, 15.0):
+            pp = dict(p, totali_kappa=kappa, nb_r=r)
+            ll = metrikas(parrekinat(bt, pp))["logloss_o55"]
+            labakais = min(labakais, (ll, kappa, r))
+    p = dict(p, totali_kappa=labakais[1], nb_r=labakais[2])
+    b2 = parrekinat(bt, p)
+    pred_x, fakt_x = b2["pX"].mean(), (b2["hg"] == b2["ag"]).mean()
+    p["neizskirts_rho"] = float(min(1.8, max(0.9, p["neizskirts_rho"] * fakt_x / max(1e-6, pred_x))))
+    b2 = parrekinat(bt, p)
+    ot = b2[b2["hg"] == b2["ag"]]
+    if len(ot) >= 50:
+        p["ot_majas"] = float(min(0.6, max(0.4, (ot["uzv_majas"].sum() + 25 * 0.52) / (len(ot) + 25))))   # pievilkts pie 52%
+        p["ot_stiprums"] = min((np.mean([_ll(ot_majas_iespeja(a, b, dict(p, ot_stiprums=k)) if y else 1 - ot_majas_iespeja(a, b, dict(p, ot_stiprums=k)))
+                                         for a, b, y in zip(ot["lh"], ot["la"], ot["uzv_majas"])]), k) for k in (0.0, 0.2, 0.35, 0.5, 0.75, 1.0))[1]
+    return p
+
+
 def kalibret(g, sezonas, izvade=PARAMETRU_FAILS, rezgis=None):
-    """Parametru izvēle uz priekšpēdējās sezonas, pārbaude uz pēdējās. Rezultāts – JSON fails lietotnei."""
+    """
+    1) Godīga pārbaude: parametri izvēlēti uz priekšpēdējās sezonas, pārbaudīti uz pēdējās (katra spēle – tikai no datiem pirms tās).
+    2) Gala parametri lietotnei: tie paši iestatījumi, bet neizšķirtu/kopsummas/OT korekcijas no abām sezonām kopā.
+    Rezultāts – JSON fails lietotnei.
+    """
     if len(sezonas) < 2:
         print("Kalibrēšanai vajag vismaz 2 pilnas sezonas.")
         return 1
     sez_reg, sez_test = sezonas[-2], sezonas[-1]
+    ir_vesture_regulesanai = bool((g["sezona"] < sez_reg).any())
     print(f"Parametru izvēle uz {sez_reg}, pārbaude uz {sez_test} ({len(g)} spēles kopā)")
-    rezgis = rezgis or [(pp, vs) for pp in (30, 60, 120) for vs in ([0.25, 0.1], [0.5, 0.25], [0.8, 0.4])]
+    if not ir_vesture_regulesanai:
+        print(f"  Piezīme: pirms {sez_reg} DB nav vēstures, tāpēc vēstures svaru uz šīs sezonas nevar izvēlēties "
+              f"(lejupielādē arī {sez_reg // 10000 - 1}{sez_reg // 10000}: python vesture.py {sez_reg // 10000 - 1}{sez_reg // 10000}).")
+    vs_varianti = ([0.25, 0.1], [0.5, 0.25], [0.8, 0.4]) if ir_vesture_regulesanai else ([0.5, 0.25],)
+    rezgis = rezgis or [(pp, vs) for pp in (60, 120, 240) for vs in vs_varianti]
     labakais, lab_ll, lab_bt = None, 1e9, None
     for pp, vs in rezgis:
         p = dict(NOKLUSETIE, pusperiods_dienas=pp, vesture_svari=vs)
@@ -404,26 +469,22 @@ def kalibret(g, sezonas, izvade=PARAMETRU_FAILS, rezgis=None):
         print(f"  pusperiods {pp:3d} d, vēstures svari {vs}: log loss 1X2 {met.get('logloss_1x2', float('nan')):.4f}")
         if met and met["logloss_1x2"] < lab_ll:
             labakais, lab_ll, lab_bt = p, met["logloss_1x2"], bt
-    p = dict(labakais)
-    # neizšķirtu korekcija (rho) un OT parametri no izvēles sezonas prognozēm
-    pred_x, fakt_x = lab_bt["pX"].mean(), (lab_bt["hg"] == lab_bt["ag"]).mean()
-    p["neizskirts_rho"] = float(min(1.6, max(0.9, p["neizskirts_rho"] * fakt_x / max(1e-6, pred_x))))
-    ot = lab_bt[lab_bt["hg"] == lab_bt["ag"]]
-    if len(ot) >= 50:
-        p["ot_majas"] = float(min(0.6, max(0.4, (ot["uzv_majas"].sum() + 25 * 0.52) / (len(ot) + 25))))   # pievilkts pie 52%
-        labakais_k = min((np.mean([_ll(ot_majas_iespeja(a, b, dict(p, ot_stiprums=k)) if y else 1 - ot_majas_iespeja(a, b, dict(p, ot_stiprums=k)))
-                                   for a, b, y in zip(ot["lh"], ot["la"], ot["uzv_majas"])]), k) for k in (0.0, 0.2, 0.35, 0.5, 0.75, 1.0))
-        p["ot_stiprums"] = labakais_k[1]
+    p = _izveleties_papildu(lab_bt, dict(labakais))
     tot = g[["g_p1", "g_p2", "g_p3"]].sum()
     p["periodu_dalas"] = [float(x) for x in (tot / tot.sum()).round(4)]
-    # pārbaude uz pēdējās sezonas: bez un ar H2H
+    print(f"  izvēlēts: kopsummas pievilkšana {p['totali_kappa']}, izkliede {'Puasons' if not p['nb_r'] else p['nb_r']}, "
+          f"neizšķirtu korekcija {p['neizskirts_rho']:.2f}, OT mājiniekiem {p['ot_majas']:.3f}")
+    # godīga pārbaude uz pēdējās sezonas: bez un ar H2H
     bt = atpakal_parbaude(g, p, sez_test, solis_dienas=3, h2h=False)
     bt_h = atpakal_parbaude(g, p, sez_test, solis_dienas=3, h2h=True)
     met, met_h, baze = metrikas(bt), metrikas(bt_h), bazes_metrikas(bt)
     p["h2h_lietot"] = bool(met_h["logloss_1x2"] <= met["logloss_1x2"] + 1e-4)
     gala = bt_h if p["h2h_lietot"] else bt
+    # gala parametri lietotnei: korekcijas no abām sezonām kopā (vairāk datu; pārbaudes rezultāts paliek godīgs)
+    p_gala = _izveleties_papildu(pd.concat([lab_bt, gala], ignore_index=True), dict(p, neizskirts_rho=NOKLUSETIE["neizskirts_rho"]))
+    p_gala["h2h_lietot"] = p["h2h_lietot"]
     rez = {
-        "parametri": p, "regulesanas_sezona": sez_reg, "parbaudes_sezona": sez_test,
+        "parametri": p_gala, "parametri_parbaudei": p, "regulesanas_sezona": sez_reg, "parbaudes_sezona": sez_test,
         "parbaude": metrikas(gala), "parbaude_bez_h2h": met, "parbaude_ar_h2h": met_h, "baze": baze,
         "kalibracija_1": kalibracija(gala, "p1", (gala["hg"] > gala["ag"]).astype(float)),
         "kalibracija_o55": kalibracija(gala, "o55", ((gala["hg"] + gala["ag"]) > 5.5).astype(float)),
@@ -432,9 +493,12 @@ def kalibret(g, sezonas, izvade=PARAMETRU_FAILS, rezgis=None):
     os.makedirs(os.path.dirname(izvade), exist_ok=True)
     with open(izvade, "w", encoding="utf-8") as f:
         json.dump(rez, f, ensure_ascii=False, indent=2, default=float)
-    print(f"\nPārbaude {sez_test}: log loss 1X2 {rez['parbaude']['logloss_1x2']:.4f} (bāze {baze['logloss_1x2']:.4f}), "
-          f"neizšķirti {rez['parbaude']['neizskirti_prog']:.1%} prognoze / {rez['parbaude']['neizskirti_fakt']:.1%} fakts; "
-          f"H2H {'uzlabo – tiek lietots' if p['h2h_lietot'] else 'neuzlabo – netiek lietots'}.\nSaglabāts: {izvade}")
+    m = rez["parbaude"]
+    print(f"\nPārbaude {sez_test} ({m['speles']} spēles): log loss 1X2 {m['logloss_1x2']:.4f} (bāze {baze['logloss_1x2']:.4f}), "
+          f"O/U 5.5 {m['logloss_o55']:.4f} (bāze {baze['logloss_o55']:.4f}); neizšķirti {m['neizskirti_prog']:.1%} prognoze / "
+          f"{m['neizskirti_fakt']:.1%} fakts; H2H {'uzlabo – tiek lietots' if p['h2h_lietot'] else 'neuzlabo – netiek lietots'}.")
+    print(f"Gala parametri (no abām sezonām): neizšķirtu korekcija {p_gala['neizskirts_rho']:.2f}, kopsummas pievilkšana "
+          f"{p_gala['totali_kappa']}, izkliede {'Puasons' if not p_gala['nb_r'] else p_gala['nb_r']}.\nSaglabāts: {izvade}")
     return 0
 
 
