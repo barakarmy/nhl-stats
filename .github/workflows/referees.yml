@@ -1,4 +1,4 @@
-# NHL Referees: pirms spēlēm paziņotie tiesneši no Scouting The Refs (rezerve: NHL right-rail) → dati/tiesnesi_planotie.csv.
+# NHL Referees: pirms spēlēm paziņotie tiesneši no Scouting The Refs (rezerve: NHL right-rail) → sezonas/tiesnesi_planotie.csv.
 # Palaiž: cron-job.org ik 30 min 14:00–23:30 (Europe/Riga, workflow_dispatch) + GitHub grafiks zemāk (rezerve).
 # Katra palaišana vispirms ātri pārbauda, vai ielāde vajadzīga. !!! cron-job.org žetons derīgs līdz 2027-07-30.
 name: NHL Referees (pirms spēlēm)
@@ -33,7 +33,7 @@ jobs:
 
       - name: Check if referees are needed
         id: check
-        # tikai standarta Python, bez pakotņu instalēšanas: nolasa nhl_kalendars.csv un dati/tiesnesi_planotie.csv
+        # tikai standarta Python, bez pakotņu instalēšanas: nolasa sezonas/nhl_kalendars.csv un sezonas/tiesnesi_planotie.csv
         run: python3 tiesnesi_planotie.py --parbaude
 
       - name: Set up Python
@@ -57,5 +57,5 @@ jobs:
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add dati/tiesnesi_planotie.csv
+          git add sezonas/tiesnesi_planotie.csv
           git diff --cached --quiet || (git commit -m "Referees update" && git pull --rebase && git push)
