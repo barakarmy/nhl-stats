@@ -6,10 +6,10 @@ KĀ DATI NONĀK LIETOTNĒ
 Lietotne pati NHL datus nevāc: tā tikai nolasa CSV failus no repozitorija mapes dati/ un nhl_kalendars.csv.
 Šos failus atjaunina divas GitHub Actions darbplūsmas (.github/workflows/), un katru no tām palaiž divi grafiki:
 
-1) NHL Daily Update (.github/workflows/daily.yml → python nhl_dati.py --vieglais, pēc tam kalendars.py)
+1) NHL Daily Update (.github/workflows/daily.yml → python kalendars.py, pēc tam python nhl_dati.py --vieglais)
    - Avots: NHL oficiālā statistika (api-web.nhle.com: score, landing, boxscore, play-by-play, right-rail).
    - Raksta: dati/speles.csv (spēles, periodi, metieni, minor sodi, vairākums), dati/speletaji.csv, dati/vartsargi.csv,
-     dati/varti.csv, dati/tiesnesi.csv (faktiskie tiesneši) un nhl_kalendars.csv (nākamās spēles).
+     dati/varti.csv, dati/tiesnesi.csv (faktiskie tiesneši) un nhl_kalendars.csv (nākamās RS un PO spēles 60 dienas uz priekšu).
    - Palaišana:
        a) cron-job.org katru dienu 08:40 pēc Rīgas laika (workflow_dispatch caur GitHub API) – galvenais, precīzs grafiks;
        b) GitHub paša grafiks '15 8 * * *' (UTC) = 11:15 Rīgā vasaras laikā / 10:15 ziemas laikā – rezerve (var kavēties).
