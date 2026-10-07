@@ -1,4 +1,10 @@
 # Lielie faili, kas nav vajadzīgi Streamlit lietotnei (paliek tikai lokāli)
+sezonas/**/notikumi.csv
+sezonas/**/mainas.csv
+sezonas/**/raw/
+sezonas/**/*_vecs_*.csv
+sezonas/**/*.tmp
+# vecā mape (pirms pārcelšanas uz sezonas/)
 dati/notikumi.csv
 dati/mainas.csv
 dati/raw/
