@@ -1,6 +1,6 @@
 """
-Plānotie tiesneši: pirms spēlēm iegūst galvenos tiesnešus un ieraksta dati/tiesnesi_planotie.csv
-(viena rinda uz spēli un amatpersonu). Spēļu laiki tiek ņemti no nhl_kalendars.csv (to atjaunina kalendars.py).
+Plānotie tiesneši: pirms spēlēm iegūst galvenos tiesnešus un ieraksta sezonas/tiesnesi_planotie.csv
+(viena rinda uz spēli un amatpersonu). Spēļu laiki tiek ņemti no sezonas/nhl_kalendars.csv (to atjaunina kalendars.py).
 
 Avoti (pēc prioritātes):
   1. Scouting The Refs (scoutingtherefs.com): neatkarīgs hokeja tiesnešu portāls, kas katru dienu apmēram 4 stundas pirms pirmās spēles
@@ -33,8 +33,8 @@ from datetime import date, datetime, timedelta, timezone
 from html.parser import HTMLParser
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-DATU_MAPE = os.environ.get("NHL_DATU_MAPE") or os.path.join(BASE, "dati")
-KALENDARS = os.path.join(BASE, "nhl_kalendars.csv")
+DATU_MAPE = os.environ.get("NHL_DATU_MAPE") or os.path.join(BASE, "sezonas")
+KALENDARS = os.path.join(DATU_MAPE, "nhl_kalendars.csv")
 FAILS = os.path.join(DATU_MAPE, "tiesnesi_planotie.csv")
 KOLONNAS = ["game_id", "sakums_utc", "home_team", "away_team", "loma", "vards", "atjaunots_utc", "avots"]
 
@@ -338,7 +338,7 @@ def dzivie_tiesnesi(kalendars, esosie_id=(), stundas=IEGUVES_STUNDAS, tagad=None
     """
     Tiesneši spēlēm bez tiesnešiem, ielādēti tieši no Scouting The Refs (lietotnei: nav atkarīgs no GitHub Actions grafika).
     kalendars: DataFrame vai saraksts ar vārdnīcām (game_id, datums [ASV datums], majas_komanda, viesu_komanda, sakuma_laiks_utc).
-    Atgriež rindu sarakstu tādā pašā formātā kā dati/tiesnesi_planotie.csv (avots 'ScoutingTheRefs'). Nekā nerakstī failos.
+    Atgriež rindu sarakstu tādā pašā formātā kā sezonas/tiesnesi_planotie.csv (avots 'ScoutingTheRefs'). Nekā nerakstī failos.
     """
     rindas = kalendars.to_dict("records") if hasattr(kalendars, "to_dict") else list(kalendars or [])
     tagad = tagad or datetime.now(timezone.utc)
