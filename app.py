@@ -60,7 +60,6 @@ import datu_apstrade as da
 import modelis  # Puasona prognožu modelis
 
 # Neobligātie moduļi: ja fails nav augšupielādēts repozitorijā, lietotne darbojas bez attiecīgās funkcijas (nevis apstājas ar kļūdu)
-cats = None          # čata sadaļa netiek rādīta (lietotājs nolēma to nelikt), arī ja cats.py ir repozitorijā
 try:
     import fakti         # "Interesanti fakti": comebacks un 3. perioda statistika (fakti.py)
 except ImportError:
@@ -190,7 +189,6 @@ header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecor
 .stApp [data-testid="stTextInput"] button, .stApp [data-testid="InputInstructions"] { display: none !important; }
 .st-key-auth_lasit, .st-key-auth_krat { position: absolute !important; width: 0; height: 0; overflow: hidden; margin: 0 !important; }
 /* kamēr pārlūks vēl nav atbildējis par saglabāto pieteikšanos, paroles lauks parādās ar nelielu aizkavi (lai pēc refresh tas nemirgo) */
-.login-gaida [data-testid="stTextInput"], .stApp:has(.login-gaida) [data-testid="stTextInput"] { animation: login-paradit .25s ease 1.3s both; }
 @keyframes login-paradit { from { opacity: 0; } to { opacity: 1; } }
 .login-err { position: fixed; top: calc(50% + 2.9rem); left: 50%; transform: translateX(-50%); z-index: 1000; white-space: nowrap;
   color: #ffb4b4; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: .85rem; letter-spacing: .04em; }
@@ -247,7 +245,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.23"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.24"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -275,7 +273,7 @@ NAV = [
         ("lapa_speletaji", "Spēlētāji", "players", "person"),
         ("lapa_tiesnesi", "Tiesneši", "referees", "sports"),
     ]},
-    # beigās atsevišķas sadaļas: Čats, Kalendārs (priekšpēdējais), Rezultāti (pēdējais)
+    # beigās atsevišķas sadaļas: Kalendārs (priekšpēdējais), Rezultāti (pēdējais)
     {"lapa": ("lapa_kalendars", "Kalendārs", "schedule", "calendar_month")},
     {"lapa": ("lapa_rezultati", "Rezultāti", "results", "sports_score")},
 ]
@@ -357,7 +355,7 @@ header[data-testid="stHeader"] { display: none; }
 /* ===== Augšējā josla ar hover izvēlnēm (melns fons, gaiši teksti) ===== */
 .st-key-topbar { position: sticky; top: .6rem; z-index: 1000; display: flex !important; flex-direction: row !important;
   flex-wrap: wrap; align-items: center; gap: .2rem !important; background: #0a0f1c; border: 1px solid rgba(255,255,255,.10);
-  border-radius: 16px; padding: .35rem .7rem; margin-bottom: 1.1rem; box-shadow: 0 10px 28px rgba(0,0,0,.35); }
+  border-radius: 16px; padding: .35rem .7rem; padding-right: 4.2rem !important; margin-bottom: 1.1rem; box-shadow: 0 10px 28px rgba(0,0,0,.35); }   /* labajā pusē vieta motīva slēdzim */
 .st-key-topbar, .st-key-topbar * { overflow: visible !important; }
 .st-key-topbar > div, [class*="st-key-navg-"], [class*="st-key-navs-"], .st-key-brand { width: auto !important; }
 .st-key-topbar p, .st-key-topbar a, .st-key-topbar .nav-title { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important; }
@@ -444,7 +442,8 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
    redzamo izskatu (balts fons, apmale, centrēts treknraksts) zīmējam mēs, tāpēc tas izskatās kā blakus pogas un nav atkarīgs no Streamlit iekšējās struktūras.
    Datuma tekstu ieliek ::after satura vērtībā (to uzstāda Python katrā izpildē). */
 .st-key-datums_lauks { position: relative !important; width: 10rem !important; height: 2.5rem; flex: 0 0 auto; overflow: hidden; box-sizing: border-box;
-  background: #ffffff; border: 1px solid rgba(49,51,63,.2); border-radius: 10px; transition: border-color .15s ease; cursor: pointer; }
+  background: linear-gradient(135deg, #18233d 0%, #0a0f1c 100%) !important; border: 1px solid rgba(255,255,255,.12) !important; border-radius: 999px !important;
+  color: #ffffff; box-shadow: 0 4px 12px rgba(10,15,28,.22); transition: border-color .15s ease; cursor: pointer; }
 .st-key-datums_lauks > * { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; margin: 0 !important; opacity: 0; }
 .st-key-datums_lauks::after { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
   font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; font-size: 1rem; font-weight: 700; letter-spacing: .01em; }
@@ -541,7 +540,8 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   [class*="st-key-kt_"]:hover { z-index: 5; }
   [class*="st-key-kt_"]:hover .kt-logo { filter: none !important; transform: scale(1.15); opacity: 1; }
 }
-.kt-logo { pointer-events: none; -webkit-user-drag: none; }          /* palielinātais logo nedrīkst nosegt blakus esošo komandu pogas */
+.kt-logo { width: 3.4rem !important; height: 3.4rem !important; max-width: none !important; object-fit: contain; display: block; margin: 0 auto;
+  pointer-events: none; -webkit-user-drag: none; }          /* palielinātais logo nedrīkst nosegt blakus esošo komandu pogas */
 [class*="st-key-kt_"] button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 [class*="st-key-kt_"][class*="_akt"] { z-index: 4; }
 [class*="st-key-kt_"][class*="_akt"] .kt-logo, [class*="st-key-kt_"][class*="_akt"]:hover .kt-logo { transform: scale(1.7); opacity: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,.32)) !important;
@@ -555,7 +555,6 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 [class*="st-key-kt_"] > div:last-child { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; margin: 0 !important; opacity: 0; }
 [class*="st-key-kt_"] > div:last-child * { width: 100% !important; height: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
   display: block !important; box-sizing: border-box; }
-.kt-logo { width: 3.4rem !important; height: 3.4rem !important; max-width: none !important; object-fit: contain; display: block; margin: 0 auto; }
 @media (max-width: 640px) {
   .st-key-kom_registis { grid-template-columns: repeat(4, 4.4rem); }
   .st-key-kom_registis > div, [class*="st-key-kt_"] { width: 4.4rem !important; height: 4.4rem; }
@@ -566,10 +565,6 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   letter-spacing: -.01em; margin: 1.1rem 0 1.2rem; }
 @media (max-width: 640px) { .kom-nos { font-size: 1.9rem; margin-top: .9rem; } }
 /* pēdējā spēle: rezultāts kā saite uz Rezultātu sadaļu */
-.st-key-pedeja_spele_josla { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; gap: .4rem !important; margin-bottom: .6rem; }
-.st-key-pedeja_spele_josla > div { width: auto !important; flex: 0 0 auto; }
-.st-key-pedeja_spele_josla button { background: none !important; border: none !important; padding: 0 .2rem !important; min-height: 0 !important;
-  color: #2563eb !important; text-decoration: underline; font-weight: 700; }
 
 /* rezultātu kartīte: iznākuma poga (Pamatlaiks / OT / SO) atver detaļas; tad statistikas rindas pazūd */
 .mc-box { position: relative; }
@@ -615,8 +610,6 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .st-key-sl_per button[data-testid="stBaseButton-primary"] p, .st-key-sl_per button[kind="primary"] p,
 .st-key-cmp_vh button[data-testid="stBaseButton-primary"] p, .st-key-cmp_vh button[kind="primary"] p,
 .st-key-cmp_va button[data-testid="stBaseButton-primary"] p, .st-key-cmp_va button[kind="primary"] p { color: #ffffff !important; }
-.st-key-datums_lauks { background: linear-gradient(135deg, #18233d 0%, #0a0f1c 100%) !important; border-color: rgba(255,255,255,.12) !important;
-  border-radius: 999px !important; color: #ffffff; box-shadow: 0 4px 12px rgba(10,15,28,.22); }
 
 /* ===== Salīdzinājuma virsraksts: [mājinieki] [VS + maiņas poga] [viesi], zem nosaukumiem katras komandas Mājās/Izbraukumā ===== */
 .st-key-cmp_head { display: flex !important; flex-direction: row !important; flex-wrap: nowrap; justify-content: center; align-items: flex-start;
@@ -674,20 +667,10 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .cel-taim { margin-top: .45rem; font-size: .78rem; font-weight: 600; color: #b91c1c; }          /* tāda pati krāsa kā "Kritiski" */
 .cel-pared { margin-top: .45rem; font-size: .78rem; font-weight: 700; color: #b91c1c; }
 .cel-taim .tk { display: inline-block; font-variant-numeric: tabular-nums; font-size: .95rem; margin-left: .2rem; }
-/* saite tabulā (kalendārs → salīdzinājums) */
-.tb a.tb-saite { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 1.7rem; border-radius: 999px; text-decoration: none;
-  background: linear-gradient(135deg, #18233d 0%, #0a0f1c 100%); color: #ffffff !important; font-weight: 700; }
-.tb a.tb-saite { position: relative; }
-.tb a.tb-saite:hover { filter: brightness(1.35); }
-@media (hover: hover) {
-  .tb a.tb-saite[data-tip]:hover::after { content: attr(data-tip); position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%);
-    padding: .25rem .6rem; border-radius: .45rem; background: #262730; color: #fff; font-size: .75rem; font-weight: 600; white-space: nowrap; z-index: 30;
-    box-shadow: 0 4px 12px rgba(0,0,0,.25); pointer-events: none; }
-}
 /* rezultātu kartīte: sākuma laiks un vieta zem iznākuma pogas */
 .mc-info { text-align: center; font-size: .82rem; opacity: .75; margin: .15rem 0 .1rem; }
 /* komandas lapa: galvenie rādītāji, forma, informācija, aizvadītās spēles */
-.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; margin: .4rem 0 .8rem; }
+.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; margin: .4rem 0 .8rem; align-items: start; }
 .kpi, .kn { border: 1px solid rgba(128,128,128,.22); border-radius: 14px; padding: .75rem .9rem; background: rgba(255,255,255,.6); }
 .kpi-l { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .6; }
 .kpi-v { font-size: 1.65rem; font-weight: 800; line-height: 1.2; margin-top: .15rem; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; }
@@ -696,13 +679,9 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .kpi-r.ok { background: rgba(22,163,74,.14); color: #15803d; }
 .kpi-r.slikti { background: rgba(220,38,38,.12); color: #b91c1c; }
 .kpi-row { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
-.fm { display: flex; gap: .4rem; margin-top: .45rem; flex-wrap: wrap; }
+.fm { display: flex; gap: .35rem; margin-top: .45rem; flex-wrap: wrap; }
 .fm-b { display: inline-flex; flex-direction: column; align-items: center; min-width: 2.6rem; padding: .25rem .4rem; border-radius: .5rem; font-weight: 800;
   font-size: .85rem; text-decoration: none !important; line-height: 1.15; }
-.fm-b small { font-weight: 600; font-size: .72rem; opacity: .85; }
-.fm-b.U { background: rgba(22,163,74,.14); color: #15803d !important; }
-.fm-b.Z { background: rgba(220,38,38,.12); color: #b91c1c !important; }
-.fm-b.ZPL { background: rgba(245,158,11,.16); color: #b45309 !important; }
 .kn-r { display: flex; align-items: center; gap: .6rem; margin-top: .4rem; }
 .kn-r img { width: 2.4rem; height: 2.4rem; object-fit: contain; }
 .ki { border: 1px solid rgba(128,128,128,.22); border-radius: 14px; background: rgba(255,255,255,.6); padding: .3rem .9rem; max-width: 640px; }
@@ -712,12 +691,11 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .ks { max-width: 760px; }
 .ks-r { display: flex; align-items: center; gap: .7rem; padding: .5rem 0; border-bottom: 1px solid rgba(128,128,128,.18); font-size: .92rem; }
 .ks-d { min-width: 3.4rem; font-size: .82rem; opacity: .7; line-height: 1.15; }
-.ks-d small { display: block; }
 .ks-o { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: .35rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ks-o img { width: 1.6rem; height: 1.6rem; object-fit: contain; flex: none; }
 .ks-v { display: inline-block; width: 1.5rem; text-align: center; flex: none; opacity: .8; }
-.ks-s { font-weight: 800; color: inherit !important; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
-.ks-m { font-size: .78rem; opacity: .6; white-space: nowrap; }
+.ks-s { font-weight: 800; color: inherit !important; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; min-width: 4.4rem; text-align: right; }
+.ks-m { font-size: .78rem; opacity: .6; white-space: nowrap; min-width: 5.6rem; text-align: right; }
 .ks-c { font-size: .78rem; opacity: .6; margin: .5rem 0 .2rem; }
 @media (max-width: 640px) {
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
@@ -745,8 +723,6 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .kn-r b a.kn-a { text-decoration: underline; text-underline-offset: 3px; line-height: inherit; }
 .ks-o.kn-a { text-decoration: none; }
 .ks-o.kn-a:hover { text-decoration: underline; }
-.ks-vt { font-size: .72rem; font-weight: 700; padding: .1rem .45rem; border-radius: .35rem; background: rgba(128,128,128,.12); }
-.ks-vt.maj { background: rgba(59,130,246,.12); color: #1d4ed8; }
 .tb a.tb-logo-a { display: inline-block; line-height: 0; border-radius: 50%; transition: transform .15s ease; }
 .tb a.tb-logo-a:hover { transform: scale(1.12); }
 /* komandas līderi: spēlētāja foto kartītes augšējā labajā stūrī (datorā lielāks) */
@@ -763,7 +739,6 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .ld-foto.ld-logo { display: flex; align-items: center; justify-content: center; background-image: none; background-color: #ffffff; }
 .ld-logo-img { width: 72%; height: 72%; object-fit: contain; }
 .ld-h { font-weight: 800; font-size: 1.05rem; margin: 1rem 0 .4rem; }
-.kpi-grid { align-items: start; }
 .ld-x { margin-top: .35rem; }
 .ld-x summary { list-style: none; cursor: pointer; font-size: .76rem; font-weight: 700; color: #1d4ed8; padding-top: .3rem; user-select: none; }
 .ld-x summary::-webkit-details-marker { display: none; }
@@ -789,9 +764,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   white-space: nowrap; z-index: 40; box-shadow: 0 4px 12px rgba(0,0,0,.25); pointer-events: none; }
 .fb i:last-child:hover::after, .fb i:last-child:focus::after { right: 0; transform: none; }
 /* aizvadīto spēļu rezultāts un zīme fiksētās kolonnās; nākamo spēļu vieta */
-.ks-s { min-width: 4.4rem; text-align: right; }
 .ks-z { width: 2.9rem; display: inline-flex; justify-content: center; flex: none; }
-.ks-m { min-width: 5.6rem; text-align: right; }
 .ks-vieta { font-size: .8rem; opacity: .65; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 /* padziļinātā statistika: tēmu kartītes */
 .dz-leg { font-size: .8rem; opacity: .75; margin: .4rem 0 .6rem; }
@@ -822,7 +795,6 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .l5u.rl, .fm-b.rl { background: #dc0000; }
 .l5u.rwo, .fm-b.rwo { background: linear-gradient(90deg, #f3a000 0 30%, #00a83f 30% 100%); }
 .l5u.rlo, .fm-b.rlo { background: linear-gradient(90deg, #f3a000 0 30%, #dc0000 30% 100%); }
-.fm { gap: .35rem; }
 /* topu vērtības ar paskaidrojumu (uzvedot / pieskaroties) */
 .ld-tip { position: relative; cursor: help; text-decoration: underline dotted rgba(128,128,128,.7); text-underline-offset: 3px; outline: none; }
 .ld-tip:hover::after, .ld-tip:focus::after { content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 6px); padding: .28rem .6rem;
@@ -889,13 +861,9 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .l5c.r .l5r .l5d { justify-self: end; }
 .l5v { font-weight: 600; opacity: .75; }
 .l5d { opacity: .65; font-size: .8rem; white-space: nowrap; }
-.l5o { font-weight: 600; display: inline-flex; align-items: center; gap: .3rem; }
 .l5lg { width: 1.7rem !important; height: 1.7rem !important; max-width: none !important; object-fit: contain; }
 .l5s { font-weight: 800; color: inherit !important; text-decoration: underline; text-underline-offset: 3px; }
 .l5u { font-size: .68rem; font-weight: 800; padding: .08rem .38rem; border-radius: .3rem; }
-.l5u.U { background: rgba(22,163,74,.14); color: #15803d; }
-.l5u.Z { background: rgba(220,38,38,.12); color: #b91c1c; }
-.l5u.ZPL { background: rgba(245,158,11,.16); color: #b45309; }
 @media (max-width: 640px) {
   .st-key-cmp_head { gap: .3rem !important; }
   .st-key-cmp_ch, .st-key-cmp_ca { width: 9.3rem !important; }
@@ -952,9 +920,8 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .cmp-bar i.a { border-radius: .3rem 0 0 .3rem; }
 .cmp-bar i.b { border-radius: 0 .3rem .3rem 0; }
 /* filtru pogas: augšējie (laika posms) un apakšējie (mājās / izbraukumā), centrēti */
-.st-key-sl_per, .st-key-sl_viet { display: flex !important; flex-direction: row !important; flex-wrap: wrap; justify-content: center; gap: .5rem !important; margin-bottom: .4rem; }
-.st-key-sl_per > div, .st-key-sl_viet > div { width: auto !important; flex: 0 0 auto; }
-.st-key-sl_viet button { min-height: 2rem; padding: .1rem .9rem; font-size: .85rem; }
+.st-key-sl_per { display: flex !important; flex-direction: row !important; flex-wrap: wrap; justify-content: center; gap: .5rem !important; margin-bottom: .4rem; }
+.st-key-sl_per > div { width: auto !important; flex: 0 0 auto; }
 .st-key-sl_poga_josla { display: flex !important; flex-direction: row !important; justify-content: center; margin: .3rem 0 .8rem; }
 .st-key-sl_poga_josla > div { width: auto !important; flex: 0 0 auto; }
 .st-key-sl_poga_josla button { background: linear-gradient(135deg, #18233d 0%, #0a0f1c 100%) !important; border: 1px solid rgba(255,255,255,.14) !important;
@@ -979,43 +946,14 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 }
 </style>""", unsafe_allow_html=True)
 
-def tema():
-    """Streamlit lietotnes patiesais motīvs: 'light' / 'dark' (st.context.theme), vai None, ja to nevar noteikt."""
-    try:
-        t = st.context.theme.type
-    except Exception:
-        return None
-    return t if t in ("light", "dark") else None
-
-
-def tema_css(tumss_css):
-    """Lietotne vienmēr ir gaišajā motīvā (.streamlit/config.toml: base = "light"), tāpēc tumšā motīva CSS netiek pievienots nekad.
-    Agrāk ierīces tumšais režīms padarīja tabulu virsrakstus, pirmo kolonnu un datuma lauku melnus."""
-    return ""
-
-
-def _tema_css_vecais(tumss_css):
-    """CSS, kas jāpiemēro tikai tumšajā motīvā. Ja motīvu var noteikt, izvēlas pēc tā (nevis pēc ierīces iestatījuma); citādi pēc ierīces."""
-    t = tema()
-    if t == "dark":
-        return tumss_css
-    return ""          # gaišs (lietotnei ir piespiedu gaišais motīvs; ierīces tumšais režīms vairs nemaina krāsas)
-
-
-_tumss_tab = tema_css(".tb thead th, .tb td.c0, .tb th.c0, .tb td.c1, .tb th.c1 { background: #11151d; } .cf-c { background: rgba(14,17,23,.62); } .cf-c i.b { background: #d1d5db; } .tb .bubble, .tip .bubble { background: #262730; color: #fafafa; border-color: rgba(250,250,250,.15); } .tb .bubble a { color: #60a5fa; } .maina-ik { filter: invert(1); }")
-if _tumss_tab:
-    st.markdown(f"<style>{_tumss_tab}</style>", unsafe_allow_html=True)
-
-# Lapas fons: ledus ar NHL logo, caurspīdīgs, lai netraucētu lasīt tekstu (gaišajā motīvā 30%, tumšajā 16%).
-# Pielāgošana: FONA_CAURSPIDIBA_GAISS / FONA_CAURSPIDIBA_TUMSS (0 = nav redzams, 1 = pilna redzamība).
-FONA_CAURSPIDIBA_GAISS, FONA_CAURSPIDIBA_TUMSS = 0.30, 0.16
+# Lapas fons: ledus ar NHL logo, caurspīdīgs, lai netraucētu lasīt tekstu (tumšā motīva caurspīdīgums – sadaļā TUMŠAIS MOTĪVS).
+# Pielāgošana: FONA_CAURSPIDIBA_GAISS (0 = nav redzams, 1 = pilna redzamība).
+FONA_CAURSPIDIBA_GAISS = 0.30
 if FONS_DATA_URI:
-    _tumss_fons = tema_css(".stApp::before { opacity: " + str(FONA_CAURSPIDIBA_TUMSS) + "; }")
     st.markdown(f"""<style>
 .stApp {{ isolation: isolate; }}
 .stApp::before {{ content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background: url("{FONS_DATA_URI}") center / cover no-repeat; opacity: {FONA_CAURSPIDIBA_GAISS}; }}
-{_tumss_fons}
 .stApp [data-testid="stAppViewContainer"], .stApp [data-testid="stMain"], .stApp section.stMain {{ background: transparent !important; }}
 </style>""", unsafe_allow_html=True)
 
@@ -1043,7 +981,6 @@ html.tumss :is(.cel-taim, .cel-pared, .fk-def, .cel-b.krit) { color: var(--t-sar
 html.tumss .cel-b.krit, html.tumss .fk-def { background: rgba(248,113,113,.14) !important; }
 html.tumss .cel-b.brid, html.tumss .fk-izl { color: var(--t-oranzs) !important; background: rgba(251,191,36,.14) !important; }
 html.tumss .fk-ser.akt { color: var(--t-zals); background: rgba(74,222,128,.15); }
-html.tumss .ks-vt.maj { color: var(--t-zils); background: rgba(147,197,253,.14); }
 html.tumss .ld-x summary { color: var(--t-zils); }
 html.tumss :is(.fm-b, .l5u) { box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
 /* viesu komandas krāsa (bija gandrīz melna) */
@@ -1055,7 +992,7 @@ html.tumss .tb thead th, html.tumss .tb :is(td.c0, th.c0, td.c1, th.c1) { backgr
 html.tumss .tb tbody tr:hover, html.tumss .tb tbody tr:hover td { background: rgba(147,197,253,.08) !important; }
 html.tumss .tb .bubble a, html.tumss .mc-det a { color: var(--t-zils) !important; }
 /* paskaidrojumi */
-html.tumss :is(.ld-tip, .fb i, .l5u, .fm-b, .kn-r a.kn-a, .tb a.tb-saite)[data-tip]:hover::after,
+html.tumss :is(.ld-tip, .fb i, .l5u, .fm-b, .kn-r a.kn-a)[data-tip]:hover::after,
 html.tumss :is(.ld-tip, .fb i):focus::after { background: #0e1626 !important; border: 1px solid rgba(255,255,255,.14); }
 html.tumss :is(.tip .bubble, .tb .bubble) { background: #0e1626 !important; color: var(--t-teksts) !important; border-color: rgba(255,255,255,.14) !important; }
 /* rezultātu kartītes */
@@ -1112,7 +1049,6 @@ html.tumss :is(.tb-logo, .ks-o img, .l5lg, .cmp-logo, .cf-c img, .kn-r img, .fk-
   background: #f8fafc; box-shadow: 0 1px 3px rgba(0,0,0,.4); transition: transform .2s ease; }
 html.tumss .tema-sw::after { transform: translateX(1.45rem); background: #e0e7ff; }
 .tema-sw:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
-.st-key-topbar { padding-right: 4.2rem !important; }
 @media (max-width: 640px) { .tema-sw { top: .55rem; transform: none; right: .55rem; } }
 </style>""", unsafe_allow_html=True)
 
@@ -1239,7 +1175,6 @@ if RAW is None or DF.empty:
              "Palaid nhl_dati.py un ieliec CSV failus repozitorijā.")
     st.stop()
 
-SCOPES = ["Visas", "Mājās", "Izbraukumā"]
 LOGI = {"Visa sezona": None, "Pēdējās 5": 5, "Pēdējās 10": 10}
 
 
@@ -1303,9 +1238,7 @@ def komandas_etikete(kods):
 POMOC = {
     # līgas / komandu tabulas
     "Sp.": "Nospēlētās spēles",
-    "U": "win (arī OT win un SO win)",
     "Z": "loss (pamatlaikā)",
-    "ZPL": "OT loss vai SO loss (komanda saņem 1 punktu)",
     "OTL": "OT loss vai SO loss (komanda saņem 1 punktu)",
     "L": "loss (pamatlaikā)",
     "Punkti": "Tabulas punkti: win 2, OT loss / SO loss 1, loss 0",
@@ -1314,7 +1247,6 @@ POMOC = {
     "Ielaisti/sp": "Vidēji ielaistie vārti spēlē pamatlaikā",
     "Starpība": "Gūto un ielaisto vārtu starpība pamatlaikā",
     "Metieni/sp": "Vidēji metieni vārtos (SOG) spēlē pamatlaikā (bez papildlaika)",
-    "Pretin. metieni/sp": "Pretinieka metieni vārtos pret šo komandu vidēji spēlē pamatlaikā (bez papildlaika)",
     "Metienu daļa %": "Komandas metienu daļa pamatlaikā: SOG par / (SOG par + SOG pret), bez papildlaika",
     "PP %": "Vairākuma (Power Play) efektivitāte pamatlaikā: vārti vairākumā / vairākuma iespējas, bez papildlaika",
     "PK %": "Mazākuma (Penalty Kill) efektivitāte pamatlaikā: neielaisto vārtu daļa, kad komanda spēlē mazākumā, bez papildlaika",
@@ -1326,7 +1258,6 @@ POMOC = {
     # periodi
     "Gūti": "Šajā periodā gūtie vārti (kopā)",
     "Ielaisti": "Šajā periodā ielaistie vārti (kopā)",
-    "Gūti/sp": "Vidēji gūtie vārti šajā periodā spēlē",
     # over / under, vairākums, noraidījumi
     "Over %": "Spēļu daļa (%), kurās abu komandu vārtu summa pamatlaikā pārsniedza izvēlēto līniju",
     "Under %": "Spēļu daļa (%), kurās abu komandu vārtu summa pamatlaikā bija zemāka par izvēlēto līniju",
@@ -1335,35 +1266,15 @@ POMOC = {
     "PP iespējas": "Vairākuma iespējas pamatlaikā (reizes, kad komanda spēlēja vairākumā), bez papildlaika",
     "PP metieni": "Metieni vārtos vairākumā pamatlaikā (bez papildlaika)",
     "Ielaisti PP": "Pretinieka vairākumā pamatlaikā gūtie vārti pret šo komandu",
-    "PIM min/sp": "Vidēji minor sodu minūtes spēlē (pamatlaikā; bez major, 10 min disciplinārajiem un kautiņiem)",
-    "Izcīnīti/sp": "Vidēji pretinieka noraidījumi pret šo komandu spēlē pamatlaikā (bez papildlaika)",
     "Izcīnīti − saņemti": "Izcīnīto un saņemto noraidījumu starpība spēlē; pozitīvs skaitlis = komanda izcīna vairāk, nekā saņem",
     # komandas lapa
-    "Skats": "Spēļu izlase, kurai parādīta statistika",
-    "Pretinieks": "vs = spēle mājās, @ = spēle viesos",
-    "Rez.": "🟩 win, 🟨 OT loss / SO loss, 🟥 loss",
-    "Rezultāts": "Spēles rezultāts: komandas vārti–pretinieka vārti (OT/SO = papildlaiks/pēcspēles metieni)",
     "Metieni": "Metieni vārtos visā spēlē (arī papildlaikā, tikai informācijai): komanda–pretinieks",
-    "Noraid.": "Komandas noraidījumu skaits spēlē (tikai minor sodi pamatlaikā; dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem)",
     "Noraidījumi": "Komandas noraidījumu skaits spēlē (tikai minor sodi pamatlaikā; dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem)",
     "PIM min": "Minor sodu minūtes spēlē (pamatlaikā; bez major, 10 min disciplinārajiem un kautiņiem)",
-    "PIM 1. per.": "Sodu minūtes 1. periodā",
-    "PIM 2. per.": "Sodu minūtes 2. periodā",
-    "PIM 3. per.": "Sodu minūtes 3. periodā",
-    "Starpība (visas)": "Vārtu starpība šajā periodā visās sezonas spēlēs",
     "Mājās": "Vārtu starpība šajā periodā mājas spēlēs",
     "Viesos": "Vārtu starpība šajā periodā viesu spēlēs",
     "Pēdējās 10": "Vārtu starpība šajā periodā pēdējās 10 spēlēs",
-    "Vieta": "Spēles vieta: mājās vai viesos",
     # ceļojums un atpūta
-    "Iepriekšējā spēle pie": "Komandas pēdējā spēle pirms šīs: kuras komandas mājās tā notika",
-    "Ceļojums (km)": "Attālums no iepriekšējās spēles vietas līdz šīs spēles vietai (lielais aplis, aptuveni)",
-    "Ceļojuma laiks (h)": "Aptuvenais ceļojuma laiks: autobuss līdz ~400 km, citādi čartera lidojums (~800 km/h + 45 min); bez gaidīšanas un viesnīcas",
-    "Laika joslu maiņa (h)": "Laika joslu starpība starp iepriekšējās spēles vietu un šo spēli (+ uz austrumiem, − uz rietumiem)",
-    "Stundas kopš pēdējās spēles": "Stundas no iepriekšējās spēles sākuma līdz šīs spēles sākumam",
-    "Back-to-back": "Jā = spēle nākamajā kalendārajā dienā (pēc ASV austrumu laika) pēc iepriekšējās spēles",
-    "Spēles 7 dienās": "Komandas spēļu skaits pēdējās 7 dienās pirms šīs spēles",
-    "Slodzes indekss": "Vienkārša heiristika: back-to-back, ceļojuma garums, laika joslu maiņa un daudz spēļu nedēļā. Jo lielāks, jo vairāk noguruma. Svarus var mainīt failā lokacijas.py",
     # karstie spēlētāji
     "Statuss": "🔥🔥 = ļoti karsts (indekss ≥ 3), 🔥 = karsts (indekss ≥ 2)",
     "Sp. logā": "Spēļu skaits izvēlētajā logā (pēdējās N spēles; ja spēlētājs nospēlējis mazāk, visas viņa spēles)",
@@ -1500,11 +1411,6 @@ def prognozes_bloks(pr):
     m2.metric("Vārti: Over / Under", pr["over_under"], border=True)
     m3.metric("Noraidījumi", pr["noraidījumi"], border=True)
     st.caption(f"1. periods: {pr['p1']}  ·  2. periods: {pr['p2']}  ·  3. periods: {pr['p3']}")
-
-
-def rezultata_teksts(h, a, beigas):
-    et = da.beigu_etikete(beigas)
-    return f"{int(a)}–{int(h)}" + (f" {et}" if et else "")
 
 
 # ============================================================================
@@ -2035,14 +1941,6 @@ def forma_bumbas(df, n=5):
     return pd.Series(out)
 
 
-class Saite(str):
-    """Teksts tabulas šūnā, kas ir saite (df_html to attēlo kā <a>)."""
-    def __new__(cls, teksts, href, virsraksts="", jauna_cilne=False):
-        o = super().__new__(cls, teksts)
-        o.href, o.virsraksts, o.jauna_cilne = href, virsraksts, jauna_cilne
-        return o
-
-
 def speles_saite(game_id):
     """Saite uz šīs spēles protokolu lietotnes sadaļā Rezultāti (atveras jaunā cilnē; saitē ir īslaicīgs paraksts, lai nebūtu jāievada parole)."""
     zet = saites_zetons()
@@ -2220,9 +2118,6 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
                 rinda += f'<td><div class="pb"><i style="width:{platums:.0f}%"></i><b>{_fmt_v(v, c["fmt"])}</b></div></td>'
             elif ir_html_suna(v):
                 rinda += f'<td class="l">{v}</td>'
-            elif isinstance(v, Saite):
-                rinda += (f'<td class="l"><a class="tb-saite" href="{e(v.href)}" title="{e(v.virsraksts)}" data-tip="{e(v.virsraksts)}"'
-                          f'{" target=_blank rel=noopener" if v.jauna_cilne else " target=_top"}>{e(str(v))}</a></td>')
             elif isinstance(v, bool):
                 rinda += f'<td class="l">{"✓" if v else ""}</td>'
             elif isinstance(v, (pd.Timestamp, datetime.date)):
@@ -2498,11 +2393,6 @@ def _lapa_pec_nosaukuma(nosaukums):
     return next((p for p in VISAS_LAPAS if p.title == nosaukums), None)
 
 
-SILUETS = ("data:image/svg+xml;base64," + __import__("base64").b64encode(
-    b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='#dfe6f0'/>"
-    b"<circle cx='50' cy='38' r='18' fill='#a9b6c8'/><path d='M18 92c4-20 18-30 32-30s28 10 32 30z' fill='#a9b6c8'/></svg>").decode())
-
-
 def spel_foto_html(player_id, komanda, vards=""):
     """Spēlētāja oficiālais NHL foto (assets.nhle.com), pietuvināts sejai. Ja foto nav, paliek tukšs gaišs aplis."""
     try:
@@ -2535,23 +2425,6 @@ KOMANDAS_DZ_GRUPAS = [   # padziļinātā statistika pa tēmām: (nosaukums, kol
                      ("Izcīnītie noraidījumi spēlē", "DRAW_sp", 1, True), ("Noraidījumu starpība spēlē", "PEN_starpiba", 2, False)]),
     ("Spēles stils (vidēji spēlē)", [("Sitieni", "hits", 1, None), ("Bloķētie metieni", "blocked", 1, None), ("Ripas zaudējumi", "giveaways", 1, False),
                                     ("Ripas atņemšanas", "takeaways", 1, True), ("Iemetieni %", "fo_pct", 1, True)]),
-]
-KOMANDAS_DZ_METRIKAS = [   # (nosaukums, kolonna, zīmes aiz komata, vai labāk augsts (None = bez vietas))
-    ("Spēles", "GP", 0, None), ("Win", "W", 0, True), ("Loss", "L", 0, False), ("OT loss / SO loss", "OTL", 0, None),
-    ("Punkti", "PTS", 0, True), ("Punkti %", "PTS_pct", 1, True),
-    ("Gūtie vārti", "G", 0, True), ("Ielaistie vārti", "Z", 0, False), ("Vārtu starpība", "Starpiba", 0, True),
-    ("Vārti spēlē", "G_sp", 2, True), ("Ielaisti spēlē", "Z_sp", 2, False),
-    ("Gūti 1. periodā (vidēji)", "G_p1", 2, True), ("Gūti 2. periodā (vidēji)", "G_p2", 2, True), ("Gūti 3. periodā (vidēji)", "G_p3", 2, True),
-    ("Ielaisti 1. periodā (vidēji)", "Z_p1", 2, False), ("Ielaisti 2. periodā (vidēji)", "Z_p2", 2, False), ("Ielaisti 3. periodā (vidēji)", "Z_p3", 2, False),
-    ("Metieni spēlē", "SOG_sp", 1, True), ("Pretinieka metieni spēlē", "SA_sp", 1, False), ("Metienu daļa %", "SOG_dala", 1, True),
-    ("Vairākuma vārti", "PPG", 0, True), ("Vairākuma iespējas", "PP_opp", 0, None), ("Vairākums PP %", "PP_pct", 1, True),
-    ("Vairākuma metieni", "PP_sog", 0, True), ("Ielaisti mazākumā", "PPG_pret", 0, False), ("Mazākuma reizes", "PP_opp_pret", 0, None),
-    ("Mazākums PK %", "PK_pct", 1, True),
-    ("Noraidījumi spēlē", "PEN_sp", 1, False), ("Sodu minūtes spēlē", "PIM_sp", 1, False), ("Izcīnītie noraidījumi spēlē", "DRAW_sp", 1, True),
-    ("Noraidījumu starpība spēlē", "PEN_starpiba", 2, False),
-    ("Over 6.5 %", "Over65", 0, None), ("Over 5.5 %", "Over55", 0, None),
-    ("Sitieni spēlē", "hits", 1, None), ("Bloķētie metieni spēlē", "blocked", 1, None),
-    ("Ripas zaudējumi spēlē", "giveaways", 1, False), ("Ripas atņemšanas spēlē", "takeaways", 1, True), ("Iemetieni %", "fo_pct", 1, True),
 ]
 
 
@@ -3115,34 +2988,6 @@ def otso_kopsavilkums(scope="Visas", n=None):
     return g
 
 
-def situacijas_spelētaji(stiprums, pari, nos):
-    """Top spēlētāji vairākumā ("pp") vai mazākumā ("sh"): vārti + rezultatīvas piespēles pamatlaikā; top 10 + izvēršams līdz 20."""
-    st.markdown(f'<p class="ld-h">Top spēlētāji {nos}</p>', unsafe_allow_html=True)
-    v = _varti_df()
-    x = pd.DataFrame()
-    if v is not None:
-        x = v[(v["strength"].astype(str).str.lower() == stiprums) & (v["period_type"].astype(str).str.upper() == "REG")
-              & pd.Series([(gi, kk) in pari for gi, kk in zip(v["game_id"], v["komanda"])], index=v.index)]
-    if x.empty:
-        st.info(f"Šajā atlasē {nos} gūtu vārtu vēl nav.")
-        return
-    ieraksti = pd.concat([x[["scorer", "komanda"]].rename(columns={"scorer": "v"}).assign(G=1, A=0),
-                          x[["assist1", "komanda"]].rename(columns={"assist1": "v"}).assign(G=0, A=1),
-                          x[["assist2", "komanda"]].rename(columns={"assist2": "v"}).assign(G=0, A=1)])
-    ieraksti = ieraksti[ieraksti["v"].notna() & (ieraksti["v"].astype(str) != "")]
-    tp = ieraksti.groupby(["v", "komanda"]).agg(G=("G", "sum"), A=("A", "sum")).reset_index()
-    tp["P"] = tp["G"] + tp["A"]
-    tp = tp.sort_values(["P", "G"], ascending=False).head(20).reset_index(drop=True)
-    tab = pd.DataFrame({"#": range(1, len(tp) + 1), "Logo": tp["komanda"].map(da.logo_url), "Spēlētājs": tp["v"],
-                        "Vārti": tp["G"], "Piespēles": tp["A"], "Punkti": tp["P"]})
-    cfgp = {"Logo": st.column_config.ImageColumn("", width="small")}
-    paskp = {"Punkti": f"Vārti + rezultatīvas piespēles {nos} (pamatlaikā)"}
-    rtabula(tab.head(10), column_config=cfgp, paskaidr=paskp, hide_index=True)
-    if len(tab) > 10:
-        with st.expander(f"Rādīt līdz top {len(tab)}"):
-            rtabula(tab.iloc[10:], column_config=cfgp, paskaidr=paskp, hide_index=True)
-
-
 def lapa_otso():
     st.title("OT / SO")
     augsa = st.container()                                 # topi (aizpildās pēc filtru nolasīšanas, bet tiek rādīti virs tiem)
@@ -3410,8 +3255,7 @@ def lapa_rezultati():
         st.button("Nākamā diena ❯", on_click=nobide, args=(1,))
 
     dat = st.session_state["rez_datums"]
-    _tumss_lauks = tema_css(".st-key-datums_lauks { background: #0e1117; border-color: rgba(250,250,250,.2); }")
-    st.markdown(f"<style>.st-key-datums_lauks::after {{ content: '{dat:%d.%m.%Y}'; }} {_tumss_lauks}</style>", unsafe_allow_html=True)
+    st.markdown(f"<style>.st-key-datums_lauks::after {{ content: '{dat:%d.%m.%Y}'; }}</style>", unsafe_allow_html=True)
     st.markdown(f"#### {da.DIENAS[dat.weekday()]}, {dat:%d.%m.%Y}")
     dienas_speles = RAW[datumi == dat].sort_values(["sakums_lv", "game_id"])
     if dienas_speles.empty:
@@ -3735,105 +3579,6 @@ def lapa_karstie():
             logo_kol=("Komanda",), burbuli=burbuli, bur_kol="Sp. logā", platas=("Kāpēc karsts",))
     st.caption(f"Logs: {logs_t.lower()} (ja spēlētājs nospēlējis mazāk, tiek ņemtas visas viņa spēles). "
                "Sezonas sākumā izlase ir maza, tāpēc rangs var strauji mainīties. Tā ir statistikas indikācija, nevis garantija.")
-
-
-# ============================================================================
-# LAPA: ČATS
-# ============================================================================
-CATA_PIEMERI = ["Kuras komandas saņem visvairāk noraidījumu?", "Kā klājas NJD pēdējās 5 spēlēs?", "Kuri spēlētāji šobrīd ir karsti?",
-                "Vakardienas rezultāti", "Salīdzini TOR un MTL", "Kuri tiesneši soda visvairāk?"]
-CATA_RIKU_NOS = {"komandas_statistika": "Komandas statistika", "ligas_tabula": "Komandu tabula", "speles": "Spēles", "speletaji": "Spēlētāji",
-                 "karstie_speletaji": "Karstie spēlētāji", "vartsargi": "Vārtsargi", "tiesnesi": "Tiesneši", "kalendars": "Kalendārs",
-                 "salidzinat_komandas": "Komandu salīdzinājums"}
-MAX_CATA_JAUTAJUMI = 40       # jautājumu skaits vienā sesijā (ierobežo izmaksas, ja ieslēgts Claude)
-
-
-def _secret(nos, noklusejums=None):
-    try:
-        return st.secrets[nos]
-    except Exception:
-        return noklusejums
-
-
-def _cata_dati():
-    cur, prev, _ = ielasit_tiesnesus(VERSIJA)
-    return cats.Dati(RAW, DF, KAL, ielasit_papildu("speletaji", VERSIJA), ielasit_papildu("vartsargi", VERSIJA),
-                     cur, prev, ielasit_planotos(VERSIJA), modelis)
-
-
-def _cata_zina(z):
-    with st.chat_message(z["loma"]):
-        st.markdown(z["teksts"])
-        for nos, _, tab in z.get("tabulas", []):
-            with st.expander(f"Dati: {CATA_RIKU_NOS.get(nos, nos)}"):
-                rtabula(tab, hide_index=True, width="stretch")
-
-
-def lapa_cats():
-    st.title("Čats")
-    atslega = _secret("ANTHROPIC_API_KEY")
-    klients, kluda = None, None
-    if atslega:
-        try:
-            import anthropic
-            klients = anthropic.Anthropic(api_key=atslega)
-        except Exception as e:
-            kluda = f"Claude nav pieejams ({type(e).__name__}); pārbaudi, vai requirements.txt ir 'anthropic'."
-    modelis_nos = _secret("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
-    if klients:
-        st.caption("Jautā brīvā formā par komandām, spēlētājiem, tiesnešiem un spēlēm. Atbildes balstās tikai uz šīs lietotnes datiem; "
-                   "jautājumi un datu fragmenti tiek nosūtīti Anthropic API apstrādei.")
-    else:
-        st.info("Darbojas vienkāršā meklēšana pēc atslēgvārdiem un komandu/spēlētāju nosaukumiem. Lai čats saprastu brīvas frāzes, "
-                "Streamlit Secrets pievieno ANTHROPIC_API_KEY.")
-        if kluda:
-            st.warning(kluda)
-
-    vesture = st.session_state.setdefault("cats_vesture", [])
-    for z in vesture:
-        _cata_zina(z)
-
-    jaut = None
-    if not vesture:
-        st.markdown("**Piemēri**")
-        for i, piemers in enumerate(CATA_PIEMERI):
-            if st.button(piemers, key=f"cp{i}", width="stretch"):
-                jaut = piemers
-    iev = st.chat_input("Pajautā par komandām, spēlētājiem, tiesnešiem, rezultātiem…")
-    jaut = iev or jaut
-    if vesture:
-        st.button("Notīrīt sarunu", on_click=lambda: st.session_state.update(cats_vesture=[]), key="cats_clear")
-
-    if not jaut:
-        return
-    if sum(1 for z in vesture if z["loma"] == "user") >= MAX_CATA_JAUTAJUMI:
-        st.warning("Sasniegts jautājumu limits šajā sesijā. Nospied «Notīrīt sarunu», lai sāktu no jauna.")
-        return
-    vesture.append({"loma": "user", "teksts": jaut})
-    _cata_zina(vesture[-1])
-    with st.chat_message("assistant"):
-        with st.spinner("Meklēju datos…"):
-            dati = _cata_dati()
-            try:
-                if klients:
-                    api = [{"role": z["loma"], "content": z["teksts"]} for z in vesture[-9:]]
-                    while api and api[0]["role"] != "user":
-                        api.pop(0)
-                    atb, tabulas = cats.atbildet_ar_claude(klients, modelis_nos, api, dati)
-                else:
-                    atb, tabulas = cats.vienkarsa_meklesana(jaut, dati)
-            except Exception as e:
-                try:
-                    teksts, tabulas = cats.vienkarsa_meklesana(jaut, dati)
-                except Exception:
-                    teksts, tabulas = "Neizdevās atrast datus.", []
-                atb = f"Neizdevās sazināties ar Claude ({type(e).__name__}). Vienkāršās meklēšanas rezultāts: {teksts}"
-        st.markdown(atb)
-        for nos, _, tab in tabulas:
-            with st.expander(f"Dati: {CATA_RIKU_NOS.get(nos, nos)}"):
-                rtabula(tab, hide_index=True, width="stretch")
-    vesture.append({"loma": "assistant", "teksts": atb, "tabulas": tabulas})
-    del vesture[:-30]            # saglabā tikai pēdējās 30 ziņas
 
 
 # ============================================================================
