@@ -1,9 +1,9 @@
 """
 Datu ielāde un sagatavošana NHL lietotnei (bez Streamlit atkarības, lai kodu var testēt atsevišķi).
 
-Datu avoti (mapē "dati" blakus šim failam, ko raksta nhl_dati.py):
+Datu avoti (mapē "sezonas" blakus šim failam, ko raksta nhl_dati.py; iepriekšējās sezonas – sezonas/vesture/<sezona>/):
   speles.csv, speletaji.csv, vartsargi.csv, varti.csv
-Kalendārs: nhl_kalendars.csv (ko raksta kalendars.py).
+Kalendārs: sezonas/nhl_kalendars.csv (ko raksta kalendars.py).
 Ja speles.csv vēl nav, tiek izmantots vecais nhl_sezona.csv.
 """
 from __future__ import annotations
@@ -18,7 +18,9 @@ import numpy as np
 import pandas as pd
 
 BASE = Path(__file__).resolve().parent
-DATU_MAPE = BASE / "dati"
+# Aktīvās sezonas faili: sezonas/ (pārejas laikā, ja tur vēl nav speles.csv, tiek lasīta vecā mape dati/)
+DATU_MAPE = BASE / "sezonas" if (BASE / "sezonas" / "speles.csv").exists() or not (BASE / "dati").exists() else BASE / "dati"
+VESTURES_MAPE = BASE / "sezonas" / "vesture"         # iepriekšējās sezonas: sezonas/vesture/<sezona>/ (piem., 20252026), tie paši CSV
 LV_TZ = ZoneInfo("Europe/Riga")
 
 KOMANDAS = {
@@ -69,9 +71,10 @@ def beigu_etikete(beigas):
 
 def datu_versija():
     """Faila izmaiņu laiki (kešatmiņas atslēga: kad fails mainās, dati tiek pārlasīti)."""
-    celi = [DATU_MAPE / n for n in ("speles.csv", "speletaji.csv", "vartsargi.csv", "varti.csv",
+    celi = [DATU_MAPE / n for n in ("speles.csv", "speletaji.csv", "vartsargi.csv", "varti.csv", "pedeja_atjaunosana.json",
                                     "tiesnesi.csv", "tiesnesi_pagajusa.csv", "referees_lastseason.csv", "tiesnesi_planotie.csv")]
-    celi += [BASE / "nhl_sezona.csv", BASE / "nhl_kalendars.csv", BASE / "referees_lastseason.csv"]
+    celi += [DATU_MAPE / "nhl_kalendars.csv", VESTURES_MAPE / "referees_lastseason.csv",
+             BASE / "nhl_sezona.csv", BASE / "nhl_kalendars.csv", BASE / "referees_lastseason.csv"]
     return tuple(c.stat().st_mtime if c.exists() else 0 for c in celi)
 
 
@@ -125,7 +128,7 @@ def ielasit_speles():
 
 
 def ielasit_kalendaru():
-    c = next((c for c in (BASE / "nhl_kalendars.csv", DATU_MAPE / "nhl_kalendars.csv") if c.exists()), None)
+    c = next((c for c in (DATU_MAPE / "nhl_kalendars.csv", BASE / "nhl_kalendars.csv") if c.exists()), None)
     if c is None:
         return None
     df = pd.read_csv(c)
@@ -394,7 +397,7 @@ def vartsargu_lideri(vg):
 # ----------------------------------------------------------------------------
 # TIESNEŠI
 # ----------------------------------------------------------------------------
-# Pagājušās sezonas fails: dati/referees_lastseason.csv (vai dati/tiesnesi_pagajusa.csv, vai tas pats fails saknē)
+# Pagājušās sezonas fails: sezonas/vesture/referees_lastseason.csv (vai sezonas/referees_lastseason.csv, vai tas pats fails saknē)
 TIESNESU_METRIKAS = ("kopa", "majas", "viesi", "p1", "p2", "p3")   # noraidījumi spēlē: kopā, mājas, viesu komanda, pa periodiem
 
 _ALIASI = {
@@ -415,7 +418,8 @@ _METR_ALIASI = {
 
 
 def _pagajusie_faili():
-    return (DATU_MAPE / "referees_lastseason.csv", DATU_MAPE / "tiesnesi_pagajusa.csv", BASE / "referees_lastseason.csv")
+    return (VESTURES_MAPE / "referees_lastseason.csv", DATU_MAPE / "referees_lastseason.csv", DATU_MAPE / "tiesnesi_pagajusa.csv",
+            BASE / "referees_lastseason.csv")
 
 
 def atslega(vards):
@@ -583,7 +587,7 @@ def tiesnesu_speles(cur, vards):
 
 
 def ielasit_planotos_tiesnesus():
-    """Pirms spēlēm paziņotie tiesneši (dati/tiesnesi_planotie.csv, ko raksta tiesnesi_planotie.py)."""
+    """Pirms spēlēm paziņotie tiesneši (sezonas/tiesnesi_planotie.csv, ko raksta tiesnesi_planotie.py)."""
     c = DATU_MAPE / "tiesnesi_planotie.csv"
     if not c.exists():
         return None
