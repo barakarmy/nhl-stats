@@ -71,7 +71,9 @@ def datu_versija():
     """Faila izmaiņu laiki (kešatmiņas atslēga: kad fails mainās, dati tiek pārlasīti)."""
     celi = [DATU_MAPE / n for n in ("speles.csv", "speletaji.csv", "vartsargi.csv", "varti.csv", "pedeja_atjaunosana.json",
                                     "tiesnesi.csv", "tiesnesi_planotie.csv")]
-    celi += [DATU_MAPE / "nhl_kalendars.csv"] + sorted(VESTURES_MAPE.glob("*/tiesnesi.csv"))
+    celi += [DATU_MAPE / "nhl_kalendars.csv"] + sorted(VESTURES_MAPE.glob("*/tiesnesi.csv")) \
+        + sorted(VESTURES_MAPE.glob("*/speles.csv")) + sorted(VESTURES_MAPE.glob("*/varti.csv")) \
+        + [VESTURES_MAPE / "modelis_parametri.json"]
     return tuple(c.stat().st_mtime if c.exists() else 0 for c in celi)
 
 
@@ -92,9 +94,9 @@ def _lv_laiks(df, utc_kol, datuma_kol):
 TIPS_RS, TIPS_PO = "RS", "PO"       # regulārā sezona / play-off (statistika vienmēr tiek skaitīta atsevišķi)
 
 
-def ielasit_speles():
-    """Viena rinda uz spēli; pievieno 'sakums_lv' un 'datums_lv' (Rīgas laiks)."""
-    fails = DATU_MAPE / "speles.csv"
+def ielasit_speles(mape=None):
+    """Viena rinda uz spēli; pievieno 'sakums_lv' un 'datums_lv' (Rīgas laiks). mape: cita sezonas mape (piem., vēsture)."""
+    fails = (mape or DATU_MAPE) / "speles.csv"
     fails = fails if fails.exists() else None
     if fails is None:
         return None
@@ -137,9 +139,9 @@ def ielasit_kalendaru():
     return df.sort_values(["sakums_lv", "game_id"]).reset_index(drop=True)
 
 
-def ielasit_tabulu(nos):
-    """Papildu tabulas (speletaji, vartsargi, varti); None, ja faila vēl nav."""
-    c = DATU_MAPE / f"{nos}.csv"
+def ielasit_tabulu(nos, mape=None):
+    """Papildu tabulas (speletaji, vartsargi, varti); None, ja faila vēl nav. mape: cita sezonas mape (piem., vēsture)."""
+    c = (mape or DATU_MAPE) / f"{nos}.csv"
     if not c.exists():
         return None
     df = pd.read_csv(c)
@@ -414,6 +416,35 @@ def vestures_sezonas():
     return sorted(p.name for p in VESTURES_MAPE.iterdir() if p.is_dir() and p.name.isdigit() and len(p.name) == 8)
 
 
+def ielasit_db():
+    """
+    DB: visas iepriekšējās sezonas (sezonas/vesture/<sezona>/) kopā. Atgriež (spēles, komandu rindas) tādā pašā formātā
+    kā aktīvajai sezonai (ar kolonnām 'sezona' un 'tips' = RS/PO), vai (None, None), ja vēstures nav.
+    Lietotnē netiek rādīts atsevišķi; izmanto tiesnešu statistikā, vēlāk – Puasona modelī un H2H.
+    """
+    dalas = []
+    for sez in vestures_sezonas():
+        r = ielasit_speles(VESTURES_MAPE / sez)
+        if r is not None and not r.empty:
+            r["sezona"] = int(sez)                       # mapes nosaukums ir noteicošais
+            dalas.append(r)
+    if not dalas:
+        return None, None
+    raw = pd.concat(dalas, ignore_index=True).sort_values(["datums_lv", "sakums_lv", "game_id"]).reset_index(drop=True)
+    return raw, sagatavot_vienoto_tabulu(raw)
+
+
+def ielasit_db_tabulu(nos):
+    """Viena papildu tabula (piem., 'varti') no visām vēstures sezonām kopā, ar kolonnu 'sezona'. None, ja nav."""
+    dalas = []
+    for sez in vestures_sezonas():
+        t = ielasit_tabulu(nos, VESTURES_MAPE / sez)
+        if t is not None and not t.empty:
+            t["sezona"] = int(sez)
+            dalas.append(t)
+    return pd.concat(dalas, ignore_index=True) if dalas else None
+
+
 def ielasit_tiesnesus_db():
     """Visu vēstures sezonu tiesneši vienā tabulā (tāds pats formāts kā sezonas/tiesnesi.csv). None, ja vēstures nav."""
     dalas = []
@@ -439,10 +470,6 @@ def ielasit_pagajuso_tiesnesus():
     out = _tiesnesu_tek_agregats(db).reset_index()
     out["liga_kopa"] = np.nan                           # līgas vidējo aprēķina no tiesnešu datiem
     return out, ""
-
-
-def _kol(df, nos):
-    return df[nos] if nos in df.columns else pd.Series(np.nan, index=df.index)
 
 
 _TEK_KOL = {"kopa": "pen_total", "majas": "pen_home", "viesi": "pen_away", "p1": "pen_p1", "p2": "pen_p2", "p3": "pen_p3"}
