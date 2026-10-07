@@ -40,6 +40,8 @@ CITI SVARĪGI FAKTI
 - Regulārā sezona (RS) un play-off (PO) vienmēr tiek skaitīti atsevišķi (speles.csv: speles_tips 2 = RS, 3 = PO; sezona, piem., 20262027).
   Statistikas lapās pārslēdzējs "Regulārā sezona · Play-off" parādās tikai tad, kad datos ir PO spēles; Līgas pārskats vienmēr RS;
   Rezultāti, Kalendārs, Prognozes, Karstākie spēlētāji un Tiesneši izmanto visas šīs sezonas spēles. Play-off zaudējums papildlaikā = loss.
+- Modelis: modelis.py (Puasona regresija ar DB kā sākuma pieņēmumu); parametrus kalibrē lokāli ar
+  python modelis.py --kalibret → sezonas/vesture/modelis_parametri.json (Prognožu lapa to nolasa).
 - Vēsture: vesture.py (palaiž lokāli) lejupielādē iepriekšējās sezonas uz sezonas/vesture/<sezona>/; --arhivet pārvieto aktīvo sezonu uz arhīvu.
 - Moduļi: datu_apstrade.py (aprēķini), lokacijas.py (attālumi, laika joslas), modelis.py (Puasona prognozes),
   rulli.py (komandu izvēle ar rullīšiem), fons.py (fona attēls), tiesnesi_planotie.py (tiesneši), nhl_dati.py (datu vākšana).
@@ -249,7 +251,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.28"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.30"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -843,6 +845,41 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 /* regulārā sezona / play-off */
 .st-key-pgr_sez_dala { justify-content: center; margin: -.4rem 0 .6rem; }
 .sez-piez { text-align: center; font-size: .78rem; opacity: .65; margin: -.4rem 0 .5rem; }
+/* prognožu kartītes */
+.pk { border: 1px solid rgba(128,128,128,.22); border-radius: 14px; background: rgba(255,255,255,.6); padding: .8rem 1rem; margin: 0 0 .9rem; }
+.pk-g { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.pk-kom { display: flex; align-items: center; gap: .4rem; font-size: .98rem; }
+.pk-kom img { width: 1.7rem; height: 1.7rem; object-fit: contain; }
+.pk-at { opacity: .6; margin: 0 .2rem; }
+.pk-laiks { font-size: .82rem; opacity: .85; }
+.pk-s { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: .6rem .9rem; margin-top: .7rem; }
+.pk-s > div { display: flex; flex-direction: column; gap: .2rem; }
+.pk-l { font-size: .7rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; opacity: .6; }
+.pk-v { display: flex; gap: .3rem .8rem; flex-wrap: wrap; align-items: flex-end; font-size: .95rem; }
+.pk-x { display: inline-flex; flex-direction: column; white-space: nowrap; line-height: 1.15; }
+.pk-x b { font-size: 1.05rem; }
+.pk-u { font-size: .68rem; opacity: .6; font-weight: 700; }
+.pk-k { font-size: .74rem; opacity: .6; }
+.pk-t .pk-x { flex-direction: row; gap: .3rem; align-items: baseline; }
+.pk-t .pk-x b { font-size: .86rem; }
+.pk-f { font-size: .78rem; opacity: .8; margin-top: .55rem; }
+.pk-d { margin-top: .5rem; }
+.pk-d summary { list-style: none; cursor: pointer; font-size: .8rem; font-weight: 700; color: #1d4ed8; }
+.pk-d summary::-webkit-details-marker { display: none; }
+.pk-d .ld-z { display: none; }
+.pk-d[open] .ld-a { display: none; }
+.pk-d[open] .ld-z { display: inline; }
+.pk-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .9rem; margin-top: .5rem; }
+.pk-h { font-size: .72rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; opacity: .65; margin-bottom: .3rem; }
+.pk-t { width: 100%; border-collapse: collapse; font-size: .84rem; margin-bottom: .4rem; }
+.pk-t th { text-align: left; font-size: .72rem; opacity: .6; font-weight: 700; padding: .15rem .3rem; }
+.pk-t td { padding: .22rem .3rem; border-top: 1px solid rgba(128,128,128,.15); white-space: nowrap; }
+.pk-piez { font-size: .8rem; opacity: .85; margin: .2rem 0 .4rem; }
+.pk-top { display: inline-flex; gap: .25rem; align-items: baseline; padding: .1rem .45rem; border-radius: .4rem; background: rgba(128,128,128,.12); font-weight: 700; margin-right: .25rem; }
+.pk-top small { font-weight: 500; opacity: .7; }
+@media (max-width: 900px) { .pk-s { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pk-1x2 { grid-column: 1 / -1; } .pk-grid { grid-template-columns: 1fr; } }
+html.tumss .pk { background: var(--t-karte); border-color: var(--t-mala); }
+html.tumss .pk-d summary { color: var(--t-zils); }
 /* kājene: paskaidrojums par lapu */
 .kaj { max-width: 900px; margin: 3rem auto 0; padding-top: 1rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .8rem; line-height: 1.55; opacity: .75; }
 .kaj p { margin: 0 0 .7rem; }
@@ -1079,6 +1116,12 @@ VERSIJA = da.datu_versija()
 def ielasit_visu(versija):
     raw = da.ielasit_speles()
     return raw, da.sagatavot_vienoto_tabulu(raw), da.ielasit_kalendaru()
+
+
+@st.cache_data(show_spinner=False)
+def ielasit_db_visu(versija):
+    """DB: iepriekšējās sezonas (sezonas/vesture) – spēles un komandu rindas. Lapās netiek rādīts; izmanto modelis un H2H."""
+    return da.ielasit_db()
 
 
 @st.cache_data(show_spinner=False)
@@ -1425,52 +1468,152 @@ def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False,
             numurs_no=numurs_no)
 
 
-def prognozes_bloks(pr):
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Rezultāts (mājas–viesi)", pr["rezultats"], border=True)
-    m2.metric("Vārti: Over / Under", pr["over_under"], border=True)
-    m3.metric("Noraidījumi", pr["noraidījumi"], border=True)
-    st.caption(f"1. periods: {pr['p1']}  ·  2. periods: {pr['p2']}  ·  3. periods: {pr['p3']}")
-
-
 # ============================================================================
 # LAPA: PROGNOZES
 # ============================================================================
+@st.cache_data(show_spinner=False)
+def modela_dati(versija):
+    """Modeļa spēļu tabula (DB + šī sezona), parametri un reitingi uz šodienu (kešots pēc datu versijas)."""
+    raw_db, df_db = ielasit_db_visu(versija)
+    raw_t, df_t, _ = ielasit_visu(versija)
+    dalas = [x for x in (raw_db, raw_t) if x is not None and not x.empty]
+    if not dalas:
+        return None, None, None, None
+    g = modelis.spelu_tabula(pd.concat(dalas, ignore_index=True))
+    p, meta = modelis.ielasit_parametrus()
+    sez = int(raw_t["sezona"].max()) if raw_t is not None and not raw_t.empty else int(g["sezona"].max())
+    mod = modelis.aprekinat_reitingus(g, uz_datumu=pd.Timestamp.now(tz=da.LV_TZ).tz_localize(None).normalize(), sezona_tagad=sez, p=p)
+    rindas = pd.concat([x for x in (df_db, df_t) if x is not None and not x.empty], ignore_index=True).sort_values(["datums", "game_id"])
+    return g, mod, (p, meta), rindas
+
+
+def _speles_faktori(home, away, sakums):
+    """Atpūta un ceļš katrai komandai pirms šīs spēles (aizvadītās + kalendārā ieplānotās spēles)."""
+    out = {}
+    for puse, kods in (("h", home), ("a", away)):
+        pirms = komandas_speles_pirms(kods, pd.Timestamp(sakums))
+        b2b = cels = 0
+        if pirms:
+            iepr = pirms[-1]
+            dienas = (_et_datums(sakums) - _et_datums(iepr[0])).days
+            b2b = int(dienas == 1)
+            if dienas <= 2 and lokacijas is not None and lokacijas.attalums_km(iepr[1], home) >= modelis.GARS_CELS_KM:
+                cels = 1
+        out[f"b2b_{puse}"], out[f"cels_{puse}"] = b2b, cels
+    return out
+
+
+def _pk(x, uzr=""):
+    """Procenti un taisnīgais koeficients vienā nedalāmā vienībā (uzr – īss apzīmējums virs, piem., 1 / X / 2)."""
+    u = f'<small class="pk-u">{_html.escape(uzr)}</small>' if uzr else ""
+    return f'<span class="pk-x">{u}<b>{x * 100:.0f}%</b><span class="pk-k">{modelis.koeficients(x):.2f}</span></span>'
+
+
+def prognozes_karte_html(home, away, sakums, tiesn_txt, pr, nor, mod):
+    e = _html.escape
+    f = pr["faktori"]
+    cipi = []
+    if f["b2b_h"]: cipi.append(f"{home}: otrā spēle pēc kārtas")
+    if f["b2b_a"]: cipi.append(f"{away}: otrā spēle pēc kārtas")
+    if f["cels_h"]: cipi.append(f"{home}: garš ceļš")
+    if f["cels_a"]: cipi.append(f"{away}: garš ceļš")
+    if f["po"]: cipi.append("play-off")
+    kh, ka, n_h2h = f["h2h"]
+    if n_h2h and (abs(kh - 1) > 0.005 or abs(ka - 1) > 0.005):
+        cipi.append(f"H2H ({n_h2h} sp.): {home} {kh - 1:+.0%}, {away} {ka - 1:+.0%}")
+    if nor and abs(nor["tiesnesu_koef"] - 1) > 0.005:
+        cipi.append(f"tiesneši: noraidījumi {nor['tiesnesu_koef'] - 1:+.0%}")
+    tic_kl = {"Augsta": "ok", "Vidēja": "", "Zema": "slikti"}[pr["ticamiba"]]
+    x = pr["1x2"]; o = pr["ar_ot"]; t55 = pr["totali"][5.5]
+    galva = (f'<div class="pk-g"><div class="pk-kom"><img src="{e(da.logo_url(away))}" alt=""><b>{e(da.pilns_nosaukums(away))}</b>'
+             f'<span class="pk-at">@</span><img src="{e(da.logo_url(home))}" alt=""><b>{e(da.pilns_nosaukums(home))}</b></div>'
+             f'<div class="pk-laiks">{pd.Timestamp(sakums):%d.%m(%H:%M)} · <span class="kpi-r {tic_kl}" title="Mazākais šīs sezonas spēļu skaits abām komandām: {pr["n_min"]}">'
+             f'ticamība: {e(pr["ticamiba"])}</span></div></div>')
+    kops = (f'<div class="pk-s"><div class="pk-1x2"><span class="pk-l">Pamatlaikā</span><span class="pk-v">{_pk(x["1"], home)} {_pk(x["X"], "X")} {_pk(x["2"], away)}</span></div>'
+            f'<div><span class="pk-l">Uzvarētājs ar OT</span><span class="pk-v">{_pk(o["1"], home)} {_pk(o["2"], away)}</span></div>'
+            f'<div><span class="pk-l">Gaidāmie vārti</span><span class="pk-v"><span class="pk-x"><small class="pk-u">{e(home)} : {e(away)}</small>'
+            f'<b>{pr["lh"]:.2f} : {pr["la"]:.2f}</b><span class="pk-k">kopā {pr["lh"] + pr["la"]:.2f}</span></span></span></div>'
+            f'<div><span class="pk-l">Totāls 5.5</span><span class="pk-v">{_pk(t55["over"], "Over")} {_pk(t55["under"], "Under")}</span></div></div>')
+    rinda = lambda nos, *v: f'<tr><td>{e(nos)}</td>' + "".join(f"<td>{_pk(z)}</td>" for z in v) + "</tr>"   # noqa: E731
+    tot = "".join(rinda(f"Totāls {lin}", pr["totali"][lin]["over"], pr["totali"][lin]["under"]) for lin in (4.5, 5.5, 6.5))
+    pm = pr["plus_minus"]
+    pml = (rinda(f"{home} −1.5 / {away} +1.5", pm["1 −1.5"], pm["2 +1.5"]) + rinda(f"{away} −1.5 / {home} +1.5", pm["2 −1.5"], pm["1 +1.5"]))
+    top = " ".join(f'<span class="pk-top">{s_}<small>{pv * 100:.0f}%</small></span>' for pv, s_ in pr["top"])
+    per = "".join(f'<tr><td>{nr}. periods <small>({v["gaidami"]:.2f})</small></td>'
+                  + "".join(f'<td>{_pk(v[lin]["over"])}</td>' for lin in (0.5, 1.5, 2.5)) + "</tr>" for nr, v in pr["periodi"].items())
+    nor_html = ""
+    if nor:
+        nor_html = (f'<div class="pk-sek"><div class="pk-h">Noraidījumi (minor, pamatlaiks)</div>'
+                    f'<div class="pk-piez">Gaidāmie: <b>{nor["kopa"]:.1f}</b> ({home} {nor["majas"]:.1f} · {away} {nor["viesi"]:.1f})'
+                    f'{" · " + e(tiesn_txt) if tiesn_txt else ""}</div>'
+                    f'<table class="pk-t"><tr><th></th><th>Over</th><th>Under</th></tr>'
+                    + "".join(rinda(f"Noraidījumi {lin}", v["over"], v["under"]) for lin, v in nor["totali"].items())
+                    + "</table></div>")
+    sikak = (f'<details class="pk-d"><summary><span class="ld-a">Visi tirgi ▾</span><span class="ld-z">Paslēpt ▴</span></summary>'
+             f'<div class="pk-grid"><div class="pk-sek"><div class="pk-h">Vārti (pamatlaiks)</div>'
+             f'<table class="pk-t"><tr><th></th><th>Over</th><th>Under</th></tr>{tot}</table>'
+             f'<table class="pk-t"><tr><th>±1.5</th><th></th><th></th></tr>{pml}</table>'
+             f'<div class="pk-piez">Ticamākie rezultāti: {top}</div></div>'
+             f'<div class="pk-sek"><div class="pk-h">Periodi: over (gaidāmie vārti)</div>'
+             f'<table class="pk-t"><tr><th></th><th>0.5</th><th>1.5</th><th>2.5</th></tr>{per}</table></div>{nor_html}</div></details>')
+    fakt = f'<div class="pk-f">{" · ".join(e(c) for c in cipi)}</div>' if cipi else ""
+    return f'<div class="pk">{galva}{kops}{fakt}{sikak}</div>'
+
+
 def lapa_prognozes():
     st.title("Prognozes")
-    gatavs, gatavas_sk, kopa_sk = modelis.parbaudit_gatavibu(DF)
-    if not gatavs:
-        st.warning("⏳ Sezonas sākums: modelis šobrīd krāj datus.")
-        st.progress(gatavas_sk / kopa_sk)
-        st.caption(f"{gatavas_sk} no {kopa_sk} komandām ir sasniegušas vismaz 5 aizvadītas spēles.")
+    md = modela_dati(VERSIJA)
+    if md[1] is None:
+        st.info("Modelim vēl nav datu (ne šīs sezonas, ne DB).")
         return
-    st.success("Modelis ir aktīvs. Prognozes tiek aprēķinātas pēc Puasona sadalījuma.")
-    if KAL is None:
-        st.warning("Nav atrasts 'sezonas/nhl_kalendars.csv' (palaid kalendars.py).")
+    g, mod, (p, meta), rindas = md
+    with st.expander("Kā modelis strādā un cik tas precīzs", expanded=False):
+        st.markdown(
+            "- **Komandu stiprums:** uzbrukums un aizsardzība no visām spēlēm, ņemot vērā pretinieku (svērta Puasona regresija). "
+            "Šīs sezonas spēles sver vairāk, iepriekšējās sezonas (DB) – mazāk; sezonas sākumā prognoze balstās galvenokārt uz DB.\n"
+            "- **Korekcijas:** mājas priekšrocība, otrā spēle pēc kārtas, garš ceļš, play-off, H2H (ja pārbaude rāda, ka tā uzlabo), "
+            "tiesneši – noraidījumiem.\n"
+            "- **Visi tirgi** ir no vienas pamatlaika rezultātu matricas (ar neizšķirtu korekciju); “ar OT” – neizšķirta gadījumā pēc vēstures. "
+            "Koeficients = 1 / varbūtība (taisnīgais, bez bukmeikera uzcenojuma).")
+        if meta:
+            mt, bz = meta.get("parbaude", {}), meta.get("baze", {})
+            st.markdown(
+                f"**Pārbaude pret vēsturi** ({str(meta.get('parbaudes_sezona'))[:4]}/{str(meta.get('parbaudes_sezona'))[6:]}, "
+                f"{mt.get('speles', 0)} spēles, katra prognozēta tikai no datiem pirms tās): log loss 1X2 **{mt.get('logloss_1x2', float('nan')):.4f}** "
+                f"(bāze bez modeļa {bz.get('logloss_1x2', float('nan')):.4f}; mazāk = labāk); neizšķirti pamatlaikā "
+                f"{mt.get('neizskirti_prog', 0):.1%} prognoze / {mt.get('neizskirti_fakt', 0):.1%} fakts; vidēji vārti "
+                f"{mt.get('videji_varti_prog', 0):.2f} / {mt.get('videji_varti_fakt', 0):.2f}. "
+                f"H2H korekcija: {'tiek lietota' if p.get('h2h_lietot') else 'netiek lietota (neuzlaboja prognozes)'}. Kalibrēts: {meta.get('izveidots', '')}.")
+            kal = meta.get("kalibracija_1") or []
+            if kal:
+                rtabula(pd.DataFrame({"Mājinieku uzvara (prognoze)": [f"{k['no'] * 100:.0f}–{k['lidz'] * 100:.0f}%" for k in kal],
+                                      "Spēles": [k["speles"] for k in kal], "Vidēji prognoze": [k["prognoze"] * 100 for k in kal],
+                                      "Notika": [k["fakts"] * 100 for k in kal]}), hide_index=True, kartot=False,
+                        column_config={"Vidēji prognoze": st.column_config.NumberColumn(format="%.0f"), "Notika": st.column_config.NumberColumn(format="%.0f")},
+                        paskaidr={"Notika": "Cik % no šīm spēlēm mājinieki tiešām uzvarēja pamatlaikā – jo tuvāk prognozei, jo labāk kalibrēts modelis"})
+        else:
+            st.caption("Modelis vēl nav kalibrēts pret vēsturi (python modelis.py --kalibret), tiek lietoti noklusējuma iestatījumi.")
+    if KAL is None or KAL.empty:
+        st.warning("Nav atrasts kalendārs (sezonas/nhl_kalendars.csv).")
         return
     skaits = st.slider("Cik tuvākās spēles rādīt", 3, 15, 7)
-    nak = da.nakamas_speles(KAL, skaits)
+    nak = KAL[KAL["sakums_lv"] > pd.Timestamp.now(tz=da.LV_TZ)].sort_values("sakums_lv").head(skaits)
     if nak.empty:
         st.info("Kalendārā šobrīd nav nākamo spēļu.")
         return
     for _, r in nak.iterrows():
-        home, away = r["majas_komanda"], r["viesu_komanda"]
-        laiks = r["sakums_lv"].strftime("%H:%M") if pd.notna(r["sakums_lv"]) else ""
-        with st.container(border=True, key=f"rmb_prog_{r['game_id']}"):
-            c1, c2 = st.columns([3, 1])
-            c1.markdown(f"**{komandas_etikete(away)}** @ **{komandas_etikete(home)}**")
-            c2.caption(f"{r['datums_lv']:%d.%m.%Y} {laiks} (Rīga)")
-            vardi, ref_pr, liga_kopa = speles_tiesnesi(r["game_id"])
-            if vardi:
-                teksts_ = f"Tiesneši: {', '.join(vardi)}"
-                if ref_pr is not None and pd.notna(ref_pr["kopa"]):
-                    teksts_ += f" · gaidāmie noraidījumi pēc tiesnešiem: {ref_pr['kopa']:.1f} (līgas vidējais {liga_kopa:.1f})"
-                st.caption(teksts_)
-            else:
-                st.caption("Tiesneši vēl nav paziņoti")
-            pr = modelis.aprekinat_prognozi_speles(home, away, DF)
-            if pr:
-                prognozes_bloks(pr)
+        home, away, sak = r["majas_komanda"], r["viesu_komanda"], r["sakums_lv"]
+        if home not in modelis.NHL_KOMANDAS_SARAKSTS or away not in modelis.NHL_KOMANDAS_SARAKSTS:
+            continue
+        po = int(str(r.get("speles_tips", "RS")) == "PO")
+        fk = _speles_faktori(home, away, sak)
+        pr = modelis.prognoze(mod, g, home, away, p, po=po, **fk)
+        vardi, ref_pr, liga_kopa = speles_tiesnesi(r["game_id"])
+        tk = (ref_pr["kopa"] / liga_kopa) if (vardi and ref_pr is not None and liga_kopa and pd.notna(ref_pr["kopa"])) else 1.0
+        nor = modelis.noraidijumi(rindas, home, away, p=p, tiesnesu_koef=tk)
+        tiesn_txt = ("Tiesneši: " + ", ".join(vardi)) if vardi else "tiesneši vēl nav paziņoti"
+        st.markdown(prognozes_karte_html(home, away, sak, tiesn_txt, pr, nor, mod), unsafe_allow_html=True)
+    st.caption("Prognozes ir matemātisks novērtējums no pieejamajiem datiem (pamatlaiks), nevis garantija.")
 
 
 # ============================================================================
@@ -3943,12 +4086,16 @@ def kajene_html():
         periods = f"šīs sezonas spēles no {d_.min():%d.%m.%Y} līdz {d_.max():%d.%m.%Y} ({len(RAW)} spēles)"
     except Exception:
         periods = "šīs sezonas aizvadītās spēles"
+    db_sez = da.vestures_sezonas()
+    if db_sez:
+        periods += ("; datubāzē arī iepriekšējās sezonas (" + ", ".join(f"{s[:4]}/{s[6:]}" for s in db_sez) +
+                    "), kas lapās netiek rādītas, bet tiek izmantotas tiesnešu statistikā")
     return f'''<div class="kaj">
 <p><b>Kā tiek rēķināts.</b> Visi rādītāji (vārti, metieni, noraidījumi, vairākums, periodi) ir tikai par pamatlaiku – papildlaiks
 un pēcspēles metienu sērijas netiek ieskaitīti; tās ir apkopotas atsevišķi sadaļā OT / SO. Vidējie ir kopsumma, dalīta ar
 izvēlēto spēļu skaitu (visa sezona, pēdējās 5 vai pēdējās 10, visas vai tikai mājās / viesos). Noraidījumi ir minor sodi
 (dubultais minor = 2), bez lielajiem un disciplinārajiem sodiem. Bilance (win, loss, OT loss) un punkti ir oficiālie rezultāti.</p>
-<p><b>Pieejamie dati.</b> {periods}; nākamo spēļu kalendārs uz priekšu; tiesnešu statistikā arī pagājušās sezonas dati.</p>
+<p><b>Pieejamie dati.</b> {periods}; nākamo spēļu kalendārs uz priekšu.</p>
 <p><b>Datu avoti.</b> NHL oficiālā statistika (rezultāti, spēlētāji, vārtsargi, notikumi, kalendārs, tiesneši pēc spēles)
 un Scouting The Refs (pirms spēlēm paziņotie tiesneši). Dati tiek atjaunināti automātiski katru dienu.</p>
 <p class="kaj-pied">Visa informācija ir tikai informatīva un balstīta uz matemātiskiem aprēķiniem no pieejamajiem datiem.
