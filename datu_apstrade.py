@@ -36,7 +36,6 @@ KOMANDAS = {
 }
 DIENAS = {0: "Pirmdiena", 1: "Otrdiena", 2: "Trešdiena", 3: "Ceturtdiena",
           4: "Piektdiena", 5: "Sestdiena", 6: "Svētdiena"}
-FORMAS_EMOJI = {"W": "🟩", "OTL": "🟨", "L": "🟥"}
 
 TEKSTA_KOL = {"datums", "home_team", "away_team", "sakums_utc", "arena",
               "spele_beidzas", "uzvaretajs", "star1", "star2", "star3"}
@@ -303,11 +302,6 @@ def noraidijumu_tabula(df, scope="Visas", n=None, metrika="skaits", videji=True)
             out[f"{kods}_{p}"] = g[kol].mean() if videji else g[kol].sum()
         out[f"r_{p}"] = out[f"i_{p}"] - out[f"s_{p}"]
     return out
-
-
-def forma(df, n=5):
-    """Pēdējo n spēļu rezultāti kā emoji virkne (vecākā → jaunākā)."""
-    return df.groupby("komanda")["rez"].agg(lambda s: "".join(FORMAS_EMOJI.get(x, "⬜") for x in s.tail(n)))
 
 
 def periodu_tabula(df, p, scope="Visas", n=None):
