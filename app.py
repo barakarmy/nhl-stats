@@ -249,7 +249,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.27"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.28"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1313,17 +1313,10 @@ POMOC = {
     "Galvenie tiesneši": "Spēlei piešķirtie galvenie tiesneši (NHL tos paziņo dažas stundas pirms spēles)",
     # tiesneši
     "Spēles šosezon": "Spēles, kurās tiesnesis šosezon ir strādājis",
-    "Spēles pagājušajā": "Spēles, kurās tiesnesis strādāja pagājušajā sezonā",
-    "Noraid./sp šosezon": "Vidēji noraidījumi spēlē (abu komandu kopā), kad šosezon strādāja šis tiesnesis",
-    "Noraid./sp pagājušajā": "Vidēji noraidījumi spēlē (abu komandu kopā), kad pagājušajā sezonā strādāja šis tiesnesis",
     "Kombinētais": "Kombinētais rādītājs: 60% pagājušā + 40% šī sezona (svarus var mainīt iestatījumos); katra daļa tiek pievilkta pie līgas vidējā, ja spēļu ir maz",
     "Pret līgu": "Kombinētā rādītāja starpība pret kombinēto līgas vidējo; pozitīvs = tiesnesis soda vairāk par vidējo",
     "Mājas komanda": "Kombinētie noraidījumi mājas komandai spēlē",
     "Viesu komanda": "Kombinētie noraidījumi viesu komandai spēlē",
-    "Noraid. 1. per.": "Kombinētie noraidījumi (abu komandu kopā) 1. periodā",
-    "Noraid. 2. per.": "Kombinētie noraidījumi (abu komandu kopā) 2. periodā",
-    "Noraid. 3. per.": "Kombinētie noraidījumi (abu komandu kopā) 3. periodā",
-    "Datu apjoms": "Cik drošs rādītājs ir: Maz datu < 8 spēles, Vidēji 8–19, Pietiekami 20+ (abas sezonas kopā)",
     "Noraid. mājas": "Mājas komandas noraidījumi spēlē",
     "Noraid. viesi": "Viesu komandas noraidījumi spēlē",
     "Kopā": "Abu komandu noraidījumi kopā spēles pamatlaikā",
@@ -3545,14 +3538,17 @@ def lapa_tiesnesi():
         st.warning(info)
     if cur is None and prev is None:
         st.info("Tiesnešu dati vēl nav pieejami. Tie parādīsies pēc nākamās datu atjaunināšanas "
-                "(sezonas/tiesnesi.csv). Pagājušās sezonas datus liec failā sezonas/vesture/referees_lastseason.csv.")
+                "(sezonas/tiesnesi.csv); iepriekšējo sezonu dati – sezonas/vesture/<sezona>/tiesnesi.csv.")
         return
+    db_sez = da.vestures_sezonas()
+    db_txt = ", ".join(f"{s_[:4]}/{s_[6:]}" for s_ in db_sez) if db_sez else "nav"
 
     with st.expander("Aprēķina iestatījumi", expanded=False):
         c1, c2 = st.columns(2)
-        w_prev = c1.slider("Pagājušās sezonas svars (%)", 0, 100, 60, 5, key="ti_w") / 100
+        w_prev = c1.slider("DB svars (%)", 0, 100, 60, 5, key="ti_w",
+                           help=f"DB = iepriekšējās sezonas kopā ({db_txt})") / 100
         k = c2.slider("Līgas vidējā korekcija K (spēles)", 0, 30, 10, key="ti_k")
-        st.caption(f"Kombinētais rādītājs = {w_prev:.0%} × pagājušā sezona + {1 - w_prev:.0%} × šī sezona. "
+        st.caption(f"Kombinētais rādītājs = {w_prev:.0%} × DB ({db_txt}) + {1 - w_prev:.0%} × šī sezona. "
                    f"Katra sezonas komponente tiek pievilkta pie līgas vidējā, kas vienāds ar {k} spēlēm: "
                    "jaunam tiesnesim vai ar maz spēlēm rādītājs ir tuvu līgas vidējam.")
 
@@ -3561,34 +3557,41 @@ def lapa_tiesnesi():
         st.info("Nav tiesnešu datu.")
         return
     if prev is None:
-        st.caption("Pagājušās sezonas fails (sezonas/vesture/referees_lastseason.csv) nav ielādēts, tāpēc tiek lietota tikai šī sezona.")
+        st.caption("Iepriekšējo sezonu dati (sezonas/vesture/<sezona>/tiesnesi.csv) nav atrasti, tāpēc tiek lietota tikai šī sezona.")
 
     m = st.columns(4)
     m[0].metric("Līgas vidējais šosezon", fmt(liga["t"]["kopa"]), border=True)
-    m[1].metric("Līgas vidējais pagājušajā", f"{liga['p']['kopa']:.2f}" if pd.notna(liga["p"]["kopa"]) else "–", border=True)
+    m[1].metric("Līgas vidējais DB", f"{liga['p']['kopa']:.2f}" if pd.notna(liga["p"]["kopa"]) else "–", border=True,
+                help=f"Iepriekšējās sezonas kopā: {db_txt}")
     m[2].metric("Tiesneši datubāzē", len(tab), border=True)
     m[3].metric("Spēles ar tiesnešiem šosezon",
                 0 if cur is None else int(cur.loc[cur["loma"] == "referee", "game_id"].nunique()), border=True)
 
     t_tab, t_rez, t_spele = st.tabs(["Tiesnešu tabula", "Gaidāmie noraidījumi spēlei", "Tiesneša spēles"])
     with t_tab:
-        min_sp = st.slider("Rādīt tiesnešus ar vismaz tik spēlēm (abās sezonās kopā)", 0, 60, 0, key="ti_min")
+        min_sp = st.slider("Rādīt tiesnešus ar vismaz tik spēlēm (šī sezona + DB kopā)", 0, 150, 0, key="ti_min")
         t = tab[(tab["GP_t"] + tab["GP_p"]) >= min_sp].sort_values("kopa", ascending=False).reset_index(drop=True)
         vis = pd.DataFrame({
-            "Tiesnesis": t["vards"], "Spēles šosezon": t["GP_t"], "Spēles pagājušajā": t["GP_p"],
-            "Noraid./sp šosezon": t["kopa_t"], "Noraid./sp pagājušajā": t["kopa_p"],
+            "Tiesnesis": t["vards"], "Spēles šosezon": t["GP_t"], "Spēles DB": t["GP_p"],
+            "Noraid. vid. šosezon": t["kopa_t"], "Noraid. vid. DB": t["kopa_p"],
             "Kombinētais": t["kopa"], "Pret līgu": t["kopa_vs_liga"],
-            "Mājas komanda": t["majas"], "Viesu komanda": t["viesi"],
-            "Noraid. 1. per.": t["p1"], "Noraid. 2. per.": t["p2"], "Noraid. 3. per.": t["p3"], "Datu apjoms": t["dati"]})
+            "Mājas komanda": t["majas"], "Viesu komanda": t["viesi"], "Dati": t["dati"]})
         fm = st.column_config.NumberColumn(format="%.2f")
         rtabula(vis, hide_index=True, width="stretch",
                      height=min(900, 35 * (len(vis) + 1) + 3),
-                     column_config={"Noraid./sp šosezon": fm, "Noraid./sp pagājušajā": fm, "Kombinētais": fm,
+                     column_config={"Noraid. vid. šosezon": fm, "Noraid. vid. DB": fm, "Kombinētais": fm,
                                     "Mājas komanda": fm, "Viesu komanda": fm,
-                                    "Noraid. 1. per.": fm, "Noraid. 2. per.": fm, "Noraid. 3. per.": fm,
-                                    "Pret līgu": st.column_config.NumberColumn(format="%+.2f")})
-        st.caption("Noraidījumi = abu komandu minor sodu skaits spēles pamatlaikā (dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem), ko pieskaita katram spēles tiesnesim. "
-                   "Datu apjoms: Maz datu < 8 spēles, Vidēji 8–19, Pietiekami 20+ (abas sezonas kopā).")
+                                    "Pret līgu": st.column_config.NumberColumn(format="%+.2f")},
+                     paskaidr={"Spēles DB": f"Spēles iepriekšējās sezonās kopā ({db_txt})",
+                               "Noraid. vid. šosezon": "Vidēji noraidījumi spēlē šosezon (abām komandām kopā)",
+                               "Noraid. vid. DB": f"Vidēji noraidījumi spēlē iepriekšējās sezonās kopā ({db_txt})",
+                               "Kombinētais": "Šīs sezonas un DB vidējais, pievilkts pie līgas vidējā (sk. Aprēķina iestatījumi)",
+                               "Pret līgu": "Kombinētais mīnus līgas vidējais: + = vairāk noraidījumu nekā vidēji",
+                               "Mājas komanda": "Kombinētie noraidījumi mājas komandai spēlē",
+                               "Viesu komanda": "Kombinētie noraidījumi viesu komandai spēlē",
+                               "Dati": "Spēļu skaits (šī sezona + DB): Maz < 8 spēles, Vidēji 8–19, OK 20+"})
+        st.caption("Noraidījumi = abu komandu minor sodu skaits spēles pamatlaikā (dubultais minor = 2; bez major, 10 min disciplinārajiem un kautiņiem), "
+                   f"ko pieskaita katram spēles tiesnesim. DB = iepriekšējās sezonas kopā ({db_txt}).")
 
     with t_rez:
         vardi = tab["vards"].dropna().sort_values().tolist()
@@ -3826,8 +3829,12 @@ IZVELNES_SKRIPTS = """
   }
   function tabuBultas(t) {                  // cilņu ritināšanas bultiņas tumšajā motīvā – tumši zilas
     d.querySelectorAll('.stTabs').forEach(function (tb) {
-      tb.querySelectorAll('*').forEach(function (el) {
-        if (el.closest('[data-baseweb="tab-panel"]') || el.closest('[role="tab"]') || el.matches('[data-baseweb="tab-list"], [data-baseweb="tab-highlight"], [data-baseweb="tab-border"]')) return;
+      var kandidati = [], tw = d.createTreeWalker(tb, 1, { acceptNode: function (n) {      // cilņu saturu un pašas cilnes izlaiž ar visu apakškoku
+        if (n.matches('[data-baseweb="tab-panel"], [role="tab"]')) return 2;             // FILTER_REJECT
+        return n.matches('[data-baseweb="tab-list"], [data-baseweb="tab-highlight"], [data-baseweb="tab-border"]') ? 3 : 1;   // SKIP / ACCEPT
+      } });
+      while (tw.nextNode()) kandidati.push(tw.currentNode);
+      kandidati.forEach(function (el) {
         if (t) {
           if (el.dataset.nhlBulta === '1' || (el.getBoundingClientRect().width < 90 && gaissFons(el))) {
             if (el.dataset.nhlBulta !== '1') el.dataset.nhlOrig = el.getAttribute('style') || '';     // oriģinālais stils atjaunošanai
@@ -3862,7 +3869,15 @@ IZVELNES_SKRIPTS = """
   }
   piemerot(); sledzis(true);
   if (w.__nhlTemaMO) { try { w.__nhlTemaMO.disconnect(); } catch (e) {} }   // vecā kadra novērotāju aizstāj ar šī kadra
-  w.__nhlTemaMO = new w.MutationObserver(function () { if (josla() && !d.querySelector('.tema-sw')) sledzis(false); if (tumss()) { iframes(true); tabuBultas(true); tumsieLauki(true); } });
+  var __nhlTemaT = null;
+  w.__nhlTemaMO = new w.MutationObserver(function () {                 // apvienots: ne biežāk kā reizi 150 ms
+    if (__nhlTemaT) return;
+    __nhlTemaT = w.setTimeout(function () {
+      __nhlTemaT = null;
+      if (josla() && !d.querySelector('.tema-sw')) sledzis(false);
+      if (tumss()) { iframes(true); tabuBultas(true); tumsieLauki(true); }
+    }, 150);
+  });
   if (w.__nhlTemaInt) w.clearInterval(w.__nhlTemaInt);    // automātiskā maiņa (08:00 / 23:01) arī tad, ja lapa ir atvērta
   w.__nhlTemaInt = w.setInterval(function () { if (d.documentElement.classList.contains('tumss') !== tumss()) piemerot(); }, 60000);
   w.__nhlTemaMO.observe(d.body, { childList: true, subtree: true });
