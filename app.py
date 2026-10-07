@@ -245,7 +245,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.24"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.25"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -826,6 +826,16 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .fk-ser { min-width: 5.4rem; text-align: center; font-weight: 800; border-radius: .35rem; padding: .12rem .4rem; background: rgba(128,128,128,.14); }
 .fk-ser.akt { background: rgba(0,168,63,.14); color: #15803d; }
 @media (max-width: 640px) { .fk-pie { display: none; } .fk-ser { min-width: 4.4rem; } }
+/* savstarpējās spēles (H2H) salīdzinājumā */
+.st-key-pgr_h2hv { justify-content: center; margin: -.1rem 0 .4rem; }
+.st-key-sl_per button:disabled { opacity: .45; cursor: not-allowed; }
+.h2h-nav { text-align: center; font-size: .8rem; opacity: .65; margin: -.2rem 0 .4rem; }
+.h2h-sum { text-align: center; margin: .2rem auto .9rem; max-width: 760px; }
+.h2h-ser { font-size: .95rem; }
+.h2h-piez { font-size: .76rem; opacity: .65; margin-top: .25rem; }
+.h2h-l { margin-top: 1.2rem; }
+.h2h-l .ks { max-width: none; }
+.h2h-k img { width: 1.5rem; height: 1.5rem; object-fit: contain; }
 /* kājene: paskaidrojums par lapu */
 .kaj { max-width: 900px; margin: 3rem auto 0; padding-top: 1rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .8rem; line-height: 1.55; opacity: .75; }
 .kaj p { margin: 0 0 .7rem; }
@@ -1513,6 +1523,7 @@ SALIDZ_METRIKAS = [      # (nosaukums, paskaidrojums uzejot ar peli, kolonna, ka
     ]),
 ]
 SL_LOGI = {"Pēdējās 5": 5, "Pēdējās 10": 10}          # ja neviens nav izvēlēts: visas sezonas spēles
+SL_H2H = "Savstarpējās"                                # tajā pašā pogu grupā: tikai šīs sezonas savstarpējās spēles
 MAINA_IKONA = "data:image/png;base64,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"
 
 
@@ -1584,6 +1595,72 @@ def rez_zime(u, kl="l5u"):
     return f'<span class="{kl} {REZ_KRASA.get(u, "")}" data-tip="{REZ_NOZIME.get(u, "")}" title="{REZ_NOZIME.get(u, "")}" tabindex="0">{REZ_BURTS.get(u, "")}</span>'
 
 
+def sl_h2h_speles(kreisa, laba):
+    """Šīs sezonas savstarpējās spēles (kreisās komandas rindas pret labo), jaunākā augšā."""
+    return DF[(DF["komanda"] == kreisa) & (DF["pretinieks"] == laba)].sort_values(["datums", "game_id"], ascending=False)
+
+
+def sl_kopsavilkums_no(sub_df):
+    """Kopsavilkums tikai no dotajām spēlēm (abām komandām), ar Over 5.5, tāpat kā sl_kopsavilkums."""
+    k = da.kopsavilkums(sub_df, "Visas", None)
+    if not k.empty and "Over55" not in k.columns:
+        k["Over55"] = (sub_df["tot_reg_goals"] > 5.5).groupby(sub_df["komanda"]).mean() * 100
+    return k
+
+
+def sl_nakama_savstarpeja(kreisa, laba):
+    """Nākamā savstarpējā spēle no kalendāra: (sākums, mājinieki) vai None."""
+    if KAL is None or KAL.empty:
+        return None
+    x = KAL[(((KAL["majas_komanda"] == kreisa) & (KAL["viesu_komanda"] == laba)) | ((KAL["majas_komanda"] == laba) & (KAL["viesu_komanda"] == kreisa)))
+            & (KAL["sakums_lv"] > pd.Timestamp.now(tz=da.LV_TZ))].sort_values("sakums_lv")
+    return (x.iloc[0]["sakums_lv"], x.iloc[0]["majas_komanda"]) if not x.empty else None
+
+
+def _nakama_txt(nak):
+    if not nak:
+        return ""
+    pils = lokacijas.LOKACIJAS.get(nak[1], {}).get("pilseta", nak[1]) if lokacijas is not None else nak[1]
+    return f"nākamā spēle {nak[0]:%d.%m(%H:%M)} · {pils}"
+
+
+def sl_h2h_kopsavilkums_html(kreisa, laba, visas, filtretas):
+    """Sezonas sērija (oficiālais rezultāts ar OT/SO), vārti, nākamā savstarpējā spēle un brīdinājums par mazo izlasi."""
+    e = _html.escape
+    w = int((visas["rez"] == "W").sum())
+    l_ = len(visas) - w
+    ot = int(visas["beigas"].astype(str).str.upper().isin(["OT", "SO"]).sum())
+    gv, gp = int(visas["g_tot"].sum()), int(visas["z_tot"].sum())
+    nak = _nakama_txt(sl_nakama_savstarpeja(kreisa, laba))
+    n = len(filtretas)
+    return (f'<div class="h2h-sum"><div class="h2h-ser">Sezonas sērija: <b>{e(kreisa)} {w}–{l_} {e(laba)}</b>'
+            f'{f" ({ot} OT/SO)" if ot else ""} · vārti {gv}:{gp}{f" · {e(nak)}" if nak else ""}</div>'
+            + (f'<div class="h2h-piez">Statistika pēc {n} savstarpēj{"ās spēles" if n == 1 else "ām spēlēm"} – izlase ir maza, '
+               f'procenti un vidējie ir mazāk droši nekā sezonas dati.</div>' if n else
+               '<div class="h2h-piez">Ar šo vietas izvēli savstarpējo spēļu nav – izvēlies otru komandu mājās vai noņem izvēli.</div>')
+            + '</div>')
+
+
+def sl_h2h_saraksts_html(kreisa, rindas):
+    """Viens kopīgs savstarpējo spēļu saraksts: datums, mājinieki – viesi, rezultāts (saite uz protokolu), W/L no kreisās komandas skatpunkta."""
+    e = _html.escape
+    global SAKUMI
+    if not SAKUMI and "sakums_lv" in RAW.columns:
+        SAKUMI = dict(zip(RAW["game_id"], RAW["sakums_lv"]))
+    rn = ""
+    for r in rindas.itertuples():
+        maj, vie = (kreisa, r.pretinieks) if r.majas == 1 else (r.pretinieks, kreisa)
+        gm, gv = (int(r.g_tot), int(r.z_tot)) if r.majas == 1 else (int(r.z_tot), int(r.g_tot))
+        bg = da.beigu_etikete(r.beigas)
+        rn += (f'<div class="ks-r h2h-r"><span class="ks-d">{dt_html(SAKUMI.get(r.game_id), r.datums)}</span>'
+               f'<span class="ks-o h2h-k"><img src="{e(da.logo_url(maj))}" alt="">{e(maj)}<span class="ks-v">–</span>'
+               f'<img src="{e(da.logo_url(vie))}" alt="">{e(vie)}</span>'
+               f'<a class="ks-s" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener">{gm}:{gv}{(" " + bg) if bg else ""}</a>'
+               f'<span class="ks-z">{rez_zime(rez_kods(r.rez, r.beigas))}</span></div>')
+    return (f'<div class="h2h-l"><div class="l5h">Savstarpējās spēles šosezon</div>'
+            f'<div class="ks">{rn or "<div class=ks-r>Ar šādu atlasi spēļu nav</div>"}</div></div>')
+
+
 def sl_pedejas5_html(kods, puse):
     """Komandas pēdējās 5 spēles (jaunākā augšā). Rezultāts ir saite uz spēles protokolu sadaļā Rezultāti (jaunā cilnē)."""
     g = DF[DF["komanda"] == kods].sort_values(["datums", "game_id"]).tail(5).iloc[::-1]
@@ -1605,7 +1682,7 @@ def sl_pedejas5_html(kods, puse):
 
 def _sl_salidzinat(a, b):
     # noklusējums jaunam salīdzinājumam: mājiniekiem mājas spēles, viesiem izbraukuma spēles, visa sezona
-    st.session_state.update(sl_a=a, sl_b=b, sl_rezims="salidzinajums", sl_vh="Mājās", sl_va="Izbraukumā", sl_logs=None)
+    st.session_state.update(sl_a=a, sl_b=b, sl_rezims="salidzinajums", sl_vh="Mājās", sl_va="Izbraukumā", sl_logs=None, sl_h2h_vieta=None)
 
 
 def _sl_citas():
@@ -1848,9 +1925,20 @@ def lapa_salidzinat():
     vh = st.session_state.setdefault("sl_vh", "Mājās")
     va = st.session_state.setdefault("sl_va", "Izbraukumā")
     logs = st.session_state.get("sl_logs")
+    h2h_visas = sl_h2h_speles(home, away)                 # šīs sezonas savstarpējās spēles (kreisās komandas skatpunktā)
+    if logs == SL_H2H and h2h_visas.empty:                # citam pārim varēja palikt ieslēgts
+        st.session_state["sl_logs"] = logs = None
+    h2h = logs == SL_H2H
     n = SL_LOGI.get(logs)
     kopa = da.kopsavilkums(DF, "Visas", None)
-    kh, ka = sl_kopsavilkums(vh or "Visas", n), sl_kopsavilkums(va or "Visas", n)
+    if h2h:                                               # statistika tikai no savstarpējām spēlēm; vieta – viena kopīga izvēle
+        hv = st.session_state.get("sl_h2h_vieta")
+        if hv not in (home, away):
+            hv = st.session_state["sl_h2h_vieta"] = None
+        h2h_rindas = h2h_visas if hv is None else h2h_visas[h2h_visas["majas"] == (1 if hv == home else 0)]
+        kh = ka = sl_kopsavilkums_no(DF[DF["game_id"].isin(set(h2h_rindas["game_id"]))])
+    else:
+        kh, ka = sl_kopsavilkums(vh or "Visas", n), sl_kopsavilkums(va or "Visas", n)
     a = kh.loc[home] if home in kh.index else None
     b = ka.loc[away] if away in ka.index else None
     gp = lambda k: int(kopa.loc[k, "GP"]) if k in kopa.index else 0                    # noqa: E731
@@ -1858,9 +1946,10 @@ def lapa_salidzinat():
     with st.container(key="cmp_head"):
         with st.container(key="cmp_ch"):
             st.markdown(sl_komanda_html(home, "a", gp(home), int(a["GP"]) if a is not None else 0, True), unsafe_allow_html=True)
-            with st.container(key="cmp_vh"):
-                for v in ("Mājās", "Izbraukumā"):
-                    st.button(ETIKETES.get(v, v), key=f"slvh_{v}", type="primary" if v == vh else "secondary", on_click=_sl_tog, args=("sl_vh", v))
+            if not h2h:                                   # savstarpējās spēlēs vieta ir viena kopīga izvēle (zemāk)
+                with st.container(key="cmp_vh"):
+                    for v in ("Mājās", "Izbraukumā"):
+                        st.button(ETIKETES.get(v, v), key=f"slvh_{v}", type="primary" if v == vh else "secondary", on_click=_sl_tog, args=("sl_vh", v))
         with st.container(key="cmp_cm"):
             st.markdown('<div class="cmp-vs">VS</div>', unsafe_allow_html=True)
             with st.container(key="sl_maina"):
@@ -1868,14 +1957,29 @@ def lapa_salidzinat():
                 st.button("Salīdzināt citas komandas", key="sl_maina_poga", on_click=_sl_citas)
         with st.container(key="cmp_ca"):
             st.markdown(sl_komanda_html(away, "b", gp(away), int(b["GP"]) if b is not None else 0, False), unsafe_allow_html=True)
-            with st.container(key="cmp_va"):
-                for v in ("Mājās", "Izbraukumā"):
-                    st.button(ETIKETES.get(v, v), key=f"slva_{v}", type="primary" if v == va else "secondary", on_click=_sl_tog, args=("sl_va", v))
-    with st.container(key="sl_per"):                       # pēdējās 5 / 10: ieslēdz ar klikšķi, izslēdz ar atkārtotu klikšķi (tad - visa sezona)
+            if not h2h:
+                with st.container(key="cmp_va"):
+                    for v in ("Mājās", "Izbraukumā"):
+                        st.button(ETIKETES.get(v, v), key=f"slva_{v}", type="primary" if v == va else "secondary", on_click=_sl_tog, args=("sl_va", v))
+    with st.container(key="sl_per"):                       # pēdējās 5 / 10 / savstarpējās: vienlaikus ieslēgta viena; neviena = visa sezona
         for p in SL_LOGI:
             st.button(p, key=f"slp_{p}", type="primary" if p == logs else "secondary", on_click=_sl_tog, args=("sl_logs", p))
+        nak_txt = _nakama_txt(sl_nakama_savstarpeja(home, away)) if h2h_visas.empty else ""
+        st.button(f"{SL_H2H} ({len(h2h_visas)})", key="slp_h2h", type="primary" if h2h else "secondary", disabled=h2h_visas.empty,
+                  help=(f"Šosezon vēl nav spēlējušas" + (f" · {nak_txt}" if nak_txt else "")) if h2h_visas.empty else None,
+                  on_click=_sl_tog, args=("sl_logs", SL_H2H))
+    if h2h_visas.empty:
+        st.markdown(f'<div class="h2h-nav">Savstarpējās: šosezon vēl nav spēlējušas{f" · {_html.escape(nak_txt)}" if nak_txt else ""}</div>',
+                    unsafe_allow_html=True)
+    if h2h:
+        with st.container(key="pgr_h2hv"):                # viena kopīga vietas izvēle: neviena = visas savstarpējās spēles
+            for kods in (home, away):
+                st.button(f"{kods} mājās", key=f"slh2h_{kods}", type="primary" if hv == kods else "secondary",
+                          on_click=_sl_tog, args=("sl_h2h_vieta", kods))
 
     rindas = sl_peldosie_html(home, away)
+    if h2h:
+        rindas += sl_h2h_kopsavilkums_html(home, away, h2h_visas, h2h_rindas)
     for grupa, metrikas in SALIDZ_METRIKAS:
         rindas += f'<div class="cmp-group">{_html.escape(grupa.upper())}</div>'
         for nos, pask, k, labak, dec in metrikas:
@@ -1884,7 +1988,10 @@ def lapa_salidzinat():
         rindas += sl_celojums_html(home, away)              # ceļojuma faktors (virs pēdējām 5 spēlēm)
     except Exception:
         pass
-    rindas += f'<div class="cmp-l5">{sl_pedejas5_html(home, "l")}{sl_pedejas5_html(away, "r")}</div>'
+    if h2h:                                               # savstarpējās: viens kopīgs saraksts (abām komandām tās ir tās pašas spēles)
+        rindas += sl_h2h_saraksts_html(home, h2h_rindas)
+    else:
+        rindas += f'<div class="cmp-l5">{sl_pedejas5_html(home, "l")}{sl_pedejas5_html(away, "r")}</div>'
     st.markdown(f'<div class="cmp-wrap">{rindas}</div>', unsafe_allow_html=True)
     with st.container(key="cmp_skripts"):                 # peldošo logo skripts (neredzams; stabila vieta)
         try:
