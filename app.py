@@ -251,7 +251,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.31"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.32"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1581,8 +1581,8 @@ def lapa_prognozes():
             st.markdown(
                 f"**Pārbaude pret vēsturi** ({str(meta.get('parbaudes_sezona'))[:4]}/{str(meta.get('parbaudes_sezona'))[6:]}, "
                 f"{mt.get('speles', 0)} spēles, katra prognozēta tikai no datiem pirms tās): log loss 1X2 **{mt.get('logloss_1x2', float('nan')):.4f}** "
-                f"(bāze bez modeļa {bz.get('logloss_1x2', float('nan')):.4f}; mazāk = labāk), totāls 5.5 **{mt.get('logloss_o55', float('nan')):.4f}** "
-                f"(bāze {bz.get('logloss_o55', float('nan')):.4f}); neizšķirti pamatlaikā "
+                f"(bāze no iepriekšējo sezonu biežumiem {bz.get('logloss_1x2', float('nan')):.4f}; mazāk = labāk), totāls 5.5 "
+                f"**{mt.get('logloss_o55', float('nan')):.4f}** (bāze {bz.get('logloss_o55', float('nan')):.4f}); neizšķirti pamatlaikā "
                 f"{mt.get('neizskirti_prog', 0):.1%} prognoze / {mt.get('neizskirti_fakt', 0):.1%} fakts; vidēji vārti "
                 f"{mt.get('videji_varti_prog', 0):.2f} / {mt.get('videji_varti_fakt', 0):.2f}. "
                 f"H2H korekcija: {'tiek lietota' if p.get('h2h_lietot') else 'netiek lietota (neuzlaboja prognozes)'}. Kalibrēts: {meta.get('izveidots', '')}.")
