@@ -253,7 +253,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.34"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.35"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1723,6 +1723,46 @@ def tirgus_html(home, away, pr):
             + "<br>".join(dalas) + "</div>")
 
 
+def modelis_pret_tirgu_bloks():
+    """Pārbaude uz aizvadītām spēlēm: prognozes un koeficienti, kas saglabāti PIRMS spēles (prognozes_arhivs.csv)."""
+    prog = da.ielasit_prognozu_arhivu()
+    if prog is None:
+        st.caption("Arhīvs vēl ir tukšs. Tas sāks krāties pēc koeficientu ielādēm (3× dienā): katrā ielādē tiek saglabātas modeļa "
+                   "prognozes un tā brīža koeficienti, lai vēlāk godīgi salīdzinātu ar rezultātiem.")
+        return
+    r = RAW_VISS if globals().get("RAW_VISS") is not None else RAW
+    rez = pd.DataFrame({"game_id": r["game_id"].astype("int64"),
+                        "hg": r[["home_p1", "home_p2", "home_p3"]].fillna(0).sum(axis=1), "ag": r[["away_p1", "away_p2", "away_p3"]].fillna(0).sum(axis=1),
+                        "h_tot": r["home_total"], "a_tot": r["away_total"]})
+    v = modelis.vertet_pret_tirgu(prog, rez)
+    n = v.get("speles", 0)
+    st.caption(f"Arhīvā: {prog['game_id'].nunique()} spēles ar prognozēm, no tām aizvadītas un novērtējamas: {n}.")
+    if n == 0:
+        return
+    if n < 200:
+        st.warning(f"Tikai {n} spēles – rezultāti vēl ir ļoti nejauši. Ticamus secinājumus var izdarīt pēc ~200–300 spēlēm.")
+    lg = v["logloss"]
+    st.markdown(
+        f"**Precizitāte 1X2 pamatlaikā** (log loss, mazāk = labāk): modelis **{lg['modelis']:.4f}** · tirgus rītā (Pinnacle) "
+        f"**{lg['tirgus_rits']:.4f}** · tirgus pirms spēles **{lg['tirgus_nosl']:.4f}** · modelis un tirgus uz pusēm **{lg['apvienots']:.4f}**.")
+    rindas = [x for x in v["likmes"] if x.get("likmes")]
+    if rindas:
+        rtabula(pd.DataFrame({
+            "Tirgus": [x["tirgus"] for x in rindas], "Starpība ≥": [f"{x['slieksnis'] * 100:.0f}%" for x in rindas],
+            "Likmes": [x["likmes"] for x in rindas], "Uzvaras %": [x["uzvaras"] / x["likmes"] * 100 for x in rindas],
+            "ROI Pinnacle %": [x["roi_pin"] * 100 for x in rindas], "ROI labākais %": [x["roi_lab"] * 100 for x in rindas],
+            "CLV %": [x["clv"] * 100 for x in rindas], "Pārspēj noslēgumu %": [x["parspeja_noslegumu"] * 100 for x in rindas]}),
+            hide_index=True, kartot=False,
+            column_config={k: st.column_config.NumberColumn(format="%.1f") for k in ("Uzvaras %", "ROI Pinnacle %", "ROI labākais %", "CLV %", "Pārspēj noslēgumu %")},
+            paskaidr={"Starpība ≥": "Simulētā likme tiek “likta”, ja modeļa varbūtība × rīta koeficients − 1 ir vismaz tik liela",
+                      "ROI Pinnacle %": "Peļņa uz likmi (vienādas likmes) ar Pinnacle rīta koeficientiem",
+                      "ROI labākais %": "Tas pats ar labāko rīta koeficientu starp ES bukmeikeriem",
+                      "CLV %": "Cik rīta koeficients bija labāks par pēdējo zināmo pirms spēles: + nozīmē, ka tirgus pēc tam pagājās modeļa virzienā",
+                      "Pārspēj noslēgumu %": "Cik % likmju rīta koeficients bija augstāks par pēdējo pirms spēles"})
+    st.caption("Svarīgākais rādītājs ir CLV: ja tas ilgtermiņā ir pozitīvs, modelis atrod informāciju, ko tirgus vēl nav ievērtējis. "
+               "ROI uz maziem paraugiem ir ļoti nejaušs. Tā ir simulācija, nevis ieteikums likt likmes.")
+
+
 def lapa_prognozes():
     st.title("Prognozes")
     md = modela_dati(VERSIJA)
@@ -1758,6 +1798,8 @@ def lapa_prognozes():
                         paskaidr={"Notika": "Cik % no šīm spēlēm mājinieki tiešām uzvarēja pamatlaikā – jo tuvāk prognozei, jo labāk kalibrēts modelis"})
         else:
             st.caption("Modelis vēl nav kalibrēts pret vēsturi (python modelis.py --kalibret), tiek lietoti noklusējuma iestatījumi.")
+    with st.expander("Modelis pret tirgu (reālās spēles)", expanded=False):
+        modelis_pret_tirgu_bloks()
     if KAL is None or KAL.empty:
         st.warning("Nav atrasts kalendārs (sezonas/nhl_kalendars.csv).")
         return
