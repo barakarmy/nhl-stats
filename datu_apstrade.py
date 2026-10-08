@@ -71,7 +71,7 @@ def datu_versija():
     """Faila izmaiņu laiki (kešatmiņas atslēga: kad fails mainās, dati tiek pārlasīti)."""
     celi = [DATU_MAPE / n for n in ("speles.csv", "speletaji.csv", "vartsargi.csv", "varti.csv", "pedeja_atjaunosana.json",
                                     "tiesnesi.csv", "tiesnesi_planotie.csv", "koeficienti.csv", "koeficienti_meta.json",
-                                    "prognozes_arhivs.csv")]
+                                    "prognozes_arhivs.csv", "vartsargi_sakuma.csv")]
     celi += [DATU_MAPE / "nhl_kalendars.csv"] + sorted(VESTURES_MAPE.glob("*/tiesnesi.csv")) \
         + sorted(VESTURES_MAPE.glob("*/speles.csv")) + sorted(VESTURES_MAPE.glob("*/varti.csv")) \
         + [VESTURES_MAPE / "modelis_parametri.json"]
@@ -429,6 +429,31 @@ def ielasit_koeficientus():
         except (OSError, ValueError):
             meta = None
     return df, meta
+
+
+def ielasit_sakuma_vartsargus():
+    """Paziņotie sākuma vārtsargi (sezonas/vartsargi_sakuma.csv, ko raksta sakuma_vartsargi.py); None, ja faila nav."""
+    c = DATU_MAPE / "vartsargi_sakuma.csv"
+    if not c.exists():
+        return None
+    df = pd.read_csv(c)
+    if df.empty:
+        return None
+    df["sakums_utc"] = pd.to_datetime(df["sakums_utc"], utc=True)
+    return df
+
+
+def sakuma_vartsargs(sv, home, away, kom, sakums):
+    """(vārds, statuss) komandai šajā spēlē (sākuma laiks ±12 h) vai (None, None)."""
+    if sv is None or sv.empty:
+        return None, None
+    t = pd.Timestamp(sakums)
+    t = t.tz_convert("UTC") if t.tzinfo else t.tz_localize("UTC")
+    x = sv[(sv["majas"] == home) & (sv["viesi"] == away) & (sv["komanda"] == kom) & ((sv["sakums_utc"] - t).abs() <= pd.Timedelta(hours=12))]
+    if x.empty:
+        return None, None
+    r = x.sort_values("ielade").iloc[-1]
+    return r["vartsargs"], r["statuss"]
 
 
 def ielasit_prognozu_arhivu():
