@@ -70,7 +70,8 @@ def beigu_etikete(beigas):
 def datu_versija():
     """Faila izmaiņu laiki (kešatmiņas atslēga: kad fails mainās, dati tiek pārlasīti)."""
     celi = [DATU_MAPE / n for n in ("speles.csv", "speletaji.csv", "vartsargi.csv", "varti.csv", "pedeja_atjaunosana.json",
-                                    "tiesnesi.csv", "tiesnesi_planotie.csv", "koeficienti.csv", "koeficienti_meta.json")]
+                                    "tiesnesi.csv", "tiesnesi_planotie.csv", "koeficienti.csv", "koeficienti_meta.json",
+                                    "prognozes_arhivs.csv")]
     celi += [DATU_MAPE / "nhl_kalendars.csv"] + sorted(VESTURES_MAPE.glob("*/tiesnesi.csv")) \
         + sorted(VESTURES_MAPE.glob("*/speles.csv")) + sorted(VESTURES_MAPE.glob("*/varti.csv")) \
         + [VESTURES_MAPE / "modelis_parametri.json"]
@@ -428,6 +429,15 @@ def ielasit_koeficientus():
         except (OSError, ValueError):
             meta = None
     return df, meta
+
+
+def ielasit_prognozu_arhivu():
+    """Modeļa prognožu momentuzņēmumi ar tā brīža koeficientiem (sezonas/prognozes_arhivs.csv); None, ja faila nav."""
+    c = DATU_MAPE / "prognozes_arhivs.csv"
+    if not c.exists():
+        return None
+    df = pd.read_csv(c)
+    return None if df.empty else df
 
 
 def vestures_sezonas():
