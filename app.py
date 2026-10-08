@@ -277,7 +277,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.41"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.42"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1811,7 +1811,7 @@ def modelis_pret_tirgu_bloks():
 
 def lapa_prognozes():
     st.title("Prognozes")
-    md = modela_dati(VERSIJA)
+    md = modela_dati(da.modela_versija())                # pārrēķina tikai, kad mainās spēles / vārtsargi / metieni / iestatījumi
     if md[1] is None:
         st.info("Modelim vēl nav datu (ne šīs sezonas, ne DB).")
         return
