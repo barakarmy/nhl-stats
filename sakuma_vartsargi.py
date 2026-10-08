@@ -28,7 +28,7 @@ FAILS = os.path.join(BASE, "sezonas", "vartsargi_sakuma.csv")
 URL = "https://www.dailyfaceoff.com/starting-goalies/{datums}"
 KOLONNAS = ["datums_et", "sakums_utc", "majas", "viesi", "komanda", "puse", "vartsargs", "statuss", "statusa_laiks", "ielade"]
 STATUSI = {"confirmed": "Confirmed", "expected": "Expected", "likely": "Likely", "probable": "Likely", "unconfirmed": "Unconfirmed"}
-ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
+ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z")
 IZLAIST = {"show more", "line combos", "news", "stats", "schedule", "--", "|", "•"}
 
 
