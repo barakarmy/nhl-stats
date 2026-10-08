@@ -43,9 +43,17 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: python koeficienti.py
 
+      - name: Save model predictions with current odds
+        # modeļa prognozes TAJĀ BRĪDĪ (godīgai salīdzināšanai ar tirgu); ja neizdodas, koeficienti tik un tā tiek saglabāti
+        continue-on-error: true
+        run: |
+          pip install pandas numpy scipy
+          python prognozes_arhivs.py
+
       - name: Commit and push changes if any
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add sezonas/koeficienti.csv sezonas/koeficienti_meta.json sezonas/koeficienti_arhivs.csv
+          git add sezonas/prognozes_arhivs.csv 2>/dev/null || true
           git diff --cached --quiet || (git commit -m "Odds update" && git pull --rebase && git push)
