@@ -43,6 +43,7 @@ CITI SVARĪGI FAKTI
 - Koeficienti: koeficienti.py (.github/workflows/odds.yml, 3× dienā; The Odds API, atslēga – GitHub noslēpums ODDS_API_KEY)
   → sezonas/koeficienti.csv; salīdzinājumā zem komandām, Prognozēs – modelis pret tirgu.
 - Sākuma vārtsargi: sakuma_vartsargi.py (.github/workflows/goalies.yml, ik 30 min vakarā; Daily Faceoff) → sezonas/vartsargi_sakuma.csv.
+- xG: metieni.py (metienu dati) + xg.py (xG modelis, apmāca lokāli: python xg.py --apmacit → sezonas/vesture/xg_modelis.json).
 - Modelis: modelis.py (Puasona regresija ar DB kā sākuma pieņēmumu); parametrus kalibrē lokāli ar
   python modelis.py --kalibret → sezonas/vesture/modelis_parametri.json (Prognožu lapa to nolasa).
 - Vēsture: vesture.py (palaiž lokāli) lejupielādē iepriekšējās sezonas uz sezonas/vesture/<sezona>/; --arhivet pārvieto aktīvo sezonu uz arhīvu.
@@ -254,7 +255,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.38"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.39"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1601,32 +1602,27 @@ def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False,
 # LAPA: PROGNOZES
 # ============================================================================
 @st.cache_data(show_spinner=False)
-def vartsargu_dati(versija):
-    """Vārtsargu rindas (DB + šī sezona) un uzskaite līdz šodienai – ticamajiem sākuma vārtsargiem."""
-    vg_d = [x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty]
-    if not vg_d:
-        return None, None
-    vr = modelis.vartsargu_rindas(pd.concat(vg_d, ignore_index=True))
-    k = modelis.ielasit_parametrus()[0].get("vartsargu_k", modelis.VG_K)
-    return vr, modelis.uzskaite_lidz(vr, pd.Timestamp.now(tz=da.LV_TZ).tz_localize(None).normalize(), k)
-
-
-@st.cache_data(show_spinner=False)
 def modela_dati(versija):
     """Modeļa spēļu tabula (DB + šī sezona), parametri un reitingi uz šodienu (kešots pēc datu versijas)."""
     raw_db, df_db = ielasit_db_visu(versija)
     raw_t, df_t, _ = ielasit_visu(versija)
     dalas = [x for x in (raw_db, raw_t) if x is not None and not x.empty]
     if not dalas:
-        return None, None, None, None
+        return None, None, None, None, None, None
     vg_d = [x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty]
-    g = modelis.spelu_tabula(pd.concat(dalas, ignore_index=True), pd.concat(vg_d, ignore_index=True) if vg_d else None,
-                             modelis.ielasit_parametrus()[0].get("vartsargu_k", modelis.VG_K))
     p, meta = modelis.ielasit_parametrus()
-    sez = int(raw_t["sezona"].max()) if raw_t is not None and not raw_t.empty else int(g["sezona"].max())
-    mod = modelis.aprekinat_reitingus(g, uz_datumu=pd.Timestamp.now(tz=da.LV_TZ).tz_localize(None).normalize(), sezona_tagad=sez, p=p)
+    metieni, xmod = None, None
+    if modelis.vajag_metienus(p):                          # metienus (xG) ielādē tikai, ja kalibrētais modelis tos izmanto
+        import xg as xgm
+        m_d = [x for x in (da.ielasit_db_tabulu("metieni"), da.ielasit_tabulu("metieni")) if x is not None and not x.empty]
+        metieni = pd.concat(m_d, ignore_index=True) if m_d else None
+        xmod = xgm.ielasit_modeli()
+    raw_all = pd.concat(dalas, ignore_index=True)
+    sez = int(raw_t["sezona"].max()) if raw_t is not None and not raw_t.empty else int(raw_all["sezona"].max())
+    g, mod, vr, vu, p = modelis.sagatavot(raw_all, pd.concat(vg_d, ignore_index=True) if vg_d else None, metieni, p,
+                                          pd.Timestamp.now(tz=da.LV_TZ).tz_localize(None).normalize(), sez, xmod)
     rindas = pd.concat([x for x in (df_db, df_t) if x is not None and not x.empty], ignore_index=True).sort_values(["datums", "game_id"])
-    return g, mod, (p, meta), rindas
+    return g, mod, (p, meta), rindas, vr, vu
 
 
 def _speles_faktori(home, away, sakums):
@@ -1795,13 +1791,15 @@ def lapa_prognozes():
     if md[1] is None:
         st.info("Modelim vēl nav datu (ne šīs sezonas, ne DB).")
         return
-    g, mod, (p, meta), rindas = md
+    g, mod, (p, meta), rindas, vr, vu = md
     with st.expander("Kā modelis strādā un cik tas precīzs", expanded=False):
         st.markdown(
             "- **Komandu stiprums:** uzbrukums un aizsardzība no visām spēlēm, ņemot vērā pretinieku (svērta Puasona regresija). "
             "Šīs sezonas spēles sver vairāk, iepriekšējās sezonas (DB) – mazāk; sezonas sākumā prognoze balstās galvenokārt uz DB.\n"
             "- **Korekcijas:** mājas priekšrocība, otrā spēle pēc kārtas, garš ceļš, play-off, H2H (ja pārbaude rāda, ka tā uzlabo), "
             "tiesneši – noraidījumiem.\n"
+            "- **xG (paredzamie vārti):** ja kalibrēšana to izvēlas, komandu stiprums tiek rēķināts no vārtu un paredzamo vārtu sajaukuma "
+            "(metienu vieta, leņķis, veids, atlēcieni), un vārtsarga kvalitāte – kā ielaistie vārti pret paredzamajiem (GSAx).\n"
             "- **Sākuma vārtsargs:** kad komanda paziņo vārtsargu (✓ apstiprināts, “gaidāms” – ļoti ticams; pārbaude ik 30 min vakarā), "
             "modelis izmanto viņu; līdz tam – ticamo vārtsargu pēc rotācijas (komandas pēdējās 10 spēles; otrajā spēlē pēc kārtas biežāk sāk otrs vārtsargs) "
             "un viņa glābšanas % vienādos sastāvos (pievilkts pie līgas vidējā) salīdzinājumā ar komandas parasto vārtsargu sajaukumu. "
@@ -1844,7 +1842,6 @@ def lapa_prognozes():
             continue
         po = int(str(r.get("speles_tips", "RS")) == "PO")
         fk = _speles_faktori(home, away, sak)
-        vr, vu = vartsargu_dati(VERSIJA)
         vs_h = modelis.ticamie_vartsargi(vr, home, fk["b2b_h"], vu) if vr is not None else []
         vs_a = modelis.ticamie_vartsargi(vr, away, fk["b2b_a"], vu) if vr is not None else []
         svs = da.ielasit_sakuma_vartsargus()                       # paziņotie sākuma vārtsargi aizstāj rotāciju
