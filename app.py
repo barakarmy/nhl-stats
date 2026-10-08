@@ -251,7 +251,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.32"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.33"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -833,7 +833,10 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .fk-ser.akt { background: rgba(0,168,63,.14); color: #15803d; }
 @media (max-width: 640px) { .fk-pie { display: none; } .fk-ser { min-width: 4.4rem; } }
 /* savstarpējās spēles (H2H) salīdzinājumā */
-.st-key-pgr_h2hv { justify-content: center; margin: -.1rem 0 .4rem; }
+.st-key-pgr_h2hv, .st-key-pgr_h2hsez { justify-content: center; margin: -.1rem 0 .4rem; }
+.h2h-sez { font-size: .76rem; font-weight: 800; letter-spacing: .05em; opacity: .6; margin: .7rem 0 .1rem; padding-bottom: .2rem;
+  border-bottom: 1px solid rgba(128,128,128,.25); }
+.h2h-nak { font-size: .85rem; opacity: .8; }
 .st-key-sl_per button:disabled { opacity: .45; cursor: not-allowed; }
 .h2h-nav { text-align: center; font-size: .8rem; opacity: .65; margin: -.2rem 0 .4rem; }
 .h2h-sum { text-align: center; margin: .2rem auto .9rem; max-width: 760px; }
@@ -1750,9 +1753,28 @@ def rez_zime(u, kl="l5u"):
     return f'<span class="{kl} {REZ_KRASA.get(u, "")}" data-tip="{REZ_NOZIME.get(u, "")}" title="{REZ_NOZIME.get(u, "")}" tabindex="0">{REZ_BURTS.get(u, "")}</span>'
 
 
-def sl_h2h_speles(kreisa, laba):
-    """Šīs sezonas savstarpējās spēles (kreisās komandas rindas pret labo), jaunākā augšā."""
-    return DF[(DF["komanda"] == kreisa) & (DF["pretinieks"] == laba)].sort_values(["datums", "game_id"], ascending=False)
+def sl_h2h_speles(kreisa, laba, df=None):
+    """Savstarpējās spēles (kreisās komandas rindas pret labo), jaunākā augšā. Pēc noklusējuma – šī sezona (pašreizējā RS/PO atlase)."""
+    df = DF if df is None else df
+    if df is None or df.empty:
+        return pd.DataFrame(columns=DF.columns)
+    return df[(df["komanda"] == kreisa) & (df["pretinieks"] == laba)].sort_values(["datums", "game_id"], ascending=False)
+
+
+def sl_db_rindas():
+    """DB (iepriekšējo sezonu) komandu rindas ar to pašu RS/PO atlasi kā pašreizējā skatā; None, ja vēstures nav."""
+    _, df_db = ielasit_db_visu(VERSIJA)
+    if df_db is None or df_db.empty:
+        return None
+    return df_db if SEZ_DALA is None else df_db[df_db["tips"] == SEZ_DALA]
+
+
+def sez_nos(s):
+    s = str(int(s))
+    return f"{s[:4]}/{s[6:]}"
+
+
+SL_H2H_APJOMI = {"sezona": "Šī sezona", "visas": "Visas sezonas"}
 
 
 def sl_kopsavilkums_no(sub_df):
@@ -1779,21 +1801,34 @@ def _nakama_txt(nak):
     return f"nākamā spēle {nak[0]:%d.%m(%H:%M)} · {pils}"
 
 
-def sl_h2h_kopsavilkums_html(kreisa, laba, visas, filtretas):
-    """Sezonas sērija (oficiālais rezultāts ar OT/SO), vārti, nākamā savstarpējā spēle un brīdinājums par mazo izlasi."""
+def _serijas_txt(kreisa, laba, x):
+    w = int((x["rez"] == "W").sum())
+    ot = int(x["beigas"].astype(str).str.upper().isin(["OT", "SO"]).sum())
+    return (f'<b>{_html.escape(kreisa)} {w}–{len(x) - w} {_html.escape(laba)}</b>{f" ({ot} OT/SO)" if ot else ""} · '
+            f'vārti {int(x["g_tot"].sum())}:{int(x["z_tot"].sum())}')
+
+
+def sl_h2h_kopsavilkums_html(kreisa, laba, sezona_r, visas_r, filtretas, apjoms):
+    """
+    Sērija (oficiālais rezultāts ar OT/SO) šajā sezonā un, ja izvēlētas visas sezonas, arī kopā; nākamā savstarpējā spēle;
+    brīdinājums par mazo izlasi (un par sastāvu maiņu starp sezonām).
+    """
     e = _html.escape
-    w = int((visas["rez"] == "W").sum())
-    l_ = len(visas) - w
-    ot = int(visas["beigas"].astype(str).str.upper().isin(["OT", "SO"]).sum())
-    gv, gp = int(visas["g_tot"].sum()), int(visas["z_tot"].sum())
     nak = _nakama_txt(sl_nakama_savstarpeja(kreisa, laba))
+    rindas = [f"Šī sezona: {_serijas_txt(kreisa, laba, sezona_r)}" if not sezona_r.empty else "Šī sezona: vēl nav spēlējušas"]
+    if apjoms == "visas" and not visas_r.empty:
+        sez = sorted(visas_r["sezona"].dropna().astype(int).unique())
+        diap = sez_nos(sez[0]) if sez[0] == sez[-1] else f"{sez_nos(sez[0])}–{sez_nos(sez[-1])}"
+        rindas.append(f"Visas sezonas ({diap}): {_serijas_txt(kreisa, laba, visas_r)}")
     n = len(filtretas)
-    return (f'<div class="h2h-sum"><div class="h2h-ser">Sezonas sērija: <b>{e(kreisa)} {w}–{l_} {e(laba)}</b>'
-            f'{f" ({ot} OT/SO)" if ot else ""} · vārti {gv}:{gp}{f" · {e(nak)}" if nak else ""}</div>'
-            + (f'<div class="h2h-piez">Statistika pēc {n} savstarpēj{"ās spēles" if n == 1 else "ām spēlēm"} – izlase ir maza, '
-               f'procenti un vidējie ir mazāk droši nekā sezonas dati.</div>' if n else
-               '<div class="h2h-piez">Ar šo vietas izvēli savstarpējo spēļu nav – izvēlies otru komandu mājās vai noņem izvēli.</div>')
-            + '</div>')
+    if not n:
+        piez = "Ar šo vietas izvēli savstarpējo spēļu nav – izvēlies otru komandu mājās vai noņem izvēli."
+    else:
+        piez = (f"Statistika pēc {n} savstarpēj{'ās spēles' if n == 1 else 'ām spēlēm'} – izlase ir maza, procenti un vidējie ir mazāk droši nekā sezonas dati."
+                + (" Iepriekšējās sezonās komandu sastāvi bija citādi." if apjoms == "visas" else ""))
+    return ('<div class="h2h-sum">' + "".join(f'<div class="h2h-ser">{r}</div>' for r in rindas)
+            + (f'<div class="h2h-ser h2h-nak">{e(nak)}</div>' if nak else "")
+            + f'<div class="h2h-piez">{e(piez)}</div></div>')
 
 
 def sl_h2h_saraksts_html(kreisa, rindas):
@@ -1802,17 +1837,27 @@ def sl_h2h_saraksts_html(kreisa, rindas):
     global SAKUMI
     if not SAKUMI and "sakums_lv" in RAW.columns:
         SAKUMI = dict(zip(RAW["game_id"], RAW["sakums_lv"]))
-    rn = ""
+    raw_db, _ = ielasit_db_visu(VERSIJA)
+    sak_db = dict(zip(raw_db["game_id"], raw_db["sakums_lv"])) if raw_db is not None and "sakums_lv" in raw_db.columns else {}
+    sez_tagad = globals().get("SEZONA")
+    rn, pedeja_sez = "", None
     for r in rindas.itertuples():
+        sez = int(r.sezona) if pd.notna(getattr(r, "sezona", None)) else sez_tagad
+        if sez != pedeja_sez:                              # sezonas atdalītājs
+            rn += f'<div class="h2h-sez">{sez_nos(sez)}{" · šī sezona" if sez == sez_tagad else ""}</div>'
+            pedeja_sez = sez
         maj, vie = (kreisa, r.pretinieks) if r.majas == 1 else (r.pretinieks, kreisa)
         gm, gv = (int(r.g_tot), int(r.z_tot)) if r.majas == 1 else (int(r.z_tot), int(r.g_tot))
         bg = da.beigu_etikete(r.beigas)
-        rn += (f'<div class="ks-r h2h-r"><span class="ks-d">{dt_html(SAKUMI.get(r.game_id), r.datums)}</span>'
+        tagad = sez == sez_tagad
+        saite = speles_saite(r.game_id) if tagad else f"https://www.nhl.com/gamecenter/{int(r.game_id)}"   # vēsturei – NHL protokols
+        rn += (f'<div class="ks-r h2h-r"><span class="ks-d">{dt_html(SAKUMI.get(r.game_id) if tagad else sak_db.get(r.game_id), r.datums)}</span>'
                f'<span class="ks-o h2h-k"><img src="{e(da.logo_url(maj))}" alt="">{e(maj)}<span class="ks-v">–</span>'
                f'<img src="{e(da.logo_url(vie))}" alt="">{e(vie)}</span>'
-               f'<a class="ks-s" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener">{gm}:{gv}{(" " + bg) if bg else ""}</a>'
+               f'<a class="ks-s" href="{e(saite)}" target="_blank" rel="noopener">{gm}:{gv}{(" " + bg) if bg else ""}</a>'
                f'<span class="ks-z">{rez_zime(rez_kods(r.rez, r.beigas))}</span></div>')
-    return (f'<div class="h2h-l"><div class="l5h">Savstarpējās spēles šosezon</div>'
+    virsr = "Savstarpējās spēles" + (" (play-off)" if SEZ_DALA == da.TIPS_PO else "")
+    return (f'<div class="h2h-l"><div class="l5h">{virsr}</div>'
             f'<div class="ks">{rn or "<div class=ks-r>Ar šādu atlasi spēļu nav</div>"}</div></div>')
 
 
@@ -1837,7 +1882,8 @@ def sl_pedejas5_html(kods, puse):
 
 def _sl_salidzinat(a, b):
     # noklusējums jaunam salīdzinājumam: mājiniekiem mājas spēles, viesiem izbraukuma spēles, visa sezona
-    st.session_state.update(sl_a=a, sl_b=b, sl_rezims="salidzinajums", sl_vh="Mājās", sl_va="Izbraukumā", sl_logs=None, sl_h2h_vieta=None)
+    st.session_state.update(sl_a=a, sl_b=b, sl_rezims="salidzinajums", sl_vh="Mājās", sl_va="Izbraukumā", sl_logs=None, sl_h2h_vieta=None,
+                            sl_h2h_apjoms=None)
 
 
 def _sl_citas():
@@ -2083,17 +2129,27 @@ def lapa_salidzinat():
     va = st.session_state.setdefault("sl_va", "Izbraukumā")
     logs = st.session_state.get("sl_logs")
     h2h_visas = sl_h2h_speles(home, away)                 # šīs sezonas savstarpējās spēles (kreisās komandas skatpunktā)
-    if logs == SL_H2H and h2h_visas.empty:                # citam pārim varēja palikt ieslēgts
+    df_db = sl_db_rindas()                                # iepriekšējās sezonas (tā pati RS/PO atlase)
+    h2h_db = sl_h2h_speles(home, away, df_db) if df_db is not None else h2h_visas.iloc[0:0]
+    n_t, n_db = len(h2h_visas), len(h2h_db)
+    if logs == SL_H2H and n_t + n_db == 0:                # citam pārim varēja palikt ieslēgts
         st.session_state["sl_logs"] = logs = None
     h2h = logs == SL_H2H
     n = SL_LOGI.get(logs)
     kopa = da.kopsavilkums(DF, "Visas", None)
+    apjoms = "sezona"
     if h2h:                                               # statistika tikai no savstarpējām spēlēm; vieta – viena kopīga izvēle
         hv = st.session_state.get("sl_h2h_vieta")
         if hv not in (home, away):
             hv = st.session_state["sl_h2h_vieta"] = None
-        h2h_rindas = h2h_visas if hv is None else h2h_visas[h2h_visas["majas"] == (1 if hv == home else 0)]
-        kh = ka = sl_kopsavilkums_no(DF[DF["game_id"].isin(set(h2h_rindas["game_id"]))])
+        apjoms = st.session_state.get("sl_h2h_apjoms")
+        if apjoms not in SL_H2H_APJOMI or (apjoms == "sezona" and n_t == 0) or (apjoms == "visas" and n_db == 0):
+            apjoms = st.session_state["sl_h2h_apjoms"] = "sezona" if n_t else "visas"
+        h2h_kopa = pd.concat([h2h_visas, h2h_db], ignore_index=True) if apjoms == "visas" else h2h_visas
+        h2h_kopa = h2h_kopa.sort_values(["datums", "game_id"], ascending=False)
+        h2h_rindas = h2h_kopa if hv is None else h2h_kopa[h2h_kopa["majas"] == (1 if hv == home else 0)]
+        avots = pd.concat([x for x in (DF, df_db if apjoms == "visas" else None) if x is not None], ignore_index=True)
+        kh = ka = sl_kopsavilkums_no(avots[avots["game_id"].isin(set(h2h_rindas["game_id"]))])
     else:
         kh, ka = sl_kopsavilkums(vh or "Visas", n), sl_kopsavilkums(va or "Visas", n)
     a = kh.loc[home] if home in kh.index else None
@@ -2121,22 +2177,31 @@ def lapa_salidzinat():
     with st.container(key="sl_per"):                       # pēdējās 5 / 10 / savstarpējās: vienlaikus ieslēgta viena; neviena = visa sezona
         for p in SL_LOGI:
             st.button(p, key=f"slp_{p}", type="primary" if p == logs else "secondary", on_click=_sl_tog, args=("sl_logs", p))
-        nak_txt = _nakama_txt(sl_nakama_savstarpeja(home, away)) if h2h_visas.empty else ""
-        st.button(f"{SL_H2H} ({len(h2h_visas)})", key="slp_h2h", type="primary" if h2h else "secondary", disabled=h2h_visas.empty,
-                  help=(f"Šosezon vēl nav spēlējušas" + (f" · {nak_txt}" if nak_txt else "")) if h2h_visas.empty else None,
+        nak_txt = _nakama_txt(sl_nakama_savstarpeja(home, away)) if n_t == 0 else ""
+        nav_nevienas = n_t + n_db == 0
+        st.button(f"{SL_H2H} ({n_t})" if not n_db else f"{SL_H2H} ({n_t} · kopā {n_t + n_db})", key="slp_h2h",
+                  type="primary" if h2h else "secondary", disabled=nav_nevienas,
+                  help=("Nav spēlējušas ne šosezon, ne iepriekšējās sezonās" + (f" · {nak_txt}" if nak_txt else "")) if nav_nevienas else
+                       (f"Šosezon {n_t}, iepriekšējās sezonās {n_db} savstarpējās spēles" if n_db else None),
                   on_click=_sl_tog, args=("sl_logs", SL_H2H))
-    if h2h_visas.empty:
-        st.markdown(f'<div class="h2h-nav">Savstarpējās: šosezon vēl nav spēlējušas{f" · {_html.escape(nak_txt)}" if nak_txt else ""}</div>',
-                    unsafe_allow_html=True)
+    if n_t == 0:
+        st.markdown(f'<div class="h2h-nav">Savstarpējās: šosezon vēl nav spēlējušas{f" · {_html.escape(nak_txt)}" if nak_txt else ""}'
+                    f'{f" · iepriekšējās sezonās {n_db} spēles" if n_db else ""}</div>', unsafe_allow_html=True)
     if h2h:
         with st.container(key="pgr_h2hv"):                # viena kopīga vietas izvēle: neviena = visas savstarpējās spēles
             for kods in (home, away):
                 st.button(f"{kods} mājās", key=f"slh2h_{kods}", type="primary" if hv == kods else "secondary",
                           on_click=_sl_tog, args=("sl_h2h_vieta", kods))
+        if n_db:
+            with st.container(key="pgr_h2hsez"):          # šī sezona / visas sezonas (DB)
+                for k_, nos_ in SL_H2H_APJOMI.items():
+                    st.button(nos_, key=f"slh2hs_{k_}", type="primary" if apjoms == k_ else "secondary",
+                              disabled=(k_ == "sezona" and n_t == 0),
+                              on_click=lambda v_=k_: st.session_state.__setitem__("sl_h2h_apjoms", v_))
 
     rindas = sl_peldosie_html(home, away)
     if h2h:
-        rindas += sl_h2h_kopsavilkums_html(home, away, h2h_visas, h2h_rindas)
+        rindas += sl_h2h_kopsavilkums_html(home, away, h2h_visas, pd.concat([h2h_visas, h2h_db], ignore_index=True), h2h_rindas, apjoms)
     for grupa, metrikas in SALIDZ_METRIKAS:
         rindas += f'<div class="cmp-group">{_html.escape(grupa.upper())}</div>'
         for nos, pask, k, labak, dec in metrikas:
