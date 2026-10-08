@@ -40,34 +40,56 @@ def teksta_rindas(saturs):
 
 
 def parset(rindas):
-    """Spēles no lapas teksta: 'Viesi at Mājinieki', sākuma laiks, tad viesu un mājinieku vārtsargs ar statusu."""
+    """Spēles no lapas teksta: 'Viesi at/vs/@ Mājinieki', sākuma laiks, tad viesu un mājinieku vārtsargs."""
     speles = []
     i, n = 0, len(rindas)
     while i < n:
-        m = re.match(r"^(.+?) at (.+)$", rindas[i])
-        a = kods(m.group(1)) if m else None
-        h = kods(m.group(2)) if m else None
-        if not (a and h) or i + 1 >= n or not ISO.match(rindas[i + 1]):
+        # 1. Elastīga komandu pāra meklēšana (atbalsta at, @, vs)
+        m = re.search(r"^\s*(.+?)\s+(?:at|@|vs\.?)\s+(.+?)\s*$", rindas[i], re.IGNORECASE)
+        a = kods(m.group(1).strip()) if m else None
+        h = kods(m.group(2).strip()) if m else None
+        
+        if not (a and h):
             i += 1
             continue
-        sakums = rindas[i + 1]
-        j, vartsargi = i + 2, []
+            
+        # 2. Elastīga ISO laika meklēšana tuvākajās 5 rindās
+        sakums = ""
+        for k in range(1, 6):
+            if i + k < n and ISO.search(rindas[i + k]):
+                sakums = ISO.search(rindas[i + k]).group(0)
+                break
+        
+        j = i + 1
+        vartsargi = []
+        
+        # 3. Meklējam vārtsargu statusus līdz atduramies pret nākamo spēli
         while j < n and len(vartsargi) < 2:
             r = rindas[j]
-            if re.match(r"^(.+?) at (.+)$", r) and kods(r.split(" at ")[0]) and j + 1 < n and ISO.match(rindas[j + 1]):
-                break                                        # nākamā spēle sākas – trūkst datu
-            st = STATUSI.get(r.lower())
+            
+            # Pārbaudām, vai nesākas jauna spēle (lai nepārlektu pāri datiem)
+            m_next = re.search(r"^\s*(.+?)\s+(?:at|@|vs\.?)\s+(.+?)\s*$", r, re.IGNORECASE)
+            if m_next and kods(m_next.group(1).strip()) and kods(m_next.group(2).strip()):
+                break
+            
+            st = STATUSI.get(r.lower().strip())
             if st:
-                vards = next((rindas[k] for k in range(j - 1, max(i + 1, j - 4), -1)
-                              if rindas[k].lower() not in IZLAIST and not ISO.match(rindas[k]) and not rindas[k].startswith("http")), "")
-                laiks = rindas[j + 1] if j + 1 < n and ISO.match(rindas[j + 1]) else ""
-                vartsargi.append((vards, st, laiks))
+                # Vārtsarga vārds parasti ir 1-5 rindas virs statusa
+                vards = next((rindas[k] for k in range(j - 1, max(i, j - 6), -1)
+                              if rindas[k].lower() not in IZLAIST and not ISO.search(rindas[k]) and not rindas[k].startswith("http")), "")
+                
+                # Statusa apstiprināšanas laiks var būt uzreiz pēc statusa
+                laiks = rindas[j + 1] if j + 1 < n and ISO.search(rindas[j + 1]) else ""
+                vartsargi.append((vards.strip(), st, laiks))
             j += 1
+            
         if len(vartsargi) == 2:
-            speles.append({"sakums_utc": sakums, "viesi": a, "majas": h, "v_viesi": vartsargi[0], "v_majas": vartsargi[1]})
-        i = j
+            sakums_val = sakums if sakums else "9999-12-31T00:00:00Z" # Drošības fallback, ja laiks nav atrasts
+            speles.append({"sakums_utc": sakums_val, "viesi": a, "majas": h, "v_viesi": vartsargi[0], "v_majas": vartsargi[1]})
+        
+        i = j if j > i else i + 1
+        
     return speles
-
 
 def ielasit(datums_et):
     url = URL.format(datums=datums_et)
