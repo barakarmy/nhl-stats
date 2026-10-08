@@ -66,13 +66,14 @@ def main():
     raw_t = da.ielasit_speles()
     vg_d = [x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty]
     vg = pd.concat(vg_d, ignore_index=True) if vg_d else None
-    g = modelis.spelu_tabula(pd.concat([x for x in (raw_db, raw_t) if x is not None and not x.empty], ignore_index=True), vg)
+    k_v = modelis.ielasit_parametrus()[0].get("vartsargu_k", modelis.VG_K)
+    g = modelis.spelu_tabula(pd.concat([x for x in (raw_db, raw_t) if x is not None and not x.empty], ignore_index=True), vg, k_v)
     vr = modelis.vartsargu_rindas(vg) if vg is not None else None
     p, _ = modelis.ielasit_parametrus()
     sez = int(raw_t["sezona"].max()) if raw_t is not None and not raw_t.empty else int(g["sezona"].max())
     sodiena = tagad.tz_convert(da.LV_TZ).tz_localize(None).normalize()
     mod = modelis.aprekinat_reitingus(g, uz_datumu=sodiena, sezona_tagad=sez, p=p)
-    vu = modelis.uzskaite_lidz(vr, sodiena) if vr is not None else None
+    vu = modelis.uzskaite_lidz(vr, sodiena, k_v) if vr is not None else None
     svs = da.ielasit_sakuma_vartsargus()
     kal = da.ielasit_kalendaru()
     kal["sakums_utc"] = pd.to_datetime(kal["sakuma_laiks_utc"], utc=True)
