@@ -87,6 +87,28 @@ try:
 except ImportError:
     rulli = None
 
+
+# Streamlit Cloud pēc augšupielādes ne vienmēr pārlādē mūsu pašu moduļus (tie paliek atmiņā vecajā versijā, un jaunais app.py
+# tad nevar atrast jaunās funkcijas). Tāpēc katrā palaišanā: ja moduļa fails ir mainījies, tas tiek pārlādēts.
+def _parladet_mainitos_modulus():
+    import importlib
+    import sys as _sys
+    for _nos in ("datu_apstrade", "lokacijas", "xg", "modelis", "fakti", "rulli", "fons"):
+        _m = _sys.modules.get(_nos)
+        _f = getattr(_m, "__file__", None) if _m is not None else None
+        if not _f or not os.path.exists(_f):
+            continue
+        _mt = os.path.getmtime(_f)
+        if getattr(_m, "_nhl_mtime", None) != _mt:       # pirmo reizi šajā procesā vai fails mainījies → pārlādē
+            try:
+                importlib.reload(_m)
+            except Exception:
+                pass
+        _m._nhl_mtime = _mt
+
+
+_parladet_mainitos_modulus()
+
 st.set_page_config(page_title="NHL stats", page_icon=":material/sports_hockey:", layout="wide",
                    initial_sidebar_state="collapsed")
 
@@ -255,7 +277,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.39"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.41"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1688,6 +1710,7 @@ def prognozes_karte_html(home, away, sakums, tiesn_txt, pr, nor, mod, vartsargi=
     tot = "".join(rinda(f"Totāls {lin}", pr["totali"][lin]["over"], pr["totali"][lin]["under"]) for lin in (4.5, 5.5, 6.5))
     pm = pr["plus_minus"]
     pml = (rinda(f"{home} −1.5 / {away} +1.5", pm["1 −1.5"], pm["2 +1.5"]) + rinda(f"{away} −1.5 / {home} +1.5", pm["2 −1.5"], pm["1 +1.5"]))
+    otl = rinda("Papildlaiks (jā / nē)", pr["papildlaiks"]["ja"], pr["papildlaiks"]["ne"]) if "papildlaiks" in pr else ""
     top = " ".join(f'<span class="pk-top">{s_}<small>{pv * 100:.0f}%</small></span>' for pv, s_ in pr["top"])
     per = "".join(f'<tr><td>{nr}. periods <small>({v["gaidami"]:.2f})</small></td>'
                   + "".join(f'<td>{_pk(v[lin]["over"])}</td>' for lin in (0.5, 1.5, 2.5)) + "</tr>" for nr, v in pr["periodi"].items())
@@ -1703,6 +1726,7 @@ def prognozes_karte_html(home, away, sakums, tiesn_txt, pr, nor, mod, vartsargi=
              f'<div class="pk-grid"><div class="pk-sek"><div class="pk-h">Vārti (pamatlaiks)</div>'
              f'<table class="pk-t"><tr><th></th><th>Over</th><th>Under</th></tr>{tot}</table>'
              f'<table class="pk-t"><tr><th>±1.5</th><th></th><th></th></tr>{pml}</table>'
+             f'<table class="pk-t"><tr><th>Neizšķirts pamatlaikā</th><th></th><th></th></tr>{otl}</table>'
              f'<div class="pk-piez">Ticamākie rezultāti: {top}</div></div>'
              f'<div class="pk-sek"><div class="pk-h">Periodi: over (gaidāmie vārti)</div>'
              f'<table class="pk-t"><tr><th></th><th>0.5</th><th>1.5</th><th>2.5</th></tr>{per}</table></div>{nor_html}</div></details>')
@@ -1804,6 +1828,8 @@ def lapa_prognozes():
             "modelis izmanto viņu; līdz tam – ticamo vārtsargu pēc rotācijas (komandas pēdējās 10 spēles; otrajā spēlē pēc kārtas biežāk sāk otrs vārtsargs) "
             "un viņa glābšanas % vienādos sastāvos (pievilkts pie līgas vidējā) salīdzinājumā ar komandas parasto vārtsargu sajaukumu. "
             "Ietekmes stiprumu nosaka kalibrēšana.\n"
+            "- **Neizšķirti:** neizšķirtu iespēja pamatlaikā tiek pielāgota šīs sezonas līdzšinējam līmenim (ja kalibrēšana to izvēlas); "
+            "no tās izriet arī tirgus “Papildlaiks jā/nē”.\n"
             "- **Visi tirgi** ir no vienas pamatlaika rezultātu matricas (ar neizšķirtu korekciju; gaidāmo vārtu kopsumma piesardzīgi pievilkta "
             "pie līgas vidējā, ja pārbaude to rāda); “ar OT” – neizšķirta gadījumā pēc vēstures. "
             "Koeficients = 1 / varbūtība (taisnīgais, bez bukmeikera uzcenojuma).")
