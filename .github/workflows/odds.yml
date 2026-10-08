@@ -1,0 +1,51 @@
+# NHL Odds: koeficienti no The Odds API (the-odds-api.com) → sezonas/koeficienti.csv (+ _meta.json, _arhivs.csv)
+# Laiki (GitHub grafiks ir UTC; Rīgā ziemā +2 h, vasarā +3 h):
+#   06:50 UTC → 08:50 / 09:50 Rīgā  – pēc ikdienas datu atjaunināšanas ("rīta līnija")
+#   14:20 UTC → 16:20 / 17:20 Rīgā  – brīvdienu dienas spēles, pirmās ziņas par vārtsargiem
+#   20:50 UTC → 22:50 / 23:50 Rīgā  – ~3 h pirms galvenā spēļu bloka (tuvāk galīgajiem koeficientiem)
+# Viena palaišana = 3 kredīti (ES reģions × h2h, spreads, totals) → ~270 mēnesī (bezmaksas plānā 500).
+# API atslēga: Settings → Secrets and variables → Actions → ODDS_API_KEY (kodā un žurnālos netiek rādīta).
+# Ja kalendārā tuvāko 3 dienu laikā nav spēļu, API netiek izsaukts (kredīti netiek tērēti).
+name: NHL Odds
+
+on:
+  schedule:
+    - cron: '50 6 * * *'
+    - cron: '20 14 * * *'
+    - cron: '50 20 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nhl-data-update
+  cancel-in-progress: false
+
+jobs:
+  odds:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_collector.txt
+
+      - name: Fetch odds
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: python koeficienti.py
+
+      - name: Commit and push changes if any
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add sezonas/koeficienti.csv sezonas/koeficienti_meta.json sezonas/koeficienti_arhivs.csv
+          git diff --cached --quiet || (git commit -m "Odds update" && git pull --rebase && git push)
