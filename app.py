@@ -42,6 +42,7 @@ CITI SVARĪGI FAKTI
   Rezultāti, Kalendārs, Prognozes, Karstākie spēlētāji un Tiesneši izmanto visas šīs sezonas spēles. Play-off zaudējums papildlaikā = loss.
 - Koeficienti: koeficienti.py (.github/workflows/odds.yml, 3× dienā; The Odds API, atslēga – GitHub noslēpums ODDS_API_KEY)
   → sezonas/koeficienti.csv; salīdzinājumā zem komandām, Prognozēs – modelis pret tirgu.
+- Sākuma vārtsargi: sakuma_vartsargi.py (.github/workflows/goalies.yml, ik 30 min vakarā; Daily Faceoff) → sezonas/vartsargi_sakuma.csv.
 - Modelis: modelis.py (Puasona regresija ar DB kā sākuma pieņēmumu); parametrus kalibrē lokāli ar
   python modelis.py --kalibret → sezonas/vesture/modelis_parametri.json (Prognožu lapa to nolasa).
 - Vēsture: vesture.py (palaiž lokāli) lejupielādē iepriekšējās sezonas uz sezonas/vesture/<sezona>/; --arhivet pārvieto aktīvo sezonu uz arhīvu.
@@ -253,7 +254,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.35"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.37"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1600,6 +1601,16 @@ def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False,
 # LAPA: PROGNOZES
 # ============================================================================
 @st.cache_data(show_spinner=False)
+def vartsargu_dati(versija):
+    """Vārtsargu rindas (DB + šī sezona) un uzskaite līdz šodienai – ticamajiem sākuma vārtsargiem."""
+    vg_d = [x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty]
+    if not vg_d:
+        return None, None
+    vr = modelis.vartsargu_rindas(pd.concat(vg_d, ignore_index=True))
+    return vr, modelis.uzskaite_lidz(vr, pd.Timestamp.now(tz=da.LV_TZ).tz_localize(None).normalize())
+
+
+@st.cache_data(show_spinner=False)
 def modela_dati(versija):
     """Modeļa spēļu tabula (DB + šī sezona), parametri un reitingi uz šodienu (kešots pēc datu versijas)."""
     raw_db, df_db = ielasit_db_visu(versija)
@@ -1607,7 +1618,8 @@ def modela_dati(versija):
     dalas = [x for x in (raw_db, raw_t) if x is not None and not x.empty]
     if not dalas:
         return None, None, None, None
-    g = modelis.spelu_tabula(pd.concat(dalas, ignore_index=True))
+    vg_d = [x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty]
+    g = modelis.spelu_tabula(pd.concat(dalas, ignore_index=True), pd.concat(vg_d, ignore_index=True) if vg_d else None)
     p, meta = modelis.ielasit_parametrus()
     sez = int(raw_t["sezona"].max()) if raw_t is not None and not raw_t.empty else int(g["sezona"].max())
     mod = modelis.aprekinat_reitingus(g, uz_datumu=pd.Timestamp.now(tz=da.LV_TZ).tz_localize(None).normalize(), sezona_tagad=sez, p=p)
@@ -1637,10 +1649,22 @@ def _pk(x, uzr=""):
     return f'<span class="pk-x">{u}<b>{x * 100:.0f}%</b><span class="pk-k">{modelis.koeficients(x):.2f}</span></span>'
 
 
-def prognozes_karte_html(home, away, sakums, tiesn_txt, pr, nor, mod):
+def prognozes_karte_html(home, away, sakums, tiesn_txt, pr, nor, mod, vartsargi=None):
     e = _html.escape
     f = pr["faktori"]
     cipi = []
+    if vartsargi:
+        vt = []
+        for kom, sar, stat in vartsargi:
+            if sar:
+                pid, vards, pv, _ = max(sar, key=lambda z: z[2])
+                uzv = vards.split(" ")[-1] if vards else "?"
+                vt.append(f"{kom} {uzv} ✓" if stat == "Confirmed" else (f"{kom} {uzv} (gaidāms)" if stat else f"{kom} {uzv} {pv * 100:.0f}%"))
+        if vt:
+            cipi.append("vārtsargi: " + ", ".join(vt))
+    fv_h, fv_a = f.get("vartsargi", (1.0, 1.0))
+    if abs(fv_h - 1) >= 0.02 or abs(fv_a - 1) >= 0.02:
+        cipi.append(f"vārtsargu ietekme: {home} vārti {fv_h - 1:+.0%}, {away} vārti {fv_a - 1:+.0%}")
     if f["b2b_h"]: cipi.append(f"{home}: otrā spēle pēc kārtas")
     if f["b2b_a"]: cipi.append(f"{away}: otrā spēle pēc kārtas")
     if f["cels_h"]: cipi.append(f"{home}: garš ceļš")
@@ -1776,6 +1800,10 @@ def lapa_prognozes():
             "Šīs sezonas spēles sver vairāk, iepriekšējās sezonas (DB) – mazāk; sezonas sākumā prognoze balstās galvenokārt uz DB.\n"
             "- **Korekcijas:** mājas priekšrocība, otrā spēle pēc kārtas, garš ceļš, play-off, H2H (ja pārbaude rāda, ka tā uzlabo), "
             "tiesneši – noraidījumiem.\n"
+            "- **Sākuma vārtsargs:** kad komanda paziņo vārtsargu (✓ apstiprināts, “gaidāms” – ļoti ticams; pārbaude ik 30 min vakarā), "
+            "modelis izmanto viņu; līdz tam – ticamo vārtsargu pēc rotācijas (komandas pēdējās 10 spēles; otrajā spēlē pēc kārtas biežāk sāk otrs vārtsargs) "
+            "un viņa glābšanas % vienādos sastāvos (pievilkts pie līgas vidējā) salīdzinājumā ar komandas parasto vārtsargu sajaukumu. "
+            "Ietekmes stiprumu nosaka kalibrēšana.\n"
             "- **Visi tirgi** ir no vienas pamatlaika rezultātu matricas (ar neizšķirtu korekciju; gaidāmo vārtu kopsumma piesardzīgi pievilkta "
             "pie līgas vidējā, ja pārbaude to rāda); “ar OT” – neizšķirta gadījumā pēc vēstures. "
             "Koeficients = 1 / varbūtība (taisnīgais, bez bukmeikera uzcenojuma).")
@@ -1814,12 +1842,19 @@ def lapa_prognozes():
             continue
         po = int(str(r.get("speles_tips", "RS")) == "PO")
         fk = _speles_faktori(home, away, sak)
-        pr = modelis.prognoze(mod, g, home, away, p, po=po, **fk)
+        vr, vu = vartsargu_dati(VERSIJA)
+        vs_h = modelis.ticamie_vartsargi(vr, home, fk["b2b_h"], vu) if vr is not None else []
+        vs_a = modelis.ticamie_vartsargi(vr, away, fk["b2b_a"], vu) if vr is not None else []
+        svs = da.ielasit_sakuma_vartsargus()                       # paziņotie sākuma vārtsargi aizstāj rotāciju
+        vs_h, st_h = modelis.apstiprinatie_vartsargi(vs_h, vr, home, *da.sakuma_vartsargs(svs, home, away, home, sak), vu)
+        vs_a, st_a = modelis.apstiprinatie_vartsargi(vs_a, vr, away, *da.sakuma_vartsargs(svs, home, away, away, sak), vu)
+        pr = modelis.prognoze(mod, g, home, away, p, po=po, vg_h=modelis.sagaidama_attieciba(vs_h),
+                              vg_a=modelis.sagaidama_attieciba(vs_a), **fk)
         vardi, ref_pr, liga_kopa = speles_tiesnesi(r["game_id"])
         tk = (ref_pr["kopa"] / liga_kopa) if (vardi and ref_pr is not None and liga_kopa and pd.notna(ref_pr["kopa"])) else 1.0
         nor = modelis.noraidijumi(rindas, home, away, p=p, tiesnesu_koef=tk)
         tiesn_txt = ("Tiesneši: " + ", ".join(vardi)) if vardi else "tiesneši vēl nav paziņoti"
-        st.markdown(prognozes_karte_html(home, away, sak, tiesn_txt, pr, nor, mod), unsafe_allow_html=True)
+        st.markdown(prognozes_karte_html(home, away, sak, tiesn_txt, pr, nor, mod, [(home, vs_h, st_h), (away, vs_a, st_a)]), unsafe_allow_html=True)
     st.caption("Prognozes ir matemātisks novērtējums no pieejamajiem datiem (pamatlaiks), nevis garantija.")
 
 
