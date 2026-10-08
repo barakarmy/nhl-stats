@@ -39,6 +39,8 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+import metieni                       # metienu rindas xG modelim (tajā pašā mapē)
+
 # ----------------------------------------------------------------------------
 # IESTATĪJUMI
 # ----------------------------------------------------------------------------
@@ -127,6 +129,7 @@ TABULAS = {
     "sastavi": ("sastavi.csv", SPELETAJA_PAMATS),
     "mainas": ("mainas.csv", MAINU_KOL),
     "tiesnesi": ("tiesnesi.csv", TIESNESU_KOL),
+    "metieni": ("metieni.csv", metieni.KOLONNAS),     # neblokētie metieni ar xG pazīmēm (sk. metieni.py)
     "speles": ("speles.csv", SPELES_KOL),   # pēdējā: spēle ir "gatava" tikai tad, kad tā ierakstīta šeit
 }
 
@@ -652,8 +655,13 @@ def apstradat_spele(spele, datums):
             print("  Piezīme: right-rail atbildē nav 'referees'. Augšējās atslēgas:", list(rr)[:15],
                   "| gameInfo:", json.dumps(rr.get("gameInfo"), ensure_ascii=False)[:300])
 
+    try:
+        metienu_rindas = metieni.metienu_rindas(pbp, gid, datums)
+    except Exception as ex:                                  # metieni nedrīkst apturēt pārējo datu saglabāšanu
+        print(f"  Brīdinājums: metienus neizdevās nolasīt ({type(ex).__name__})")
+        metienu_rindas = []
     return {
-        "tiesnesi": tiesnesu_rindas,
+        "tiesnesi": tiesnesu_rindas, "metieni": metienu_rindas,
         "speles": [r], "varti": vartu_rindas, "notikumi": notikumu_rindas,
         "sastavi": sastavu_rindas, "speletaji": speletaju_rindas,
         "vartsargi": vartsargu_rindas, "mainas": mainu_rindas,
