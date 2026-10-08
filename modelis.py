@@ -349,12 +349,18 @@ def ticamie_vartsargi(vr, team, b2b=0, u=None):
     x = vr[(vr["team"] == team) & vr["starter"]].sort_values(["datums", "game_id"])
     if x.empty:
         return []
-    ped = x.tail(10)
+    # šīs sezonas sākumi, ja tādu ir vismaz 3 (citādi pēdējie 10 kopā ar iepriekšējo sezonu)
+    sez_tag = _sezona_no_datuma(x["datums"].iloc[-1])
+    xs = x[x["datums"].map(_sezona_no_datuma) == sez_tag]
+    ped = (xs if len(xs) >= 3 else x).tail(10)
     sk = ped["playerId"].value_counts()
     vardi = dict(zip(x["playerId"], x["vards"]))
     ids = list(sk.index[:2])
     if len(ids) == 1:
-        p = {ids[0]: 1.0}
+        # tikai viens vārtsargs nesen sācis: bez apstiprinājuma nekad 100% – 15% komandas otrajam vārtsargam (no vēstures)
+        otrie = [i for i in x["playerId"].iloc[::-1].unique() if i != ids[0]][:1]
+        ids += otrie if otrie else [-1]
+        p = {ids[0]: 0.85, ids[1]: 0.15}
     else:
         p1 = min(0.85, max(0.5, sk.iloc[0] / sk.sum()))
         if b2b and x["playerId"].iloc[-1] == ids[0]:
@@ -622,28 +628,48 @@ def tirgi(lh, la, p):
     }
 
 
-def noraidijumi(df_rindas, home, away, uz_datumu=None, p=None, tiesnesu_koef=1.0):
-    """Gaidāmie minor noraidījumi (pamatlaiks): komandas saņemtie × pretinieka izcīnītie (pievilkti pie līgas) × tiesneši."""
+def noraidijumi(df_rindas, home, away, uz_datumu=None, p=None, tiesnesu_koef=1.0, tips="RS"):
+    """
+    Gaidāmie minor noraidījumi (pamatlaiks) katrai komandai:
+      līgas līmenis šosezon (pievilkts pie iepriekšējo sezonu līmeņa, 300 komandas-spēles)
+      × komandas saņemto noraidījumu tendence × pretinieka izcīnīto noraidījumu tendence × tiesnešu koeficients.
+    Tendences = komandas pēdējās 40 tā paša tipa spēles (RS vai PO) attiecībā pret līgas vidējo TAJĀ sezonā,
+    pievilktas pie 1 (noraid_k spēles). Play-off spēlēs noraidījumu ir būtiski vairāk, tāpēc tās netiek jauktas ar RS.
+    """
     p = p or NOKLUSETIE
     if df_rindas is None or df_rindas.empty or "pen_count" not in df_rindas.columns:
         return None
     d = df_rindas
+    if "tips" in d.columns:
+        d = d[d["tips"] == tips] if (d["tips"] == tips).any() else d
     if uz_datumu is not None:
         d = d[pd.to_datetime(d["datums"]) < pd.Timestamp(uz_datumu)]
-    liga = d["pen_count"].mean()
+    d = d[d["pen_count"].notna()]
+    if d.empty:
+        return None
+    d = d.sort_values(["datums", "game_id"])
+    lig_sez = d.groupby("sezona")["pen_count"].mean()
+    sez = d["sezona"].max()
+    tag, iepr = d[d["sezona"] == sez], d[d["sezona"] < sez]
+    liga_iepr = float(iepr["pen_count"].mean()) if len(iepr) >= 200 else float(d["pen_count"].mean())
+    K = 300.0
+    liga = (float(tag["pen_count"].sum()) + K * liga_iepr) / (len(tag) + K)
     if not (liga > 0):
         return None
     k = float(p["noraid_k"])
 
-    def biezums(kom, kol):
-        x = d[d["komanda"] == kom][kol].dropna().tail(40)
-        return (x.sum() + k * liga) / (len(x) + k)
-    lh = biezums(home, "pen_count") * biezums(away, "pen_draw") / liga * tiesnesu_koef
-    la = biezums(away, "pen_count") * biezums(home, "pen_draw") / liga * tiesnesu_koef
+    def tendence(kom, kol):
+        x = d[d["komanda"] == kom].tail(40)
+        if x.empty:
+            return 1.0
+        rel = (x[kol] / x["sezona"].map(lig_sez)).replace([np.inf, -np.inf], np.nan).dropna()
+        return float((rel.sum() + k * 1.0) / (len(rel) + k))
+    lh = liga * tendence(home, "pen_count") * tendence(away, "pen_draw") * tiesnesu_koef
+    la = liga * tendence(away, "pen_count") * tendence(home, "pen_draw") * tiesnesu_koef
     lam = lh + la
     b = int(round(lam))
     linijas = sorted({max(0.5, b - 1.5), max(1.5, b - 0.5), b + 0.5})        # līnijas ap gaidāmo skaitu
-    return {"majas": lh, "viesi": la, "kopa": lam, "tiesnesu_koef": tiesnesu_koef,
+    return {"majas": lh, "viesi": la, "kopa": lam, "tiesnesu_koef": tiesnesu_koef, "liga": liga,
             "totali": {lin: {"over": float(1 - poisson.cdf(int(lin), lam)), "under": float(poisson.cdf(int(lin), lam))}
                        for lin in linijas}}
 
