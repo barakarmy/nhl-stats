@@ -1,0 +1,45 @@
+# NHL Starting Goalies: paziņotie sākuma vārtsargi līdz spēlei → sezonas/vartsargi_sakuma.csv
+# Avots: Daily Faceoff "Starting Goalies" (NHL oficiālie dati apstiprinātos vārtsargus pirms spēles nepublicē).
+# Laiki (UTC; Rīgā ziemā +2 h, vasarā +3 h): ik 30 min 14:05–00:35 UTC → ~16:05–02:35 Rīgā (ziemā),
+# kad komandas pēc rīta treniņa paziņo vārtsargus. Viens pieprasījums palaišanā.
+# Prognožu lapa nolasa failu katrā atvēršanas reizē: apstiprināts vārtsargs aizstāj rotācijas varbūtības.
+name: NHL Starting Goalies
+
+on:
+  schedule:
+    - cron: '5,35 14-23 * * *'
+    - cron: '5,35 0 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nhl-goalies
+  cancel-in-progress: false
+
+jobs:
+  goalies:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_collector.txt
+
+      - name: Check starting goalies
+        run: python sakuma_vartsargi.py
+
+      - name: Commit and push changes if any
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add sezonas/vartsargi_sakuma.csv 2>/dev/null || true
+          git diff --cached --quiet || (git commit -m "Starting goalies update" && git pull --rebase && git push)
