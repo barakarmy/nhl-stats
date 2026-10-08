@@ -1,0 +1,196 @@
+{
+  "parametri": {
+    "pusperiods_dienas": 240,
+    "vesture_svari": [
+      0.5,
+      0.25
+    ],
+    "regularizacija": 3.0,
+    "neizskirts_rho": 1.4450225141428652,
+    "ot_majas": 0.5195783132530121,
+    "ot_stiprums": 0.5,
+    "h2h_lietot": false,
+    "h2h_k": 12.0,
+    "h2h_max": 0.08,
+    "periodu_dalas": [
+      0.2955,
+      0.3451,
+      0.3594
+    ],
+    "totali_kappa": 0.2,
+    "nb_r": 0.0,
+    "totali_kal": {
+      "4.5": [
+        -0.016747758639647146,
+        1.118845332701306
+      ],
+      "5.5": [
+        0.050112387582321935,
+        1.0979358557670782
+      ],
+      "6.5": [
+        0.01654515189097496,
+        1.0381415551410835
+      ]
+    },
+    "noraid_k": 10.0,
+    "vartsargu_beta": 1.0,
+    "vartsargu_k": 1000,
+    "vartsargu_metode": "sv",
+    "xg_svars": 0.25
+  },
+  "parametri_parbaudei": {
+    "pusperiods_dienas": 240,
+    "vesture_svari": [
+      0.5,
+      0.25
+    ],
+    "regularizacija": 3.0,
+    "neizskirts_rho": 1.343794574701764,
+    "ot_majas": 0.5411392405063291,
+    "ot_stiprums": 1.0,
+    "h2h_lietot": false,
+    "h2h_k": 12.0,
+    "h2h_max": 0.08,
+    "periodu_dalas": [
+      0.2955,
+      0.3451,
+      0.3594
+    ],
+    "totali_kappa": 0.0,
+    "nb_r": 60.0,
+    "totali_kal": {
+      "4.5": [
+        -0.007673251330925268,
+        0.9978290034749029
+      ],
+      "5.5": [
+        0.0055590091236408625,
+        1.008169547670686
+      ],
+      "6.5": [
+        -0.13528290325161524,
+        0.8199465377946126
+      ]
+    },
+    "noraid_k": 10.0,
+    "vartsargu_beta": 1.0,
+    "vartsargu_k": 1000,
+    "vartsargu_metode": "sv",
+    "xg_svars": 0.25
+  },
+  "regulesanas_sezona": 20242025,
+  "parbaudes_sezona": 20252026,
+  "parbaude": {
+    "speles": 1394,
+    "logloss_1x2": 1.07724348349378,
+    "brier_1x2": 0.6516289113750915,
+    "logloss_ar_ot": 0.6875886300585459,
+    "logloss_o55": 0.6845971127859274,
+    "neizskirti_fakt": 0.24964131994261118,
+    "neizskirti_prog": 0.20399859652205204,
+    "videji_varti_fakt": 5.98493543758967,
+    "videji_varti_prog": 5.938791393123005
+  },
+  "parbaude_bez_h2h": {
+    "speles": 1394,
+    "logloss_1x2": 1.07724348349378,
+    "brier_1x2": 0.6516289113750915,
+    "logloss_ar_ot": 0.6875886300585459,
+    "logloss_o55": 0.6845971127859274,
+    "neizskirti_fakt": 0.24964131994261118,
+    "neizskirti_prog": 0.20399859652205204,
+    "videji_varti_fakt": 5.98493543758967,
+    "videji_varti_prog": 5.938791393123005
+  },
+  "parbaude_ar_h2h": {
+    "speles": 1394,
+    "logloss_1x2": 1.0799122478308176,
+    "brier_1x2": 0.6537364629049179,
+    "logloss_ar_ot": 0.6909598306403324,
+    "logloss_o55": 0.6846175376462873,
+    "neizskirti_fakt": 0.24964131994261118,
+    "neizskirti_prog": 0.20261642970084645,
+    "videji_varti_fakt": 5.98493543758967,
+    "videji_varti_prog": 5.938791393123005
+  },
+  "baze": {
+    "logloss_1x2": 1.0875038919456743,
+    "logloss_o55": 0.6832018592666764,
+    "biezumi": {
+      "1": 0.4388849177984274,
+      "X": 0.2069335239456755,
+      "2": 0.3541815582558971
+    },
+    "over55": 0.5553967119370979
+  },
+  "baze_zina_nakotni": {
+    "logloss_1x2": 1.0810493950208528,
+    "logloss_o55": 0.6826111434467993,
+    "biezumi": {
+      "1": 0.3945480631276901,
+      "X": 0.24964131994261118,
+      "2": 0.35581061692969873
+    },
+    "over55": 0.5724533715925395
+  },
+  "pa_sezonas_dalam": {
+    "sakums": {
+      "speles": 330,
+      "logloss_1x2": 1.1017912652336417,
+      "baze_1x2": 1.1075339031636635
+    },
+    "parejais": {
+      "speles": 1064,
+      "logloss_1x2": 1.0696299797586728,
+      "baze_1x2": 1.0812915764363356
+    }
+  },
+  "kalibracija_1": [
+    {
+      "no": 0.2,
+      "lidz": 0.3,
+      "speles": 68,
+      "prognoze": 0.27029198721014513,
+      "fakts": 0.3235294117647059
+    },
+    {
+      "no": 0.3,
+      "lidz": 0.4,
+      "speles": 444,
+      "prognoze": 0.35689284962217105,
+      "fakts": 0.34234234234234234
+    },
+    {
+      "no": 0.4,
+      "lidz": 0.5,
+      "speles": 586,
+      "prognoze": 0.44804400063387484,
+      "fakts": 0.3890784982935154
+    },
+    {
+      "no": 0.5,
+      "lidz": 0.6,
+      "speles": 262,
+      "prognoze": 0.5404981526884783,
+      "fakts": 0.4961832061068702
+    },
+    {
+      "no": 0.6,
+      "lidz": 0.7,
+      "speles": 29,
+      "prognoze": 0.6241782217595088,
+      "fakts": 0.5862068965517241
+    }
+  ],
+  "kalibracija_o55": [
+    {
+      "no": 0.5,
+      "lidz": 0.6,
+      "speles": 1394,
+      "prognoze": 0.5414454000630097,
+      "fakts": 0.5724533715925395
+    }
+  ],
+  "izveidots": "2026-10-08 15:26 UTC"
+}
