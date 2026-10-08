@@ -373,6 +373,72 @@ def tirgus_varbutibas(koef):
     return {k: v / s for k, v in inv.items()} if inv and s > 0 and len(inv) == len(koef) else None
 
 
+def vertet_pret_tirgu(prog, rez, sliesni=(0.03, 0.05, 0.10)):
+    """
+    Modelis pret tirgu uz reālām (aizvadītām) spēlēm, izmantojot tikai pirms spēles saglabātās prognozes un koeficientus.
+    prog – prognozes_arhivs.csv (spēle × ielāde); rez – spēļu rezultāti: game_id, hg, ag (pamatlaiks), h_tot, a_tot (gala rezultāts).
+    Likmes laiks = pirmā ielāde (rīta līnija); "noslēgums" = pēdējā zināmā ielāde pirms spēles.
+    Atgriež: {'speles', 'logloss': {...}, 'likmes': [ {tirgus, slieksnis, likmes, uzvaras, roi_pin, roi_lab, clv, parspeja_noslegumu} ]}.
+    """
+    if prog is None or prog.empty or rez is None or rez.empty:
+        return {"speles": 0}
+    pr = prog.sort_values("ielade")
+    pirma = pr.groupby("game_id").first()
+    ped = pr.groupby("game_id").last()
+    r = rez.set_index("game_id")
+    ids = [i for i in pirma.index if i in r.index]
+    if not ids:
+        return {"speles": 0}
+    a, z, rr = pirma.loc[ids], ped.loc[ids], r.loc[ids]
+    iz = np.where(rr["hg"] > rr["ag"], "1", np.where(rr["hg"] == rr["ag"], "X", "2"))
+
+    def tv(df, i):
+        inv = 1 / df[[f"pin_{k}" for k in ("1", "X", "2")]]
+        return (inv[f"pin_{i}"] / inv.sum(axis=1)).to_numpy()
+    p_m = {i: a[f"m_{i}"].to_numpy() for i in ("1", "X", "2")}
+    p_t0 = {i: tv(a, i) for i in ("1", "X", "2")}
+    p_t1 = {i: tv(z, i) for i in ("1", "X", "2")}
+    ok = np.isfinite(p_t0["1"]) & np.isfinite(p_t1["1"])
+
+    def ll(pp):
+        v = np.array([pp[k][n] for n, k in enumerate(iz)])
+        return float(np.mean(-np.log(np.clip(v[ok], 1e-12, 1))))
+    out = {"speles": int(ok.sum()),
+           "logloss": {"modelis": ll(p_m), "tirgus_rits": ll(p_t0), "tirgus_nosl": ll(p_t1),
+                       "apvienots": ll({k: 0.5 * p_m[k] + 0.5 * p_t0[k] for k in p_m})}}
+    likmes = []
+    # 1X2 pamatlaikā
+    for i in ("1", "X", "2"):
+        o0, o1, ob = a[f"pin_{i}"].to_numpy(), z[f"pin_{i}"].to_numpy(), a[f"lab_{i}"].to_numpy()
+        ev = p_m[i] * o0 - 1
+        uzv = (iz == i)
+        for sl in sliesni:
+            m = ok & np.isfinite(o0) & (ev >= sl)
+            likmes.append(_likmju_rinda(f"Pamatlaikā {i}", sl, m, uzv, o0, ob, o1))
+    # totāls ar OT (Pinnacle galvenā līnija; tikai, ja līnija rītā un noslēgumā ir tā pati)
+    lin_ok = np.isfinite(a["tot_linija"].to_numpy()) & (a["tot_linija"].to_numpy() == z["tot_linija"].to_numpy())
+    tot = (rr["h_tot"] + rr["a_tot"]).to_numpy()
+    for puse, mp, kol in (("Over", a["m_over"].to_numpy(), "over"), ("Under", 1 - a["m_over"].to_numpy(), "under")):
+        o0, o1, ob = a[f"pin_{kol}"].to_numpy(), z[f"pin_{kol}"].to_numpy(), a[f"lab_{kol}"].to_numpy()
+        ev = mp * o0 - 1
+        uzv = (tot > a["tot_linija"].to_numpy()) if puse == "Over" else (tot < a["tot_linija"].to_numpy())
+        for sl in sliesni:
+            m = lin_ok & np.isfinite(o0) & np.isfinite(mp) & (ev >= sl)
+            likmes.append(_likmju_rinda(f"Totāls {puse} (ar OT)", sl, m, uzv, o0, ob, o1))
+    out["likmes"] = likmes
+    return out
+
+
+def _likmju_rinda(tirgus, sl, m, uzv, o0, ob, o1):
+    n = int(m.sum())
+    if n == 0:
+        return {"tirgus": tirgus, "slieksnis": sl, "likmes": 0}
+    w = uzv[m].astype(float)
+    return {"tirgus": tirgus, "slieksnis": sl, "likmes": n, "uzvaras": int(w.sum()),
+            "roi_pin": float(np.mean(w * o0[m] - 1)), "roi_lab": float(np.nanmean(w * np.where(np.isfinite(ob[m]), ob[m], o0[m]) - 1)),
+            "clv": float(np.nanmean(o0[m] / o1[m] - 1)), "parspeja_noslegumu": float(np.nanmean(o0[m] > o1[m]))}
+
+
 def koeficients(pr):
     """Taisnīgais koeficients = 1 / varbūtība (bez bukmeikera uzcenojuma)."""
     return 1 / pr if pr and pr > 1e-9 else float("inf")
