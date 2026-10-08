@@ -4,11 +4,6 @@ sakuma_vartsargi.py – sākuma vārtsargi līdz spēlei → sezonas/vartsargi_s
 Palaiž darbplūsma "NHL Starting Goalies" ik 30 min ~16:00–02:30 Rīgā (kad komandas paziņo vārtsargus).
 Avots: Daily Faceoff "Starting Goalies" lapa (dailyfaceoff.com/starting-goalies/<ASV austrumu datums>) – NHL oficiālie dati
 apstiprinātos vārtsargus pirms spēles nepublicē. Viens pieprasījums palaišanā (pieklājīgs biežums).
-
-Katrai šodienas spēlei: abu komandu vārtsargs un statuss:
-  Confirmed (apstiprināts) · Expected / Likely (gaidāms) · Unconfirmed (nav apstiprināts – modelis paliek pie rotācijas).
-Fails tiek pārrakstīts katrā palaišanā; spēles, kas sākās vairāk nekā pirms 12 h, tiek izmestas (glabājas ~2 dienas).
-Ja lapu ielādēt vai nolasīt neizdodas, esošais fails netiek mainīts.
 """
 import csv
 import html
@@ -28,7 +23,7 @@ FAILS = os.path.join(BASE, "sezonas", "vartsargi_sakuma.csv")
 URL = "https://www.dailyfaceoff.com/starting-goalies/{datums}"
 KOLONNAS = ["datums_et", "sakums_utc", "majas", "viesi", "komanda", "puse", "vartsargs", "statuss", "statusa_laiks", "ielade"]
 STATUSI = {"confirmed": "Confirmed", "expected": "Expected", "likely": "Likely", "probable": "Likely", "unconfirmed": "Unconfirmed"}
-ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z")
+ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
 IZLAIST = {"show more", "line combos", "news", "stats", "schedule", "--", "|", "•"}
 
 
@@ -80,7 +75,8 @@ def parset(rindas):
         i += 1
         
     return speles
-  
+
+
 def ielasit(datums_et):
     url = URL.format(datums=datums_et)
     for m in range(2):
@@ -104,16 +100,45 @@ def _lasit_csv(c):
 
 def main():
     tagad = datetime.now(timezone.utc)
-    datums_et = (tagad - timedelta(hours=5)).strftime("%Y-%m-%d")       # ASV austrumu datums
+    datums_et = (tagad - timedelta(hours=5)).strftime("%Y-%m-%d")       # ASV austrumu datums (pietiekami precīzi spēļu dienai)
     saturs = ielasit(datums_et)
+    
     if saturs is None:
         print("Lapu ielādēt neizdevās – fails netiek mainīts.")
         return 1
+        
+    speles = parset(teksta_rindas(saturs))
     
-    speles = parset(rindas)
     if not speles:
         print(f"{datums_et}: lapā nav atrastu spēļu (vai mainījusies lapas uzbūve) – fails netiek mainīts.")
         return 0
+        
+    tagad_txt = tagad.strftime("%Y-%m-%dT%H:%M:%SZ")
+    jaunas = []
+    for s in speles:
+        for puse, kom, (vards, st, laiks) in (("away", s["viesi"], s["v_viesi"]), ("home", s["majas"], s["v_majas"])):
+            jaunas.append({"datums_et": datums_et, "sakums_utc": s["sakums_utc"][:19] + "Z", "majas": s["majas"], "viesi": s["viesi"],
+                           "komanda": kom, "puse": puse, "vartsargs": vards, "statuss": st, "statusa_laiks": laiks, "ielade": tagad_txt})
+                           
+    # iepriekšējās rindas citām spēlēm paliek, kamēr spēle nav sākusies sen (≤ 12 h pēc sākuma)
+    atsl = {(r["majas"], r["viesi"], r["sakums_utc"][:13]) for r in jaunas}
+    robeza = tagad - timedelta(hours=12)
+    vecas = [r for r in _lasit_csv(FAILS) if (r["majas"], r["viesi"], r["sakums_utc"][:13]) not in atsl
+             and datetime.fromisoformat(r["sakums_utc"].replace("Z", "+00:00")) > robeza]
+    rindas = sorted(vecas + jaunas, key=lambda r: (r["sakums_utc"], r["majas"], r["puse"]))
+    
+    os.makedirs(os.path.dirname(FAILS), exist_ok=True)
+    tmp = FAILS + ".tmp"
+    with open(tmp, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=KOLONNAS)
+        w.writeheader()
+        w.writerows(rindas)
+    os.replace(tmp, FAILS)
+    
+    apst = sum(1 for r in jaunas if r["statuss"] == "Confirmed")
+    print(f"{datums_et}: {len(speles)} spēles, apstiprināti {apst} no {len(jaunas)} vārtsargiem.")
+    return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
