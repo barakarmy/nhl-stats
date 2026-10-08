@@ -137,6 +137,46 @@ def spelu_xg(m, modelis, tikai_pamatlaiks=True):
     return kom, vart
 
 
+def modela_xg(metieni, modelis, speles, prieks_svars=400.0):
+    """
+    xG dati Puasona modelim (pamatlaiks, 1.–3. periods):
+      komandas – game_id, komanda, xg (normalizēts), en (vārti tukšos vārtos);
+      vartsargi – game_id, playerId, komanda (kuru aizsargā), xga (normalizēts), ga.
+    Normalizācija: xG × (līgas vārti / līgas xG) šajā sezonā LĪDZ ŠAI DIENAI (+ iepriekšējās sezonas attiecība kā sākuma
+    pieņēmums ar svaru prieks_svars), lai xG būtu tajā pašā mērogā kā vārti un pārbaudē netiktu izmantota nākotne.
+    speles – modeļa spēļu tabula (game_id, datums, sezona).
+    """
+    if metieni is None or metieni.empty or not modelis or speles is None or speles.empty:
+        return None, None
+    m = metieni.copy()
+    m = m[_skaitlis(m["period"]) <= 3]
+    m["game_id"] = pd.to_numeric(m["game_id"], errors="coerce").astype("int64")
+    m["varti"] = _skaitlis(m["varti"])
+    en = m[_skaitlis(m["tuksi"]) == 1].groupby(["game_id", "komanda"])["varti"].sum().rename("en").reset_index()
+    kom, vart = spelu_xg(m, modelis, tikai_pamatlaiks=True)
+    if kom is None:
+        return None, None
+    sp = speles[["game_id", "datums", "sezona"]].drop_duplicates("game_id")
+    # līgas attiecība (vārti / xG) pa dienām katrā sezonā – tikai no iepriekšējām dienām
+    dien = kom.merge(sp, on="game_id").groupby(["sezona", "datums"]).agg(g=("gf", "sum"), x=("xgf", "sum")).reset_index().sort_values(["sezona", "datums"])
+    faktori, iepr_attieciba = {}, 1.0
+    for sez, d in dien.groupby("sezona", sort=True):
+        cg = cx = 0.0
+        for r in d.itertuples(index=False):
+            faktori[(sez, r.datums)] = (cg + prieks_svars * iepr_attieciba) / (cx + prieks_svars)
+            cg += r.g
+            cx += r.x
+        iepr_attieciba = cg / cx if cx > 0 else 1.0
+    kom = kom.merge(sp, on="game_id")
+    kom["f"] = [faktori.get((s_, d_), 1.0) for s_, d_ in zip(kom["sezona"], kom["datums"])]
+    kom["xg"] = kom["xgf"] * kom["f"]
+    kom = kom.merge(en, on=["game_id", "komanda"], how="left").fillna({"en": 0})
+    vart = vart.merge(kom[["game_id", "f"]].drop_duplicates("game_id"), on="game_id", how="left").fillna({"f": 1.0})
+    vart["xga"] = vart["xga"] * vart["f"]
+    return (kom[["game_id", "komanda", "xg", "en"]],
+            vart.rename(columns={"vartsargs": "playerId"})[["game_id", "playerId", "komanda", "xga", "ga"]])
+
+
 def main():
     if "--apmacit" not in sys.argv:
         print(__doc__)
