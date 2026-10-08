@@ -254,7 +254,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.37"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.38"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1607,7 +1607,8 @@ def vartsargu_dati(versija):
     if not vg_d:
         return None, None
     vr = modelis.vartsargu_rindas(pd.concat(vg_d, ignore_index=True))
-    return vr, modelis.uzskaite_lidz(vr, pd.Timestamp.now(tz=da.LV_TZ).tz_localize(None).normalize())
+    k = modelis.ielasit_parametrus()[0].get("vartsargu_k", modelis.VG_K)
+    return vr, modelis.uzskaite_lidz(vr, pd.Timestamp.now(tz=da.LV_TZ).tz_localize(None).normalize(), k)
 
 
 @st.cache_data(show_spinner=False)
@@ -1619,7 +1620,8 @@ def modela_dati(versija):
     if not dalas:
         return None, None, None, None
     vg_d = [x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty]
-    g = modelis.spelu_tabula(pd.concat(dalas, ignore_index=True), pd.concat(vg_d, ignore_index=True) if vg_d else None)
+    g = modelis.spelu_tabula(pd.concat(dalas, ignore_index=True), pd.concat(vg_d, ignore_index=True) if vg_d else None,
+                             modelis.ielasit_parametrus()[0].get("vartsargu_k", modelis.VG_K))
     p, meta = modelis.ielasit_parametrus()
     sez = int(raw_t["sezona"].max()) if raw_t is not None and not raw_t.empty else int(g["sezona"].max())
     mod = modelis.aprekinat_reitingus(g, uz_datumu=pd.Timestamp.now(tz=da.LV_TZ).tz_localize(None).normalize(), sezona_tagad=sez, p=p)
