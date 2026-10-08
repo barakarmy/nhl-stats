@@ -19,6 +19,7 @@ Ja ielāde neizdodas, esošie faili netiek mainīti.
 import csv
 import json
 import os
+import re
 import sys
 import time
 import unicodedata
@@ -197,11 +198,22 @@ def atjaunot_arhivu(rindas, tagad_txt):
     _rakstit_csv(ARHIVS, ARH_KOLONNAS, sorted(arh.values(), key=lambda r: (r["sakums_utc"], r["game_id"])))
 
 
+def tirit_atslegu(v):
+    """Atslēga no noslēpuma vērtības: der arī, ja ielīmēta visa saite vai 'apiKey=...', ar pēdiņām vai atstarpēm."""
+    v = (v or "").strip().strip('"').strip("'").strip()
+    m = re.search(r"(?<![0-9a-fA-F])[0-9a-fA-F]{32}(?![0-9a-fA-F])", v)
+    return m.group(0) if m else v
+
+
 def main():
-    atslega = os.environ.get("ODDS_API_KEY", "").strip()
+    sakotneja = os.environ.get("ODDS_API_KEY", "")
+    atslega = tirit_atslegu(sakotneja)
     if not atslega:
-        print("Nav ODDS_API_KEY (GitHub: Settings → Secrets and variables → Actions).")
+        print("Nav ODDS_API_KEY (GitHub: Settings → Secrets and variables → Actions → Repository secrets).")
         return 1
+    # diagnostika bez atslēgas atklāšanas: garums un vai izskatās pēc The Odds API atslēgas (32 simboli 0-9, a-f)
+    print(f"Atslēga: {len(atslega)} simboli, formāts {'derīgs' if re.fullmatch(r'[0-9a-fA-F]{32}', atslega) else 'NEDERĪGS (gaidīti 32 simboli 0-9, a-f)'}"
+          f"{' (no noslēpuma izvilkta tikai atslēga)' if atslega != sakotneja.strip() else ''}")
     tagad = datetime.now(timezone.utc)
     tagad_txt = tagad.strftime("%Y-%m-%dT%H:%M:%SZ")
     speles = kalendara_speles(tagad)
