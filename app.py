@@ -40,6 +40,8 @@ CITI SVARĪGI FAKTI
 - Regulārā sezona (RS) un play-off (PO) vienmēr tiek skaitīti atsevišķi (speles.csv: speles_tips 2 = RS, 3 = PO; sezona, piem., 20262027).
   Statistikas lapās pārslēdzējs "Regulārā sezona · Play-off" parādās tikai tad, kad datos ir PO spēles; Līgas pārskats vienmēr RS;
   Rezultāti, Kalendārs, Prognozes, Karstākie spēlētāji un Tiesneši izmanto visas šīs sezonas spēles. Play-off zaudējums papildlaikā = loss.
+- Koeficienti: koeficienti.py (.github/workflows/odds.yml, 3× dienā; The Odds API, atslēga – GitHub noslēpums ODDS_API_KEY)
+  → sezonas/koeficienti.csv; salīdzinājumā zem komandām, Prognozēs – modelis pret tirgu.
 - Modelis: modelis.py (Puasona regresija ar DB kā sākuma pieņēmumu); parametrus kalibrē lokāli ar
   python modelis.py --kalibret → sezonas/vesture/modelis_parametri.json (Prognožu lapa to nolasa).
 - Vēsture: vesture.py (palaiž lokāli) lejupielādē iepriekšējās sezonas uz sezonas/vesture/<sezona>/; --arhivet pārvieto aktīvo sezonu uz arhīvu.
@@ -251,7 +253,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.33"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.34"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -883,6 +885,27 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 @media (max-width: 900px) { .pk-s { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pk-1x2 { grid-column: 1 / -1; } .pk-grid { grid-template-columns: 1fr; } }
 html.tumss .pk { background: var(--t-karte); border-color: var(--t-mala); }
 html.tumss .pk-d summary { color: var(--t-zils); }
+/* koeficienti */
+.kf { max-width: 760px; margin: .2rem auto .8rem; text-align: center; }
+.kf-g { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .6; margin-bottom: .3rem; }
+.kf-r { display: flex; justify-content: center; gap: .6rem; flex-wrap: wrap; }
+.kf-s { display: inline-flex; align-items: baseline; gap: .35rem; padding: .35rem .8rem; border-radius: 999px;
+  border: 1px solid rgba(128,128,128,.25); background: rgba(255,255,255,.55); }
+.kf-n { font-size: .78rem; font-weight: 700; opacity: .7; }
+.kf-s b { font-size: 1.05rem; }
+.kf-p { font-size: .74rem; opacity: .6; }
+.kf-b { font-size: .7rem; } .kf-b.aug { color: #16a34a; } .kf-b.kr { color: #dc2626; }
+.kf-nav { font-size: .8rem; opacity: .6; }
+.kf-d { margin-top: .4rem; text-align: left; }
+.kf-d summary { list-style: none; cursor: pointer; font-size: .8rem; font-weight: 700; color: #1d4ed8; text-align: center; }
+.kf-d summary::-webkit-details-marker { display: none; }
+.kf-d .ld-z { display: none; } .kf-d[open] .ld-a { display: none; } .kf-d[open] .ld-z { display: inline; }
+.pk-m { font-size: .8rem; margin-top: .55rem; padding: .35rem .6rem; border-radius: .5rem; background: rgba(128,128,128,.08); }
+.pk-pl { color: #15803d; font-weight: 700; } .pk-mn { color: #b91c1c; font-weight: 700; }
+@media (max-width: 640px) { .kf-r { gap: .35rem; flex-wrap: nowrap; } .kf-s { padding: .3rem .5rem; gap: .25rem; } .kf-s b { font-size: .95rem; } .kf-p { display: none; } }
+html.tumss .kf-s { background: var(--t-karte); border-color: var(--t-mala); }
+html.tumss .kf-d summary { color: var(--t-zils); }
+html.tumss .kf-b.aug, html.tumss .pk-pl { color: #4ade80; } html.tumss .kf-b.kr, html.tumss .pk-mn { color: #f87171; }
 /* kājene: paskaidrojums par lapu */
 .kaj { max-width: 900px; margin: 3rem auto 0; padding-top: 1rem; border-top: 1px solid rgba(128,128,128,.25); font-size: .8rem; line-height: 1.55; opacity: .75; }
 .kaj p { margin: 0 0 .7rem; }
@@ -1119,6 +1142,108 @@ VERSIJA = da.datu_versija()
 def ielasit_visu(versija):
     raw = da.ielasit_speles()
     return raw, da.sagatavot_vienoto_tabulu(raw), da.ielasit_kalendaru()
+
+
+@st.cache_data(show_spinner=False)
+def ielasit_koef(versija):
+    return da.ielasit_koeficientus()
+
+
+BUKMEIKERU_NOS = {"pinnacle": "Pinnacle", "betfair_ex_eu": "Betfair", "betsson": "Betsson", "nordicbet": "NordicBet", "unibet_eu": "Unibet",
+                  "unibet_se": "Unibet", "unibet_nl": "Unibet", "unibet_fr": "Unibet", "williamhill": "William Hill", "sport888": "888sport",
+                  "coolbet": "Coolbet", "onexbet": "1xBet", "matchbook": "Matchbook", "marathonbet": "Marathonbet", "leovegas_se": "LeoVegas",
+                  "winamax_fr": "Winamax", "winamax_de": "Winamax", "tipico_de": "Tipico", "pmu_fr": "PMU", "everygame": "Everygame",
+                  "gtbets": "GTbets", "betonlineag": "BetOnline", "betanysports": "BetAnything"}
+
+
+def speles_koeficienti(a_kom, b_kom):
+    """Tuvākās vēl nesāktās spēles koeficienti starp abām komandām (jebkurā mājas/viesu secībā): DataFrame vai None."""
+    k, _ = ielasit_koef(VERSIJA)
+    if k is None:
+        return None
+    x = k[(((k["majas"] == a_kom) & (k["viesi"] == b_kom)) | ((k["majas"] == b_kom) & (k["viesi"] == a_kom)))
+          & (k["sakums_lv"] > pd.Timestamp.now(tz=da.LV_TZ))]
+    if x.empty:
+        return None
+    gid = x.sort_values("sakums_lv")["game_id"].iloc[0]
+    return x[x["game_id"] == gid]
+
+
+def _pinnacle_vai_vid(x, tirgus, izn, linija=None):
+    """Pinnacle koeficients (vai vidējais, ja Pinnacle nav) un iepriekšējā vērtība: (koef, iepr, avots)."""
+    y = x[(x["tirgus"] == tirgus) & (x["iznakums"] == izn)]
+    if linija is not None:
+        y = y[(y["linija"] - linija).abs() < 1e-9]
+    if y.empty:
+        return None, None, None
+    p = y[y["bukmeikers"] == "pinnacle"]
+    if not p.empty:
+        r = p.iloc[0]
+        return float(r["koef"]), (float(r["koef_iepr"]) if pd.notna(r["koef_iepr"]) and str(r["koef_iepr"]) != "" else None), "Pinnacle"
+    return float(y["koef"].mean()), None, f"vidējais ({y['bukmeikers'].nunique()})"
+
+
+def _labakais(x, tirgus, izn, linija=None):
+    y = x[(x["tirgus"] == tirgus) & (x["iznakums"] == izn)]
+    if linija is not None:
+        y = y[(y["linija"] - linija).abs() < 1e-9]
+    if y.empty:
+        return None, None
+    r = y.loc[y["koef"].idxmax()]
+    return float(r["koef"]), BUKMEIKERU_NOS.get(r["bukmeikers"], str(r["bukmeikers"]))
+
+
+def _bulta(k, iepr):
+    if iepr is None or k is None or abs(k - iepr) < 1e-9:
+        return ""
+    return (f'<span class="kf-b {"aug" if k > iepr else "kr"}" title="Iepriekšējā ielādē: {iepr:.2f}">{"▲" if k > iepr else "▼"}</span>')
+
+
+def koef_bloks_html(x, meta):
+    """Salīdzinājumā: 1 · X · 2 (pamatlaiks) ar izmaiņu bultiņām un varbūtībām; izvēršot – vairāk līniju un labākie koeficienti."""
+    e = _html.escape
+    h, v = x["majas"].iloc[0], x["viesi"].iloc[0]
+    k1, i1, avots = _pinnacle_vai_vid(x, "1x2", "1")
+    kx, ix, _ = _pinnacle_vai_vid(x, "1x2", "X")
+    k2, i2, _ = _pinnacle_vai_vid(x, "1x2", "2")
+    laiks = ""
+    if meta and meta.get("ielade"):
+        laiks = f'{pd.Timestamp(meta["ielade"]).tz_convert(da.LV_TZ):%d.%m. %H:%M}'
+    galva = f'<div class="kf-g">Koeficienti · {e(avots or "–")} · pamatlaiks{f" · atjaunoti {laiks}" if laiks else ""}</div>'
+    if k1 and kx and k2:
+        tv = modelis.tirgus_varbutibas({"1": k1, "X": kx, "2": k2}) or {}
+        sk = lambda nos, k, i, izn: (f'<div class="kf-s"><span class="kf-n">{e(nos)}</span><b>{k:.2f}</b>{_bulta(k, i)}'   # noqa: E731
+                                     f'<span class="kf-p">{tv.get(izn, 0) * 100:.0f}%</span></div>')
+        rinda = f'<div class="kf-r">{sk(h, k1, i1, "1")}{sk("X", kx, ix, "X")}{sk(v, k2, i2, "2")}</div>'
+    else:
+        rinda = '<div class="kf-r kf-nav">Pamatlaika 1X2 koeficientu vēl nav</div>'
+    # vairāk līniju
+    rind = []
+
+    def r_(nos, tirgus, izn, lin=None):
+        kp, ip, av = _pinnacle_vai_vid(x, tirgus, izn, lin)
+        kb, bn = _labakais(x, tirgus, izn, lin)
+        if kp is None:
+            return
+        avz = "" if av == "Pinnacle" else ' <small title="Pinnacle šai līnijai nav – vidējais no bukmeikeriem">vid.</small>'
+        rind.append(f'<tr><td>{e(nos)}</td><td><b>{kp:.2f}</b>{_bulta(kp, ip)}{avz}</td>'
+                    f'<td>{f"{kb:.2f} <small>{e(bn)}</small>" if kb else "–"}</td></tr>')
+    for izn, nos in (("1", f"{h} pamatlaikā"), ("X", "Neizšķirts"), ("2", f"{v} pamatlaikā")):
+        r_(nos, "1x2", izn)
+    for izn, nos in (("1", f"{h} ar OT"), ("2", f"{v} ar OT")):
+        r_(nos, "ml", izn)
+    for lin_h in sorted(x[(x["tirgus"] == "pm") & (x["iznakums"] == "1")]["linija"].dropna().unique()):
+        r_(f"{h} {lin_h:+.1f}", "pm", "1", lin_h)
+        r_(f"{v} {-lin_h:+.1f}", "pm", "2", -lin_h)
+    for lin in sorted(x[x["tirgus"] == "tot"]["linija"].dropna().unique()):
+        r_(f"Over {lin:g}", "tot", "over", lin)
+        r_(f"Under {lin:g}", "tot", "under", lin)
+    sikak = ""
+    if rind:
+        sikak = (f'<details class="kf-d"><summary><span class="ld-a">Vairāk līniju ▾</span><span class="ld-z">Paslēpt ▴</span></summary>'
+                 f'<table class="pk-t"><tr><th></th><th>Pinnacle</th><th>Labākais</th></tr>{"".join(rind)}</table>'
+                 f'<div class="pk-piez">±1.5 un totāli parasti ietver papildlaiku. Taisnīgās varbūtības – bez bukmeikera uzcenojuma.</div></details>')
+    return f'<div class="kf">{galva}{rinda}{sikak}</div>'
 
 
 @st.cache_data(show_spinner=False)
@@ -1560,7 +1685,42 @@ def prognozes_karte_html(home, away, sakums, tiesn_txt, pr, nor, mod):
              f'<div class="pk-sek"><div class="pk-h">Periodi: over (gaidāmie vārti)</div>'
              f'<table class="pk-t"><tr><th></th><th>0.5</th><th>1.5</th><th>2.5</th></tr>{per}</table></div>{nor_html}</div></details>')
     fakt = f'<div class="pk-f">{" · ".join(e(c) for c in cipi)}</div>' if cipi else ""
-    return f'<div class="pk">{galva}{kops}{fakt}{sikak}</div>'
+    return f'<div class="pk">{galva}{kops}{tirgus_html(home, away, pr)}{fakt}{sikak}</div>'
+
+
+def tirgus_html(home, away, pr):
+    """Modelis pret tirgu: Pinnacle (bez uzcenojuma) 1X2 pamatlaikā un galvenais totāls (ar OT), starpība procentpunktos."""
+    x = speles_koeficienti(home, away)
+    if x is None:
+        return ""
+    e = _html.escape
+    if x["majas"].iloc[0] != home:                        # kalendārā mājinieki ir pirmā komanda; drošībai pārbaude
+        return ""
+    k = {izn: _pinnacle_vai_vid(x, "1x2", izn)[0] for izn in ("1", "X", "2")}
+    dalas = []
+    tv = modelis.tirgus_varbutibas(k) if all(k.values()) else None
+    if tv:
+        def st_(izn, nos):
+            d = (pr["1x2"][izn] - tv[izn]) * 100
+            kl = "pk-pl" if d >= 5 else ("pk-mn" if d <= -5 else "")
+            return f'{e(nos)} {tv[izn] * 100:.0f}% <span class="{kl}">({d:+.0f})</span>'
+        dalas.append("Tirgus pamatlaikā: " + " · ".join(st_(i, n) for i, n in (("1", home), ("X", "X"), ("2", away))))
+    tot = x[(x["tirgus"] == "tot") & (x["bukmeikers"] == "pinnacle")]
+    if tot.empty:
+        tot = x[x["tirgus"] == "tot"]
+    if not tot.empty:
+        lin = tot["linija"].mode().iloc[0]
+        ko = {i: _pinnacle_vai_vid(x, "tot", i, lin)[0] for i in ("over", "under")}
+        tvo = modelis.tirgus_varbutibas(ko) if all(ko.values()) else None
+        mo = modelis.pilnas_speles_over(pr, float(lin))
+        if tvo and mo is not None:
+            d = (mo - tvo["over"]) * 100
+            kl = "pk-pl" if d >= 5 else ("pk-mn" if d <= -5 else "")
+            dalas.append(f"Over {lin:g} (ar OT): tirgus {tvo['over'] * 100:.0f}%, modelis {mo * 100:.0f}% <span class=\"{kl}\">({d:+.0f})</span>")
+    if not dalas:
+        return ""
+    return (f'<div class="pk-m" title="Tirgus varbūtības no Pinnacle koeficientiem bez uzcenojuma; iekavās – modelis mīnus tirgus, procentpunktos">'
+            + "<br>".join(dalas) + "</div>")
 
 
 def lapa_prognozes():
@@ -2174,6 +2334,9 @@ def lapa_salidzinat():
                 with st.container(key="cmp_va"):
                     for v in ("Mājās", "Izbraukumā"):
                         st.button(ETIKETES.get(v, v), key=f"slva_{v}", type="primary" if v == va else "secondary", on_click=_sl_tog, args=("sl_va", v))
+    kx_ = speles_koeficienti(home, away)                  # koeficienti nākamajai spēlei starp šīm komandām (ja ir)
+    if kx_ is not None:
+        st.markdown(koef_bloks_html(kx_, ielasit_koef(VERSIJA)[1]), unsafe_allow_html=True)
     with st.container(key="sl_per"):                       # pēdējās 5 / 10 / savstarpējās: vienlaikus ieslēgta viena; neviena = visa sezona
         for p in SL_LOGI:
             st.button(p, key=f"slp_{p}", type="primary" if p == logs else "secondary", on_click=_sl_tog, args=("sl_logs", p))
