@@ -64,11 +64,16 @@ def main():
         return 0
     raw_db, _ = da.ielasit_db()
     raw_t = da.ielasit_speles()
-    g = modelis.spelu_tabula(pd.concat([x for x in (raw_db, raw_t) if x is not None and not x.empty], ignore_index=True))
+    vg_d = [x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty]
+    vg = pd.concat(vg_d, ignore_index=True) if vg_d else None
+    g = modelis.spelu_tabula(pd.concat([x for x in (raw_db, raw_t) if x is not None and not x.empty], ignore_index=True), vg)
+    vr = modelis.vartsargu_rindas(vg) if vg is not None else None
     p, _ = modelis.ielasit_parametrus()
     sez = int(raw_t["sezona"].max()) if raw_t is not None and not raw_t.empty else int(g["sezona"].max())
     sodiena = tagad.tz_convert(da.LV_TZ).tz_localize(None).normalize()
     mod = modelis.aprekinat_reitingus(g, uz_datumu=sodiena, sezona_tagad=sez, p=p)
+    vu = modelis.uzskaite_lidz(vr, sodiena) if vr is not None else None
+    svs = da.ielasit_sakuma_vartsargus()
     kal = da.ielasit_kalendaru()
     kal["sakums_utc"] = pd.to_datetime(kal["sakuma_laiks_utc"], utc=True)
     pazimes = atputas_pazimes(g, kal, tagad)
@@ -79,7 +84,13 @@ def main():
         f = pazimes.loc[int(gid)] if int(gid) in pazimes.index else None
         fk = {k: int(f[k]) for k in ("b2b_h", "b2b_a", "cels_h", "cels_a")} if f is not None else {}
         po = int(f["po"]) if f is not None else 0
-        pr = modelis.prognoze(mod, g, home, away, p, po=po, **fk)
+        vs_h = modelis.ticamie_vartsargi(vr, home, fk.get("b2b_h", 0), vu) if vr is not None else []
+        vs_a = modelis.ticamie_vartsargi(vr, away, fk.get("b2b_a", 0), vu) if vr is not None else []
+        sak = x["sakums_utc"].iloc[0]
+        vs_h, st_h = modelis.apstiprinatie_vartsargi(vs_h, vr, home, *da.sakuma_vartsargs(svs, home, away, home, sak), vu)
+        vs_a, st_a = modelis.apstiprinatie_vartsargi(vs_a, vr, away, *da.sakuma_vartsargs(svs, home, away, away, sak), vu)
+        pr = modelis.prognoze(mod, g, home, away, p, po=po, vg_h=modelis.sagaidama_attieciba(vs_h),
+                              vg_a=modelis.sagaidama_attieciba(vs_a), **fk)
         tot = x[(x["tirgus"] == "tot") & (x["bukmeikers"] == "pinnacle")]
         lin = float(tot["linija"].mode().iloc[0]) if not tot.empty else np.nan
         over_m = modelis.pilnas_speles_over(pr, lin) if not np.isnan(lin) else None
@@ -96,6 +107,8 @@ def main():
             "lab_over": _koef(x, None, "tot", "over", lin) if not np.isnan(lin) else np.nan,
             "lab_under": _koef(x, None, "tot", "under", lin) if not np.isnan(lin) else np.nan,
             "ticamiba": pr["ticamiba"],
+            "vartsargs_h": max(vs_h, key=lambda z: z[2])[1] if vs_h else "", "vartsargs_a": max(vs_a, key=lambda z: z[2])[1] if vs_a else "",
+            "vg_h": round(pr["vg_h"], 4), "vg_a": round(pr["vg_a"], 4), "vartsargs_h_statuss": st_h or "", "vartsargs_a_statuss": st_a or "",
         })
     jaunas = pd.DataFrame(rindas)
     if os.path.exists(FAILS):
