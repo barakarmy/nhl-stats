@@ -410,6 +410,15 @@ def atslega(vards):
     return f"{dalas[0][0]} {dalas[-1]}" if dalas else ""
 
 
+def modela_versija():
+    """Kešatmiņas atslēga prognožu modelim: tikai faili, no kuriem atkarīgi komandu reitingi (spēles, vārtsargi, metieni,
+    vēsture, modeļa un xG iestatījumi). Tiesnešu, vārtsargu paziņojumu un koeficientu atjauninājumi modeli nepārrēķina."""
+    celi = [DATU_MAPE / n for n in ("speles.csv", "vartsargi.csv", "metieni.csv")]
+    celi += sorted(VESTURES_MAPE.glob("*/speles.csv")) + sorted(VESTURES_MAPE.glob("*/vartsargi.csv")) \
+        + sorted(VESTURES_MAPE.glob("*/metieni.csv")) + [VESTURES_MAPE / "modelis_parametri.json", VESTURES_MAPE / "xg_modelis.json"]
+    return tuple(c.stat().st_mtime if c.exists() else 0 for c in celi)
+
+
 def ielasit_koeficientus():
     """Koeficienti (sezonas/koeficienti.csv, ko raksta koeficienti.py) un ielādes informācija. (None, None), ja faila nav."""
     c = DATU_MAPE / "koeficienti.csv"
