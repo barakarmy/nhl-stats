@@ -296,6 +296,7 @@ def tirgi(lh, la, p):
         "plus_minus": {"1 −1.5": p_starp(lambda s: s >= 2), "2 +1.5": p_starp(lambda s: s <= 1),
                        "2 −1.5": p_starp(lambda s: s <= -2), "1 +1.5": p_starp(lambda s: s >= -1)},
         "top": sorted(((float(m[i, j]), f"{i}:{j}") for i in range(MAX_V) for j in range(MAX_V)), reverse=True)[:3],
+        "neizskirts_pa_kopsummam": {int(2 * i): float(m[i, i]) for i in range(MAX_V)},
         "periodi": per,
     }
 
@@ -347,6 +348,29 @@ def prognoze(mod, g, home, away, p, b2b_h=0, b2b_a=0, cels_h=0, cels_a=0, po=0, 
     t["ticamiba"], t["n_min"] = ticamiba(mod, home, away)
     t["faktori"] = {"b2b_h": b2b_h, "b2b_a": b2b_a, "cels_h": cels_h, "cels_a": cels_a, "po": po, "h2h": (kh, ka, n_h2h)}
     return t
+
+
+def pilnas_speles_over(t, lin):
+    """Over varbūtība pilnai spēlei (ar papildlaiku/metienu sēriju, kā bukmeikeru totāliem): neizšķirts pamatlaikā dod +1 vārtu."""
+    if abs(lin - round(lin)) < 1e-9:
+        return None                                  # veselas līnijas (6.0) ar naudas atgriešanu netiek salīdzinātas
+    k = int(math.floor(lin))                         # pamatlaika kopsumma k (neizšķirts) → pilnā spēlē k + 1 > lin
+    if lin in t["totali"]:
+        pamat = t["totali"][lin]["over"]
+    else:
+        lam = t["lh"] + t["la"]
+        pamat = float(1 - poisson.cdf(k, lam))
+    return float(min(1.0, pamat + t.get("neizskirts_pa_kopsummam", {}).get(k, 0.0)))
+
+
+def tirgus_varbutibas(koef):
+    """Koeficienti → varbūtības bez bukmeikera uzcenojuma (proporcionāli): {iznākums: varbūtība} vai None."""
+    try:
+        inv = {k: 1 / float(v) for k, v in koef.items() if v and float(v) > 1}
+    except (TypeError, ValueError):
+        return None
+    s = sum(inv.values())
+    return {k: v / s for k, v in inv.items()} if inv and s > 0 and len(inv) == len(koef) else None
 
 
 def koeficients(pr):
