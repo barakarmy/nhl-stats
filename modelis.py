@@ -20,6 +20,7 @@ PROCESS PIRMS PROGNOZES
 import json
 import math
 import os
+import re
 import sys
 
 import numpy as np
@@ -48,11 +49,14 @@ NOKLUSETIE = {
     "nb_r": 0.0,                      # vārtu izkliede: 0 = Puasons, >0 = negatīvais binomiālais (mazāks = lielāka izkliede)
     "totali_kal": {},                 # totālu kalibrācija pēc vēstures: {"5.5": [a, b]} → over = σ(a + b·logit(over_modelis))
     "noraid_k": 10.0,                 # komandas noraidījumu biežuma pievilkšana pie līgas (spēles)
+    "vartsargu_beta": 0.0,            # sākuma vārtsarga ietekmes stiprums (0 = neietekmē; nosaka kalibrēšana: 0 … 1)
 }
 GARS_CELS_KM = 1500
 KOMANDU_PECTECI = {"ARI": "UTA"}      # Arizona Coyotes (līdz 2023/24) → Utah: sastāvs pārcēlās, modelim tā ir viena komanda
 PARAMETRU_FAILS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sezonas", "vesture", "modelis_parametri.json")
 MAX_V = 13
+VG_K = 1500                           # vārtsarga glābšanas % "pievilkšana" pie līgas (metienu ekvivalents)
+VG_SEZONAS_SVARS = 0.5                # iepriekšējo sezonu metieni vārtsargu vērtējumā sver uz pusi
 
 
 # ----------------------------------------------------------------------------
@@ -73,8 +77,9 @@ def ielasit_parametrus(fails=PARAMETRU_FAILS):
     return p, meta
 
 
-def spelu_tabula(raw):
-    """Spēļu līmeņa tabula modelim: datums, sezona, po, home, away, hg, ag (pamatlaika vārti) + atpūtas/ceļa pazīmes."""
+def spelu_tabula(raw, vg=None):
+    """Spēļu līmeņa tabula modelim: datums, sezona, po, home, away, hg, ag (pamatlaika vārti) + atpūtas/ceļa pazīmes
+    + faktisko sākuma vārtsargu attiecības vg_h / vg_a (ja doti vārtsargu dati; citādi 1)."""
     if raw is None or raw.empty:
         return pd.DataFrame()
     r = raw.copy()
@@ -93,6 +98,13 @@ def spelu_tabula(raw):
         g[f"g_p{p_}"] = r[f"home_p{p_}"].fillna(0) + r[f"away_p{p_}"].fillna(0)
     g = g[g["home"].isin(NHL_KOMANDAS_SARAKSTS) & g["away"].isin(NHL_KOMANDAS_SARAKSTS)]
     g = g.drop_duplicates("game_id").sort_values(["datums", "game_id"]).reset_index(drop=True)
+    g["vg_h"] = g["vg_a"] = 1.0
+    if vg is not None and not vg.empty:
+        f = vartsargu_faktori_vesturei(vartsargu_rindas(vg))
+        if not f.empty:
+            k = dict(zip(zip(f["game_id"], f["team"]), f["vg"]))
+            g["vg_h"] = [k.get((gid, h), 1.0) for gid, h in zip(g["game_id"], g["home"])]
+            g["vg_a"] = [k.get((gid, a), 1.0) for gid, a in zip(g["game_id"], g["away"])]
     return pievienot_atputu(g)
 
 
@@ -129,6 +141,165 @@ def pievienot_atputu(g):
         g[f"b2b_{puse}"] = b2b[puse]
         g[f"cels_{puse}"] = cels[puse]
     return g
+
+
+# ----------------------------------------------------------------------------
+# VĀRTSARGI: kvalitāte (pievilkts glābšanas % vienādos sastāvos) un sākuma vārtsarga ietekme
+# ----------------------------------------------------------------------------
+def _dala(v, idx):
+    try:
+        a, b = str(v).split("/")
+        return float((a, b)[idx])
+    except (ValueError, IndexError):
+        return np.nan
+
+
+def vartsargu_rindas(vg):
+    """Vārtsargs × spēle: game_id, datums, team, playerId, vards, starter, sa, ga (vienādos sastāvos; ja nav – visi metieni)."""
+    if vg is None or vg.empty:
+        return pd.DataFrame()
+    v = vg.copy()
+    sa = v["evenStrengthShotsAgainst"].map(lambda x: _dala(x, 1)) if "evenStrengthShotsAgainst" in v else pd.Series(np.nan, index=v.index)
+    ga = pd.to_numeric(v.get("evenStrengthGoalsAgainst"), errors="coerce") if "evenStrengthGoalsAgainst" in v else pd.Series(np.nan, index=v.index)
+    sa = sa.fillna(pd.to_numeric(v.get("shotsAgainst"), errors="coerce"))
+    ga = ga.fillna(pd.to_numeric(v.get("goalsAgainst"), errors="coerce"))
+    out = pd.DataFrame({"game_id": pd.to_numeric(v["game_id"], errors="coerce").astype("int64"), "datums": pd.to_datetime(v["datums"]).dt.normalize(),
+                        "team": v["team"].replace(KOMANDU_PECTECI), "playerId": pd.to_numeric(v["playerId"], errors="coerce").astype("int64"),
+                        "vards": v.get("vards", ""), "starter": v["starter"].astype(str).str.lower().isin(["true", "1"]),
+                        "sa": sa.fillna(0), "ga": ga.fillna(0)})
+    return out.sort_values(["datums", "game_id"]).reset_index(drop=True)
+
+
+def _sezona_no_datuma(d):
+    return d.year * 10000 + d.year + 1 if d.month >= 7 else (d.year - 1) * 10000 + d.year
+
+
+class VartsarguUzskaite:
+    """Kumulatīvā uzskaite pa datumiem: vārtsargu metieni/vārti (iepriekšējās sezonas ar svaru) un komandu vārtsargu sajaukums."""
+
+    def __init__(self):
+        self.gk = {}                 # playerId → [metieni, vārti]
+        self.kom = {}                # komanda → [metieni, vārti] (šī + iepriekšējā sezona ar svaru)
+        self.sezona = None
+        self.lg = [0.0, 0.0]
+
+    def jauna_sezona(self, sez):
+        if self.sezona is not None and sez != self.sezona:
+            for d in (self.gk, self.kom):
+                for k in d:
+                    d[k] = [d[k][0] * VG_SEZONAS_SVARS, d[k][1] * VG_SEZONAS_SVARS]
+        self.sezona = sez
+
+    def liga_sv(self):
+        return 1 - self.lg[1] / self.lg[0] if self.lg[0] > 500 else 0.915
+
+    def sv(self, pid):
+        s, g = self.gk.get(pid, (0.0, 0.0))
+        lsv = self.liga_sv()
+        return ((s - g) + VG_K * lsv) / (s + VG_K)
+
+    def kom_sv(self, team):
+        s, g = self.kom.get(team, (0.0, 0.0))
+        lsv = self.liga_sv()
+        return ((s - g) + VG_K * lsv) / (s + VG_K)
+
+    def attieciba(self, pid, team):
+        """Vārti pret šo vārtsargu attiecībā pret komandas parasto vārtsargu sajaukumu (>1 = sliktāks par parasto)."""
+        return (1 - self.sv(pid)) / max(1e-6, 1 - self.kom_sv(team))
+
+    def pievienot(self, rindas):
+        for r in rindas.itertuples(index=False):
+            if r.sa <= 0:
+                continue
+            a = self.gk.setdefault(r.playerId, [0.0, 0.0]); a[0] += r.sa; a[1] += r.ga
+            b = self.kom.setdefault(r.team, [0.0, 0.0]); b[0] += r.sa; b[1] += r.ga
+            self.lg[0] += r.sa; self.lg[1] += r.ga
+
+
+def vartsargu_faktori_vesturei(vr):
+    """Katrai aizvadītajai spēlei: faktiskā sākuma vārtsarga attiecība (no datiem pirms šīs dienas) → game_id, vg_h, vg_a."""
+    if vr is None or vr.empty:
+        return pd.DataFrame(columns=["game_id", "team", "vg"])
+    u = VartsarguUzskaite()
+    out = []
+    for d, diena in vr.groupby("datums", sort=True):
+        u.jauna_sezona(_sezona_no_datuma(d))
+        for r in diena[diena["starter"]].itertuples(index=False):
+            out.append((r.game_id, r.team, u.attieciba(r.playerId, r.team)))
+        u.pievienot(diena)
+    return pd.DataFrame(out, columns=["game_id", "team", "vg"])
+
+
+def ticamie_vartsargi(vr, team, b2b=0, u=None):
+    """
+    Nākamās spēles ticamie sākuma vārtsargi pēc rotācijas: [(playerId, vārds, varbūtība, attiecība)].
+    Nr. 1 = visvairāk sākumu komandas pēdējās 10 spēlēs. Otrajā spēlē pēc kārtas, ja vakar sāka Nr. 1, biežāk sāk otrs vārtsargs.
+    """
+    x = vr[(vr["team"] == team) & vr["starter"]].sort_values(["datums", "game_id"])
+    if x.empty:
+        return []
+    ped = x.tail(10)
+    sk = ped["playerId"].value_counts()
+    vardi = dict(zip(x["playerId"], x["vards"]))
+    ids = list(sk.index[:2])
+    if len(ids) == 1:
+        p = {ids[0]: 1.0}
+    else:
+        p1 = min(0.85, max(0.5, sk.iloc[0] / sk.sum()))
+        if b2b and x["playerId"].iloc[-1] == ids[0]:
+            p1 = 0.3
+        p = {ids[0]: p1, ids[1]: 1 - p1}
+    return [(pid, vardi.get(pid, ""), pr, (u.attieciba(pid, team) if u is not None else 1.0)) for pid, pr in p.items()]
+
+
+APSTIPRINAJUMA_VARBUTIBA = {"Confirmed": 1.0, "Expected": 0.9, "Likely": 0.75}
+
+
+def _vards_norm(s):
+    import unicodedata
+    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode().lower()
+    return " ".join(re.sub(r"[^a-z ]", " ", s).split())
+
+
+def apstiprinatie_vartsargi(rotacija, vr, team, vards, statuss, u=None):
+    """
+    Ja ir ziņa par sākuma vārtsargu (Confirmed / Expected / Likely), tas aizstāj rotācijas varbūtības:
+    šim vārtsargam – 100% / 90% / 75%, atlikums – pārējiem pēc rotācijas. Unconfirmed vai nav ziņu – paliek rotācija.
+    Atgriež (saraksts [(playerId, vārds, varbūtība, attiecība)], statuss vai None).
+    """
+    pv = APSTIPRINAJUMA_VARBUTIBA.get(str(statuss))
+    if not pv or not vards:
+        return rotacija, None
+    nv = _vards_norm(vards)
+    pid = None
+    if vr is not None and not vr.empty:
+        kand = vr[vr["vards"].map(_vards_norm) == nv]
+        if not kand.empty:
+            kom = kand[kand["team"] == team]
+            pid = int((kom if not kom.empty else kand)["playerId"].iloc[-1])
+    pid = pid if pid is not None else -abs(hash(nv)) % 10 ** 9      # jauns vārtsargs bez NHL spēlēm DB → līgas vidējais
+    citi = [(i, n, p_, r_) for i, n, p_, r_ in rotacija if i != pid]
+    s_citi = sum(p_ for _, _, p_, _ in citi)
+    out = [(pid, vards, pv, (u.attieciba(pid, team) if u is not None else 1.0))]
+    if pv < 1 and citi:
+        out += [(i, n, (1 - pv) * (p_ / s_citi if s_citi > 0 else 1 / len(citi)), r_) for i, n, p_, r_ in citi]
+    elif pv < 1:
+        out = [(pid, vards, 1.0, out[0][3])]
+    return out, str(statuss)
+
+
+def sagaidama_attieciba(saraksts):
+    """Ticamo vārtsargu attiecību vidējais pēc varbūtībām (1, ja nav datu)."""
+    return float(sum(p_ * r_ for _, _, p_, r_ in saraksts)) if saraksts else 1.0
+
+
+def uzskaite_lidz(vr, datums):
+    """Vārtsargu uzskaite ar visām spēlēm pirms datuma (nākamo spēļu prognozēm)."""
+    u = VartsarguUzskaite()
+    for d, diena in vr[vr["datums"] < pd.Timestamp(datums)].groupby("datums", sort=True):
+        u.jauna_sezona(_sezona_no_datuma(d))
+        u.pievienot(diena)
+    return u
 
 
 # ----------------------------------------------------------------------------
@@ -332,8 +503,9 @@ def ticamiba(mod, home, away):
     return ("Augsta" if n >= 15 else ("Vidēja" if n >= 5 else "Zema")), n
 
 
-def prognoze(mod, g, home, away, p, b2b_h=0, b2b_a=0, cels_h=0, cels_a=0, po=0, h2h=None):
-    """Pilna prognoze spēlei (vārti, tirgi, ticamība, izmantotie faktori)."""
+def prognoze(mod, g, home, away, p, b2b_h=0, b2b_a=0, cels_h=0, cels_a=0, po=0, h2h=None, vg_h=1.0, vg_a=1.0):
+    """Pilna prognoze spēlei (vārti, tirgi, ticamība, izmantotie faktori).
+    vg_h / vg_a – mājinieku / viesu sākuma vārtsarga attiecība pret komandas parasto (>1 = sliktāks): ietekmē pretinieka vārtus."""
     h2h = p.get("h2h_lietot", True) if h2h is None else h2h
     lh, la = lambdas(mod, home, away, b2b_h, b2b_a, cels_h, cels_a, po)
     kh = ka = 1.0
@@ -341,12 +513,18 @@ def prognoze(mod, g, home, away, p, b2b_h=0, b2b_a=0, cels_h=0, cels_a=0, po=0, 
     if h2h:
         kh, ka, n_h2h = h2h_koeficienti(mod, g, home, away, p)
         lh, la = lh * kh, la * ka
+    lh_bv, la_bv = lh, la
+    beta = float(p.get("vartsargu_beta", 0.0))
+    fv_h, fv_a = float(vg_a) ** beta, float(vg_h) ** beta     # mājinieku vārti atkarīgi no viesu vārtsarga un otrādi
+    lh, la = lh * fv_h, la * fv_a
     lh0, la0 = lh, la
     lh, la = saspiest(lh, la, p, mod.get("liga_kopa"))
     t = tirgi(lh, la, p)
     t["lh0"], t["la0"], t["liga_kopa"] = lh0, la0, mod.get("liga_kopa")
     t["ticamiba"], t["n_min"] = ticamiba(mod, home, away)
-    t["faktori"] = {"b2b_h": b2b_h, "b2b_a": b2b_a, "cels_h": cels_h, "cels_a": cels_a, "po": po, "h2h": (kh, ka, n_h2h)}
+    t["faktori"] = {"b2b_h": b2b_h, "b2b_a": b2b_a, "cels_h": cels_h, "cels_a": cels_a, "po": po, "h2h": (kh, ka, n_h2h),
+                    "vartsargi": (fv_h, fv_a)}
+    t["lh_bv"], t["la_bv"], t["vg_h"], t["vg_a"] = lh_bv, la_bv, vg_h, vg_a
     return t
 
 
@@ -465,10 +643,12 @@ def atpakal_parbaude(g, p, sezona, solis_dienas=3, h2h=False):
         if mod is None:
             continue
         for r in s[s["datums"] == d].itertuples(index=False):
-            t = prognoze(mod, g, r.home, r.away, p, r.b2b_h, r.b2b_a, r.cels_h, r.cels_a, r.po, h2h=h2h)
+            t = prognoze(mod, g, r.home, r.away, p, r.b2b_h, r.b2b_a, r.cels_h, r.cels_a, r.po, h2h=h2h,
+                         vg_h=getattr(r, "vg_h", 1.0), vg_a=getattr(r, "vg_a", 1.0))
             rindas.append({"game_id": r.game_id, "datums": d, "home": r.home, "away": r.away, "hg": r.hg, "ag": r.ag,
                            "beigas": r.beigas, "uzv_majas": r.uzv_majas, "lh": t["lh"], "la": t["la"],
                            "lh0": t["lh0"], "la0": t["la0"], "liga_kopa": t["liga_kopa"],
+                           "lh_bv": t["lh_bv"], "la_bv": t["la_bv"], "vg_h": t["vg_h"], "vg_a": t["vg_a"],
                            "p1": t["1x2"]["1"], "pX": t["1x2"]["X"], "p2": t["1x2"]["2"], "ml1": t["ar_ot"]["1"],
                            "o45": t["totali"][4.5]["over"], "o55": t["totali"][5.5]["over"], "o65": t["totali"][6.5]["over"]})
     return pd.DataFrame(rindas)
@@ -533,7 +713,13 @@ def bazes_metrikas(bt, ref=None):
 def parrekinat(bt, p):
     """Varbūtības no saglabātajām λ ar citiem rho / kappa / nb_r (bez modeļa pārrēķināšanas)."""
     rind = []
-    for lh0, la0, L in zip(bt["lh0"], bt["la0"], bt["liga_kopa"]):
+    beta = float(p.get("vartsargu_beta", 0.0))
+    if "lh_bv" in bt.columns:                         # vārtsargu ietekme ar šī p beta
+        lh0s = bt["lh_bv"] * bt["vg_a"] ** beta
+        la0s = bt["la_bv"] * bt["vg_h"] ** beta
+    else:
+        lh0s, la0s = bt["lh0"], bt["la0"]
+    for lh0, la0, L in zip(lh0s, la0s, bt["liga_kopa"]):
         lh, la = saspiest(lh0, la0, p, L)
         t = tirgi(lh, la, p)
         rind.append((t["1x2"]["1"], t["1x2"]["X"], t["1x2"]["2"], t["ar_ot"]["1"], t["totali"][4.5]["over"], t["totali"][5.5]["over"],
@@ -557,8 +743,11 @@ def _platt(p_mod, y):
 
 
 def _izveleties_papildu(bt, p):
-    """No pārbaudes prognozēm: kopsummas pievilkšana un izkliede (pēc O/U 5.5 log loss), tad neizšķirtu korekcija, OT un totālu kalibrācija."""
+    """No pārbaudes prognozēm: vārtsargu ietekme (pēc 1X2 log loss), kopsummas pievilkšana un izkliede (pēc O/U 5.5 log loss),
+    tad neizšķirtu korekcija, OT un totālu kalibrācija."""
     p = dict(p, totali_kal={})
+    if "lh_bv" in bt.columns and (bt["vg_h"] != 1).any():
+        p["vartsargu_beta"] = min((metrikas(parrekinat(bt, dict(p, vartsargu_beta=b)))["logloss_1x2"], b) for b in (0.0, 0.25, 0.5, 0.75, 1.0))[1]
     labakais = (1e9, p["totali_kappa"], p["nb_r"])
     for kappa in (1.0, 0.8, 0.6, 0.4, 0.2, 0.0):
         for r in (0.0, 60.0, 30.0, 15.0):
@@ -610,7 +799,7 @@ def kalibret(g, sezonas, izvade=PARAMETRU_FAILS, rezgis=None):
     p = _izveleties_papildu(lab_bt, dict(labakais))
     tot = g[["g_p1", "g_p2", "g_p3"]].sum()
     p["periodu_dalas"] = [float(x) for x in (tot / tot.sum()).round(4)]
-    print(f"  izvēlēts: kopsummas pievilkšana {p['totali_kappa']}, izkliede {'Puasons' if not p['nb_r'] else p['nb_r']}, "
+    print(f"  izvēlēts: vārtsargu ietekme {p.get('vartsargu_beta', 0)}, kopsummas pievilkšana {p['totali_kappa']}, izkliede {'Puasons' if not p['nb_r'] else p['nb_r']}, "
           f"neizšķirtu korekcija {p['neizskirts_rho']:.2f}, OT mājiniekiem {p['ot_majas']:.3f}, "
           f"totālu kalibrācija 5.5: a={p['totali_kal']['5.5'][0]:+.2f}, b={p['totali_kal']['5.5'][1]:.2f}")
     # godīga pārbaude uz pēdējās sezonas: bez un ar H2H
@@ -660,7 +849,9 @@ if __name__ == "__main__":
         if not dalas:
             print("Nav datu.")
             sys.exit(1)
-        g = spelu_tabula(pd.concat(dalas, ignore_index=True))
+        vg = pd.concat([x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty],
+                       ignore_index=True) if any(x is not None for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi"))) else None
+        g = spelu_tabula(pd.concat(dalas, ignore_index=True), vg)
         sezonas = sorted(int(s) for s in g["sezona"].unique() if (g["sezona"] == s).sum() > 500)
         sys.exit(kalibret(g, sezonas))
     print(__doc__)
