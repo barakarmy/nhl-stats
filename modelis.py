@@ -50,7 +50,9 @@ NOKLUSETIE = {
     "totali_kal": {},                 # totālu kalibrācija pēc vēstures: {"5.5": [a, b]} → over = σ(a + b·logit(over_modelis))
     "noraid_k": 10.0,                 # komandas noraidījumu biežuma pievilkšana pie līgas (spēles)
     "vartsargu_beta": 0.0,            # sākuma vārtsarga ietekmes stiprums (0 = neietekmē; nosaka kalibrēšana: 0 … 2)
-    "vartsargu_k": 1500,              # vārtsarga glābšanas % pievilkšana pie līgas (metienu ekvivalents; nosaka kalibrēšana)
+    "vartsargu_k": 1500,              # vārtsarga vērtējuma pievilkšana pie līgas (sv: metieni; xg: paredzamie vārti; nosaka kalibrēšana)
+    "vartsargu_metode": "sv",         # "sv" = glābšanas % vienādos sastāvos; "xg" = ielaistie pret paredzamajiem vārtiem (GSAx)
+    "xg_svars": 0.0,                  # komandu stiprums: 0 = tikai vārti, 1 = tikai xG (nosaka kalibrēšana)
 }
 GARS_CELS_KM = 1500
 KOMANDU_PECTECI = {"ARI": "UTA"}      # Arizona Coyotes (līdz 2023/24) → Utah: sastāvs pārcēlās, modelim tā ir viena komanda
@@ -78,13 +80,13 @@ def ielasit_parametrus(fails=PARAMETRU_FAILS):
     return p, meta
 
 
-def pievienot_vartsargus(g, vr, k=VG_K):
-    """Faktisko sākuma vārtsargu attiecības katrai spēlei (vg_h / vg_a) ar doto pievilkšanu k."""
+def pievienot_vartsargus(g, vr, k=VG_K, metode="sv", w=0.0):
+    """Faktisko sākuma vārtsargu attiecības katrai spēlei (vg_h / vg_a) ar doto pievilkšanu k un metodi."""
     g = g.copy()
     g["vg_h"] = g["vg_a"] = 1.0
     if vr is None or vr.empty:
         return g
-    f = vartsargu_faktori_vesturei(vr, k)
+    f = vartsargu_faktori_vesturei(vr, k, metode, w)
     if not f.empty:
         kk = dict(zip(zip(f["game_id"], f["team"]), f["vg"]))
         g["vg_h"] = [kk.get((gid, h), 1.0) for gid, h in zip(g["game_id"], g["home"])]
@@ -92,7 +94,19 @@ def pievienot_vartsargus(g, vr, k=VG_K):
     return g
 
 
-def spelu_tabula(raw, vg=None, k=VG_K):
+def pievienot_xg(g, xgk):
+    """Komandu xG (normalizēts) + vārti tukšos vārtos katrai spēlei: xh / xa (NaN, ja metienu datu nav)."""
+    g = g.copy()
+    g["xh"] = g["xa"] = np.nan
+    if xgk is None or xgk.empty:
+        return g
+    k = {(int(a), b): float(x) + float(e) for a, b, x, e in zip(xgk["game_id"], xgk["komanda"], xgk["xg"], xgk["en"])}
+    g["xh"] = [k.get((gid, h), np.nan) for gid, h in zip(g["game_id"], g["home"])]
+    g["xa"] = [k.get((gid, a), np.nan) for gid, a in zip(g["game_id"], g["away"])]
+    return g
+
+
+def spelu_tabula(raw, vg=None, k=VG_K, xgk=None):
     """Spēļu līmeņa tabula modelim: datums, sezona, po, home, away, hg, ag (pamatlaika vārti) + atpūtas/ceļa pazīmes
     + faktisko sākuma vārtsargu attiecības vg_h / vg_a (ja doti vārtsargu dati; citādi 1)."""
     if raw is None or raw.empty:
@@ -114,6 +128,7 @@ def spelu_tabula(raw, vg=None, k=VG_K):
     g = g[g["home"].isin(NHL_KOMANDAS_SARAKSTS) & g["away"].isin(NHL_KOMANDAS_SARAKSTS)]
     g = g.drop_duplicates("game_id").sort_values(["datums", "game_id"]).reset_index(drop=True)
     g = pievienot_vartsargus(g, vartsargu_rindas(vg) if vg is not None and not vg.empty else None, k)
+    g = pievienot_xg(g, xgk)
     return pievienot_atputu(g)
 
 
@@ -226,11 +241,48 @@ class VartsarguUzskaite:
             self.lg[0] += r.sa; self.lg[1] += r.ga
 
 
-def vartsargu_faktori_vesturei(vr, k=VG_K):
+class VartsarguUzskaiteXG(VartsarguUzskaite):
+    """Vārtsargs pēc ielaistajiem pret paredzamajiem vārtiem (rindās sa = xG pret vārtsargu, ga = ielaistie).
+    r = (ielaistie + k) / (xG + k); komandas stiprums ar xG svaru w jau neietver vārtsargu, tāpēc
+    attiecība = r_vārtsargs / r_komandas^(1 − w) (w = 0: salīdzinājums ar komandas parasto; w = 1: absolūti)."""
+
+    def __init__(self, k=50.0, w=0.0):
+        super().__init__(k)
+        self.w = float(w)
+
+    def r(self, s, g):
+        return (g + self.k) / (s + self.k)
+
+    def attieciba(self, pid, team):
+        s, g = self.gk.get(pid, (0.0, 0.0))
+        ks, kg = self.kom.get(team, (0.0, 0.0))
+        return self.r(s, g) / max(1e-6, self.r(ks, kg)) ** (1 - self.w)
+
+
+def _uzskaite(k, metode="sv", w=0.0):
+    return VartsarguUzskaiteXG(k, w) if metode == "xg" else VartsarguUzskaite(k)
+
+
+def vartsargu_rindas_xg(vr, vxg):
+    """Vārtsargu rindas xG metodei: starter un datums no vr, sa = xG pret vārtsargu, ga = ielaistie (bez tukšajiem vārtiem)."""
+    if vr is None or vr.empty or vxg is None or vxg.empty:
+        return pd.DataFrame()
+    x = vxg.copy()
+    x["playerId"] = pd.to_numeric(x["playerId"], errors="coerce")
+    x = x.dropna(subset=["playerId"])
+    x["playerId"] = x["playerId"].astype("int64")
+    out = vr[["game_id", "datums", "team", "playerId", "vards", "starter"]].merge(
+        x[["game_id", "playerId", "xga", "ga"]], on=["game_id", "playerId"], how="left")
+    out["sa"] = out["xga"].fillna(0.0)
+    out["ga"] = out["ga"].fillna(0.0)
+    return out.drop(columns=["xga"]).sort_values(["datums", "game_id"]).reset_index(drop=True)
+
+
+def vartsargu_faktori_vesturei(vr, k=VG_K, metode="sv", w=0.0):
     """Katrai aizvadītajai spēlei: faktiskā sākuma vārtsarga attiecība (no datiem pirms šīs dienas) → game_id, team, vg."""
     if vr is None or vr.empty:
         return pd.DataFrame(columns=["game_id", "team", "vg"])
-    u = VartsarguUzskaite(k)
+    u = _uzskaite(k, metode, w)
     out = []
     for d, diena in vr.groupby("datums", sort=True):
         u.jauna_sezona(_sezona_no_datuma(d))
@@ -303,9 +355,9 @@ def sagaidama_attieciba(saraksts):
     return float(sum(p_ * r_ for _, _, p_, r_ in saraksts)) if saraksts else 1.0
 
 
-def uzskaite_lidz(vr, datums, k=VG_K):
-    """Vārtsargu uzskaite ar visām spēlēm pirms datuma (nākamo spēļu prognozēm)."""
-    u = VartsarguUzskaite(k)
+def uzskaite_lidz(vr, datums, k=VG_K, metode="sv", w=0.0):
+    """Vārtsargu uzskaite ar visām spēlēm pirms datuma (nākamo spēļu prognozēm). vr – rindas atbilstoši metodei."""
+    u = _uzskaite(k, metode, w)
     for d, diena in vr[vr["datums"] < pd.Timestamp(datums)].groupby("datums", sort=True):
         u.jauna_sezona(_sezona_no_datuma(d))
         u.pievienot(diena)
@@ -344,6 +396,11 @@ def aprekinat_reitingus(g, uz_datumu=None, sezona_tagad=None, p=None):
     ix = {k: i for i, k in enumerate(komandas)}
     H, A = g["home"].map(ix).to_numpy(), g["away"].map(ix).to_numpy()
     yh, ya = g["hg"].to_numpy(float), g["ag"].to_numpy(float)
+    w_xg = float(p.get("xg_svars", 0.0))
+    if w_xg > 0 and "xh" in g.columns:                # komandu stiprums no vārtu un paredzamo vārtu sajaukuma
+        xh, xa = g["xh"].to_numpy(float), g["xa"].to_numpy(float)
+        yh = np.where(np.isfinite(xh), (1 - w_xg) * yh + w_xg * xh, yh)
+        ya = np.where(np.isfinite(xa), (1 - w_xg) * ya + w_xg * xa, ya)
     bh, ba = g["b2b_h"].to_numpy(float), g["b2b_a"].to_numpy(float)
     ch, ca = g["cels_h"].to_numpy(float), g["cels_a"].to_numpy(float)
     po = g["po"].to_numpy(float)
@@ -381,6 +438,35 @@ def aprekinat_reitingus(g, uz_datumu=None, sezona_tagad=None, p=None):
     return {"liga_kopa": 2 * sv, "mu": x[0], "majas": x[1], "b2b_att": x[2], "b2b_def": x[3], "cels_att": x[4], "cels_def": x[5], "po": x[6],
             "att": dict(zip(komandas, x[7:7 + n])), "def": dict(zip(komandas, x[7 + n:])),
             "n_sez": n_sez, "sezona": sezona_tagad, "uz_datumu": uz_datumu}
+
+
+def vajag_metienus(p):
+    return float(p.get("xg_svars", 0.0)) > 0 or p.get("vartsargu_metode", "sv") == "xg"
+
+
+def sagatavot(raw, vg, metieni, p, uz_datumu, sezona_tagad, xg_modelis=None):
+    """
+    Viss prognozēm vajadzīgais vienā vietā (lietotne un prognožu arhīvs):
+    spēļu tabula (ar vārtsargiem un, ja parametri to prasa, xG), reitingi uz datumu, vārtsargu rotācijas rindas un uzskaite.
+    Ja parametri prasa xG, bet metienu datu vai xG modeļa nav, tiek izmantoti vārti un glābšanas % (ar noklusējuma pievilkšanu).
+    """
+    metode, w = p.get("vartsargu_metode", "sv"), float(p.get("xg_svars", 0.0))
+    k = float(p.get("vartsargu_k", VG_K))
+    vr = vartsargu_rindas(vg) if vg is not None and not vg.empty else None
+    ir_xg = vajag_metienus(p) and metieni is not None and not metieni.empty and bool(xg_modelis)
+    g = spelu_tabula(raw, vg, k if metode == "sv" else VG_K)
+    vr_u, k_u, metode_u = vr, (k if metode == "sv" else VG_K), "sv"
+    if ir_xg:
+        import xg as xgm
+        xgk, vxg = xgm.modela_xg(metieni, xg_modelis, g)
+        g = pievienot_xg(g, xgk)
+        if metode == "xg" and vr is not None:
+            vr_u, k_u, metode_u = vartsargu_rindas_xg(vr, vxg), k, "xg"
+            g = pievienot_vartsargus(g, vr_u, k, "xg", w)
+    p_eff = p if ir_xg or not vajag_metienus(p) else dict(p, xg_svars=0.0, vartsargu_metode="sv", vartsargu_k=VG_K)
+    mod = aprekinat_reitingus(g, uz_datumu=uz_datumu, sezona_tagad=sezona_tagad, p=p_eff)
+    u = uzskaite_lidz(vr_u, uz_datumu, k_u, metode_u, w) if vr_u is not None and not vr_u.empty else None
+    return g, mod, vr, u, p_eff
 
 
 def lambdas(mod, home, away, b2b_h=0, b2b_a=0, cels_h=0, cels_a=0, po=0):
@@ -783,28 +869,32 @@ def _izveleties_papildu(bt, p):
     return p
 
 
-def izveleties_vartsargus(bt, p, vr, k_varianti=(250, 500, 1000, 1500, 2000, 3000), b_varianti=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0)):
-    """Vārtsargu pievilkšana (k) un ietekmes stiprums (beta) pēc 1X2 log loss uz izvēles sezonas (bez modeļa pārrēķināšanas)."""
+def izveleties_vartsargus(bt, p, vr, k_varianti=(250, 500, 1000, 1500, 2000, 3000), b_varianti=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0),
+                          vr_xg=None, k_xg=(10, 25, 50, 100, 200)):
+    """Vārtsargu metode (glābšanas % vai xG), pievilkšana (k) un stiprums (beta) pēc 1X2 log loss uz izvēles sezonas."""
     if vr is None or vr.empty or "lh_bv" not in bt.columns:
         return p, []
+    varianti = [("sv", k, vr) for k in k_varianti]
+    if vr_xg is not None and not vr_xg.empty:
+        varianti += [("xg", k, vr_xg) for k in k_xg]
     rez = []
-    for k in k_varianti:
-        f = vartsargu_faktori_vesturei(vr, k)
+    for metode, k, rr in varianti:
+        f = vartsargu_faktori_vesturei(rr, k, metode, float(p.get("xg_svars", 0.0)))
         kk = dict(zip(zip(f["game_id"], f["team"]), f["vg"]))
         b2 = bt.copy()
         b2["vg_h"] = [kk.get((gid, h), 1.0) for gid, h in zip(b2["game_id"], b2["home"])]
         b2["vg_a"] = [kk.get((gid, a), 1.0) for gid, a in zip(b2["game_id"], b2["away"])]
         for b in b_varianti:
-            rez.append((metrikas(parrekinat(b2, dict(p, vartsargu_beta=b)))["logloss_1x2"], k, b))
+            rez.append((metrikas(parrekinat(b2, dict(p, vartsargu_beta=b)))["logloss_1x2"], k, b, metode))
     # Robusta izvēle: starp variantiem, kas ir ne vairāk kā 0.001 sliktāki par labāko (atšķirība mazāka par nejaušību),
-    # ņem to ar stiprāko pievilkšanu (lielāks k) un mazāko stiprumu – tas labāk vispārinās uz nākamo sezonu.
-    labakais = min(rez)[0]
-    tuvi = [x for x in rez if x[0] <= labakais + 0.001 and x[2] > 0]
-    ll, k, b = max(tuvi, key=lambda x: (x[1], -x[2])) if tuvi else min(rez)
-    return dict(p, vartsargu_k=k, vartsargu_beta=b), sorted(rez)
+    # ņem labākās metodes variantu ar stiprāko pievilkšanu (lielāks k) un mazāko stiprumu – tas labāk vispārinās.
+    labakais = min(rez)
+    tuvi = [x for x in rez if x[0] <= labakais[0] + 0.001 and x[2] > 0 and x[3] == labakais[3]]
+    ll, k, b, metode = max(tuvi, key=lambda x: (x[1], -x[2])) if tuvi else labakais
+    return dict(p, vartsargu_k=k, vartsargu_beta=b, vartsargu_metode=metode), sorted(rez)
 
 
-def kalibret(g, sezonas, izvade=PARAMETRU_FAILS, rezgis=None, vr=None):
+def kalibret(g, sezonas, izvade=PARAMETRU_FAILS, rezgis=None, vr=None, vr_xg=None):
     """
     1) Godīga pārbaude: parametri izvēlēti uz priekšpēdējās sezonas, pārbaudīti uz pēdējās (katra spēle – tikai no datiem pirms tās).
     2) Gala parametri lietotnei: tie paši iestatījumi, bet neizšķirtu/kopsummas/OT korekcijas no abām sezonām kopā.
@@ -829,22 +919,34 @@ def kalibret(g, sezonas, izvade=PARAMETRU_FAILS, rezgis=None, vr=None):
         print(f"  pusperiods {pp:3d} d, vēstures svari {vs}: log loss 1X2 {met.get('logloss_1x2', float('nan')):.4f}")
         if met and met["logloss_1x2"] < lab_ll:
             labakais, lab_ll, lab_bt = p, met["logloss_1x2"], bt
-    # vārtsargi: pievilkšana un stiprums (faktiskie sākuma vārtsargi; vērtējums tikai no datiem pirms katras spēles)
-    p_v, vrez = izveleties_vartsargus(lab_bt, dict(labakais), vr)
+    # komandu stiprums no vārtiem un xG: sajaukuma svars (ja ir metienu dati)
+    if "xh" in g.columns and g["xh"].notna().any():
+        print("  komandu stiprums: vārti pret xG (xG svars → log loss 1X2):")
+        print(f"    xG svars 0.00: {lab_ll:.4f}")
+        for w in (0.25, 0.5, 0.75, 1.0):
+            pw = dict(labakais, xg_svars=w)
+            bt = atpakal_parbaude(g, pw, sez_reg, solis_dienas=7)
+            ll_w = metrikas(bt)["logloss_1x2"]
+            print(f"    xG svars {w:.2f}: {ll_w:.4f}")
+            if ll_w < lab_ll - 0.0005:                  # xG tiek ņemts tikai, ja tas skaidri uzlabo
+                labakais, lab_ll, lab_bt = pw, ll_w, bt
+    # vārtsargi: metode, pievilkšana un stiprums (faktiskie sākuma vārtsargi; vērtējums tikai no datiem pirms katras spēles)
+    p_v, vrez = izveleties_vartsargus(lab_bt, dict(labakais), vr, vr_xg=vr_xg)
     if vrez:
-        print("  vārtsargi (pievilkšana k, stiprums beta → log loss 1X2):")
-        for ll, k, b in vrez[:5]:
-            print(f"    k={k:5d}, beta={b:.2f}: {ll:.4f}")
+        print("  vārtsargi (metode, pievilkšana k, stiprums beta → log loss 1X2):")
+        for ll, k, b, mt in vrez[:6]:
+            print(f"    {mt:2s} k={k:5g}, beta={b:.2f}: {ll:.4f}")
         bez = min(x for x in vrez if x[2] == 0.0)
         print(f"    bez vārtsargu ietekmes: {bez[0]:.4f}")
-        g = pievienot_vartsargus(g, vr, p_v["vartsargu_k"])
-        lab_bt = atpakal_parbaude(g, dict(labakais, vartsargu_k=p_v["vartsargu_k"]), sez_reg, solis_dienas=7)
-    p = _izveleties_papildu(lab_bt, dict(labakais, vartsargu_k=p_v.get("vartsargu_k", VG_K)))
+        rr = vr_xg if p_v["vartsargu_metode"] == "xg" else vr
+        g = pievienot_vartsargus(g, rr, p_v["vartsargu_k"], p_v["vartsargu_metode"], float(labakais.get("xg_svars", 0.0)))
+        lab_bt = atpakal_parbaude(g, dict(labakais, vartsargu_k=p_v["vartsargu_k"], vartsargu_metode=p_v["vartsargu_metode"]), sez_reg, solis_dienas=7)
+    p = _izveleties_papildu(lab_bt, dict(labakais, vartsargu_k=p_v.get("vartsargu_k", VG_K), vartsargu_metode=p_v.get("vartsargu_metode", "sv")))
     if vrez:
         p["vartsargu_beta"] = p_v["vartsargu_beta"]
     tot = g[["g_p1", "g_p2", "g_p3"]].sum()
     p["periodu_dalas"] = [float(x) for x in (tot / tot.sum()).round(4)]
-    print(f"  izvēlēts: vārtsargu ietekme {p.get('vartsargu_beta', 0)} (pievilkšana {p.get('vartsargu_k', VG_K)}), kopsummas pievilkšana {p['totali_kappa']}, izkliede {'Puasons' if not p['nb_r'] else p['nb_r']}, "
+    print(f"  izvēlēts: xG svars {p.get('xg_svars', 0)}, vārtsargi {p.get('vartsargu_metode', 'sv')} ietekme {p.get('vartsargu_beta', 0)} (pievilkšana {p.get('vartsargu_k', VG_K)}), kopsummas pievilkšana {p['totali_kappa']}, izkliede {'Puasons' if not p['nb_r'] else p['nb_r']}, "
           f"neizšķirtu korekcija {p['neizskirts_rho']:.2f}, OT mājiniekiem {p['ot_majas']:.3f}, "
           f"totālu kalibrācija 5.5: a={p['totali_kal']['5.5'][0]:+.2f}, b={p['totali_kal']['5.5'][1]:.2f}")
     # godīga pārbaude uz pēdējās sezonas: bez un ar H2H
@@ -857,6 +959,7 @@ def kalibret(g, sezonas, izvade=PARAMETRU_FAILS, rezgis=None, vr=None):
     # gala parametri lietotnei: korekcijas no abām sezonām kopā (vairāk datu; pārbaudes rezultāts paliek godīgs)
     p_gala = _izveleties_papildu(pd.concat([lab_bt, gala], ignore_index=True), dict(p, neizskirts_rho=NOKLUSETIE["neizskirts_rho"], totali_kal={}))
     p_gala["vartsargu_beta"], p_gala["vartsargu_k"] = p.get("vartsargu_beta", 0.0), p.get("vartsargu_k", VG_K)
+    p_gala["vartsargu_metode"], p_gala["xg_svars"] = p.get("vartsargu_metode", "sv"), p.get("xg_svars", 0.0)
     p_gala["h2h_lietot"] = p["h2h_lietot"]
     rez = {
         "parametri": p_gala, "parametri_parbaudei": p, "regulesanas_sezona": sez_reg, "parbaudes_sezona": sez_test,
@@ -898,6 +1001,21 @@ if __name__ == "__main__":
         vg = pd.concat([x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty],
                        ignore_index=True) if any(x is not None for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi"))) else None
         g = spelu_tabula(pd.concat(dalas, ignore_index=True), vg)
+        vr = vartsargu_rindas(vg) if vg is not None else None
+        vr_xg = None
+        try:                                           # xG (ja ir metienu dati un xg_modelis.json)
+            import xg as xgm
+            met = [x for x in (da.ielasit_db_tabulu("metieni"), da.ielasit_tabulu("metieni")) if x is not None and not x.empty]
+            xmod = xgm.ielasit_modeli()
+            if met and xmod:
+                xgk, vxg = xgm.modela_xg(pd.concat(met, ignore_index=True), xmod, g)
+                g = pievienot_xg(g, xgk)
+                vr_xg = vartsargu_rindas_xg(vr, vxg)
+                print(f"xG: {g['xh'].notna().sum()} no {len(g)} spēlēm ar metienu datiem")
+            else:
+                print("xG: nav metienu datu vai xg_modelis.json – kalibrēšana bez xG")
+        except Exception as ex:
+            print(f"xG netiek izmantots ({type(ex).__name__}: {ex})")
         sezonas = sorted(int(s) for s in g["sezona"].unique() if (g["sezona"] == s).sum() > 500)
-        sys.exit(kalibret(g, sezonas, vr=vartsargu_rindas(vg) if vg is not None else None))
+        sys.exit(kalibret(g, sezonas, vr=vr, vr_xg=vr_xg))
     print(__doc__)
