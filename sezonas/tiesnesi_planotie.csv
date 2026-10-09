@@ -1,12 +1,4 @@
 ﻿game_id,sakums_utc,home_team,away_team,loma,vards,atjaunots_utc,avots
-2026020053,2026-10-07T23:30:00Z,WSH,PIT,referee,Garrett Rank,2026-10-07 19:21,ScoutingTheRefs
-2026020053,2026-10-07T23:30:00Z,WSH,PIT,referee,Kelly Sutherland,2026-10-07 19:21,ScoutingTheRefs
-2026020053,2026-10-07T23:30:00Z,WSH,PIT,linesman,Kilian McNamara,2026-10-07 19:21,ScoutingTheRefs
-2026020053,2026-10-07T23:30:00Z,WSH,PIT,linesman,Libor Suchanek,2026-10-07 19:21,ScoutingTheRefs
-2026020054,2026-10-07T23:30:00Z,WPG,COL,referee,Graham Skilliter,2026-10-07 19:21,ScoutingTheRefs
-2026020054,2026-10-07T23:30:00Z,WPG,COL,referee,Furman South,2026-10-07 19:21,ScoutingTheRefs
-2026020054,2026-10-07T23:30:00Z,WPG,COL,linesman,Trent Knorr,2026-10-07 19:21,ScoutingTheRefs
-2026020054,2026-10-07T23:30:00Z,WPG,COL,linesman,Jesse Marquis,2026-10-07 19:21,ScoutingTheRefs
 2026020055,2026-10-08T02:00:00Z,ANA,EDM,referee,Tom Chmielewski,2026-10-07 19:21,ScoutingTheRefs
 2026020055,2026-10-08T02:00:00Z,ANA,EDM,referee,Trevor Hanson,2026-10-07 19:21,ScoutingTheRefs
 2026020055,2026-10-08T02:00:00Z,ANA,EDM,linesman,Ryan Gibbons,2026-10-07 19:21,ScoutingTheRefs
@@ -63,3 +55,7 @@
 2026020068,2026-10-09T23:00:00Z,CBJ,PIT,referee,Frederick L’Ecuyer,2026-10-09 19:19,ScoutingTheRefs
 2026020068,2026-10-09T23:00:00Z,CBJ,PIT,linesman,Mark Shewchyk,2026-10-09 19:19,ScoutingTheRefs
 2026020068,2026-10-09T23:00:00Z,CBJ,PIT,linesman,Dan Kelly,2026-10-09 19:19,ScoutingTheRefs
+2026020069,2026-10-10T00:00:00Z,WPG,ANA,referee,Wes McCauley,2026-10-09 23:35,NHL
+2026020069,2026-10-10T00:00:00Z,WPG,ANA,referee,Jake Brenk,2026-10-09 23:35,NHL
+2026020069,2026-10-10T00:00:00Z,WPG,ANA,linesman,Trent Knorr,2026-10-09 23:35,NHL
+2026020069,2026-10-10T00:00:00Z,WPG,ANA,linesman,Jesse Marquis,2026-10-09 23:35,NHL
