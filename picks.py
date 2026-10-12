@@ -108,6 +108,8 @@ def ielasit_parametrus(fails=PARAMETRU_FAILS):
         NOKLUSETIE["min_ev"] = par["min_ev"]
     if isinstance(par.get("tirgi"), list):
         NOKLUSETIE["tirgi"] = tuple(par["tirgi"])
+    if isinstance(par.get("max_likme"), (dict, float, int)):
+        NOKLUSETIE["max_likme"] = par["max_likme"]
     PARBAUDE = d
     return d
 
@@ -155,14 +157,21 @@ def kelly(p, koef):
     return (p * koef - 1.0) / (koef - 1.0) if koef > 1 else 0.0
 
 
-def likmes_dala(p, koef, ticamiba=None, cfg=None):
+def _max_likme(c, tirgus):
+    """max_likme var būt viens skaitlis vai {tirgus: skaitlis} (piem., novērošanas režīmā tirgum mazāka likme)."""
+    m = c["max_likme"]
+    return float(m.get(tirgus, 0.05)) if isinstance(m, dict) else float(m)
+
+
+def likmes_dala(p, koef, ticamiba=None, cfg=None, tirgus=None):
     """Ieteicamā bankrola daļa: ¼ Kelly × ticamība, robežās min_likme … max_likme (0, ja Kelly ≤ 0)."""
     c = {**NOKLUSETIE, **(cfg or {})}
     f = kelly(p, koef)
     if f <= 0:
         return 0.0
     f *= c["kelly_dala"] * c["ticamibas_k"].get(ticamiba, 0.75)
-    return float(min(c["max_likme"], max(c["min_likme"], f)))
+    mx = _max_likme(c, tirgus)
+    return float(min(mx, max(min(c["min_likme"], mx), f)))
 
 
 def izveles_nosaukums(tirgus, izn, lin, majas, viesi):
@@ -312,7 +321,7 @@ def atlasit(kand, cfg=None):
     if d.empty:
         return d
     d = d.sort_values("ev", ascending=False).groupby("game_id", sort=False).head(int(c["max_uz_speli"])).copy()
-    d["likme_pct"] = [likmes_dala(p, o, t, c) for p, o, t in zip(d["p_lemums"], d["koef"], d["ticamiba"])]
+    d["likme_pct"] = [likmes_dala(p, o, t, c, tg) for p, o, t, tg in zip(d["p_lemums"], d["koef"], d["ticamiba"], d["tirgus"])]
     d = d[d["likme_pct"] > 0]
     if d.empty:
         return d
@@ -502,7 +511,9 @@ def no_prognozu_arhiva(prog, cfg=None, fails=FAILS):
 PARB_SVARI = (0.25, 0.5, 0.75, 1.0)                    # modeļa svars (lēmuma p = svars × modelis + (1 − svars) × tirgus)
 PARB_MIN_EV = (0.02, 0.03, 0.04, 0.05, 0.07, 0.10)
 PARB_MIN_LIKMES = 100                                   # parametru izvēlei vajag vismaz tik likmju apmācības sezonās
-PARB_TIRGI = ("ml", "tot", "pm")                        # 1X2 pamatlaikā ASV koeficientos nav – tas seko "ml" lēmumam
+PARB_TIRGI = ("ml", "tot", "pm")
+NOKLUSETIE_MAX_LIKME = 0.05
+NOVEROSANAS_MAX_LIKME = 0.02                            # tirgus "novērošanas" režīmā: max 2 % bankrola                        # 1X2 pamatlaikā ASV koeficientos nav – tas seko "ml" lēmumam
 
 
 def _vesturiskie_koeficienti(sezona):
@@ -517,10 +528,13 @@ def _vesturiskie_koeficienti(sezona):
     return d
 
 
-def vesturiskas_prognozes(sezonas, solis_dienas=3):
+def vesturiskas_prognozes(sezonas, solis_dienas=3, test_sezona=None):
     """
-    Walk-forward prognozes (tikai no datiem pirms katras spēles) katrai norādīto sezonu spēlei, ar tiem pašiem iestatījumiem
-    un datiem kā lietotnē (vārti + xG, faktiskie sākuma vārtsargi, atpūta, ceļš). Atgriež {game_id: prognoze}.
+    Walk-forward prognozes (tikai no datiem pirms katras spēles) katrai norādīto sezonu spēlei, ar tiem pašiem datiem kā lietotnē
+    (vārti + xG, faktiskie sākuma vārtsargi, atpūta, ceļš). Atgriež ({game_id: prognoze}, info).
+    Bez noplūdes no pārbaudes sezonas (test_sezona):
+      - modeļa iestatījumi – "parametri_parbaudei" no modelis_parametri.json (kalibrēti BEZ pārbaudes sezonas), ja tā sezona sakrīt;
+      - xG modelis tiek apmācīts no jauna tikai uz metieniem pirms pārbaudes sezonas.
     """
     sys.path.insert(0, BASE)
     import datu_apstrade as da
@@ -530,13 +544,29 @@ def vesturiskas_prognozes(sezonas, solis_dienas=3):
     raw = pd.concat([x for x in (raw_db, raw_t) if x is not None and not x.empty], ignore_index=True)
     vg_d = [x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty]
     vg = pd.concat(vg_d, ignore_index=True) if vg_d else None
-    p, _ = modelis.ielasit_parametrus()
+    p, meta = modelis.ielasit_parametrus()
+    info = {"modela_parametri": "lietotnes (kalibrēti arī uz pārbaudes sezonas)", "xg_modelis": "lietotnes", "bez_nopludes": False}
+    if test_sezona and meta and meta.get("parametri_parbaudei") and int(meta.get("parbaudes_sezona") or 0) == int(test_sezona):
+        p = {**modelis.NOKLUSETIE, **meta["parametri_parbaudei"]}
+        info["modela_parametri"] = f"parametri_parbaudei (kalibrēti uz {meta.get('regulesanas_sezona')}, bez {test_sezona})"
+        print(f"  Modeļa iestatījumi: kalibrēti bez pārbaudes sezonas {test_sezona} (parametri_parbaudei).")
+    elif test_sezona:
+        print(f"  UZMANĪBU: modelis_parametri.json nav 'parametri_parbaudei' sezonai {test_sezona} – modeļa iestatījumi var būt "
+              "kalibrēti arī uz pārbaudes sezonas (palaid python modelis.py --kalibret).")
     metieni, xmod = None, None
     if modelis.vajag_metienus(p):
         import xg as xgm
         m_d = [x for x in (da.ielasit_db_tabulu("metieni"), da.ielasit_tabulu("metieni")) if x is not None and not x.empty]
         metieni = pd.concat(m_d, ignore_index=True) if m_d else None
         xmod = xgm.ielasit_modeli()
+        if test_sezona and metieni is not None and not metieni.empty:
+            gads = int(test_sezona) // 10000
+            m_apm = metieni[pd.to_numeric(metieni["game_id"], errors="coerce") // 1_000_000 < gads]
+            if len(m_apm) > 50000:
+                print(f"  xG modelis: apmāca no jauna uz {len(m_apm)} metieniem pirms {test_sezona} (bez pārbaudes sezonas)…")
+                xmod = xgm.apmacit(m_apm)
+                info["xg_modelis"] = f"apmācīts uz metieniem pirms {test_sezona}"
+    info["bez_nopludes"] = info["modela_parametri"].startswith("parametri_parbaudei") and info["xg_modelis"].startswith("apmācīts")
     pirma = pd.Timestamp(raw[raw["sezona"] == min(sezonas)]["datums"].min())
     g, _, _, _, p_eff = modelis.sagatavot(raw, vg, metieni, p, pirma, min(sezonas), xmod)
     out = {}
@@ -558,7 +588,7 @@ def vesturiskas_prognozes(sezonas, solis_dienas=3):
                 out[int(r.game_id)] = {k: t[k] for k in ("lh", "la", "1x2", "ar_ot", "plus_minus", "totali", "neizskirts_pa_kopsummam", "ticamiba")}
             if (i + 1) % 30 == 0:
                 print(f"  {sezona}: {i + 1}/{len(datumi)} dienas")
-    return out
+    return out, info
 
 
 def _vesturiskie_kandidati(prognozes, koef, speles, cena="koef"):
@@ -647,7 +677,7 @@ def parbaude(sezonas=None, izvade=PARAMETRU_FAILS):
         print("Vajag vēsturiskos koeficientus vismaz 2 sezonām: python vesturiskie_koef.py")
         return 1
     print(f"Sezonas ar koeficientiem: {sezonas}. Modeļa prognozes (walk-forward, var aizņemt 10–30 min)…")
-    prog = vesturiskas_prognozes(sezonas)
+    prog, info = vesturiskas_prognozes(sezonas, test_sezona=sezonas[-1])
     raw_db, _ = da.ielasit_db()
     kand, kand_atv = [], []
     for s in sezonas:
@@ -676,24 +706,33 @@ def parbaude(sezonas=None, izvade=PARAMETRU_FAILS):
             continue
         w, mev, a, b = labakais
         atv = _simulet(d_atv[(d_atv["sezona"] == test_s) & (d_atv["tirgus"] == t)], w, mev)
+        kopa = _simulet(d[d["tirgus"] == t], w, mev)                       # visas sezonas kopā: vai ROI ir drošs (ROI − 1 SE > 0)
         iesl = a["roi"] > 0 and b.get("likmes", 0) > 0 and b["roi"] > 0
-        tirgi_rez[t] = {"iesl": bool(iesl), "svars": w, "min_ev": mev, "apmaciba": a, "parbaude": b, "parbaude_atvershana": atv,
-                        "iemesls": "" if iesl else ("nav pelnošs apmācības sezonās" if a["roi"] <= 0 else "nav pelnošs pārbaudes sezonā")}
+        limenis = ("pilns" if kopa["roi"] - kopa["se"] > 0 else "novērošana") if iesl else "izslēgts"
+        tirgi_rez[t] = {"iesl": bool(iesl), "limenis": limenis, "svars": w, "min_ev": mev, "apmaciba": a, "parbaude": b,
+                        "parbaude_atvershana": atv, "kopa": kopa,
+                        "iemesls": ("" if limenis == "pilns" else
+                                    "pelnošs abos posmos, bet kopējais ROI nav drošs (± 1 SE) – mazākas likmes, līdz to apstiprina reālā vēsture"
+                                    if iesl else ("nav pelnošs apmācības sezonās" if a["roi"] <= 0 else "nav pelnošs pārbaudes sezonā"))}
         print(f"  {TIRGU_NOS[t]}: svars {w}, min EV {mev:.0%} → apmācība ROI {a['roi']:+.1%} ({a['likmes']} likmes), "
-              f"pārbaude ROI {b.get('roi', float('nan')):+.1%} ({b.get('likmes', 0)} likmes) → {'IESLĒGTS' if iesl else 'izslēgts'}")
+              f"pārbaude ROI {b.get('roi', float('nan')):+.1%} ({b.get('likmes', 0)} likmes), kopā {kopa['roi']:+.1%} ± {kopa['se']:.1%} "
+              f"→ {limenis.upper()}")
     svars = {t: tirgi_rez[t].get("svars", NOKLUSETIE["modela_svars"].get(t, 1.0)) for t in PARB_TIRGI}
     svars["1x2"] = svars["ml"]                                   # 1X2 nāk no tā paša sadalījuma kā "ar OT"
     min_ev = {t: tirgi_rez[t].get("min_ev", 0.04) for t in PARB_TIRGI}
     min_ev["1x2"] = min_ev["ml"]
     tirgi = [t for t in PARB_TIRGI if tirgi_rez[t]["iesl"]] + (["1x2"] if tirgi_rez["ml"]["iesl"] else [])
-    cfg = {**NOKLUSETIE, "modela_svars": svars, "min_ev": min_ev, "tirgi": tuple(tirgi)}
+    max_likme = {t: (NOVEROSANAS_MAX_LIKME if tirgi_rez[t].get("limenis") == "novērošana" else NOKLUSETIE_MAX_LIKME) for t in PARB_TIRGI}
+    max_likme["1x2"] = max_likme["ml"]
+    cfg = {**NOKLUSETIE, "modela_svars": svars, "min_ev": min_ev, "tirgi": tuple(tirgi), "max_likme": max_likme}
     bank = _bankrola_simulacija(test, cfg) if tirgi else {"likmes": 0, "bankrols": BANKROLLS, "max_kritums": 0.0}
     rez = {
         "izveidots": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
         "avots": "SportsbookReview – ASV bukmeikeru noslēguma koeficienti (vidējais bez uzcenojuma = tirgus; labākais = likmei)",
         "apmacibas_sezonas": apm_s, "parbaudes_sezona": test_s,
         "speles": {str(s): int(d[d["sezona"] == s]["game_id"].nunique()) for s in sezonas},
-        "parametri": {"modela_svars": svars, "min_ev": min_ev, "tirgi": tirgi},
+        "parametri": {"modela_svars": svars, "min_ev": min_ev, "tirgi": tirgi, "max_likme": max_likme},
+        "bez_nopludes": info.get("bez_nopludes", False), "modela_parametri": info.get("modela_parametri"), "xg_modelis": info.get("xg_modelis"),
         "tirgi": tirgi_rez, "bankrols_parbaudes_sezona": bank, "rezgis": rezgis,
     }
     os.makedirs(os.path.dirname(izvade), exist_ok=True)
