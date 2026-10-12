@@ -736,6 +736,7 @@ def vertet_pret_tirgu(prog, rez, sliesni=(0.03, 0.05, 0.10)):
     Modelis pret tirgu uz reālām (aizvadītām) spēlēm, izmantojot tikai pirms spēles saglabātās prognozes un koeficientus.
     prog – prognozes_arhivs.csv (spēle × ielāde); rez – spēļu rezultāti: game_id, hg, ag (pamatlaiks), h_tot, a_tot (gala rezultāts).
     Likmes laiks = pirmā ielāde (rīta līnija); "noslēgums" = pēdējā zināmā ielāde pirms spēles.
+    1X2 tirgus: Pinnacle, ja tas dod visus trīs iznākumus; citādi labākie ES koeficienti (Pinnacle ES plūsmā 1X2 nedod).
     Atgriež: {'speles', 'logloss': {...}, 'likmes': [ {tirgus, slieksnis, likmes, uzvaras, roi_pin, roi_lab, clv, parspeja_noslegumu} ]}.
     """
     if prog is None or prog.empty or rez is None or rez.empty:
@@ -750,9 +751,17 @@ def vertet_pret_tirgu(prog, rez, sliesni=(0.03, 0.05, 0.10)):
     a, z, rr = pirma.loc[ids], ped.loc[ids], r.loc[ids]
     iz = np.where(rr["hg"] > rr["ag"], "1", np.where(rr["hg"] == rr["ag"], "X", "2"))
 
+    def k1x2(df, i):
+        """1X2 koeficients: Pinnacle; ja Pinnacle 1X2 nav (ES plūsmā Pinnacle dod tikai uzvarētāju ar OT) – labākais koeficients."""
+        pin = df[f"pin_{i}"].to_numpy(dtype=float) if f"pin_{i}" in df else np.full(len(df), np.nan)
+        lab = df[f"lab_{i}"].to_numpy(dtype=float) if f"lab_{i}" in df else np.full(len(df), np.nan)
+        visi_pin = np.isfinite(np.column_stack([df[f"pin_{k}"].to_numpy(dtype=float) if f"pin_{k}" in df else np.full(len(df), np.nan)
+                                                for k in ("1", "X", "2")])).all(axis=1)
+        return np.where(visi_pin, pin, lab)
+
     def tv(df, i):
-        inv = 1 / df[[f"pin_{k}" for k in ("1", "X", "2")]]
-        return (inv[f"pin_{i}"] / inv.sum(axis=1)).to_numpy()
+        inv = {k: 1 / k1x2(df, k) for k in ("1", "X", "2")}
+        return inv[i] / (inv["1"] + inv["X"] + inv["2"])
     p_m = {i: a[f"m_{i}"].to_numpy() for i in ("1", "X", "2")}
     p_t0 = {i: tv(a, i) for i in ("1", "X", "2")}
     p_t1 = {i: tv(z, i) for i in ("1", "X", "2")}
@@ -767,12 +776,22 @@ def vertet_pret_tirgu(prog, rez, sliesni=(0.03, 0.05, 0.10)):
     likmes = []
     # 1X2 pamatlaikā
     for i in ("1", "X", "2"):
-        o0, o1, ob = a[f"pin_{i}"].to_numpy(), z[f"pin_{i}"].to_numpy(), a[f"lab_{i}"].to_numpy()
+        o0, o1, ob = k1x2(a, i), k1x2(z, i), a[f"lab_{i}"].to_numpy(dtype=float)
         ev = p_m[i] * o0 - 1
         uzv = (iz == i)
         for sl in sliesni:
             m = ok & np.isfinite(o0) & (ev >= sl)
             likmes.append(_likmju_rinda(f"Pamatlaikā {i}", sl, m, uzv, o0, ob, o1))
+    # uzvarētājs ar OT (Pinnacle; kolonnas arhīvā kopš v1.1.47)
+    if all(c in a.columns for c in ("pin_ml1", "pin_ml2", "m_ml1", "m_ml2")):
+        uzv_ot = (rr["h_tot"] > rr["a_tot"]).to_numpy()
+        for i, mp, uzv in (("1", a["m_ml1"].to_numpy(dtype=float), uzv_ot), ("2", a["m_ml2"].to_numpy(dtype=float), ~uzv_ot)):
+            o0, o1 = a[f"pin_ml{i}"].to_numpy(dtype=float), z[f"pin_ml{i}"].to_numpy(dtype=float)
+            ob = a[f"lab_ml{i}"].to_numpy(dtype=float) if f"lab_ml{i}" in a else o0
+            ev = mp * o0 - 1
+            for sl in sliesni:
+                m = np.isfinite(o0) & np.isfinite(mp) & (ev >= sl)
+                likmes.append(_likmju_rinda(f"Uzvarētājs ar OT {i}", sl, m, uzv, o0, ob, o1))
     # totāls ar OT (Pinnacle galvenā līnija; tikai, ja līnija rītā un noslēgumā ir tā pati)
     lin_ok = np.isfinite(a["tot_linija"].to_numpy()) & (a["tot_linija"].to_numpy() == z["tot_linija"].to_numpy())
     tot = (rr["h_tot"] + rr["a_tot"]).to_numpy()
