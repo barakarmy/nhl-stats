@@ -71,7 +71,7 @@ def datu_versija():
     """Faila izmaiņu laiki (kešatmiņas atslēga: kad fails mainās, dati tiek pārlasīti)."""
     celi = [DATU_MAPE / n for n in ("speles.csv", "speletaji.csv", "vartsargi.csv", "varti.csv", "pedeja_atjaunosana.json",
                                     "tiesnesi.csv", "tiesnesi_planotie.csv", "koeficienti.csv", "koeficienti_meta.json",
-                                    "prognozes_arhivs.csv", "vartsargi_sakuma.csv")]
+                                    "prognozes_arhivs.csv", "vartsargi_sakuma.csv", "picks_arhivs.csv")]
     celi += [DATU_MAPE / "nhl_kalendars.csv"] + sorted(VESTURES_MAPE.glob("*/tiesnesi.csv")) \
         + sorted(VESTURES_MAPE.glob("*/speles.csv")) + sorted(VESTURES_MAPE.glob("*/varti.csv")) \
         + [VESTURES_MAPE / "modelis_parametri.json"]
