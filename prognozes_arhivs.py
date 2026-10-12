@@ -104,7 +104,7 @@ def main():
         over_m = modelis.pilnas_speles_over(pr, lin) if not np.isnan(lin) else None
         try:                                              # Picks: visas izvēles ar šīs ielādes koeficientiem
             spele = {"game_id": int(gid), "sakums_utc": x["sakums_utc"].iloc[0].strftime("%Y-%m-%dT%H:%M:%SZ"), "majas": home, "viesi": away,
-                     "ticamiba": pr["ticamiba"]}
+                     "ticamiba": pr["ticamiba"], "vartsargi": (st_h, st_a)}
             pick_kand += picks.kandidati(spele, picks.modela_varbutibas(pr, x), x)
         except Exception as e_:                           # noqa: BLE001
             print(f"Picks: spēle {gid} izlaista ({e_})")
