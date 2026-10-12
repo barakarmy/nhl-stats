@@ -35,7 +35,7 @@ VESTURE = os.path.join(AKTIVA, "vesture")
 # aktīvās sezonas faili, kas pieder vienai sezonai (kalendārs paliek aktīvajā mapē)
 SEZONAS_FAILI = ("speles.csv", "speletaji.csv", "vartsargi.csv", "varti.csv", "tiesnesi.csv", "sastavi.csv", "metieni.csv",
                  "tiesnesi_planotie.csv", "pedeja_atjaunosana.json", "notikumi.csv", "mainas.csv",
-                 "prognozes_arhivs.csv", "koeficienti_arhivs.csv", "vartsargi_sakuma.csv")
+                 "prognozes_arhivs.csv", "koeficienti_arhivs.csv", "vartsargi_sakuma.csv", "picks_arhivs.csv")
 
 
 def sezonas_datumi(sezona):
