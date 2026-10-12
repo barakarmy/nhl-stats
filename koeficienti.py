@@ -15,7 +15,15 @@ Faili:
 - sezonas/koeficienti_arhivs.csv – viena rinda katrai spēlei: Pinnacle pirmie un pēdējie zināmie 1X2 un totāla koeficienti
   (vēlāk – modeļa salīdzināšanai ar tirgu; lietotnē netiek rādīts).
 Ja ielāde neizdodas, esošie faili netiek mainīti.
+
+Papildu ielāde pēc vārtsargu paziņošanas (darbplūsma "NHL Starting Goalies", ik 30 min vakaros):
+    python koeficienti.py --ja-vajag
+Koeficienti tiek ielādēti tikai tad, ja kādai spēlei, kas sākas tuvāko VARTSARGU_LOGS_H stundu laikā, abi sākuma vārtsargi ir
+paziņoti (Confirmed / Expected) PĒC pēdējās koeficientu ielādes – tad tirgus jau ir ievērtējis vārtsargu ziņas, un Picks var
+atlasīt likmes ar pareizajiem vārtsargiem. Kredītu sargs: ne vairāk par MAX_PAPILDU_DIENA papildu ielādēm dienā un tikai, ja
+atlikums pietiek parastajām ielādēm līdz mēneša beigām (+ rezerve).
 """
+import calendar
 import csv
 import json
 import os
@@ -33,6 +41,13 @@ KALENDARS = os.path.join(MAPE, "nhl_kalendars.csv")
 FAILS = os.path.join(MAPE, "koeficienti.csv")
 META = os.path.join(MAPE, "koeficienti_meta.json")
 ARHIVS = os.path.join(MAPE, "koeficienti_arhivs.csv")
+VARTSARGI = os.path.join(MAPE, "vartsargi_sakuma.csv")
+VARTSARGU_LOGS_H = 4             # papildu ielāde tikai spēlēm, kas sākas tuvāko 4 h laikā
+MAX_PAPILDU_DIENA = 2            # papildu ielādes dienā (katra = 3 kredīti)
+KREDITI_IELADE = 3
+PARASTAS_DIENA = 3               # parastās ielādes dienā (odds.yml)
+KREDITU_REZERVE = 15
+VARTSARGI_ZINAMI = ("Confirmed", "Expected")
 URL = "https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds"
 DIENAS = 3
 KOLONNAS = ["game_id", "sakums_utc", "majas", "viesi", "bukmeikers", "tirgus", "iznakums", "linija", "koef",
@@ -205,7 +220,65 @@ def tirit_atslegu(v):
     return m.group(0) if m else v
 
 
+def _gh_output(ieladets):
+    """GitHub Actions: steps.<id>.outputs.ieladets = true/false (lai nākamie soļi zinātu, vai koeficienti tika ielādēti)."""
+    c = os.environ.get("GITHUB_OUTPUT")
+    if c:
+        with open(c, "a", encoding="utf-8") as f:
+            f.write(f"ieladets={'true' if ieladets else 'false'}\n")
+
+
+def _meta():
+    try:
+        with open(META, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def vajag_papildu(tagad):
+    """(True/False, iemesls): vai pēc vārtsargu paziņošanas vajag papildu koeficientu ielādi."""
+    meta = _meta()
+    pedeja = _laiks(meta.get("ielade")) if meta.get("ielade") else None
+    sodien = tagad.strftime("%Y-%m-%d")
+    pap = (meta.get("papildu") or {}).get(sodien, 0)
+    if pap >= MAX_PAPILDU_DIENA:
+        return False, f"šodien jau {pap} papildu ielādes (max {MAX_PAPILDU_DIENA})"
+    try:
+        atl = int(float(meta.get("kreditu_atlikums")))
+    except (TypeError, ValueError):
+        atl = None
+    dienas_atl = calendar.monthrange(tagad.year, tagad.month)[1] - tagad.day + 1
+    vajag_parastajam = dienas_atl * PARASTAS_DIENA * KREDITI_IELADE + KREDITU_REZERVE
+    if atl is not None and atl - KREDITI_IELADE < vajag_parastajam:
+        return False, f"kredītu atlikums {atl} – jāpietiek parastajām ielādēm līdz mēneša beigām ({vajag_parastajam})"
+    vs = _lasit_csv(VARTSARGI)
+    pedejie = {}                                                   # (mājinieki, viesi, komanda) → jaunākais ieraksts
+    for r in vs:
+        k = (r.get("majas"), r.get("viesi"), r.get("komanda"))
+        if k not in pedejie or str(r.get("ielade", "")) >= str(pedejie[k].get("ielade", "")):
+            pedejie[k] = r
+    for gid, h, a, t in kalendara_speles(tagad):
+        if not (tagad < t <= tagad + timedelta(hours=VARTSARGU_LOGS_H)):
+            continue
+        rr = [pedejie.get((h, a, kom)) for kom in (h, a)]
+        if not all(r and r.get("statuss") in VARTSARGI_ZINAMI for r in rr):
+            continue
+        laiki = [_laiks(r.get("statusa_laiks")) or _laiks(r.get("ielade")) for r in rr]
+        jaunakais = max((x for x in laiki if x), default=None)
+        if pedeja is None or (jaunakais and jaunakais > pedeja):
+            return True, f"{a} @ {h}: abi vārtsargi paziņoti pēc pēdējās koeficientu ielādes"
+    return False, "nav spēļu ar jauniem paziņotiem vārtsargiem tuvāko stundu laikā"
+
+
 def main():
+    papildu = "--ja-vajag" in sys.argv
+    if papildu:
+        ok, iemesls = vajag_papildu(datetime.now(timezone.utc))
+        print(f"Papildu ielāde: {'jā' if ok else 'nē'} – {iemesls}")
+        if not ok:
+            _gh_output(False)
+            return 0
     sakotneja = os.environ.get("ODDS_API_KEY", "")
     atslega = tirit_atslegu(sakotneja)
     if not atslega:
@@ -229,12 +302,16 @@ def main():
     os.makedirs(MAPE, exist_ok=True)
     _rakstit_csv(FAILS, KOLONNAS, sorted(rindas, key=lambda r: (r["sakums_utc"], r["game_id"], r["bukmeikers"], r["tirgus"], r["iznakums"])))
     atjaunot_arhivu(rindas, tagad_txt)
+    sodien = tagad.strftime("%Y-%m-%d")
+    pap = {sodien: (_meta().get("papildu") or {}).get(sodien, 0) + (1 if papildu else 0)}     # tikai šodienas skaitītājs
     meta = {"ielade": tagad_txt, "speles": len({r["game_id"] for r in rindas}), "kalendara_speles": len(speles),
-            "rindas": len(rindas), "kreditu_atlikums": galvenes.get("x-requests-remaining"), "kreditu_izlietots": galvenes.get("x-requests-used")}
+            "rindas": len(rindas), "kreditu_atlikums": galvenes.get("x-requests-remaining"), "kreditu_izlietots": galvenes.get("x-requests-used"),
+            "papildu": pap}
     with open(META, "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=1)
     print(f"Koeficienti: {meta['speles']} no {meta['kalendara_speles']} kalendāra spēlēm, {meta['rindas']} rindas; "
           f"kredīti: izlietoti {meta['kreditu_izlietots']}, atlikuši {meta['kreditu_atlikums']}.")
+    _gh_output(True)
     return 0
 
 
