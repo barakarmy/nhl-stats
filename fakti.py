@@ -90,8 +90,9 @@ def spelu_gaita(speles, varti):
 def comebacks(gaita, min_def=MIN_DEFICITS):
     """Uzvaras pēc ≥ min_def vārtu deficīta (jaunākās/lielākās augšā)."""
     c = [r for r in gaita if r["iznakums"] == "W" and r["max_deficits"] >= min_def]
-    c = sorted(c, key=lambda r: r["datums"], reverse=True)              # jaunākās vispirms ...
-    return sorted(c, key=lambda r: -r["max_deficits"])                  # ... lielākais deficīts augšā (stabila kārtošana)
+    c = sorted(c, key=lambda r: (r["datums"], r["game_id"]), reverse=True)      # jaunākās vispirms ...
+    beigu_seciba = {"REG": 0, "OT": 1, "SO": 2}                                 # ... vienādam deficītam: uzvara pamatlaikā > OT > SO ...
+    return sorted(c, key=lambda r: (-r["max_deficits"], beigu_seciba.get(r["beigas"], 0)))   # ... lielākais deficīts augšā (stabila kārtošana)
 
 
 def zaudetas_vadibas(gaita, min_vad=MIN_DEFICITS):
