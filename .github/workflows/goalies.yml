@@ -3,6 +3,8 @@
 # Laiki (UTC; Rīgā ziemā +2 h, vasarā +3 h): ik 30 min 14:05–00:35 UTC → ~16:05–02:35 Rīgā (ziemā),
 # kad komandas pēc rīta treniņa paziņo vārtsargus. Viens pieprasījums palaišanā.
 # Prognožu lapa nolasa failu katrā atvēršanas reizē: apstiprināts vārtsargs aizstāj rotācijas varbūtības.
+# Pēc tam: ja kādai tuvākajai spēlei abi vārtsargi paziņoti pēc pēdējās koeficientu ielādes, tiek ielādēti jauni koeficienti
+# (koeficienti.py --ja-vajag, ar kredītu sargu) un atjaunināti prognožu arhīvs un Picks (prognozes_arhivs.py).
 name: NHL Starting Goalies
 
 on:
@@ -37,9 +39,25 @@ jobs:
       - name: Check starting goalies
         run: python sakuma_vartsargi.py
 
+      - name: Fetch odds after goalie news (only if needed)
+        id: odds
+        continue-on-error: true
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: python koeficienti.py --ja-vajag
+
+      - name: Update predictions and picks
+        if: steps.odds.outputs.ieladets == 'true'
+        continue-on-error: true
+        run: |
+          pip install pandas numpy scipy
+          python prognozes_arhivs.py
+
       - name: Commit and push changes if any
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add sezonas/vartsargi_sakuma.csv 2>/dev/null || true
+          git add sezonas/koeficienti.csv sezonas/koeficienti_meta.json sezonas/koeficienti_arhivs.csv 2>/dev/null || true
+          git add sezonas/prognozes_arhivs.csv sezonas/picks_arhivs.csv 2>/dev/null || true
           git diff --cached --quiet || (git commit -m "Starting goalies update" && git pull --rebase && git push)
