@@ -281,7 +281,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.50"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.52"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -299,6 +299,7 @@ NAV = [
     {"grupa": "Statistika", "lapas": [
         ("lapa_periodi", "Periodi", "periods", "view_timeline"),
         ("lapa_forma", "Forma un vārti", "form", "trending_up"),
+        ("lapa_xg", "xG", "xg", "scatter_plot"),
         ("lapa_over_under", "Vairāk / Mazāk", "over-under", "swap_vert"),
         ("lapa_powerplay", "Vairākums", "powerplay", "bolt"),
         ("lapa_mazakums", "Mazākums", "penalty-kill", "shield"),
@@ -679,6 +680,7 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
   padding: .45rem .7rem; background: #ffffff; color: #31333f; border: 1px solid rgba(49,51,63,.12); border-radius: .5rem; box-shadow: 0 .25rem 1rem rgba(0,0,0,.18);
   font-size: .8rem; font-weight: 400; line-height: 1.45; text-align: left; white-space: normal; letter-spacing: 0; text-transform: none; }
 .tip:hover .bubble, .tip:focus .bubble, .tip:focus-within .bubble { display: block; }
+.kpi-l .tip .bubble { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: .8rem; opacity: 1; line-height: 1.35; }
 @media (max-width: 900px), (hover: none) {
   .tip .bubble { position: fixed; left: .5rem; right: .5rem; top: auto; bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); transform: none; margin: 0;
     width: auto; max-width: none; max-height: 50vh; overflow-y: auto; z-index: 2000; font-size: .9rem; box-shadow: 0 -.25rem 1.5rem rgba(0,0,0,.28); }
@@ -3503,9 +3505,13 @@ def lapa_komanda():
                 x_ = gx.loc[kom]
                 vx = lambda kol, aug=True: int(gx[kol].rank(ascending=not aug, method="min").loc[kom])     # noqa: E731
                 d_g, d_z = kop["G_sp"] - x_["xGF_sp"], kop["Z_sp"] - x_["xGA_sp"]
-                kartes += [("xG spēlē", _sk(x_["xGF_sp"], 2), f"gūti {_sk(kop['G_sp'], 2)} ({d_g:+.2f} pret xG)", vx("xGF_sp")),
-                           ("xG pret spēlē", _sk(x_["xGA_sp"], 2), f"ielaisti {_sk(kop['Z_sp'], 2)} ({d_z:+.2f} pret xG)", vx("xGA_sp", False)),
-                           ("xG daļa %", _sk(x_["xG_pct"], 1), f"xG {x_['xGF']:.1f} : {x_['xGA']:.1f} kopā", vx("xG_pct"))]
+                kartes += [("xG spēlē", _sk(x_["xGF_sp"], 2), f"gūti {_sk(kop['G_sp'], 2)} ({d_g:+.2f} pret xG)", vx("xGF_sp"),
+                            "Paredzamie vārti (expected goals) vidēji spēlē: cik vārtus komanda “būtu pelnījusi” gūt pēc savu metienu kvalitātes "
+                            "(attālums, leņķis, metiena veids, atlēciens). Gūti vairāk nekā xG = laba realizācija vai veiksme"),
+                           ("xG pret spēlē", _sk(x_["xGA_sp"], 2), f"ielaisti {_sk(kop['Z_sp'], 2)} ({d_z:+.2f} pret xG)", vx("xGA_sp", False),
+                            "Paredzamie vārti, ko komanda pieļauj pretiniekam vidēji spēlē (mazāk = labāka aizsardzība). Ielaisti mazāk nekā xG = labs vārtsargs vai veiksme"),
+                           ("xG daļa %", _sk(x_["xG_pct"], 1), f"xG {x_['xGF']:.1f} : {x_['xGA']:.1f} kopā", vx("xG_pct"),
+                            "Komandas xG / (komandas xG + pretinieku xG). Virs 50% = komanda rada bīstamākas iespējas nekā pieļauj – labs ilgtermiņa formas rādītājs")]
         except Exception:
             pass
         kartes += [
@@ -3522,9 +3528,10 @@ def lapa_komanda():
                            ("SO win – SO loss", o["SO_bil"], f"{int(o['SO_W'] + o['SO_L'])} metienu sērijas", rot("SO_W"))]
         except Exception:
             pass
-        st.markdown('<div class="kpi-grid">' + "".join(
-            f'<div class="kpi"><div class="kpi-l">{e(l)}</div><div class="kpi-v">{e(v)}</div><div class="kpi-s">{e(s)}</div>{vieta_html(r)}</div>'
-            for l, v, s, r in kartes) + "</div>", unsafe_allow_html=True)
+        def kpi_html(l, v, s, r, h=""):
+            lbl = (f'<span class="tip" tabindex="0">{e(l)} ⓘ<span class="bubble">{e(h)}</span></span>' if h else e(l))
+            return f'<div class="kpi"><div class="kpi-l">{lbl}</div><div class="kpi-v">{e(v)}</div><div class="kpi-s">{e(s)}</div>{vieta_html(r)}</div>'
+        st.markdown('<div class="kpi-grid">' + "".join(kpi_html(*k_) for k_ in kartes) + "</div>", unsafe_allow_html=True)
         # forma: pēdējās 5 spēles
         l5 = tdf.sort_values(["datums", "game_id"]).tail(5)
         forma = "".join(f'<a class="fm-b {REZ_KRASA.get(rez_kods(r.rez, r.beigas), "")}" href="{e(speles_saite(r.game_id))}" target="_blank" rel="noopener" '
@@ -4127,6 +4134,241 @@ def lapa_otso():
 
 
 # ============================================================================
+# LAPA: xG (paredzamie vārti) – komandas, spēlētāji, vārtsargi; tikai pamatlaiks, bez tukšajiem vārtiem
+# ============================================================================
+XG_BISTAMS = 0.20                 # "bīstams metiens" – metiens ar xG ≥ 0.20 (≈ viens no 5 kļūst par vārtiem)
+XG_SASTAVI = {"Visi": (None, None), "5v5": ("5v5", "5v5"), "Vairākums": ("PP", "SH"), "Mazākums": ("SH", "PP")}   # (savi metieni, pretinieka metieni)
+
+XG_PASKAIDROJUMS = """
+**Kas ir xG (expected goals, paredzamie vārti)?** Katram metienam, kas nav bloķēts (vārtos, garām vai vārti), modelis piešķir varbūtību
+kļūt par vārtiem – pēc tā, **no kurienes un kā** metiens izdarīts: attālums un leņķis pret vārtiem, metiena veids (plaukstas, uzsitiens,
+pārmetiens u.c.), vai tas ir atlēciens, ātrais uzbrukums un sastāvs (5 pret 5, vairākums, mazākums). Piemēram, metiens no zilās līnijas ≈ 0.03,
+atlēciens no vārtu priekšas ≈ 0.25–0.35. Saskaitot visus komandas metienus, iegūst, **cik vārtus komanda “būtu pelnījusi” gūt** pēc savu iespēju kvalitātes.
+Modelis apmācīts uz iepriekšējo 3 sezonu metieniem (~240 000 metienu). Tukšie vārti un metienu sērijas netiek skaitīti, tikai pamatlaiks.
+
+**Kāpēc tas noder?** Vārti hokejā ir reti un ļoti nejauši (rikošets, vārtsarga kļūda, stabiņš). xG mēra to, kas ir komandas kontrolē – **cik
+labas iespējas tā rada un cik daudz pieļauj**. Tāpēc xG ir stabilāks un labāk paredz nākamās spēles nekā vārti: komanda ar labu xG, bet sliktiem
+rezultātiem, parasti uzlabojas, un otrādi.
+
+| Rādītājs | Ko nozīmē | Kā lasīt |
+|---|---|---|
+| **xG/sp** | Radīto iespēju kvalitāte vidēji spēlē | Vairāk = bīstamāks uzbrukums. Līgā ~2.8–3.0 |
+| **xG pret/sp** | Pretiniekam pieļauto iespēju kvalitāte vidēji spēlē | Mazāk = labāka aizsardzība |
+| **xG %** | Komandas xG / (komandas xG + pretinieku xG) | Virs 50% – komanda kontrolē spēli; viens no labākajiem formas rādītājiem |
+| **xG ±/sp** | xG/sp mīnus xG pret/sp | Cik iespēju ziņā komanda ir pārāka par pretiniekiem vidēji spēlē |
+| **Vārti − xG** | Gūtie vārti mīnus xG (kopā) | + = realizē labāk nekā “vajadzētu” (labi metēji vai veiksme), − = neveiksme/slikta realizācija; lieli skaitļi parasti izlīdzinās |
+| **Vārtsargi (xG − ielaisti)** | Pretinieku xG mīnus ielaistie vārti (kopā) | + = vārtsargi ielaiž mazāk nekā gaidāms (labi vārtsargi vai veiksme) |
+| **xG/metiens** | Vidējā viena metiena kvalitāte | Augstāks = komanda met no labākām pozīcijām, nevis “visu pēc kārtas” |
+| **Bīstami/sp** | Metieni ar xG ≥ 0.20 vidēji spēlē (un pret) | Īstas vārtu iespējas – atlēcieni, metieni no vārtu priekšas |
+| **PDO** | Metienu realizācija % + atvairīto metienu % (vārtos) | Līgā ≈ 100. Virs ~102 – komandai “veicas” (visticamāk kritīsies), zem ~98 – “neveicas” (visticamāk uzlabosies) |
+
+**Spēlētājiem:** *ixG* – spēlētāja paša metienu xG; *Vārti − ixG* – vai viņš realizē vairāk vai mazāk nekā vidējs spēlētājs no tām pašām pozīcijām
+(ilgstoši + ir labiem snaiperiem). **Vārtsargiem:** *GSAx* (goals saved above expected) = xG pret viņu − ielaistie vārti: + = atvairījis vairāk
+nekā vidējs vārtsargs tādos pašos metienos – labākais vārtsarga kvalitātes rādītājs.
+
+Mazs spēļu skaits (sezonas sākumā) – rādītāji vēl ļoti svārstās. Sastāva filtrs: *Vairākums* – komandas metieni vairākumā un pretinieka metieni
+mazākumā tajās pašās situācijās (un otrādi *Mazākumam*).
+"""
+
+
+@st.cache_data(show_spinner=False)
+def metienu_xg_dati(versija, dala=None):
+    """Katram neblokētam metienam pamatlaikā – xG (bez tukšajiem vārtiem): game_id, komanda, pretinieks, sastavs, xg, varti, uz_vartiem, bistams, metejs, vartsargs."""
+    try:
+        import xg as xgm
+    except ImportError:
+        return None
+    m = ielasit_papildu("metieni", versija)
+    mod = xgm.ielasit_modeli()
+    if m is None or m.empty or not mod:
+        return None
+    m = m[pd.to_numeric(m["period"], errors="coerce") <= 3].copy()
+    m["xg"] = xgm.xg_varbutibas(m, mod)
+    m = m[m["xg"].notna()].copy()
+    m["game_id"] = pd.to_numeric(m["game_id"], errors="coerce")
+    m["varti"] = pd.to_numeric(m["varti"], errors="coerce").fillna(0)
+    m["uz_vartiem"] = m["tips"].astype(str).isin(["sog", "goal"]).astype(int)
+    m["bistams"] = (m["xg"] >= XG_BISTAMS).astype(int)
+    m["metejs"] = pd.to_numeric(m["metejs"], errors="coerce")
+    m["vartsargs"] = pd.to_numeric(m["vartsargs"], errors="coerce")
+    return m[["game_id", "komanda", "pretinieks", "sastavs", "xg", "varti", "uz_vartiem", "bistams", "metejs", "vartsargs"]]
+
+
+def _xg_atlase(m, scope, n, sastavs):
+    """(savi metieni, pretinieku metieni, spēļu pāri) izvēlētajām komandu spēlēm un sastāvam."""
+    sub_ = da.filtret(DF, scope, n)
+    pdf = sub_[["game_id", "komanda"]].drop_duplicates()
+    pdf = pdf[pdf["game_id"].isin(set(m["game_id"]))]
+    savi = m.merge(pdf, on=["game_id", "komanda"])
+    pret = m.merge(pdf.rename(columns={"komanda": "pretinieks"}), on=["game_id", "pretinieks"])
+    a, b = XG_SASTAVI[sastavs]
+    if a:
+        savi = savi[savi["sastavs"] == a]
+        pret = pret[pret["sastavs"] == b]
+    return savi, pret, pdf
+
+
+def xg_komandu_tabula(m, scope, n, sastavs):
+    savi, pret, pdf = _xg_atlase(m, scope, n, sastavs)
+    if pdf.empty:
+        return pd.DataFrame()
+    t = pd.DataFrame({"GP": pdf.groupby("komanda").size()})
+    gs = savi.groupby("komanda").agg(xGF=("xg", "sum"), GF=("varti", "sum"), SF=("uz_vartiem", "sum"), MF=("xg", "size"), HDF=("bistams", "sum"))
+    gp = pret.groupby("pretinieks").agg(xGA=("xg", "sum"), GA=("varti", "sum"), SA=("uz_vartiem", "sum"), MA=("xg", "size"), HDA=("bistams", "sum"))
+    t = t.join(gs).join(gp).fillna(0)
+    t["xGF_sp"], t["xGA_sp"] = t["xGF"] / t["GP"], t["xGA"] / t["GP"]
+    t["xG_pct"] = (t["xGF"] / (t["xGF"] + t["xGA"]).where((t["xGF"] + t["xGA"]) > 0) * 100)
+    t["xGd_sp"] = t["xGF_sp"] - t["xGA_sp"]
+    t["G_sp"], t["GA_sp"] = t["GF"] / t["GP"], t["GA"] / t["GP"]
+    t["real"] = t["GF"] - t["xGF"]
+    t["gsax"] = t["xGA"] - t["GA"]
+    t["kval"] = (t["xGF"] / t["MF"]).where(t["MF"] > 0)
+    t["HD_sp"], t["HDA_sp"] = t["HDF"] / t["GP"], t["HDA"] / t["GP"]
+    sh = (t["GF"] / t["SF"]).where(t["SF"] > 0)
+    sv = (1 - t["GA"] / t["SA"]).where(t["SA"] > 0)
+    t["PDO"] = (sh + sv) * 100
+    sez = da.kopsavilkums(DF, "Visas", None)
+    t["sez_PTS"] = sez["PTS"].reindex(t.index)
+    t.index.name = "komanda"
+    return t
+
+
+def lapa_xg():
+    st.title("xG – paredzamie vārti")
+    m = metienu_xg_dati(VERSIJA, SEZ_DALA)
+    if m is None or m.empty:
+        st.info("xG datiem vajag metienu datus (sezonas/metieni.csv) un xG modeli (sezonas/vesture/xg_modelis.json).")
+        return
+    augsa = st.container()
+    with st.expander("Kas ir xG un kā lasīt šo sadaļu", expanded=False):
+        st.markdown(XG_PASKAIDROJUMS)
+    with st.container(key="frinda_xg"):
+        skats = izvele("Skats", ["Komandas", "Spēlētāji", "Vārtsargi"], key="xg_skats")
+        sastavs = izvele("Sastāvs", list(XG_SASTAVI), key="xg_sast")
+        scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="xg_s")
+        logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="xg_n")
+    n = LOGI[logs]
+    t = xg_komandu_tabula(m, scope, n, sastavs)
+    if t.empty:
+        st.info("Šim skatam datu nav.")
+        return
+    f2 = lambda v: _sk(v, 2)                                                                       # noqa: E731
+    kartes = [kom_kartes(t, "xG_pct", "Labākā xG %", lambda v: f"{v:.1f}%", lambda k: f" · {t.loc[k, 'xGF']:.1f} : {t.loc[k, 'xGA']:.1f}",
+                         seciba=[("xGd_sp", True), ("sez_PTS", True)],
+                         tip_f=lambda k: f"xG {t.loc[k, 'xGF']:.1f} radīti, {t.loc[k, 'xGA']:.1f} pieļauti {int(t.loc[k, 'GP'])} spēlēs"),
+              kom_kartes(t, "xGF_sp", "Bīstamākais uzbrukums (xG/sp)", f2, lambda k: f" · gūti {_sk(t.loc[k, 'G_sp'], 2)}/sp", seciba=[("xG_pct", True)]),
+              kom_kartes(t, "xGA_sp", "Labākā aizsardzība (xG pret/sp)", f2, lambda k: f" · ielaisti {_sk(t.loc[k, 'GA_sp'], 2)}/sp", aug=False,
+                         seciba=[("xG_pct", True)]),
+              kom_kartes(t, "real", "Realizē virs xG", lambda v: f"{v:+.1f}", lambda k: f" · {int(t.loc[k, 'GF'])} vārti no {t.loc[k, 'xGF']:.1f} xG",
+                         seciba=[("xG_pct", True)], tip_f=lambda k: "Gūti vairāk nekā paredzēts – labi metēji vai veiksme (bieži izlīdzinās)"),
+              kom_kartes(t, "real", "Realizē zem xG (var uzlaboties)", lambda v: f"{v:+.1f}", lambda k: f" · {int(t.loc[k, 'GF'])} vārti no {t.loc[k, 'xGF']:.1f} xG",
+                         aug=False, seciba=[("xG_pct", True)], tip_f=lambda k: "Gūti mazāk nekā paredzēts – nākotnē parasti tuvojas xG"),
+              kom_kartes(t, "PDO", "Visvairāk “veicas” (PDO)", lambda v: f"{v:.1f}", lambda k: f" · {int(t.loc[k, 'GP'])} sp.", seciba=[("xG_pct", False)],
+                         tip_f=lambda k: "Realizācija % + atvairīto metienu %. Virs ~102 – rezultāti labāki par spēli, visticamāk kritīsies")]
+    if sastavs == "Vairākums":                 # speciālās situācijas: xG % un PDO nav jēgpilni – tikai uzbrukums vairākumā
+        kartes = [kartes[1], kartes[3], kartes[4]]
+        kartes[0] = (kartes[0][0].replace("Bīstamākais uzbrukums", "Bīstamākais vairākums"), kartes[0][1])
+    elif sastavs == "Mazākums":                # tikai aizsardzība mazākumā
+        kartes = [kartes[2]]
+        kartes[0] = (kartes[0][0].replace("Labākā aizsardzība", "Labākais mazākums"), kartes[0][1])
+    with augsa:
+        st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
+
+    if skats == "Komandas":
+        tabula(t, {"GP": "Sp.", "xGF_sp": "xG/sp", "xGA_sp": "xG pret/sp", "xG_pct": "xG %", "xGd_sp": "xG ±/sp", "G_sp": "Vārti/sp",
+                   "real": "Vārti − xG", "gsax": "Vārtsargi (xG − ielaisti)", "kval": "xG/metiens", "HD_sp": "Bīstami/sp", "HDA_sp": "Bīstami pret/sp",
+                   "PDO": "PDO"},
+               sort_col=({"Vairākums": ["xGF_sp", "xG_pct", "sez_PTS"], "Mazākums": ["xGA_sp", "xG_pct", "sez_PTS"]}.get(sastavs, ["xG_pct", "xGd_sp", "sez_PTS"])),
+               ascending=([True, False, False] if sastavs == "Mazākums" else False),
+               prog={"xG_pct": (30, 70)},
+               formati={"xGF_sp": "{:.2f}", "xGA_sp": "{:.2f}", "xG_pct": "{:.1f}", "xGd_sp": "{:+.2f}", "G_sp": "{:.2f}", "real": "{:+.1f}",
+                        "gsax": "{:+.1f}", "kval": "{:.3f}", "HD_sp": "{:.1f}", "HDA_sp": "{:.1f}", "PDO": "{:.1f}"},
+               vienadiem={"xG_pct": [("xGd_sp", True), ("sez_PTS", True)], "xGF_sp": [("xG_pct", True)], "xGA_sp": [("xG_pct", False)],
+                          "xGd_sp": [("xG_pct", True)], "real": [("xG_pct", True)], "gsax": [("xG_pct", True)], "PDO": [("xG_pct", False)],
+                          "HD_sp": [("xGF_sp", True)], "HDA_sp": [("xGA_sp", True)], "kval": [("xGF_sp", True)], "GP": [("sez_PTS", True)]},
+               paskaidr={"Sp.": "Spēles ar metienu datiem izvēlētajā atlasē",
+                         "xG/sp": "Paredzamie vārti vidēji spēlē – cik bīstamas iespējas komanda rada (vairāk = labāk)",
+                         "xG pret/sp": "Pretinieku paredzamie vārti vidēji spēlē – cik bīstamas iespējas komanda pieļauj (mazāk = labāk)",
+                         "xG %": "Komandas xG daļa no visiem xG tās spēlēs. Virs 50% – komanda kontrolē spēli",
+                         "xG ±/sp": "xG/sp mīnus xG pret/sp",
+                         "Vārti/sp": "Faktiski gūtie vārti vidēji spēlē (no metieniem, bez tukšajiem vārtiem)",
+                         "Vārti − xG": "Gūti mīnus paredzētie (kopā): + realizē virs gaidītā (labi metēji vai veiksme), − zem gaidītā",
+                         "Vārtsargi (xG − ielaisti)": "Pretinieku xG mīnus ielaistie vārti (kopā): + vārtsargi ielaiž mazāk nekā gaidāms",
+                         "xG/metiens": "Vidējā metiena kvalitāte (xG uz vienu neblokētu metienu)",
+                         "Bīstami/sp": f"Metieni ar xG ≥ {XG_BISTAMS:.2f} vidēji spēlē – īstas vārtu iespējas",
+                         "Bīstami pret/sp": f"Pretinieka metieni ar xG ≥ {XG_BISTAMS:.2f} vidēji spēlē",
+                         "PDO": "Realizācija % + atvairīto metienu % (vārtos). Līgā ≈ 100; virs ~102 – veicas, zem ~98 – neveicas"})
+        st.caption({"Vairākums": "Secība: xG/sp vairākumā (bīstamākais vairākums augšā). xG % un PDO speciālajās situācijās nav jēgpilni.",
+                    "Mazākums": "Secība: xG pret/sp mazākumā (mazāk = labāk). xG % un PDO speciālajās situācijās nav jēgpilni."}.get(
+            sastavs, "Secība: xG %; vienādiem – xG ±/sp, tad komandas punkti sezonā.") + " Vairāk paskaidrojumu – “Kas ir xG un kā lasīt šo sadaļu”.")
+        return
+
+    savi, pret, pdf = _xg_atlase(m, scope, n, sastavs)
+    komandas = ["Visas komandas"] + sorted(da.KOMANDAS)
+    kom = st.selectbox("Komanda", komandas, key="xg_kom", format_func=lambda x: x if x == "Visas komandas" else komandas_etikete(x))
+    if skats == "Spēlētāji":
+        x = savi if kom == "Visas komandas" else savi[savi["komanda"] == kom]
+        if x.empty:
+            st.info("Šim skatam datu nav.")
+            return
+        g = x.groupby("metejs").agg(Komanda=("komanda", "last"), Metieni=("xg", "size"), Vartos=("uz_vartiem", "sum"), G=("varti", "sum"),
+                                    ixG=("xg", "sum"), Bistami=("bistams", "sum"), GP=("game_id", "nunique"))
+        sk_ = ielasit_papildu("speletaji", VERSIJA)
+        vardi = sk_.drop_duplicates("playerId", keep="last").set_index("playerId")["vards"] if sk_ is not None and not sk_.empty else pd.Series(dtype=str)
+        g["Spēlētājs"] = [vardi.get(int(p), str(int(p))) if pd.notna(p) else "–" for p in g.index]
+        g["G_ixG"] = g["G"] - g["ixG"]
+        g["ixG_sp"] = g["ixG"] / g["GP"]
+        g["kval"] = g["ixG"] / g["Metieni"]
+        g = g.sort_values(["ixG", "G", "Metieni"], ascending=False).head(60).reset_index(drop=True)
+        g.insert(0, "#", range(1, len(g) + 1))
+        g["Komanda"] = g["Komanda"].map(da.logo_url)
+        rtabula(g[["#", "Spēlētājs", "Komanda", "GP", "Metieni", "Vartos", "G", "ixG", "G_ixG", "ixG_sp", "kval", "Bistami"]], hide_index=True,
+                column_config={"Komanda": st.column_config.ImageColumn("", width="small"), "GP": st.column_config.NumberColumn("Sp."),
+                               "Vartos": st.column_config.NumberColumn("Vārtos"), "G": st.column_config.NumberColumn("Vārti"),
+                               "ixG": st.column_config.NumberColumn("ixG", format="%.2f"), "G_ixG": st.column_config.NumberColumn("Vārti − ixG", format="%+.2f"),
+                               "ixG_sp": st.column_config.NumberColumn("ixG/sp", format="%.2f"), "kval": st.column_config.NumberColumn("xG/metiens", format="%.3f"),
+                               "Bistami": st.column_config.NumberColumn("Bīstami")},
+                paskaidr={"Sp.": "Spēles, kurās spēlētājs izdarījis vismaz vienu metienu (izvēlētajā atlasē)",
+                          "Metieni": "Neblokētie metieni (vārtos, garām un vārti), pamatlaikā", "Vārtos": "Metieni vārtos (ieskaitot vārtus)",
+                          "ixG": "Spēlētāja paša metienu paredzamie vārti – cik vārtus viņš “būtu pelnījis” gūt",
+                          "Vārti − ixG": "+ realizē labāk nekā vidējs spēlētājs no tām pašām pozīcijām (snaiperis vai veiksme), − sliktāk",
+                          "ixG/sp": "ixG vidēji spēlē", "xG/metiens": "Vidējā metiena kvalitāte – augstāks = met no bīstamākām vietām",
+                          "Bīstami": f"Metieni ar xG ≥ {XG_BISTAMS:.2f}"})
+        st.caption("Top 60 pēc ixG. Kārtot var ar pogu “Kārtot”.")
+        return
+
+    # vārtsargi: GSAx
+    x = pret[pret["vartsargs"].notna()]
+    if kom != "Visas komandas":
+        x = x[x["pretinieks"] == kom]
+    if x.empty:
+        st.info("Šim skatam datu nav.")
+        return
+    g = x.groupby("vartsargs").agg(Komanda=("pretinieks", "last"), Metieni=("xg", "size"), SA=("uz_vartiem", "sum"), GA=("varti", "sum"),
+                                   xGA=("xg", "sum"), Bistami=("bistams", "sum"), GP=("game_id", "nunique"))
+    vg_ = ielasit_papildu("vartsargi", VERSIJA)
+    vardi = vg_.drop_duplicates("playerId", keep="last").set_index("playerId")["vards"] if vg_ is not None and not vg_.empty else pd.Series(dtype=str)
+    g["Vārtsargs"] = [vardi.get(int(p), str(int(p))) for p in g.index]
+    g["GSAx"] = g["xGA"] - g["GA"]
+    g["GSAx_sp"] = g["GSAx"] / g["GP"]
+    g["sv"] = (1 - g["GA"] / g["SA"]).where(g["SA"] > 0) * 100
+    g = g.sort_values(["GSAx", "GP"], ascending=[False, True]).reset_index(drop=True)
+    g.insert(0, "#", range(1, len(g) + 1))
+    g["Komanda"] = g["Komanda"].map(da.logo_url)
+    rtabula(g[["#", "Vārtsargs", "Komanda", "GP", "SA", "GA", "xGA", "GSAx", "GSAx_sp", "sv", "Bistami"]], hide_index=True,
+            column_config={"Komanda": st.column_config.ImageColumn("", width="small"), "GP": st.column_config.NumberColumn("Sp."),
+                           "SA": st.column_config.NumberColumn("Metieni vārtos"), "GA": st.column_config.NumberColumn("Ielaisti"),
+                           "xGA": st.column_config.NumberColumn("xG pret", format="%.2f"), "GSAx": st.column_config.NumberColumn("GSAx", format="%+.2f"),
+                           "GSAx_sp": st.column_config.NumberColumn("GSAx/sp", format="%+.2f"), "sv": st.column_config.NumberColumn("Atvairīti %", format="%.1f"),
+                           "Bistami": st.column_config.NumberColumn("Bīstami pret")},
+            paskaidr={"xG pret": "Paredzamie vārti no visiem metieniem pret šo vārtsargu",
+                      "GSAx": "Goals saved above expected = xG pret − ielaisti. + atvairījis vairāk nekā vidējs vārtsargs tādos pašos metienos",
+                      "GSAx/sp": "GSAx vidēji spēlē", "Atvairīti %": "Faktiskais atvairīto metienu % (metieni vārtos)",
+                      "Bīstami pret": f"Metieni pret vārtsargu ar xG ≥ {XG_BISTAMS:.2f}"})
+    st.caption("Secība: GSAx (vārtsargs, kas atvairījis visvairāk virs gaidītā, augšā).")
+
+
+# ============================================================================
 # LAPA: BACK TO BACK (spēles divas dienas pēc kārtas)
 # B2B = komanda spēlē divās pēc kārtas esošās dienās pēc ASV austrumu laika (kā skaita NHL). "2. spēle" = spēle bez atpūtas dienas,
 # "1. spēle" = spēle, pēc kuras nākamajā dienā ir vēl viena (arī kalendārā ieplānota). Statistika – pamatlaiks, bilance – oficiālā.
@@ -4221,16 +4463,19 @@ def lapa_b2b():
     else:
         t["pts_citas"] = c["pts_pct"].reindex(t.index)
         t["pts_starp"] = t["pts_pct"] - t["pts_citas"]
+        sez = da.kopsavilkums(DF, "Visas", None)                  # visas sezonas bilance – vienādu B2B rādītāju secībai
+        t["sez_PTS"] = sez["PTS"].reindex(t.index)
+        t["sez_W"] = sez["W"].reindex(t.index)
         kartes = [kom_kartes(t, "pts_pct", "Punkti % B2B spēlēs", lambda v: f"{v:.0f}%", lambda k: f" · {int(t.loc[k, 'W'])}-{int(t.loc[k, 'L'])}-{int(t.loc[k, 'OTL'])}",
-                             seciba=[("W", True), ("Starpiba", True)],
+                             seciba=[("W", True), ("Starpiba", True), ("sez_PTS", True), ("sez_W", True)],
                              tip_f=lambda k: f"{int(t.loc[k, 'W'])} win, {int(t.loc[k, 'L'])} loss, {int(t.loc[k, 'OTL'])} OT/SO loss {int(t.loc[k, 'sp'])} B2B spēlēs"),
                   kom_kartes(t, "sp", "Visvairāk B2B spēļu", lambda v: f"{int(v)}", lambda k: f" · {t.loc[k, 'pts_pct']:.0f}% punktu",
-                             seciba=[("pts_pct", True)]),
+                             seciba=[("pts_pct", True), ("sez_PTS", True)]),
                   kom_kartes(t, "pts_starp", "Vislabāk tiek galā (pret citām spēlēm)", lambda v: f"{v:+.0f}", lambda k: f" · {t.loc[k, 'pts_pct']:.0f}% pret {t.loc[k, 'pts_citas']:.0f}%",
-                             seciba=[("sp", True)], filtrs=lambda y: y["pts_starp"].notna(),
+                             seciba=[("sp", True), ("sez_PTS", True)], filtrs=lambda y: y["pts_starp"].notna(),
                              tip_f=lambda k: f"Punkti % B2B spēlēs mīnus punkti % citās spēlēs (procentpunkti)"),
                   kom_kartes(t, "pts_starp", "Lielākais kritums (pret citām spēlēm)", lambda v: f"{v:+.0f}", lambda k: f" · {t.loc[k, 'pts_pct']:.0f}% pret {t.loc[k, 'pts_citas']:.0f}%",
-                             aug=False, seciba=[("sp", True)], filtrs=lambda y: y["pts_starp"].notna(),
+                             aug=False, seciba=[("sp", True), ("sez_PTS", True)], filtrs=lambda y: y["pts_starp"].notna(),
                              tip_f=lambda k: f"Punkti % B2B spēlēs mīnus punkti % citās spēlēs (procentpunkti)")]
         with augsa:
             st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
@@ -4241,19 +4486,29 @@ def lapa_b2b():
                 {"teksts": f"{pd.Timestamp(r.datums):%d.%m} {'vs' if r.majas == 1 else '@'} {da.pilns_nosaukums(r.pretinieks)}",
                  "saite": f"({int(r.g_tot)}:{int(r.z_tot)})", "url": speles_saite(r.game_id),
                  "piez": REZ_NOZIME.get(rez_kods(r.rez, r.beigas), "")} for r in g_.itertuples()])
-        tabula(t, {"sp": "Sp.", "W": "W", "L": "L", "OTL": "OTL", "pts_pct": "Punkti %", "G_sp": "Gūti/sp", "Z_sp": "Ielaisti/sp",
-                   "SOG_sp": "Metieni/sp", "SA_sp": "Pret. metieni/sp", "pts_citas": "Citās punkti %", "pts_starp": "Starpība"},
-               sort_col=["pts_pct", "W", "Starpiba", "sp"], ascending=False, burbuli=burbuli,
+        tabula(t, {"sp": "Sp.", "W": "W", "L": "L", "OTL": "OTL", "pts_pct": "Punkti %", "pts_citas": "Punkti % citās", "pts_starp": "B2B pret citām",
+                   "G_sp": "Gūti/sp", "Z_sp": "Ielaisti/sp", "Starpiba": "Vārtu ±", "SOG_sp": "Metieni/sp", "SA_sp": "Pret. metieni/sp"},
+               # secība: punkti % B2B spēlēs; vienādiem – vairāk uzvaru, labāka vārtu starpība, tad visas sezonas punkti un uzvaras (nevis alfabēts)
+               sort_col=["pts_pct", "W", "Starpiba", "sez_PTS", "sez_W"], ascending=False, burbuli=burbuli,
                prog={"pts_pct": (0, 100)}, formati={"pts_pct": "{:.0f}", "pts_citas": "{:.0f}", "pts_starp": "{:+.0f}", "G_sp": "{:.2f}", "Z_sp": "{:.2f}",
-                                                    "SOG_sp": "{:.1f}", "SA_sp": "{:.1f}"},
-               vienadiem={"pts_pct": [("W", True), ("Starpiba", True)], "W": [("pts_pct", True)], "L": [("pts_pct", False)],
-                          "sp": [("pts_pct", True)], "G_sp": [("Starpiba", True)], "Z_sp": [("Starpiba", False)], "pts_starp": [("sp", True)]},
-               paskaidr={"Sp.": f"B2B spēles ({sp_txt}); uzved, lai redzētu spēles", "W": "win (arī OT win un SO win)", "L": "loss",
-                         "OTL": "OT loss vai SO loss", "Punkti %": "Izcīnīto punktu daļa šajās spēlēs (win 2, OT/SO loss 1)",
-                         "Gūti/sp": "Vidēji gūtie vārti pamatlaikā šajās spēlēs", "Ielaisti/sp": "Vidēji ielaistie vārti pamatlaikā šajās spēlēs",
-                         "Metieni/sp": "Vidēji metieni vārtos pamatlaikā", "Pret. metieni/sp": "Pretinieka vidējie metieni vārtos pamatlaikā",
-                         "Citās punkti %": "Punkti % visās pārējās spēlēs (tajā pašā atlasē: mājās / viesos)",
-                         "Starpība": "Punkti % B2B spēlēs mīnus citās spēlēs (procentpunkti); negatīvs = B2B spēlē sliktāk"})
+                                                    "Starpiba": "{:+.0f}", "SOG_sp": "{:.1f}", "SA_sp": "{:.1f}"},
+               vienadiem={"pts_pct": [("W", True), ("Starpiba", True), ("sez_PTS", True)], "W": [("pts_pct", True), ("sez_PTS", True)],
+                          "L": [("pts_pct", False)], "OTL": [("pts_pct", False)], "sp": [("pts_pct", True), ("sez_PTS", True)],
+                          "pts_citas": [("sez_PTS", True)], "pts_starp": [("sp", True), ("sez_PTS", True)],
+                          "G_sp": [("Starpiba", True)], "Z_sp": [("Starpiba", False)], "Starpiba": [("G_sp", True), ("sez_PTS", True)],
+                          "SOG_sp": [("G_sp", True)], "SA_sp": [("Z_sp", True)]},
+               paskaidr={"Sp.": f"Cik B2B spēles komanda aizvadījusi ({sp_txt}); uzved, lai redzētu spēles",
+                         "W": "Uzvaras šajās B2B spēlēs (arī OT win un SO win)", "L": "Zaudējumi pamatlaikā šajās B2B spēlēs",
+                         "OTL": "Zaudējumi papildlaikā vai metienu sērijā (dod 1 punktu)",
+                         "Punkti %": "Cik % no iespējamajiem punktiem komanda izcīnīja B2B spēlēs (win = 2, OT/SO loss = 1). Piem., 1-1-0 = 50%",
+                         "Punkti % citās": "Tas pats rādītājs visās pārējās šīs sezonas spēlēs (ne B2B) – ar ko salīdzināt",
+                         "B2B pret citām": "Punkti % B2B spēlēs mīnus Punkti % citās (procentpunkti). +20 = B2B spēlēs komanda spēlē labāk nekā parasti; "
+                                           "−30 = B2B spēlēs ievērojami sliktāk (nogurums)",
+                         "Gūti/sp": "Vidēji gūtie vārti B2B spēlē (pamatlaikā)", "Ielaisti/sp": "Vidēji ielaistie vārti B2B spēlē (pamatlaikā)",
+                         "Vārtu ±": "Gūto un ielaisto vārtu starpība visās šīs B2B spēlēs kopā (pamatlaikā)",
+                         "Metieni/sp": "Vidēji metieni vārtos B2B spēlē (pamatlaikā)", "Pret. metieni/sp": "Pretinieka vidējie metieni vārtos B2B spēlē"})
+        st.caption("Secība: Punkti % B2B spēlēs; ja vienāds – vairāk uzvaru, labāka vārtu starpība, tad komandas punkti un uzvaras visā sezonā. "
+                   "Mazs spēļu skaits (1–2) ir nejaušs – skaties uz “Sp.” un “B2B pret citām”.")
 
     # --- nākamās B2B (kalendārs, 7 dienas uz priekšu) ---
     st.markdown('<p class="ld-h">Nākamās B2B (7 dienas)</p>', unsafe_allow_html=True)
