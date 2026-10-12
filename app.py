@@ -281,7 +281,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.46"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.47"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -1827,7 +1827,7 @@ def modelis_pret_tirgu_bloks():
         st.warning(f"Tikai {n} spēles – rezultāti vēl ir ļoti nejauši. Ticamus secinājumus var izdarīt pēc ~200–300 spēlēm.")
     lg = v["logloss"]
     st.markdown(
-        f"**Precizitāte 1X2 pamatlaikā** (log loss, mazāk = labāk): modelis **{lg['modelis']:.4f}** · tirgus rītā (Pinnacle) "
+        f"**Precizitāte 1X2 pamatlaikā** (log loss, mazāk = labāk): modelis **{lg['modelis']:.4f}** · tirgus rītā (Pinnacle vai labākie ES koef.) "
         f"**{lg['tirgus_rits']:.4f}** · tirgus pirms spēles **{lg['tirgus_nosl']:.4f}** · modelis un tirgus uz pusēm **{lg['apvienots']:.4f}**.")
     rindas = [x for x in v["likmes"] if x.get("likmes")]
     if rindas:
@@ -1839,7 +1839,7 @@ def modelis_pret_tirgu_bloks():
             hide_index=True, kartot=False,
             column_config={k: st.column_config.NumberColumn(format="%.1f") for k in ("Uzvaras %", "ROI Pinnacle %", "ROI labākais %", "CLV %", "Pārspēj noslēgumu %")},
             paskaidr={"Starpība ≥": "Simulētā likme tiek “likta”, ja modeļa varbūtība × rīta koeficients − 1 ir vismaz tik liela",
-                      "ROI Pinnacle %": "Peļņa uz likmi (vienādas likmes) ar Pinnacle rīta koeficientiem",
+                      "ROI Pinnacle %": "Peļņa uz likmi (vienādas likmes) ar Pinnacle rīta koeficientiem (1X2 – labākie ES koeficienti, jo Pinnacle 1X2 nedod)",
                       "ROI labākais %": "Tas pats ar labāko rīta koeficientu starp ES bukmeikeriem",
                       "CLV %": "Cik rīta koeficients bija labāks par pēdējo zināmo pirms spēles: + nozīmē, ka tirgus pēc tam pagājās modeļa virzienā",
                       "Pārspēj noslēgumu %": "Cik % likmju rīta koeficients bija augstāks par pēdējo pirms spēles"})
