@@ -83,6 +83,10 @@ try:
 except ImportError:
     FONS_DATA_URI = None
 try:
+    import picks                        # Picks: likmju atlase pēc vērtības (EV, Kelly) un vēsture (picks.py)
+except ImportError:
+    picks = None
+try:
     import rulli                        # komandu izvēle ar rullīšiem (salīdzināšanas lapā); bez tā tiek rādītas parastas izvēlnes
 except ImportError:
     rulli = None
@@ -93,7 +97,7 @@ except ImportError:
 def _parladet_mainitos_modulus():
     import importlib
     import sys as _sys
-    for _nos in ("datu_apstrade", "lokacijas", "xg", "modelis", "fakti", "rulli", "fons"):
+    for _nos in ("datu_apstrade", "lokacijas", "xg", "modelis", "fakti", "rulli", "fons", "picks"):
         _m = _sys.modules.get(_nos)
         _f = getattr(_m, "__file__", None) if _m is not None else None
         if not _f or not os.path.exists(_f):
@@ -277,7 +281,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.44"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.46"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -927,6 +931,24 @@ html.tumss .pk-d summary { color: var(--t-zils); }
 .kf-d .ld-z { display: none; } .kf-d[open] .ld-a { display: none; } .kf-d[open] .ld-z { display: inline; }
 .pk-m { font-size: .8rem; margin-top: .55rem; padding: .35rem .6rem; border-radius: .5rem; background: rgba(128,128,128,.08); }
 .pk-pl { color: #15803d; font-weight: 700; } .pk-mn { color: #b91c1c; font-weight: 700; }
+/* Picks */
+.pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: .7rem; margin: .4rem 0 .9rem; }
+.pc { position: relative; }
+.pc-t { display: flex; align-items: center; gap: .45rem; font-size: .8rem; opacity: .75; }
+.pc-t img { width: 1.55rem; height: 1.55rem; object-fit: contain; }
+.pc-iz { font-size: 1.15rem; font-weight: 800; margin-top: .35rem; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; }
+.pc-k { font-size: .82rem; opacity: .75; }
+.pc-r { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .3rem; margin-top: .55rem; text-align: center; }
+.pc-r div { background: rgba(128,128,128,.09); border-radius: .5rem; padding: .3rem .2rem; }
+.pc-r small { display: block; font-size: .64rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .6; }
+.pc-r b { font-size: .95rem; }
+.pc-ev { position: absolute; top: .65rem; right: .75rem; font-weight: 800; font-size: .85rem; color: #15803d; background: rgba(22,163,74,.12);
+  padding: .12rem .5rem; border-radius: .4rem; }
+.pc-s { margin-top: .45rem; font-size: .74rem; opacity: .65; }
+.pr-w { color: #15803d; font-weight: 800; } .pr-l { color: #b91c1c; font-weight: 800; } .pr-p { opacity: .7; font-weight: 700; }
+.pc-spark { width: 100%; height: 70px; display: block; margin: .2rem 0 .6rem; }
+html.tumss .pc-ev, html.tumss .pr-w { color: #4ade80; } html.tumss .pr-l { color: #f87171; }
+html.tumss .pc-r div { background: rgba(255,255,255,.06); }
 @media (max-width: 640px) { .kf-r { gap: .35rem; flex-wrap: nowrap; } .kf-s { padding: .3rem .5rem; gap: .25rem; } .kf-s b { font-size: .95rem; } .kf-p { display: none; } }
 html.tumss .kf-s { background: var(--t-karte); border-color: var(--t-mala); }
 html.tumss .kf-d summary { color: var(--t-zils); }
@@ -1825,11 +1847,303 @@ def modelis_pret_tirgu_bloks():
                "ROI uz maziem paraugiem ir ļoti nejaušs. Tā ir simulācija, nevis ieteikums likt likmes.")
 
 
+# ============================================================================
+# PROGNOZES → PICKS: likmes ar vērtību (picks.py) un vēsture "picks pret realitāti"
+# ============================================================================
+BK_NOS_PICKS = {"labakais": "labākais (ES)"}
+
+
+def _bk_nos(bk):
+    return BK_NOS_PICKS.get(bk) or BUKMEIKERU_NOS.get(bk, str(bk))
+
+
+def picks_iestatijumi():
+    """Lietotāja iestatījumi aktuālajiem picks (vēsturē vienmēr tiek lietoti standarta iestatījumi no picks.NOKLUSETIE)."""
+    n = picks.NOKLUSETIE
+    with st.expander("Algoritma iestatījumi (tikai šim skatam)", expanded=False):
+        c1, c2, c3 = st.columns(3)
+        min_ev = c1.slider("Min. EV %", 1.0, 15.0, n["min_ev"] * 100, 0.5, key="pk_min_ev",
+                           help="Likme tiek ieteikta tikai, ja sagaidāmā vērtība ir vismaz tik liela (p × koef − 1)")
+        min_p = c2.slider("Min. varbūtība %", 5, 50, int(n["min_p"] * 100), 1, key="pk_min_p",
+                          help="Izslēdz “brīnumus”: izvēles ar mazu modeļa varbūtību (liela dispersija)")
+        max_nov = c3.slider("Max. atšķirība no tirgus (pp)", 4, 25, int(n["max_novirze"] * 100), 1, key="pk_nov",
+                            help="Ja modelis ļoti nesaskan ar asāko tirgu (Pinnacle bez uzcenojuma), visticamāk modelis kaut ko nezina")
+        c4, c5, c6 = st.columns(3)
+        kd = c4.slider("Kelly daļa", 0.1, 1.0, n["kelly_dala"], 0.05, key="pk_kelly",
+                       help="Daļa no pilnā Kelly (¼ = 0.25 – profesionāļu standarts, mazina svārstības un modeļa kļūdu ietekmi)")
+        max_l = c5.slider("Max. likme % bankrola", 1.0, 5.0, n["max_likme"] * 100, 0.5, key="pk_maxl")
+        uz_sp = c6.slider("Max. picks vienā spēlē", 1, 3, int(n["max_uz_speli"]), 1, key="pk_uzsp",
+                          help="1X2, ar OT un ±1.5 uz to pašu komandu ir korelētas likmes – parasti tikai viena katrā spēlē")
+        c7, c8 = st.columns([1, 2])
+        w_1x2 = c7.slider("Modeļa svars (uzvarētājs)", 0.0, 1.0, float(n["modela_svars"]["1x2"]), 0.05, key="pk_w1x2",
+                          help="1X2, uzvarētājs ar OT un ±1.5: lēmuma varbūtība = svars × modelis + (1 − svars) × tirgus. 1.0 = tikai modelis, "
+                               "0.5 = puse modelis, puse tirgus (noklusējums: modelis autsaiderus vērtē augstāk par tirgu). Totāliem – tikai modelis")
+        tirgi = c8.multiselect("Tirgi", list(picks.TIRGU_NOS), default=list(picks.TIRGU_NOS), key="pk_tirgi",
+                               format_func=lambda t: picks.TIRGU_NOS[t])
+    return {"modela_svars": {**n["modela_svars"], "1x2": w_1x2, "ml": w_1x2, "pm": w_1x2},"min_ev": min_ev / 100, "min_p": min_p / 100, "max_novirze": max_nov / 100, "kelly_dala": kd,
+            "max_likme": max_l / 100, "min_likme": min(n["min_likme"], max_l / 100), "max_uz_speli": uz_sp, "tirgi": tuple(tirgi)}
+
+
+def aktualie_kandidati(md, cfg):
+    """Visas izvēles nākamajām spēlēm ar koeficientiem (pašreizējais modelis + pašreizējie koeficienti)."""
+    k, meta = ielasit_koef(VERSIJA)
+    if k is None or k.empty:
+        return [], meta, 0
+    k = k[k["sakums_lv"] > pd.Timestamp.now(tz=da.LV_TZ)]
+    if k.empty:
+        return [], meta, 0
+    po_ids = set(KAL.loc[KAL.get("speles_tips", pd.Series("RS", index=KAL.index)).astype(str) == "PO", "game_id"]) if KAL is not None else set()
+    visi = []
+    for gid, x in k.groupby("game_id"):
+        home, away, sak = x["majas"].iloc[0], x["viesi"].iloc[0], x["sakums_lv"].iloc[0]
+        if home not in modelis.NHL_KOMANDAS_SARAKSTS or away not in modelis.NHL_KOMANDAS_SARAKSTS:
+            continue
+        try:
+            pr = speles_prognoze(home, away, sak, int(gid in po_ids), md)[0]
+            spele = {"game_id": int(gid), "sakums_utc": str(x["sakums_utc"].iloc[0]), "majas": home, "viesi": away, "ticamiba": pr["ticamiba"]}
+            visi += picks.kandidati(spele, picks.modela_varbutibas(pr, x), x, cfg)
+        except Exception:
+            continue
+    return visi, meta, k["game_id"].nunique()
+
+
+def pick_karte_html(r, arh_atsl):
+    e = _html.escape
+    sak = pd.Timestamp(r["sakums_utc"]).tz_convert(da.LV_TZ)
+    lin = None if pd.isna(r["linija"]) else r["linija"]
+    saglabats = (int(r["game_id"]), r["tirgus"], str(r["iznakums"]), lin) in arh_atsl
+    likme_v = r["likme_pct"] * picks.BANKROLLS
+    p_t = "–" if pd.isna(r["p_tirgus"]) else f"{r['p_tirgus'] * 100:.0f}%"
+    pin_t = "" if pd.isna(r["koef_pin"]) else f" · Pinnacle {r['koef_pin']:.2f}"
+    w_ = r.get("modela_svars", 1.0)
+    lem_t = ("Varbūtība, pēc kuras rēķināts EV un likme: " + ("tikai modelis" if w_ >= 1 else
+             f"{w_ * 100:.0f}% modelis + {(1 - w_) * 100:.0f}% tirgus"))
+    return (f'<div class="kpi pc"><span class="pc-ev" title="Expected Value: p × (koef − 1) − (1 − p)">EV {r["ev"] * 100:+.1f}%</span>'
+            f'<div class="pc-t"><img src="{e(da.logo_url(r["viesi"]))}" alt="">{e(r["viesi"])} @ {e(r["majas"])}'
+            f'<img src="{e(da.logo_url(r["majas"]))}" alt=""> · {sak:%d.%m %H:%M}</div>'
+            f'<div class="pc-iz">{e(r["izvele"])}</div>'
+            f'<div class="pc-k">{e(picks.TIRGU_NOS.get(r["tirgus"], r["tirgus"]))} · <b>{r["koef"]:.2f}</b> ({e(_bk_nos(r["bukmeikers"]))})'
+            f'{pin_t}</div>'
+            f'<div class="pc-r"><div title="Puasona modeļa varbūtība"><small>Modelis</small><b>{r["p_modelis"] * 100:.0f}%</b></div>'
+            f'<div title="{e(lem_t)}"><small>Lēmums</small><b>{r["p_lemums"] * 100:.0f}%</b></div>'
+            f'<div title="Tirgus taisnīgā varbūtība ({e(r["tirgus_avots"])} bez uzcenojuma)"><small>Tirgus</small><b>{p_t}</b></div>'
+            f'<div title="¼ Kelly × ticamība, robežās 1–5 % bankrola"><small>Likme</small><b>{r["likme_pct"] * 100:.1f}%</b></div></div>'
+            f'<div class="pc-s">Implied {r["implied"] * 100:.0f}% · ticamība: {e(str(r["ticamiba"]))} · Kelly (pilns) {r["kelly"] * 100:.1f}% · '
+            f'{likme_v:.0f} no {picks.BANKROLLS:.0f} vien.'
+            f'{" · ✓ saglabāts vēsturē" if saglabats else ""}</div></div>')
+
+
+def picks_aktualie(md):
+    cfg = picks_iestatijumi()
+    visi, meta, n_sp = aktualie_kandidati(md, cfg)
+    if not n_sp:
+        st.info("Šobrīd nav nesāktu spēļu ar koeficientiem. Koeficienti tiek ielādēti 3× dienā (~09:00, ~16:30, ~23:00) 3 dienas uz priekšu.")
+        return
+    pk = picks.atlasit(visi, cfg)
+    der = sum(1 for x in visi if x["der"])
+    kopa = float(pk["likme_pct"].sum()) if not pk.empty else 0.0
+    ielade = ""
+    if meta and meta.get("ielade"):
+        try:
+            ielade = f" · koeficienti: {pd.Timestamp(meta['ielade']).tz_convert(da.LV_TZ):%d.%m %H:%M}"
+        except Exception:
+            pass
+    st.markdown('<div class="kpi-grid">' + "".join(
+        f'<div class="kpi"><div class="kpi-l">{l}</div><div class="kpi-v">{v}</div><div class="kpi-s">{s_}</div></div>' for l, v, s_ in (
+            ("Spēles ar koeficientiem", n_sp, f"novērtētas {len(visi)} izvēles{ielade}"),
+            ("Ar pietiekamu vērtību", der, "izturēja visus filtrus"),
+            ("Picks", len(pk), "pēc korelācijas filtra (spēlē)"),
+            ("Kopējā likme", f"{kopa * 100:.1f}%", f"bankrola · {kopa * picks.BANKROLLS:.0f} no {picks.BANKROLLS:.0f} vien.")))
+        + "</div>", unsafe_allow_html=True)
+    arh = picks.ielasit_arhivu(str(da.DATU_MAPE / "picks_arhivs.csv"))
+    arh_atsl = {(int(r.game_id), str(r.tirgus), str(r.iznakums), None if pd.isna(r.linija) else round(float(r.linija), 2)) for r in arh.itertuples()}
+    if pk.empty:
+        st.markdown('<div class="fk-liga">Šobrīd neviena izvēle neiztur filtrus – tas ir normāli: profesionāls spēlētājs liek likmes tikai tad, '
+                    'kad ir vērtība. Iemeslus var redzēt zemāk.</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="pc-grid">' + "".join(pick_karte_html(r, arh_atsl) for _, r in pk.sort_values("sakums_utc").iterrows())
+                    + "</div>", unsafe_allow_html=True)
+    with st.expander(f"Visas novērtētās izvēles ({len(visi)}) un kāpēc tās netika izvēlētas"):
+        if visi:
+            d = pd.DataFrame(visi).sort_values("ev", ascending=False)
+            atl = set(zip(pk["game_id"], pk["tirgus"], pk["iznakums"], pk["linija"].map(picks._lin))) if not pk.empty else set()
+            d["Statuss"] = [("✓ pick" if (g_, t_, i_, picks._lin(l_)) in atl else ("der (cits pick šajā spēlē)" if d_ else iem))
+                            for g_, t_, i_, l_, d_, iem in zip(d["game_id"], d["tirgus"], d["iznakums"], d["linija"], d["der"], d["iemesls"])]
+            rtabula(pd.DataFrame({
+                "Spēle": d["viesi"] + " @ " + d["majas"], "Izvēle": d["izvele"], "Koef.": d["koef"], "Bukmeikers": d["bukmeikers"].map(_bk_nos),
+                "Modelis %": d["p_modelis"] * 100, "Lēmums %": d["p_lemums"] * 100, "Tirgus %": d["p_tirgus"] * 100, "EV %": d["ev"] * 100,
+                "Statuss": d["Statuss"]}),
+                hide_index=True, column_config={"Koef.": st.column_config.NumberColumn(format="%.2f"),
+                                                **{k_: st.column_config.NumberColumn(format="%.1f") for k_ in ("Modelis %", "Lēmums %", "Tirgus %", "EV %")}},
+                paskaidr={"Tirgus %": "Taisnīgā varbūtība no Pinnacle (vai vidējiem) koeficientiem bez uzcenojuma",
+                          "Statuss": "✓ pick – ieteiktā likme; citādi – kāpēc izvēle netika ieteikta",
+                          "Lēmums %": "Varbūtība, pēc kuras rēķināts EV: 1X2, ar OT un ±1.5 – modelis pievilkts pie tirgus (svars iestatījumos), totāliem – modelis",
+                          "EV %": "Sagaidāmā vērtība ar labāko derīgo koeficientu: p × (koef − 1) − (1 − p), p – lēmuma varbūtība"})
+    with st.expander("Kā tiek atlasīti picks"):
+        n = picks.NOKLUSETIE
+        st.markdown(
+            "1. **Implied probability** = 1 / koeficients – ko paredz bukmeikers (ar uzcenojumu). **Tirgus taisnīgā varbūtība** – Pinnacle "
+            "(asākais tirgus) koeficienti bez uzcenojuma; ja Pinnacle nav – vidējais.\n"
+            "2. **Koeficients likmei** – labākais ES bukmeikeru koeficients, bet ne vairāk kā +10 % virs Pinnacle (lielāka atšķirība parasti ir novecojis koeficients).\n"
+            "3. **Lēmuma varbūtība** p = svars × modelis + (1 − svars) × tirgus: uzvarētāja tirgiem (1X2, ar OT, ±1.5) svars "
+            f"{n['modela_svars']['1x2']:g} (modelis sistemātiski vērtē autsaiderus augstāk par tirgu; visi trīs nāk no tā paša vārtu sadalījuma), "
+            "totāliem – tikai modelis. "
+            "**EV** = p × (koef − 1) − (1 − p).\n"
+            f"4. **Filtri:** EV ≥ {n['min_ev'] * 100:.0f}%, varbūtība ≥ {n['min_p'] * 100:.0f}%, koeficients ≤ {n['max_koef']:g}, "
+            f"modelis nedrīkst atšķirties no tirgus vairāk par {n['max_novirze'] * 100:.0f} pp (tad visticamāk modelis kaut ko nezina – traumas, sastāvs) "
+            "un tam jābūt optimistiskākam par taisnīgo tirgu.\n"
+            "5. **Korelācija:** vienā spēlē tikai viena izvēle (ar lielāko EV).\n"
+            f"6. **Likme:** Kelly f* = (p × koef − 1) / (koef − 1); tiek likts ¼ Kelly × ticamība (Augsta 1 / Vidēja 0.75 / Zema 0.5), "
+            f"robežās {n['min_likme'] * 100:.0f}–{n['max_likme'] * 100:.0f}% bankrola; vienā dienā kopā ne vairāk par {n['max_dienas_risks'] * 100:.0f}%.\n\n"
+            "Vēsture tiek krāta automātiski (darbplūsma “NHL Odds”, 3× dienā) ar standarta iestatījumiem; iestatījumi augstāk maina tikai šo skatu.")
+    st.caption("Picks ir matemātisks novērtējums, nevis garantija vai ieteikums likt likmes. Ticamus secinājumus par algoritmu var izdarīt tikai pēc "
+               "vairākiem simtiem likmju (skat. Vēsture – īpaši CLV).")
+
+
+@st.cache_data(show_spinner=False)
+def picks_vesture_dati(versija):
+    arh = picks.ielasit_arhivu(str(da.DATU_MAPE / "picks_arhivs.csv"))
+    raw_ = globals().get("RAW_VISS")
+    raw_ = RAW if raw_ is None else raw_
+    return picks.rezultati(arh, raw_)
+
+
+def _bankrola_svg(a):
+    """Virtuālā bankrola līkne (Kelly likmes) pa izšķirtajām likmēm laika secībā."""
+    x = a[a["rezultats"].isin(["W", "L", "P"])].sort_values(["sakums_utc", "game_id"])
+    if len(x) < 2:
+        return ""
+    y = picks.BANKROLLS + x["pelna_bank"].cumsum().to_numpy()
+    y = np.concatenate([[picks.BANKROLLS], y])
+    lo, hi = min(y.min(), picks.BANKROLLS), max(y.max(), picks.BANKROLLS)
+    rng = (hi - lo) or 1.0
+    w, h = 600, 70
+    pts = " ".join(f"{i / (len(y) - 1) * w:.1f},{h - 4 - (v - lo) / rng * (h - 8):.1f}" for i, v in enumerate(y))
+    y0 = h - 4 - (picks.BANKROLLS - lo) / rng * (h - 8)
+    kr = "#16a34a" if y[-1] >= picks.BANKROLLS else "#dc2626"
+    return (f'<svg class="pc-spark" viewBox="0 0 {w} {h}" preserveAspectRatio="none" role="img" aria-label="Bankrola līkne">'
+            f'<line x1="0" y1="{y0:.1f}" x2="{w}" y2="{y0:.1f}" stroke="currentColor" stroke-opacity=".25" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>'
+            f'<polyline points="{pts}" fill="none" stroke="{kr}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>')
+
+
+def picks_vesture():
+    a = picks_vesture_dati(VERSIJA)
+    if a is None or a.empty:
+        st.info("Vēsture vēl ir tukša. Picks tiek saglabāti automātiski pēc katras koeficientu ielādes (3× dienā), un rezultāti "
+                "tiem tiek pievienoti, tiklīdz spēle ir aizvadīta.")
+        return
+    with st.container(key="frinda_pkv"):
+        tirgus_f = sledzis("Tirgus", list(picks.TIRGU_NOS), "Visi", key="pkv_t")
+        stat_f = sledzis("Statuss", ["Izšķirti", "Gaida"], "Visi", key="pkv_s")
+    x = a if tirgus_f == "Visi" else a[a["tirgus"] == tirgus_f]
+    k = picks.kopsavilkums(x)
+    e = _html.escape
+    if k.get("likmes", 0):
+        bank = picks.BANKROLLS + k["pelna_bank"]
+        kartes = [
+            ("Picks (izšķirti)", f"{k['likmes']}", f"{k['uzvaras']}-{k['zaud']}-{k['atgriezti']} (W-L-P) · gaida {k['gaida']}"),
+            ("Trāpījumi", f"{k['uzvaras'] / max(1, k['uzvaras'] + k['zaud']) * 100:.0f}%", f"vidēji lēmuma varbūtība {k['vid_p'] * 100:.0f}% · koef. {k['vid_koef']:.2f}"),
+            ("ROI (vienādas likmes)", f"{k['roi_vien'] * 100:+.1f}%", f"{k['pelna_vien']:+.2f} vien. · vidējais EV {k['vid_ev'] * 100:+.1f}%"),
+            ("Bankrols (Kelly)", f"{bank:.0f}", f"no {picks.BANKROLLS:.0f} · {k['pelna_bank']:+.0f} vien. ({k['roi_bank'] * 100:+.1f}% no likmēm)"),
+            ("CLV", "–" if pd.isna(k["clv"]) else f"{k['clv'] * 100:+.1f}%",
+             "–" if pd.isna(k["clv_poz"]) else f"pozitīvs {k['clv_poz'] * 100:.0f}% picks · koef. pret tirgu pirms spēles"),
+        ]
+        st.markdown('<div class="kpi-grid">' + "".join(
+            f'<div class="kpi"><div class="kpi-l">{e(l)}</div><div class="kpi-v">{e(v)}</div><div class="kpi-s">{e(s_)}</div></div>' for l, v, s_ in kartes)
+            + "</div>" + _bankrola_svg(x), unsafe_allow_html=True)
+        if k["likmes"] < 200:
+            st.caption(f"Tikai {k['likmes']} izšķirtas likmes – ROI vēl ir ļoti nejaušs (svārstības ±{100 / max(1, k['likmes']) ** 0.5:.0f}%). "
+                       "Ticamākais agrīnais rādītājs ir CLV: vai mūsu koeficients bija labāks par tirgus taisnīgo koeficientu tieši pirms spēles.")
+    else:
+        st.markdown(f'<div class="fk-liga">Izšķirtu picks vēl nav · gaida rezultātu: {k.get("gaida", 0)}</div>', unsafe_allow_html=True)
+    # pa tirgiem
+    iz = a[a["rezultats"].isin(["W", "L", "P"])]
+    if not iz.empty and tirgus_f == "Visi" and iz["tirgus"].nunique() > 1:
+        t = iz.groupby("tirgus").agg(n=("rezultats", "size"), w=("rezultats", lambda s_: (s_ == "W").sum()), roi=("pelna_vien", "mean"),
+                                     ev=("ev", "mean"), clv=("clv", "mean"))
+        rtabula(pd.DataFrame({"Tirgus": [picks.TIRGU_NOS.get(i, i) for i in t.index], "Picks": t["n"].to_numpy(),
+                              "Uzvaras %": (t["w"] / t["n"] * 100).to_numpy(), "ROI %": (t["roi"] * 100).to_numpy(),
+                              "Vid. EV %": (t["ev"] * 100).to_numpy(), "CLV %": (t["clv"] * 100).to_numpy()}),
+                hide_index=True, kartot=False,
+                column_config={k_: st.column_config.NumberColumn(format="%.1f") for k_ in ("Uzvaras %", "ROI %", "Vid. EV %", "CLV %")})
+    # saraksts: jaunākās augšā
+    y = x.copy()
+    if stat_f == "Izšķirti":
+        y = y[y["rezultats"].isin(["W", "L", "P"])]
+    elif stat_f == "Gaida":
+        y = y[y["rezultats"].isna()]
+    if y.empty:
+        st.info("Šajā atlasē picks nav.")
+        return
+    y = y.sort_values(["sakums_utc", "game_id"], ascending=False)
+    sak = pd.to_datetime(y["sakums_utc"], utc=True).dt.tz_convert(da.LV_TZ)
+    rez_html = {"W": '<span class="pr-w">W</span>', "L": '<span class="pr-l">L</span>', "P": '<span class="pr-p">P</span>'}
+
+    def gala_html(gid, gala):
+        if not gala:
+            return HtmlSuna('<span class="fb"></span>–')
+        return HtmlSuna(f'<span class="fb"></span><a href="{e(speles_saite(gid))}" target="_blank" rel="noopener">{e(gala)}</a>')
+    tab = pd.DataFrame({
+        "Datums": [f"{s_:%d.%m %H:%M}" for s_ in sak], "Spēle": (y["viesi"] + " @ " + y["majas"]).to_numpy(), "Izvēle": y["izvele"].to_numpy(),
+        "Koef.": pd.to_numeric(y["koef"]).to_numpy(), "Modelis %": (y["p_modelis"] * 100).to_numpy(),
+        "Lēmums %": (pd.to_numeric(y["p_lemums"], errors="coerce").fillna(y["p_modelis"]) * 100).to_numpy(), "EV %": (y["ev"] * 100).to_numpy(),
+        "Likme %": (y["likme_pct"] * 100).to_numpy(),
+        "Rezultāts": [HtmlSuna('<span class="fb"></span>' + rez_html.get(r_, "–")) if isinstance(r_, str) else HtmlSuna('<span class="fb"></span>gaida')
+                      for r_ in y["rezultats"]],
+        "Gala": [gala_html(g_, gl) for g_, gl in zip(y["game_id"], y["gala"])],
+        "Peļņa (vien.)": y["pelna_bank"].to_numpy(), "CLV %": (y["clv"] * 100).to_numpy()})
+    rtabula(tab, hide_index=True,
+            column_config={"Koef.": st.column_config.NumberColumn(format="%.2f"), "Modelis %": st.column_config.NumberColumn(format="%.0f"),
+                           "Lēmums %": st.column_config.NumberColumn(format="%.0f"), "EV %": st.column_config.NumberColumn(format="%+.1f"), "Likme %": st.column_config.NumberColumn(format="%.1f"),
+                           "Peļņa (vien.)": st.column_config.NumberColumn(format="%+.1f"), "CLV %": st.column_config.NumberColumn(format="%+.1f")},
+            paskaidr={"Izvēle": "Likme, ko algoritms atlasīja (saglabāta pirms spēles, vēlāk netiek mainīta)",
+                      "Koef.": "Koeficients atlases brīdī (labākais derīgais ES bukmeikeru koeficients)",
+                      "Lēmums %": "Varbūtība, pēc kuras tika rēķināts EV un likme (1X2, ar OT, ±1.5 – modelis pievilkts pie tirgus)",
+                      "EV %": "Sagaidāmā vērtība atlases brīdī", "Likme %": "Bankrola daļa (¼ Kelly × ticamība, 1–5 %)",
+                      "Rezultāts": "W – uzvara, L – zaudējums, P – naudas atgriešana; totāli un ±1.5 – pilnā spēle ar OT/SO, 1X2 – pamatlaiks",
+                      "Gala": "Spēles gala rezultāts (mājinieki:viesi); saite uz protokolu",
+                      "Peļņa (vien.)": f"Peļņa vienībās ar Kelly likmi (bankrols {picks.BANKROLLS:.0f})",
+                      "CLV %": "Mūsu koeficients pret tirgus taisnīgo koeficientu pēdējā ielādē pirms spēles: + = pārspējām noslēguma līniju"})
+    st.download_button("Lejupielādēt vēsturi (CSV)", data=a.to_csv(index=False).encode("utf-8"), file_name="nhl_picks_vesture.csv",
+                       mime="text/csv", key="picks_csv")
+
+
+def lapa_picks(md):
+    if picks is None:
+        st.info("Šai sadaļai vajag failu picks.py.")
+        return
+    with st.container(key="frinda_pks"):
+        skats = izvele("Picks", ["Aktuālie", "Vēsture"], key="pk_skats")
+    if skats == "Vēsture":
+        picks_vesture()
+    else:
+        picks_aktualie(md)
+
+
+def speles_prognoze(home, away, sak, po, md):
+    """Modeļa prognoze vienai nākamajai spēlei (ar atpūtu, ceļu un ticamajiem / paziņotajiem vārtsargiem): (pr, vs_h, st_h, vs_a, st_a)."""
+    g, mod, (p, _), _, vr, vu = md
+    fk = _speles_faktori(home, away, sak)
+    vs_h = modelis.ticamie_vartsargi(vr, home, fk["b2b_h"], vu) if vr is not None else []
+    vs_a = modelis.ticamie_vartsargi(vr, away, fk["b2b_a"], vu) if vr is not None else []
+    svs = da.ielasit_sakuma_vartsargus()                           # paziņotie sākuma vārtsargi aizstāj rotāciju
+    vs_h, st_h = modelis.apstiprinatie_vartsargi(vs_h, vr, home, *da.sakuma_vartsargs(svs, home, away, home, sak), vu)
+    vs_a, st_a = modelis.apstiprinatie_vartsargi(vs_a, vr, away, *da.sakuma_vartsargs(svs, home, away, away, sak), vu)
+    pr = modelis.prognoze(mod, g, home, away, p, po=po, vg_h=modelis.sagaidama_attieciba(vs_h),
+                          vg_a=modelis.sagaidama_attieciba(vs_a), **fk)
+    return pr, vs_h, st_h, vs_a, st_a
+
+
 def lapa_prognozes():
     st.title("Prognozes")
     md = modela_dati(da.modela_versija())                # pārrēķina tikai, kad mainās spēles / vārtsargi / metieni / iestatījumi
     if md[1] is None:
         st.info("Modelim vēl nav datu (ne šīs sezonas, ne DB).")
+        return
+    with st.container(key="frinda_prog"):
+        sadala = izvele("Sadaļa", ["Prognozes", "Picks"], key="prog_sadala")
+    if sadala == "Picks":
+        lapa_picks(md)
         return
     g, mod, (p, meta), rindas, vr, vu = md
     with st.expander("Kā modelis strādā un cik tas precīzs", expanded=False):
@@ -1883,14 +2197,7 @@ def lapa_prognozes():
         if home not in modelis.NHL_KOMANDAS_SARAKSTS or away not in modelis.NHL_KOMANDAS_SARAKSTS:
             continue
         po = int(str(r.get("speles_tips", "RS")) == "PO")
-        fk = _speles_faktori(home, away, sak)
-        vs_h = modelis.ticamie_vartsargi(vr, home, fk["b2b_h"], vu) if vr is not None else []
-        vs_a = modelis.ticamie_vartsargi(vr, away, fk["b2b_a"], vu) if vr is not None else []
-        svs = da.ielasit_sakuma_vartsargus()                       # paziņotie sākuma vārtsargi aizstāj rotāciju
-        vs_h, st_h = modelis.apstiprinatie_vartsargi(vs_h, vr, home, *da.sakuma_vartsargs(svs, home, away, home, sak), vu)
-        vs_a, st_a = modelis.apstiprinatie_vartsargi(vs_a, vr, away, *da.sakuma_vartsargs(svs, home, away, away, sak), vu)
-        pr = modelis.prognoze(mod, g, home, away, p, po=po, vg_h=modelis.sagaidama_attieciba(vs_h),
-                              vg_a=modelis.sagaidama_attieciba(vs_a), **fk)
+        pr, vs_h, st_h, vs_a, st_a = speles_prognoze(home, away, sak, po, md)
         vardi, ref_pr, liga_kopa = speles_tiesnesi(r["game_id"])
         tk = (ref_pr["kopa"] / liga_kopa) if (vardi and ref_pr is not None and liga_kopa and pd.notna(ref_pr["kopa"])) else 1.0
         nor = modelis.noraidijumi(rindas, home, away, p=p, tiesnesu_koef=tk, tips="PO" if po else "RS")
