@@ -706,13 +706,15 @@ def parbaude(sezonas=None, izvade=PARAMETRU_FAILS):
             continue
         w, mev, a, b = labakais
         atv = _simulet(d_atv[(d_atv["sezona"] == test_s) & (d_atv["tirgus"] == t)], w, mev)
-        kopa = _simulet(d[d["tirgus"] == t], w, mev)                       # visas sezonas kopā: vai ROI ir drošs (ROI − 1 SE > 0)
+        kopa = _simulet(d[d["tirgus"] == t], w, mev)                       # visas sezonas kopā (informācijai)
         iesl = a["roi"] > 0 and b.get("likmes", 0) > 0 and b["roi"] > 0
-        limenis = ("pilns" if kopa["roi"] - kopa["se"] > 0 else "novērošana") if iesl else "izslēgts"
+        # "pilns" tikai, ja pārbaudes sezonā (kas parametru izvēlē NETIKA izmantota) ROI ir lielāks par savu standartkļūdu;
+        # kopējais ROI šim nav derīgs, jo apmācības daļā parametri izvēlēti tieši tāpēc, ka tur tie bija labākie (optimistisks)
+        limenis = ("pilns" if b["roi"] - b["se"] > 0 else "novērošana") if iesl else "izslēgts"
         tirgi_rez[t] = {"iesl": bool(iesl), "limenis": limenis, "svars": w, "min_ev": mev, "apmaciba": a, "parbaude": b,
                         "parbaude_atvershana": atv, "kopa": kopa,
                         "iemesls": ("" if limenis == "pilns" else
-                                    "pelnošs abos posmos, bet kopējais ROI nav drošs (± 1 SE) – mazākas likmes, līdz to apstiprina reālā vēsture"
+                                    "pelnošs abos posmos, bet pārbaudes sezonas ROI nav drošs (± 1 SE) – mazākas likmes, līdz to apstiprina reālā vēsture"
                                     if iesl else ("nav pelnošs apmācības sezonās" if a["roi"] <= 0 else "nav pelnošs pārbaudes sezonā"))}
         print(f"  {TIRGU_NOS[t]}: svars {w}, min EV {mev:.0%} → apmācība ROI {a['roi']:+.1%} ({a['likmes']} likmes), "
               f"pārbaude ROI {b.get('roi', float('nan')):+.1%} ({b.get('likmes', 0)} likmes), kopā {kopa['roi']:+.1%} ± {kopa['se']:.1%} "
