@@ -4,7 +4,7 @@ prognozes_arhivs.py – modeļa prognožu "momentuzņēmums" katrā koeficientu 
 Palaiž darbplūsma "NHL Odds" uzreiz pēc koeficienti.py. Katrai vēl nesāktajai spēlei, kurai ir koeficienti, saglabā:
 - modeļa varbūtības TAJĀ BRĪDĪ (tikai no datiem, kas bija pieejami pirms spēles): 1X2 pamatlaikā, uzvarētājs ar OT,
   over pilnai spēlei (ar OT) Pinnacle galvenajai totāla līnijai;
-- tā paša brīža Pinnacle koeficientus un labākos koeficientus (1, X, 2, over, under).
+- tā paša brīža Pinnacle koeficientus un labākos koeficientus (1, X, 2, uzvarētājs ar OT, over, under).
 Vēlāk (lietotnē) tos salīdzina ar spēles rezultātu un ar pēdējiem zināmajiem koeficientiem pirms spēles (CLV).
 Viena rinda = spēle × ielāde; vecās rindas netiek mainītas (godīga pārbaude bez "skatīšanās nākotnē").
 
@@ -116,6 +116,8 @@ def main():
             "tot_linija": lin, "m_over": round(over_m, 5) if over_m is not None else np.nan,
             **{f"pin_{i}": _koef(x, "pinnacle", "1x2", i) for i in ("1", "X", "2")},
             **{f"lab_{i}": _koef(x, None, "1x2", i) for i in ("1", "X", "2")},
+            **{f"pin_ml{i}": _koef(x, "pinnacle", "ml", i) for i in ("1", "2")},
+            **{f"lab_ml{i}": _koef(x, None, "ml", i) for i in ("1", "2")},
             "pin_over": _koef(x, "pinnacle", "tot", "over", lin) if not np.isnan(lin) else np.nan,
             "pin_under": _koef(x, "pinnacle", "tot", "under", lin) if not np.isnan(lin) else np.nan,
             "lab_over": _koef(x, None, "tot", "over", lin) if not np.isnan(lin) else np.nan,
