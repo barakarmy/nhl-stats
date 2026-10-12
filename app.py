@@ -277,7 +277,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.43"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.44"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -300,6 +300,7 @@ NAV = [
         ("lapa_mazakums", "Mazākums", "penalty-kill", "shield"),
         ("lapa_otso", "OT / SO", "ot-so", "timer"),
         ("lapa_noraidijumi", "Noraidījumi", "penalties", "gavel"),
+        ("lapa_b2b", "Back to Back", "back-to-back", "event_repeat"),
     ]},
     {"grupa": "Spēlētāji un tiesneši", "lapas": [
         ("lapa_speletaji", "Spēlētāji", "players", "person"),
@@ -1599,15 +1600,28 @@ def rtabula(df, column_config=None, paskaidr=None, **kw):
             indekss=(kw.get("hide_index") is False and not isinstance(df.index, pd.RangeIndex)), kartot=kw.get("kartot", True))
 
 
-def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False, paskaidr=None, burbuli=None, formati=None, prog=None, numurs_no=1):
+def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False, paskaidr=None, burbuli=None, formati=None, prog=None, numurs_no=1,
+           vienadiem=None):
     """Komandu rangu tabula ar logotipiem. res: DataFrame ar indeksu 'komanda'; kolonnas: {iekšējais: virsraksts}.
+    sort_col / ascending: noklusējuma secība – viena kolonna vai saraksts (piem., ["PTS", "W"] un [False, False]); vienādām vērtībām
+    secību nosaka nākamās kolonnas, pēc tām – komandas kods.
+    vienadiem: {iekšējā kolonna: [(cita kolonna, tajā pašā virzienā?)]} – kā sakārtot vienādās vērtības, kad lietotājs izvēlnē "Kārtot"
+    izvēlas šo kolonnu (piem., Over vienādiem – vairāk vidēji vārtu augstāk, Under vienādiem – mazāk). Teksta kolonnām (piem., "3-1")
+    kārto tikai pēc šīm kolonnām.
     burbuli: {komanda: HTML} spēļu saraksts burbulī uz kolonnas "Sp."; formati/prog: {iekšējais: formāts / (min, max)}. (Grafiki lietotnē vairs netiek rādīti.)"""
     if res is None or res.empty:
         st.info("Nav datu šim skatam.")
         return
-    t = res.sort_values(sort_col, ascending=ascending, kind="stable").reset_index()
+    sk = list(sort_col) if isinstance(sort_col, (list, tuple)) else [sort_col]
+    asc = list(ascending) if isinstance(ascending, (list, tuple)) else [ascending] * len(sk)
+    t = res.sort_index().sort_values(sk, ascending=asc, kind="stable").reset_index()
     bur = [burbuli.get(k) for k in t["komanda"]] if burbuli else None
     saites = [iekseja_saite("team", kom=k) for k in t["komanda"]]           # logo atver komandas statistiku
+    sek, sek_dati = None, None
+    if vienadiem:
+        sek = {kolonnas[k]: v for k, v in vienadiem.items() if k in kolonnas}
+        kol_ = sorted({c for v in vienadiem.values() for c, _ in v if c in t.columns})
+        sek_dati = t[kol_].reset_index(drop=True) if kol_ else None
     t.insert(0, "Logo", t["komanda"].map(da.logo_url))
     t.insert(1, "Komanda", t["komanda"].map(da.pilns_nosaukums))
     t.insert(0, "#", range(numurs_no, numurs_no + len(t)))
@@ -1617,7 +1631,7 @@ def tabula(res, kolonnas, sort_col, ascending=False, config=None, grafiks=False,
     fm = {kolonnas[k]: v for k, v in (formati or {}).items() if k in kolonnas}
     pg = {kolonnas[k]: v for k, v in (prog or {}).items() if k in kolonnas}
     df_html(t, config=cfg_ar_help(list(t.columns), cfg, paskaidr), formati=fm, prog=pg, burbuli=bur, bur_kol=kolonnas.get("GP"), logo_saites=saites,
-            numurs_no=numurs_no)
+            numurs_no=numurs_no, vienadiem=sek, vienadiem_dati=sek_dati)
 
 
 # ============================================================================
@@ -1899,7 +1913,10 @@ def lapa_parskats():
         "G_sp": "Vārti/sp", "Z_sp": "Ielaisti/sp", "Starpiba": "Starpība",
         "SOG_sp": "Metieni/sp", "SOG_dala": "Metienu daļa %", "PP_pct": "PP %", "PK_pct": "PK %",
         "PEN_sp": "Noraid./sp", "Forma": "Forma (5)"},
-        sort_col="PTS",
+        sort_col=["PTS", "GP", "W", "Starpiba", "G"], ascending=[False, True, False, False, False],   # punkti; vienādiem – mazāk spēļu, vairāk uzvaru, starpība
+        vienadiem={"PTS": [("GP", False), ("W", True), ("Starpiba", True)], "PTS_pct": [("PTS", True), ("W", True)], "W": [("PTS", True)],
+                   "L": [("PTS", False)], "GP": [("PTS", True)], "G_sp": [("Starpiba", True)], "Z_sp": [("Starpiba", False)],
+                   "Starpiba": [("G", True)], "PP_pct": [("PPG", True)], "PK_pct": [("PPG_pret", False)]},
         config={"Punkti %": st.column_config.ProgressColumn("Punkti %", min_value=0, max_value=100, format="%.0f"),
                 "Vārti/sp": st.column_config.NumberColumn(format="%.2f"),
                 "Ielaisti/sp": st.column_config.NumberColumn(format="%.2f"),
@@ -2634,11 +2651,13 @@ def _kartosanas_izvele(key, opcijas, izv):
 
 
 def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=(), burbuli=None, bur_kol=None, platas=(), indekss=False, kartot=True,
-            atgriezt=False, logo_saites=None, numurs_no=1):
+            atgriezt=False, logo_saites=None, numurs_no=1, vienadiem=None, vienadiem_dati=None):
     """
     Visas lietotnes tabulas: DataFrame kā caurspīdīga HTML tabula ar paskaidrojumiem virsrakstos (uzvedot peli).
     config: Streamlit column_config (None = kolonna paslēpta; image = logotips; progress = josla; format = skaitļa formāts; width='large' = plata teksta kolonna);
     formati/prog/logo_kol/platas: tas pats tieši; burbuli: saraksts (pa vienam katrai rindai) ar HTML burbuli kolonnai bur_kol (spēļu saraksts uz "Sp.").
+    vienadiem: {kolonnas virsraksts: [(atslēga, tajā pašā virzienā?)]} – vienādu vērtību secība, kārtojot pēc šīs kolonnas; atslēgas ņem no
+    vienadiem_dati (DataFrame ar tādu pašu rindu secību kā df). Bez tā vienādās vērtības paliek noklusējuma secībā (stabila kārtošana).
     """
     if df is None or df.empty:
         if atgriezt:
@@ -2678,8 +2697,18 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
         if izv:
             k, dilst = izv
             s = df[k]
-            atsl = s.astype(str).str.lower() if s.dtype == object else pd.to_numeric(s, errors="coerce")
-            seciba = atsl.sort_values(ascending=not dilst, na_position="last", kind="stable").index
+            sek = [(c_, v_) for c_, v_ in (vienadiem or {}).get(k, []) if vienadiem_dati is not None and c_ in vienadiem_dati.columns]
+            atsl, virz = pd.DataFrame(index=df.index), []
+            if pd.api.types.is_numeric_dtype(s):
+                atsl["_0"] = pd.to_numeric(s, errors="coerce")
+                virz.append(not dilst)
+            elif not sek:                                      # teksts (piem., "3-1") bez skaitliskām atslēgām – alfabētiski
+                atsl["_0"] = s.astype(str).str.lower()
+                virz.append(not dilst)
+            for j_, (c_, vienads) in enumerate(sek):
+                atsl[f"_{j_ + 1}"] = pd.to_numeric(vienadiem_dati[c_], errors="coerce").to_numpy()
+                virz.append((not dilst) if vienads else dilst)
+            seciba = atsl.sort_values(list(atsl.columns), ascending=virz, na_position="last", kind="stable").index
             df = df.loc[seciba].reset_index(drop=True)
             if burbuli is not None:
                 burbuli = [burbuli[i] for i in seciba]
@@ -2743,13 +2772,13 @@ def lapa_periodi():
         p = int(izvele("Hokeja periods", ["1. periods", "2. periods", "3. periods"], key="per_p")[0])
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="per_scope")
         logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="per_logs")
-    kolonna = "Starpiba"                                   # noklusējuma secība; citu secību izvēlas tabulas izvēlnē "Kārtot"
+    kolonna = ["Starpiba", "G"]                            # noklusējuma secība (vienādai starpībai – vairāk gūto); citu – tabulas izvēlnē "Kārtot"
     kartes_p = []
     for pp in (1, 2, 3):                                   # labākās komandas katrā periodā pēc vidēji gūtajiem vārtiem
         tp_ = da.periodu_tabula(DF, pp, scope, LOGI[logs])
-        kartes_p.append(kom_kartes(tp_, "G_sp", f"{pp}. periods – vidēji gūti", lambda v: _sk(v, 2)))
+        kartes_p.append(kom_kartes(tp_, "G_sp", f"{pp}. periods – vidēji gūti", lambda v: _sk(v, 2), seciba=[("Starpiba", True)]))
     kp_ = da.kopsavilkums(DF, scope, LOGI[logs])
-    kartes_p.append(kom_kartes(kp_, "G_sp", "Pamatlaikā kopā – vidēji gūti", lambda v: _sk(v, 2)))
+    kartes_p.append(kom_kartes(kp_, "G_sp", "Pamatlaikā kopā – vidēji gūti", lambda v: _sk(v, 2), seciba=[("Starpiba", True)]))
     with augsa:
         st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes_p), unsafe_allow_html=True)
     res = da.periodu_tabula(DF, p, scope, LOGI[logs])
@@ -2770,6 +2799,8 @@ def lapa_periodi():
     tabula(res, {"G": "Gūti", "Z": "Ielaisti", "Starpiba": "Starpība",
                  "G_sp": "Gūti/v.", "Z_sp": "Ielaisti/v.", "SOG_sp": "Metieni/v.", "SA_sp": "Metieni pret/v."},
            sort_col=kolonna, paskaidr=pask, burbuli=burbuli,
+           vienadiem={"Starpiba": [("G", True)], "G": [("Starpiba", True)], "Z": [("Starpiba", False)], "G_sp": [("Starpiba", True)],
+                      "Z_sp": [("Starpiba", False)], "SOG_sp": [("G_sp", True)], "SA_sp": [("Z_sp", True)]},
            formati={"G_sp": "{:.2f}", "Z_sp": "{:.2f}", "SOG_sp": "{:.1f}", "SA_sp": "{:.1f}"},
            config={"Gūti/v.": st.column_config.NumberColumn(format="%.2f"),
                    "Ielaisti/v.": st.column_config.NumberColumn(format="%.2f"),
@@ -2787,11 +2818,14 @@ def lapa_forma():
 
     res = da.kopsavilkums(DF, "Visas", n)
     res["Forma"] = forma_bumbas(DF, n)
-    kol, asc = "G", False                                  # noklusējums: visvairāk gūto vārtu; citu secību - tabulas izvēlnē "Kārtot"
+    kol, asc = ["PTS", "W", "Starpiba", "G"], False       # noklusējums: punkti (vienādiem – uzvaras, starpība, gūtie); citu – izvēlnē "Kārtot"
     burbuli = spelu_burbuli("Visas", n, lambda r: (r.g_reg, r.z_reg), f"Pēdējās {n} spēles · pamatlaika vārti (komanda:pretinieks)", set(res.index))
     tabula(res, {"W": "W", "L": "L", "OTL": "OTL", "PTS": "Punkti",
                  "G": "Gūti vārti", "Z": "Ielaisti vārti", "Starpiba": "Starpība", "Forma": "Forma"},
-           sort_col=kol, ascending=asc, burbuli=burbuli)
+           sort_col=kol, ascending=asc, burbuli=burbuli,
+           vienadiem={"PTS": [("W", True), ("Starpiba", True), ("G", True)], "W": [("PTS", True), ("Starpiba", True)],
+                      "L": [("PTS", False)], "OTL": [("PTS", False)], "G": [("Starpiba", True)], "Z": [("Starpiba", False)],
+                      "Starpiba": [("G", True)]})
 
 
 # ============================================================================
@@ -2804,7 +2838,7 @@ def lapa_over_under():
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="ou_s")
         logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", default="Pēdējās 10", key="ou_n")
     res = da.over_under(DF, linija, scope, LOGI[logs])
-    kol = "Over"                                           # noklusējums; Under u.c. secība - tabulas izvēlnē "Kārtot"
+    kol = ["Over_pct", "Over", "Vid_kopa"]                 # noklusējums: Over % (vienādiem – vairāk vidēji vārtu spēlē augstāk); citu – izvēlnē "Kārtot"
     n_ = LOGI[logs]
     burbuli = None
     if n_ in (5, 10) and not res.empty:
@@ -2813,6 +2847,9 @@ def lapa_over_under():
     tabula(res, {"Over": f"Over {linija}", "Over_pct": "Over %",
                  "Under": f"Under {linija}", "Under_pct": "Under %", "Vid_kopa": "Vid. vārti spēlē"},
            sort_col=kol, burbuli=burbuli, formati={"Vid_kopa": "{:.2f}"}, prog={"Over_pct": (0, 100), "Under_pct": (0, 100)},
+           vienadiem={"Over": [("Over_pct", True), ("Vid_kopa", True)], "Over_pct": [("Over", True), ("Vid_kopa", True)],
+                      "Under": [("Under_pct", True), ("Vid_kopa", False)], "Under_pct": [("Under", True), ("Vid_kopa", False)],
+                      "Vid_kopa": [("Over_pct", True)]},
            config={"Over %": st.column_config.ProgressColumn("Over %", min_value=0, max_value=100, format="%.0f"),
                    "Under %": st.column_config.ProgressColumn("Under %", min_value=0, max_value=100, format="%.0f"),
                    "Vid. vārti spēlē": st.column_config.NumberColumn(format="%.2f")})
@@ -2827,7 +2864,7 @@ def lapa_powerplay():
     with st.container(key="frinda_pp"):
         scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="pp_s")
         logs = sledzis("Laika posms", ["Pēdējās 5", "Pēdējās 10"], "Visa sezona", key="pp_n")
-    kol = "PPG"                                            # noklusējums; citu secību izvēlas tabulas izvēlnē "Kārtot"
+    kol = ["PP_pct", "PPG"]                                # noklusējums: PP % (vienādiem – vairāk vārtu); citu secību – izvēlnē "Kārtot"
     n_ = LOGI[logs]
     res = da.kopsavilkums(DF, scope, n_)
     if res.empty:
@@ -2838,9 +2875,9 @@ def lapa_powerplay():
     kartes = [spel_kartes(tp, "P", "Punkti vairākumā", lambda r: f" · {int(r.G)} v. + {int(r.A)} p."),
               spel_kartes(tp, "G", "Vārti vairākumā"), spel_kartes(tp, "A", "Piespēles vairākumā"),
               kom_kartes(res, "PP_pct", "PP % (komandas)", lambda v: f"{v:.1f}%", lambda k: f" · {int(res.loc[k, 'PPG'])}/{int(res.loc[k, 'PP_opp'])}",
-                         filtrs=lambda x: x["PP_opp"] > 0,
+                         filtrs=lambda x: x["PP_opp"] > 0, seciba=[("PPG", True)],
                          tip_f=lambda k: f"{int(res.loc[k, 'PPG'])} vārti no {int(res.loc[k, 'PP_opp'])} vairākumiem"),
-              kom_kartes(res, "PPG", "PP vārti (komandas)", lambda v: f"{int(v)}")]
+              kom_kartes(res, "PPG", "PP vārti (komandas)", lambda v: f"{int(v)}", seciba=[("PP_pct", True)])]
     with augsa:
         st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
     burbuli = None
@@ -2850,6 +2887,8 @@ def lapa_powerplay():
     tabula(res, {"PPG": "PP vārti", "PP_opp": "PP iespējas", "PP_pct": "PP %",
                  "PP_sog": "PP metieni", "PPG_pret": "Ielaisti PP"},
            sort_col=kol, burbuli=burbuli, formati={"PP_pct": "{:.1f}"},
+           vienadiem={"PP_pct": [("PPG", True)], "PPG": [("PP_pct", True)], "PP_opp": [("PPG", True)], "PP_sog": [("PPG", True)],
+                      "PPG_pret": [("PPG", False)]},
            config={"PP %": st.column_config.NumberColumn(format="%.1f")})
 
 
@@ -2922,6 +2961,7 @@ def lapa_noraidijumi():
             kolonnas[f"{vkods}_{p}"] = nos
             pask[nos] = apraksts(vkods, p)
         tabula(res, kolonnas, sort_col=f"{vkods}_kopa", paskaidr=pask,
+               vienadiem={f"{vkods}_{p}": [(f"{vkods}_kopa", True)] for p in (1, 2, 3)},
                config={nos: st.column_config.NumberColumn(format=fm) for nos in pkarte})
     else:
         p = pkarte[perioda]
@@ -2929,7 +2969,8 @@ def lapa_noraidijumi():
         pask = {"Saņemtie": apraksts("s", p), "Izcīnītie": apraksts("i", p),
                 "Izcīnīti − saņemti": f"Izcīnīto un saņemto starpība ({ptxt[p]}, {mtxt}, {vtxt}); "
                                       "pozitīvs skaitlis = komanda izcīna vairāk, nekā saņem"}
-        tabula(res, kolonnas, sort_col=f"{vkods}_{p}", paskaidr=pask,
+        tabula(res, kolonnas, sort_col=[f"{vkods}_{p}", f"r_{p}"], ascending=[False, vkods == "s"], paskaidr=pask,
+               vienadiem={f"s_{p}": [(f"i_{p}", False)], f"i_{p}": [(f"s_{p}", False)], f"r_{p}": [(f"i_{p}", True)]},
                config={"Saņemtie": st.column_config.NumberColumn(format=fm),
                        "Izcīnītie": st.column_config.NumberColumn(format=fm),
                        "Izcīnīti − saņemti": st.column_config.NumberColumn(format=fm.replace("%", "%+"))})
@@ -3014,6 +3055,7 @@ KOMANDAS_DZ_GRUPAS = [   # padziļinātā statistika pa tēmām: (nosaukums, kol
     ("Vārti pa periodiem (vidēji spēlē)", [("Gūti 1. periodā", "G_p1", 2, True), ("Gūti 2. periodā", "G_p2", 2, True), ("Gūti 3. periodā", "G_p3", 2, True),
                                            ("Ielaisti 1. periodā", "Z_p1", 2, False), ("Ielaisti 2. periodā", "Z_p2", 2, False), ("Ielaisti 3. periodā", "Z_p3", 2, False)]),
     ("Metieni", [("Metieni spēlē", "SOG_sp", 1, True), ("Pretinieka metieni spēlē", "SA_sp", 1, False), ("Metienu daļa %", "SOG_dala", 1, True)]),
+    ("xG (paredzamie vārti, vidēji spēlē)", [("xG spēlē", "xGF_sp", 2, True), ("xG pret spēlē", "xGA_sp", 2, False), ("xG daļa %", "xG_pct", 1, True)]),
     ("Vairākums un mazākums", [("Vairākums PP %", "PP_pct", 1, True), ("Vairākuma vārti", "PPG", 0, True), ("Vairākuma iespējas", "PP_opp", 0, None),
                                ("Vairākuma metieni", "PP_sog", 0, True), ("Mazākums PK %", "PK_pct", 1, True), ("Ielaisti mazākumā", "PPG_pret", 0, False),
                                ("Mazākuma reizes", "PP_opp_pret", 0, None)]),
@@ -3062,6 +3104,19 @@ def lapa_komanda():
             ("Ielaisti spēlē", _sk(kop["Z_sp"], 2), f"kopā {int(kop['Z'])}", vieta("Z_sp", False)),
             ("Vārtu starpība", f"{int(kop['Starpiba']):+d}", f"{int(kop['GP'])} spēlēs", vieta("Starpiba")),
             ("Metieni spēlē", _sk(kop["SOG_sp"], 1), f"pretinieki {_sk(kop['SA_sp'], 1)}", vieta("SOG_sp")),
+        ]
+        try:                                              # xG (paredzamie vārti) no metienu datiem; bez metieniem / modeļa – kartītes netiek rādītas
+            gx = komandu_xg(DF)
+            if kom in gx.index:
+                x_ = gx.loc[kom]
+                vx = lambda kol, aug=True: int(gx[kol].rank(ascending=not aug, method="min").loc[kom])     # noqa: E731
+                d_g, d_z = kop["G_sp"] - x_["xGF_sp"], kop["Z_sp"] - x_["xGA_sp"]
+                kartes += [("xG spēlē", _sk(x_["xGF_sp"], 2), f"gūti {_sk(kop['G_sp'], 2)} ({d_g:+.2f} pret xG)", vx("xGF_sp")),
+                           ("xG pret spēlē", _sk(x_["xGA_sp"], 2), f"ielaisti {_sk(kop['Z_sp'], 2)} ({d_z:+.2f} pret xG)", vx("xGA_sp", False)),
+                           ("xG daļa %", _sk(x_["xG_pct"], 1), f"xG {x_['xGF']:.1f} : {x_['xGA']:.1f} kopā", vx("xG_pct"))]
+        except Exception:
+            pass
+        kartes += [
             ("Vairākums PP %", _sk(kop["PP_pct"], 1) if pd.notna(kop["PP_pct"]) else "–", f"{int(kop['PPG'])}/{int(kop['PP_opp'])} vārti", vieta("PP_pct")),
             ("Mazākums PK %", _sk(kop["PK_pct"], 1) if pd.notna(kop["PK_pct"]) else "–", f"ielaisti {int(kop['PPG_pret'])}", vieta("PK_pct")),
             ("Noraidījumi spēlē", _sk(kop["PEN_sp"], 1), f"izcīnīti {_sk(kop['DRAW_sp'], 1)}", vieta("PEN_sp", False)),
@@ -3223,6 +3278,12 @@ def lapa_komanda():
         sub_ = da.filtret(DF, scope, n)
         extra = sub_.groupby("komanda")[["hits", "blocked", "giveaways", "takeaways", "fo_pct"]].mean() if not sub_.empty else pd.DataFrame()
         L = L.join(extra, how="left") if not L.empty else L
+        try:
+            gx_ = komandu_xg(sub_)
+            if not L.empty and not gx_.empty:
+                L = L.join(gx_[["xGF_sp", "xGA_sp", "xG_pct"]], how="left")
+        except Exception:
+            pass
         if L.empty or kom not in L.index:
             st.info("Šim skatam datu nav.")
         else:
@@ -3266,6 +3327,39 @@ def fakti_dati(versija, dala=None):
 
 
 @st.cache_data(show_spinner=False)
+def spelu_xg_dati(versija, dala=None):
+    """xG katrai komandai katrā spēlē (pamatlaiks, bez tukšajiem vārtiem): game_id, komanda, xgf, xga. None, ja nav metienu datu vai xG modeļa."""
+    try:
+        import xg as xgm
+    except ImportError:
+        return None
+    m = ielasit_papildu("metieni", versija)
+    mod = xgm.ielasit_modeli()
+    if m is None or m.empty or not mod:
+        return None
+    kom, _ = xgm.spelu_xg(m, mod, tikai_pamatlaiks=True)
+    if kom is None or kom.empty:
+        return None
+    kom["game_id"] = pd.to_numeric(kom["game_id"], errors="coerce")
+    return kom[["game_id", "komanda", "xgf", "xga"]]
+
+
+def komandu_xg(sub_df):
+    """Komandu xG kopsavilkums dotajām spēlēm (DF rindām): xGF_sp, xGA_sp, xG_pct (xG daļa %), xG_GP (spēles ar xG datiem)."""
+    x = spelu_xg_dati(VERSIJA, SEZ_DALA)
+    if x is None or sub_df is None or sub_df.empty:
+        return pd.DataFrame()
+    j = sub_df[["game_id", "komanda"]].merge(x, on=["game_id", "komanda"], how="inner")
+    if j.empty:
+        return pd.DataFrame()
+    g = j.groupby("komanda").agg(xG_GP=("game_id", "nunique"), xGF=("xgf", "sum"), xGA=("xga", "sum"))
+    g["xGF_sp"] = g["xGF"] / g["xG_GP"]
+    g["xGA_sp"] = g["xGA"] / g["xG_GP"]
+    g["xG_pct"] = (g["xGF"] / (g["xGF"] + g["xGA"]).where((g["xGF"] + g["xGA"]) > 0) * 100)
+    return g
+
+
+@st.cache_data(show_spinner=False)
 def sausas_serijas_dati(versija, dala=None):
     v = ielasit_papildu("varti", versija)
     vg = ielasit_papildu("vartsargi", versija)
@@ -3289,6 +3383,7 @@ def lapa_fakti():
 
     def pct_karte(t, nos, kontekts, min_n):
         return kom_kartes(t, "win_pct", nos, lambda v: f"{v:.0f}%", filtrs=lambda x: x["sp"] >= min_n,
+                          seciba=[("W", True), ("pts_pct", True), ("L", False)],
                           piez_f=lambda kk: f" · {int(t.loc[kk, 'W'])} no {int(t.loc[kk, 'sp'])}",
                           tip_f=lambda kk: f"{int(t.loc[kk, 'W'])} win, {int(t.loc[kk, 'OTL'])} OT/SO loss, {int(t.loc[kk, 'L'])} loss {kontekts}")
     # --- topi: tikai dominējošās komandas katrā rādītājā ---
@@ -3301,16 +3396,21 @@ def lapa_fakti():
         pct_karte(pv, "Iemet pirmie → win %", "spēlēs, kurās guva pirmos vārtus", min_sp),
         pct_karte(pi, "Ielaiž pirmie → win %", "spēlēs, kurās ielaida pirmos vārtus", min_sp),
         kom_kartes(k, "iedz_pct", "3. perioda karaļi (win %)", lambda v: f"{v:.0f}%", filtrs=lambda x: x["iedz_sp"] >= min_sp,
+                   seciba=[("iedz_W", True), ("iedz_OTL", True)],
                    piez_f=lambda kk: f" · {int(k.loc[kk, 'iedz_W'])} no {int(k.loc[kk, 'iedz_sp'])}",
                    tip_f=lambda kk: f"{int(k.loc[kk, 'iedz_W'])} win no {int(k.loc[kk, 'iedz_sp'])} spēlēm, kurās pēc 2. perioda bija iedzinējos"),
         kom_kartes(k, "vad_pct", "Noturīgākie līderi (win %)", lambda v: f"{v:.0f}%", filtrs=lambda x: x["vad_sp"] >= min_sp,
+                   seciba=[("vad_W", True), ("vad_OTL", True)],
                    piez_f=lambda kk: f" · {int(k.loc[kk, 'vad_W'])} no {int(k.loc[kk, 'vad_sp'])}",
                    tip_f=lambda kk: f"{int(k.loc[kk, 'vad_W'])} win no {int(k.loc[kk, 'vad_sp'])} spēlēm, kurās pēc 2. perioda vadīja"),
         kom_kartes(vel, "izlidzinaja", "Izlīdzinājumi beigās", lambda v: f"{int(v)}", filtrs=lambda x: x["izlidzinaja"] > 0,
+                   seciba=[("izl_W", True), ("pret_izlidzinaja", False)],
                    piez_f=lambda kk: f" · {int(vel.loc[kk, 'izl_W'])} no tām win"),
         kom_kartes(k, "comebacks", "Visvairāk comebacks", lambda v: f"{int(v)}", filtrs=lambda x: x["comebacks"] > 0,
+                   seciba=[("lielakais_cb", True), ("izlaistas_vadibas", False)],
                    piez_f=lambda kk: f" · lielākais −{int(k.loc[kk, 'lielakais_cb'])}"),
-        kom_kartes(k, "izlaistas_vadibas", "Izlaistas 2+ vārtu vadības", lambda v: f"{int(v)}", filtrs=lambda x: x["izlaistas_vadibas"] > 0),
+        kom_kartes(k, "izlaistas_vadibas", "Izlaistas 2+ vārtu vadības", lambda v: f"{int(v)}", filtrs=lambda x: x["izlaistas_vadibas"] > 0,
+                   seciba=[("comebacks", False)]),
     ]
     st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
 
@@ -3331,7 +3431,9 @@ def lapa_fakti():
         st.markdown(f'<div class="fk-liga">Izlīdzinājumi 3. perioda pēdējās 2 minūtēs: kopā {len(vel_notik)} '
                     f'(no tām {sum(1 for r in vel_notik if r["iznakums"] == "W")} beidzās ar win)</div>', unsafe_allow_html=True)
         if not t.empty:
-            tabula(t, {"izlidzinaja": "Izlīdzināja", "izl_W": "No tām win", "pret_izlidzinaja": "Pret to izlīdzināja"}, sort_col="izlidzinaja",
+            tabula(t, {"izlidzinaja": "Izlīdzināja", "izl_W": "No tām win", "pret_izlidzinaja": "Pret to izlīdzināja"},
+                   sort_col=["izlidzinaja", "izl_W", "pret_izlidzinaja"], ascending=[False, False, True],
+                   vienadiem={"izlidzinaja": [("izl_W", True)], "izl_W": [("izlidzinaja", True)], "pret_izlidzinaja": [("izlidzinaja", False)]},
                    paskaidr={"Izlīdzināja": "Vārti 3. perioda pēdējās 2 minūtēs, kas izlīdzināja rezultātu",
                              "No tām win": "Spēles, kuras pēc izlīdzinājuma komanda arī uzvarēja (OT/SO)",
                              "Pret to izlīdzināja": "Reizes, kad pretinieks izlīdzināja pēdējās 2 minūtēs"})
@@ -3364,7 +3466,10 @@ def lapa_fakti():
         else:
             st.markdown(f'<div class="fk-liga">Spēles, kurās komanda {e(apraksts)}: kopā {int(t["sp"].sum())} · '
                         f'līgā vidēji <b>{liga:.0f}%</b> win</div>', unsafe_allow_html=True)
-            tabula(t, {"sp": "Sp.", "W": "W", "L": "L", "OTL": "OTL", "win_pct": "Win %", "pts_pct": "Punkti %"}, sort_col="win_pct",
+            tabula(t, {"sp": "Sp.", "W": "W", "L": "L", "OTL": "OTL", "win_pct": "Win %", "pts_pct": "Punkti %"},
+                   sort_col=["win_pct", "W", "pts_pct", "L"], ascending=[False, False, False, True],      # win %; vienādiem – vairāk uzvaru augstāk
+                   vienadiem={"win_pct": [("W", True), ("pts_pct", True)], "pts_pct": [("win_pct", True), ("W", True)],
+                              "W": [("win_pct", True)], "sp": [("W", True)], "L": [("win_pct", False)], "OTL": [("pts_pct", False)]},
                    prog={"win_pct": (0, 100), "pts_pct": (0, 100)}, formati={"win_pct": "{:.0f}", "pts_pct": "{:.0f}"},
                    paskaidr={"Sp.": f"Spēles, kurās komanda {apraksts}", "W": "win (arī OT win un SO win)", "L": "loss",
                              "OTL": "OT loss vai SO loss", "Win %": "Uzvaru daļa šajās spēlēs", "Punkti %": "Izcīnīto punktu daļa (win 2, OT/SO loss 1)"})
@@ -3428,16 +3533,16 @@ def lapa_fakti():
                        f'<span class="fk-pie">{e(pie)}</span>{stat}</div>')
             st.markdown(f'<div class="ks">{rn}</div>', unsafe_allow_html=True)
 
-    # --- izcēlumi: komandas, kas kādā rādītājā ļoti atšķiras no līgas ---
+    # --- signāls (agrāk "Izcēlumi"): komandas, kas kādā rādītājā ļoti atšķiras no līgas ---
     izc = fakti.izcelumi(ier)
-    st.markdown('<p class="ld-h">Izcēlumi</p>', unsafe_allow_html=True)
+    st.markdown('<p class="ld-h">Signāls</p>', unsafe_allow_html=True)
     if izc:
         st.markdown('<div class="fk-izc">' + "".join(
             f'<div class="fk-iz {"aug" if x["augstak"] else "zem"}"><img src="{e(da.logo_url(x["komanda"]))}" alt="">'
             f'<div><b>{e(da.pilns_nosaukums(x["komanda"]))}</b><span>{e(x["teksts"])}</span></div></div>' for x in izc) + "</div>",
             unsafe_allow_html=True)
     else:
-        st.markdown(f'<div class="fk-liga">Pagaidām neviena komanda būtiski neizceļas. Izcēlumam vajag vismaz {fakti.IZCELUMA_MIN_SP} spēles situācijā '
+        st.markdown(f'<div class="fk-liga">Pagaidām neviena komanda būtiski neizceļas. Signālam vajag vismaz {fakti.IZCELUMA_MIN_SP} spēles situācijā '
                     f'un vismaz {int(fakti.IZCELUMA_MIN_STARP * 100)} procentpunktu atšķirību no līgas vidējā.</div>', unsafe_allow_html=True)
     st.download_button("Lejupielādēt datus (JSON)", data=js, file_name="nhl_fakti.json", mime="application/json", key="fakti_json")
 
@@ -3527,19 +3632,25 @@ def spel_kartes(t, kol, nos, piez_f=lambda r: "", top=10):
     """Viena topa kartīte no spēlētāju tabulas: [(vārds (komanda), vērtība, piezīme, foto)]."""
     if t is None or t.empty or kol not in t.columns:
         return (nos, [])
-    t = t[t[kol] > 0].sort_values([kol, "P"], ascending=False).head(top)
+    t = t[t[kol] > 0].sort_values([kol, "P", "G"], ascending=False, kind="stable").head(top)
     rindas = []
     for n, r in enumerate(t.itertuples()):
         rindas.append((f"{r.vards} ({r.komanda})", f"{int(getattr(r, kol))}", piez_f(r), spel_foto_html(r.pid, r.komanda, r.vards) if n == 0 else ""))
     return (nos, rindas)
 
 
-def kom_kartes(g, kol, nos, fmt, piez_f=lambda k: "", aug=True, top=10, filtrs=None, tip_f=None):
-    """Viena topa kartīte no komandu tabulas (līderim logo). tip_f(k): paskaidrojums uz vērtības visām vietām (piem., procentiem)."""
+def kom_kartes(g, kol, nos, fmt, piez_f=lambda k: "", aug=True, top=10, filtrs=None, tip_f=None, seciba=()):
+    """
+    Viena topa kartīte no komandu tabulas (līderim logo). tip_f(k): paskaidrojums uz vērtības visām vietām (piem., procentiem).
+    seciba: papildu kārtošanas atslēgas vienādām vērtībām [(kolonna, augstāks_labāk)], piem., win % vienādiem – vairāk uzvaru augstāk
+    (4 no 4 pirms 1 no 1). Pēc tām – komandas nosaukums (stabili).
+    """
     if g is None or g.empty or kol not in g.columns:
         return (nos, [])
     x = g if filtrs is None else g[filtrs(g)]
-    x = x[x[kol].notna()].sort_values(kol, ascending=not aug).head(top)
+    x = x[x[kol].notna()]
+    atsl = [(kol, aug)] + [(k_, a_) for k_, a_ in seciba if k_ in x.columns]
+    x = x.sort_index().sort_values([k_ for k_, _ in atsl], ascending=[not a_ for _, a_ in atsl], kind="stable").head(top)
     return (nos, [(da.pilns_nosaukums(k), fmt(v), piez_f(k), komandas_logo_foto(k) if n == 0 else "", tip_f(k) if tip_f else "")
                   for n, (k, v) in enumerate(x[kol].items())])
 
@@ -3596,9 +3707,12 @@ def lapa_otso():
         st.info("Šim skatam datu nav.")
         return
     # topi (komandas ar logo, spēlētāji ar foto)
-    kartes = [kom_kartes(g, "W_kopa", "OT win + SO win", lambda v: f"{int(v)}", lambda k: f" · bilance {g.loc[k, 'Kopa_bil']}"),
-              kom_kartes(g, "OTG", "Visbiežāk līdz papildlaikam", lambda v: f"{int(v)}", lambda k: f" · {g.loc[k, 'OT_pct']:.0f}% spēļu"),
+    kartes = [kom_kartes(g, "W_kopa", "OT win + SO win", lambda v: f"{int(v)}", lambda k: f" · bilance {g.loc[k, 'Kopa_bil']}",
+                         seciba=[("L_kopa", False), ("OT_W", True)]),
+              kom_kartes(g, "OTG", "Visbiežāk līdz papildlaikam", lambda v: f"{int(v)}", lambda k: f" · {g.loc[k, 'OT_pct']:.0f}% spēļu",
+                         seciba=[("OT_pct", True)]),
               kom_kartes(g, "W_pct", "Win % OT/SO", lambda v: f"{v:.0f}%", lambda k: f" · {int(g.loc[k, 'OTG'])} sp.", filtrs=lambda x: x["OTG"] > 0,
+                         seciba=[("W_kopa", True), ("OT_W", True)],
                          tip_f=lambda k: f"{int(g.loc[k, 'W_kopa'])} win no {int(g.loc[k, 'OTG'])} spēlēm līdz papildlaikam")]
     pari, _ = _apakskopa_pari(scope, n)
     to = spelētaju_situacijas_topi(None, pari, "OT")
@@ -3607,13 +3721,194 @@ def lapa_otso():
         st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
     tabula(g, {"GP": "Sp.", "OTG": "Līdz papildl.", "OT_pct": "Papildl. %", "OT_bil": "OT W-L", "SO_bil": "SO W-L", "Kopa_bil": "Kopā W-L",
                "W_pct": "Win %", "G_OT": "Gūti OT", "Z_OT": "Ielaisti OT", "S_OT": "Metieni OT", "SA_OT": "Pret. metieni OT"},
-           sort_col="W_kopa",
+           sort_col=["W_kopa", "L_kopa", "OT_W"], ascending=[False, True, False],
+           vienadiem={"OT_bil": [("OT_W", True), ("OT_L", False)], "SO_bil": [("SO_W", True), ("SO_L", False)],
+                      "Kopa_bil": [("W_kopa", True), ("L_kopa", False)], "W_pct": [("W_kopa", True), ("L_kopa", False)],
+                      "OTG": [("W_kopa", True)], "OT_pct": [("OTG", True)], "GP": [("W_kopa", True)],
+                      "G_OT": [("Z_OT", False)], "Z_OT": [("G_OT", False)], "S_OT": [("G_OT", True)], "SA_OT": [("Z_OT", True)]},
            config={"Papildl. %": st.column_config.NumberColumn(format="%.0f"), "Win %": st.column_config.NumberColumn(format="%.0f")},
            paskaidr={"Līdz papildl.": "Spēles, kas pēc pamatlaika bija neizšķirtas (papildlaiks un/vai metienu sērija)",
                      "Papildl. %": "Cik % spēļu aizgāja līdz papildlaikam", "OT W-L": "OT win – OT loss (spēles, kas izšķīrās papildlaikā)",
                      "SO W-L": "SO win – SO loss (pēcspēles metienu sērijas)", "Kopā W-L": "(OT win + SO win) – (OT loss + SO loss)",
                      "Win %": "OT win un SO win daļa spēlēs, kas aizgāja līdz papildlaikam", "Gūti OT": "Papildlaikā gūtie vārti",
                      "Ielaisti OT": "Papildlaikā ielaistie vārti", "Metieni OT": "Metieni vārtos papildlaikā", "Pret. metieni OT": "Pretinieka metieni papildlaikā"})
+
+
+# ============================================================================
+# LAPA: BACK TO BACK (spēles divas dienas pēc kārtas)
+# B2B = komanda spēlē divās pēc kārtas esošās dienās pēc ASV austrumu laika (kā skaita NHL). "2. spēle" = spēle bez atpūtas dienas,
+# "1. spēle" = spēle, pēc kuras nākamajā dienā ir vēl viena (arī kalendārā ieplānota). Statistika – pamatlaiks, bilance – oficiālā.
+# ============================================================================
+B2B_TZ = "America/New_York"
+
+
+def _b2b_grafiks():
+    """Visas šīs sezonas komandu spēles (aizvadītās + kalendārā plānotās): game_id, komanda, et (spēles datums ASV austrumu laikā)."""
+    rindas = []
+    dfv = globals().get("DF_VISS")
+    dfv = DF if dfv is None else dfv
+    if dfv is not None and not dfv.empty:
+        et = pd.to_datetime(dfv["sakums"], utc=True, errors="coerce").dt.tz_convert(B2B_TZ).dt.normalize().dt.tz_localize(None)
+        et = et.fillna(pd.to_datetime(dfv["datums"]) - pd.Timedelta(days=1))          # bez laika: Rīgas datums − 1 diena (spēles ASV vakarā)
+        rindas.append(pd.DataFrame({"game_id": dfv["game_id"].to_numpy(), "komanda": dfv["komanda"].to_numpy(), "et": et.to_numpy()}))
+    if KAL is not None and not KAL.empty:
+        et = pd.to_datetime(KAL["sakums_lv"], utc=True, errors="coerce").dt.tz_convert(B2B_TZ).dt.normalize().dt.tz_localize(None)
+        et = et.fillna(pd.to_datetime(KAL["datums"], errors="coerce"))
+        for puse in ("majas_komanda", "viesu_komanda"):
+            rindas.append(pd.DataFrame({"game_id": KAL["game_id"].to_numpy(), "komanda": KAL[puse].to_numpy(), "et": et.to_numpy()}))
+    if not rindas:
+        return pd.DataFrame(columns=["game_id", "komanda", "et"])
+    g = pd.concat(rindas, ignore_index=True).dropna(subset=["et"]).drop_duplicates(["game_id", "komanda"], keep="first")
+    return g.sort_values(["komanda", "et", "game_id"]).reset_index(drop=True)
+
+
+def b2b_atputa():
+    """
+    Katrai komandas spēlei: atputa (dienas kopš iepriekšējās spēles − 1; 0 = B2B 2. spēle), b2b1 (nākamajā dienā vēl spēle), b2b2,
+    un pretinieka atpūta tajā pašā spēlē (pret_atputa, pret_b2b2). Indekss: (game_id, komanda).
+    """
+    g = _b2b_grafiks()
+    if g.empty:
+        return g
+    gr = g.groupby("komanda")["et"]
+    g["atputa"] = (g["et"] - gr.shift(1)).dt.days - 1
+    g["b2b1"] = (gr.shift(-1) - g["et"]).dt.days == 1
+    g["b2b2"] = g["atputa"] == 0
+    pret = g[["game_id", "komanda", "atputa", "b2b2"]].rename(columns={"komanda": "_pk", "atputa": "pret_atputa", "b2b2": "pret_b2b2"})
+    g = g.merge(pret, on="game_id", how="left")
+    g = g[g["_pk"] != g["komanda"]].drop(columns="_pk")
+    return g.set_index(["game_id", "komanda"])
+
+
+def _b2b_bilance(x):
+    """Komandu bilance un vārti dotajām spēlēm (DF rindām)."""
+    if x.empty:
+        return pd.DataFrame()
+    s = x.assign(w=(x["rez"] == "W").astype(int), l=(x["rez"] == "L").astype(int), otl=(x["rez"] == "OTL").astype(int))
+    g = s.groupby("komanda")
+    out = pd.DataFrame({"sp": g.size(), "W": g["w"].sum(), "L": g["l"].sum(), "OTL": g["otl"].sum(), "PTS": g["pts"].sum(),
+                        "G_sp": g["g_reg"].mean(), "Z_sp": g["z_reg"].mean(), "SOG_sp": g["sog_reg"].mean(), "SA_sp": g["sog_pret_reg"].mean(),
+                        "G": g["g_reg"].sum(), "Z": g["z_reg"].sum()})
+    out["pts_pct"] = out["PTS"] / (2 * out["sp"]) * 100
+    out["win_pct"] = out["W"] / out["sp"] * 100
+    out["Starpiba"] = out["G"] - out["Z"]
+    return out
+
+
+def lapa_b2b():
+    st.title("Back to Back")
+    augsa = st.container()
+    with st.container(key="frinda_b2b"):
+        spele = izvele("Spēle", ["2. spēle (bez atpūtas)", "1. spēle"], key="b2b_sp")
+        scope = sledzis("Spēles", ["Mājās", "Izbraukumā"], "Visas", key="b2b_s")
+        pret_f = sledzis("Pretinieks", ["Atpūties", "Arī B2B"], "Jebkurš", key="b2b_p")
+    atp = b2b_atputa()
+    if atp.empty or DF.empty:
+        st.info("Šim skatam datu nav.")
+        return
+    x = da.filtret(DF, scope, None)
+    x = x.join(atp[["atputa", "b2b1", "b2b2", "pret_atputa", "pret_b2b2"]], on=["game_id", "komanda"])
+    kolonna = "b2b2" if spele.startswith("2.") else "b2b1"
+    b2b = x[x[kolonna].fillna(False).astype(bool)]
+    if pret_f == "Atpūties":
+        b2b = b2b[b2b["pret_atputa"].fillna(-1) >= 1]
+    elif pret_f == "Arī B2B":
+        b2b = b2b[b2b["pret_b2b2"].fillna(False).astype(bool)]
+    citas = x[~x[kolonna].fillna(False).astype(bool)]
+    t = _b2b_bilance(b2b)
+    c = _b2b_bilance(citas)
+    sp_txt = "2. spēlē (bez atpūtas dienas)" if kolonna == "b2b2" else "1. spēlē (nākamajā dienā vēl spēle)"
+    with augsa:
+        if not t.empty:
+            vid_b = (2 * t["W"].sum() + t["OTL"].sum()) / (2 * t["sp"].sum()) * 100
+            vid_c = (2 * c["W"].sum() + c["OTL"].sum()) / (2 * c["sp"].sum()) * 100 if not c.empty and c["sp"].sum() else float("nan")
+            st.markdown(f'<div class="fk-liga">B2B {sp_txt}: kopā {int(t["sp"].sum())} spēles · līgā <b>{vid_b:.0f}%</b> punktu '
+                        f'(citās spēlēs {vid_c:.0f}%) · win {t["W"].sum() / t["sp"].sum() * 100:.0f}%</div>', unsafe_allow_html=True)
+    if t.empty:
+        st.info("Šādu spēļu vēl nav.")
+    else:
+        t["pts_citas"] = c["pts_pct"].reindex(t.index)
+        t["pts_starp"] = t["pts_pct"] - t["pts_citas"]
+        kartes = [kom_kartes(t, "pts_pct", "Punkti % B2B spēlēs", lambda v: f"{v:.0f}%", lambda k: f" · {int(t.loc[k, 'W'])}-{int(t.loc[k, 'L'])}-{int(t.loc[k, 'OTL'])}",
+                             seciba=[("W", True), ("Starpiba", True)],
+                             tip_f=lambda k: f"{int(t.loc[k, 'W'])} win, {int(t.loc[k, 'L'])} loss, {int(t.loc[k, 'OTL'])} OT/SO loss {int(t.loc[k, 'sp'])} B2B spēlēs"),
+                  kom_kartes(t, "sp", "Visvairāk B2B spēļu", lambda v: f"{int(v)}", lambda k: f" · {t.loc[k, 'pts_pct']:.0f}% punktu",
+                             seciba=[("pts_pct", True)]),
+                  kom_kartes(t, "pts_starp", "Vislabāk tiek galā (pret citām spēlēm)", lambda v: f"{v:+.0f}", lambda k: f" · {t.loc[k, 'pts_pct']:.0f}% pret {t.loc[k, 'pts_citas']:.0f}%",
+                             seciba=[("sp", True)], filtrs=lambda y: y["pts_starp"].notna(),
+                             tip_f=lambda k: f"Punkti % B2B spēlēs mīnus punkti % citās spēlēs (procentpunkti)"),
+                  kom_kartes(t, "pts_starp", "Lielākais kritums (pret citām spēlēm)", lambda v: f"{v:+.0f}", lambda k: f" · {t.loc[k, 'pts_pct']:.0f}% pret {t.loc[k, 'pts_citas']:.0f}%",
+                             aug=False, seciba=[("sp", True)], filtrs=lambda y: y["pts_starp"].notna(),
+                             tip_f=lambda k: f"Punkti % B2B spēlēs mīnus punkti % citās spēlēs (procentpunkti)")]
+        with augsa:
+            st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
+        # burbulis uz "Sp.": šīs B2B spēles (jaunākā pirmā)
+        burbuli = {}
+        for kods, g_ in b2b.sort_values(["datums", "game_id"], ascending=False).groupby("komanda"):
+            burbuli[kods] = burbula_html(f"B2B {sp_txt}{vietas_teksts(scope)}", [
+                {"teksts": f"{pd.Timestamp(r.datums):%d.%m} {'vs' if r.majas == 1 else '@'} {da.pilns_nosaukums(r.pretinieks)}",
+                 "saite": f"({int(r.g_tot)}:{int(r.z_tot)})", "url": speles_saite(r.game_id),
+                 "piez": REZ_NOZIME.get(rez_kods(r.rez, r.beigas), "")} for r in g_.itertuples()])
+        tabula(t, {"sp": "Sp.", "W": "W", "L": "L", "OTL": "OTL", "pts_pct": "Punkti %", "G_sp": "Gūti/sp", "Z_sp": "Ielaisti/sp",
+                   "SOG_sp": "Metieni/sp", "SA_sp": "Pret. metieni/sp", "pts_citas": "Citās punkti %", "pts_starp": "Starpība"},
+               sort_col=["pts_pct", "W", "Starpiba", "sp"], ascending=False, burbuli=burbuli,
+               prog={"pts_pct": (0, 100)}, formati={"pts_pct": "{:.0f}", "pts_citas": "{:.0f}", "pts_starp": "{:+.0f}", "G_sp": "{:.2f}", "Z_sp": "{:.2f}",
+                                                    "SOG_sp": "{:.1f}", "SA_sp": "{:.1f}"},
+               vienadiem={"pts_pct": [("W", True), ("Starpiba", True)], "W": [("pts_pct", True)], "L": [("pts_pct", False)],
+                          "sp": [("pts_pct", True)], "G_sp": [("Starpiba", True)], "Z_sp": [("Starpiba", False)], "pts_starp": [("sp", True)]},
+               paskaidr={"Sp.": f"B2B spēles ({sp_txt}); uzved, lai redzētu spēles", "W": "win (arī OT win un SO win)", "L": "loss",
+                         "OTL": "OT loss vai SO loss", "Punkti %": "Izcīnīto punktu daļa šajās spēlēs (win 2, OT/SO loss 1)",
+                         "Gūti/sp": "Vidēji gūtie vārti pamatlaikā šajās spēlēs", "Ielaisti/sp": "Vidēji ielaistie vārti pamatlaikā šajās spēlēs",
+                         "Metieni/sp": "Vidēji metieni vārtos pamatlaikā", "Pret. metieni/sp": "Pretinieka vidējie metieni vārtos pamatlaikā",
+                         "Citās punkti %": "Punkti % visās pārējās spēlēs (tajā pašā atlasē: mājās / viesos)",
+                         "Starpība": "Punkti % B2B spēlēs mīnus citās spēlēs (procentpunkti); negatīvs = B2B spēlē sliktāk"})
+
+    # --- nākamās B2B (kalendārs, 7 dienas uz priekšu) ---
+    st.markdown('<p class="ld-h">Nākamās B2B (7 dienas)</p>', unsafe_allow_html=True)
+    nak = []
+    if KAL is not None and not KAL.empty:
+        tagad = pd.Timestamp.now(tz=da.LV_TZ)
+        k_ = KAL[(KAL["sakums_lv"] > tagad - pd.Timedelta(hours=3)) & (KAL["sakums_lv"] <= tagad + pd.Timedelta(days=7))]
+        kal_idx = KAL.set_index("game_id")
+        for r in k_.itertuples():
+            for kods, majas in ((r.majas_komanda, True), (r.viesu_komanda, False)):
+                if (r.game_id, kods) not in atp.index:
+                    continue
+                a_ = atp.loc[(r.game_id, kods)]
+                if not bool(a_["b2b2"]):
+                    continue
+                # iepriekšējā (1.) spēle: tās pašas komandas spēle dienu iepriekš
+                g1 = atp.xs(kods, level="komanda")
+                g1 = g1[g1["et"] == a_["et"] - pd.Timedelta(days=1)]
+                if g1.empty:
+                    continue
+                gid1 = g1.index[0]
+                if gid1 in kal_idx.index:
+                    k1 = kal_idx.loc[gid1]
+                    k1 = k1.iloc[0] if isinstance(k1, pd.DataFrame) else k1
+                    maj1, pret1, sak1 = k1["majas_komanda"] == kods, (k1["viesu_komanda"] if k1["majas_komanda"] == kods else k1["majas_komanda"]), k1["sakums_lv"]
+                else:
+                    r1 = RAW_VISS[RAW_VISS["game_id"] == gid1] if "RAW_VISS" in globals() else RAW[RAW["game_id"] == gid1]
+                    if r1.empty:
+                        continue
+                    r1 = r1.iloc[0]
+                    maj1, pret1, sak1 = r1["home_team"] == kods, (r1["away_team"] if r1["home_team"] == kods else r1["home_team"]), r1["sakums_lv"]
+                pret2 = r.viesu_komanda if majas else r.majas_komanda
+                pa = a_["pret_atputa"]
+                pret_txt = "arī B2B" if pd.notna(pa) and pa == 0 else (f"atpūties {int(pa)} d." if pd.notna(pa) else "–")
+                nak.append({"_s": r.sakums_lv, "Logo": da.logo_url(kods), "Komanda": da.pilns_nosaukums(kods),
+                            "1. spēle": f"{pd.Timestamp(sak1):%d.%m %H:%M} {'vs' if maj1 else '@'} {da.pilns_nosaukums(pret1)}",
+                            "2. spēle": f"{pd.Timestamp(r.sakums_lv):%d.%m %H:%M} {'vs' if majas else '@'} {da.pilns_nosaukums(pret2)}",
+                            "Pretinieks 2. spēlē": pret_txt})
+    if nak:
+        nd = pd.DataFrame(nak).sort_values(["_s", "Komanda"]).drop(columns="_s").reset_index(drop=True)
+        df_html(nd, config={"Logo": st.column_config.ImageColumn("", width="small")}, kartot=False,
+                paskaidr={"1. spēle": "Pirmā spēle (laiks pēc Rīgas)", "2. spēle": "Otrā spēle nākamajā dienā (pēc ASV laika) – bez atpūtas",
+                          "Pretinieks 2. spēlē": "Vai pretinieks pirms šīs spēles ir atpūties (dienas bez spēles) vai arī spēlē B2B"})
+    else:
+        st.markdown('<div class="fk-liga">Tuvāko 7 dienu kalendārā B2B spēļu nav.</div>', unsafe_allow_html=True)
+    st.caption("B2B (back to back) – komanda spēlē divās dienās pēc kārtas (pēc ASV austrumu laika, kā to skaita NHL). "
+               "Vārti un metieni ir pamatlaika; win, loss un punkti – oficiālie rezultāti.")
 
 
 def lapa_mazakums():
@@ -3644,14 +3939,16 @@ def lapa_mazakums():
             "Noraid/v.": "Vidēji saņemtie noraidījumi spēlē (pamatlaikā)"}
     tsh = spelētaju_situacijas_topi("sh", pari)
     kartes = [kom_kartes(res, "PK_pct", "PK % (komandas)", lambda v: f"{v:.1f}%", lambda k: f" · {int(res.loc[k, 'PK_nosargati'])}/{int(res.loc[k, 'PP_opp_pret'])}",
-                         filtrs=lambda x: x["PP_opp_pret"] > 0,
+                         filtrs=lambda x: x["PP_opp_pret"] > 0, seciba=[("PK_nosargati", True)],
                          tip_f=lambda k: f"{int(res.loc[k, 'PK_nosargati'])} no {int(res.loc[k, 'PP_opp_pret'])} mazākumiem izturēti"),
-              kom_kartes(res, "SHG", "Gūti mazākumā (komandas)", lambda v: f"{int(v)}", filtrs=lambda x: x["SHG"] > 0),
+              kom_kartes(res, "SHG", "Gūti mazākumā (komandas)", lambda v: f"{int(v)}", filtrs=lambda x: x["SHG"] > 0, seciba=[("PK_pct", True)]),
               spel_kartes(tsh, "P", "Punkti mazākumā", lambda r: f" · {int(r.G)} v. + {int(r.A)} p."),
               spel_kartes(tsh, "G", "Vārti mazākumā")]
     with augsa:
         st.markdown('<p class="ld-h">Topi</p>' + top_kartes_html(kartes), unsafe_allow_html=True)
-    tabula(res, kol, sort_col="PK_pct", config=cfg, paskaidr=pask)
+    tabula(res, kol, sort_col=["PK_pct", "PK_nosargati"], config=cfg, paskaidr=pask,
+           vienadiem={"PK_pct": [("PK_nosargati", True)], "PK_nosargati": [("PK_pct", True)], "PPG_pret": [("PP_opp_pret", False)],
+                      "PP_opp_pret": [("PPG_pret", False)], "SHG": [("PK_pct", True)], "PEN_sp": [("PK_pct", False)]})
 
 
 # ============================================================================
@@ -3967,7 +4264,8 @@ def lapa_speletaji():  # noqa: C901
                 L = L[L["Poz"].isin(["C", "L", "R", "W"])]
             elif poz == "Aizsargi":
                 L = L[L["Poz"] == "D"]
-            L = L.sort_values(kartot, ascending=False).head(60).copy()
+            atsl_ = list(dict.fromkeys([kartot, "P", "G", "GP"]))                   # vienādiem: vairāk punktu, vārtu; mazāk spēļu
+            L = L.sort_values(atsl_, ascending=[c_ == "GP" and c_ != kartot for c_ in atsl_], kind="stable").head(60).copy()
             L["Komanda"] = L["Komanda"].map(da.logo_url)                       # komandas saīsinājuma vietā logotips
             L = L[[c for c in ["playerId", "Speletajs", "Komanda", "Poz", "GP", "G", "A", "P", "P_sp", "PM", "PIM", "SOG", "HIT", "BLK", "PPG", "TOI"]
                    if c in L.columns]]
