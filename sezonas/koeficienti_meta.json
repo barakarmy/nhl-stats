@@ -1,8 +1,11 @@
 {
- "ielade": "2026-10-12T07:10:53Z",
+ "ielade": "2026-10-12T14:45:41Z",
  "speles": 3,
  "kalendara_speles": 21,
- "rindas": 342,
- "kreditu_atlikums": "456",
- "kreditu_izlietots": "44"
+ "rindas": 334,
+ "kreditu_atlikums": "453",
+ "kreditu_izlietots": "47",
+ "papildu": {
+  "2026-10-12": 0
+ }
 }
