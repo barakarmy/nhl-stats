@@ -281,7 +281,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.49"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.50"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -2178,8 +2178,8 @@ def picks_parbaudes_bloks():
                           "Apmācība: ROI %": "Vienādas likmes ar noslēguma koeficientiem sezonās, uz kurām izvēlēti parametri",
                           "Pārbaude: ROI %": "Tas pats jaunākajā sezonā, kas parametru izvēlē netika izmantota (godīgais rezultāts)",
                           "± (1 SE) %": "Standartkļūda: ROI nejaušības robeža – ja ROI ir mazāks par to, rezultāts var būt nejaušs",
-                          "Kopā: ROI %": "Visas sezonas kopā. Ja tas ir lielāks par savu standartkļūdu – tirgus pilnībā ieslēgts, citādi – novērošanas režīmā",
-                          "Statuss": "✓ ieslēgts – pelnošs un statistiski drošs; ◐ novērošana – pelnošs abos posmos, bet vēl ne drošs, likmes max 2 %"})
+                          "Kopā: ROI %": "Visas sezonas kopā (informācijai; optimistisks, jo apmācības daļā iestatījumi izvēlēti kā labākie)",
+                          "Statuss": "✓ ieslēgts – pelnošs abos posmos un pārbaudes sezonā ROI > 1 standartkļūda; ◐ novērošana – pelnošs abos posmos, bet vēl ne drošs, likmes max 2 %"})
     b = d.get("bankrols_parbaudes_sezona") or {}
     tirgi = (d.get("parametri") or {}).get("tirgi") or []
     if tirgi:
