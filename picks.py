@@ -32,9 +32,11 @@ Lēmuma soļi (katrai izvēlei)
        |p − tirgus| ≤ max_novirze (12 pp) – ja modelis ļoti nesaskan ar asāko tirgu, visticamāk modelis nezina kaut ko
          (trauma, sastāvs), nevis tirgus kļūdās – šādas "vērtības" profesionāļi neņem;
        p ≥ tirgus – modelim jābūt optimistiskākam par taisnīgo tirgu (citādi EV rodas tikai no "labākā" koeficienta).
-  5. Korelācija: vienā spēlē tikai max_uz_speli izvēles (noklusējums 1, ar lielāko EV) – 1X2, ML un ±1.5 uz to pašu komandu
+  5. Vārtsargi: pick tiek atlasīts tikai, kad abu komandu sākuma vārtsargi ir paziņoti (Confirmed vai Expected) –
+     NHL tas ir būtiskākais faktors pirms spēles, un bez tā modelis var rēķināt ar nepareizo vārtsargu.
+  6. Korelācija: vienā spēlē tikai max_uz_speli izvēles (noklusējums 1, ar lielāko EV) – 1X2, ML un ±1.5 uz to pašu komandu
      ir viena un tā pati likme dažādos veidos.
-  6. Likmes lielums – Kelly kritērijs f* = (p × koef − 1) / (koef − 1), ņemta tikai daļa (¼ Kelly), pareizināta ar modeļa
+  7. Likmes lielums – Kelly kritērijs f* = (p × koef − 1) / (koef − 1), ņemta tikai daļa (¼ Kelly), pareizināta ar modeļa
      ticamību (Augsta 1.0 / Vidēja 0.75 / Zema 0.5), robežās 1–5 % no bankrola. Ja vienas dienas likmju summa pārsniedz
      max_dienas_risks (15 %), visas tās dienas likmes proporcionāli samazina.
 
@@ -46,9 +48,18 @@ Vēsture (sezonas/picks_arhivs.csv)
   koeficientu tieši pirms spēles (profesionāļu galvenais rādītājs – ilgtermiņā pozitīvs CLV nozīmē reālu priekšrocību).
   Rezultātu lietotne pieliek no sezonas/speles.csv, tāpēc vēsture pati papildinās līdz ar aizvadītajām spēlēm.
 
+Vēsturiskā pārbaude (lokāli, pēc python vesturiskie_koef.py)
+  python picks.py --parbaude
+  Katrai iepriekšējo sezonu spēlei modeļa prognoze tikai no datiem pirms tās (walk-forward, kā modelis.py --kalibret),
+  salīdzināta ar tā laika ASV bukmeikeru noslēguma koeficientiem (uzvarētājs ar OT, totāli, ±1.5). Katram tirgum tiek
+  izvēlēts modeļa svars un min. EV uz vecākajām sezonām un godīgi pārbaudīts uz jaunākās. Tirgi, kas vēsturē nebija pelnoši,
+  tiek izslēgti. Rezultāts: sezonas/vesture/picks_parametri.json – to automātiski nolasa lietotne un prognozes_arhivs.py.
+
 Komandrinda (lokāli):
   python picks.py --no-arhiva   → izveido / papildina vēsturi no jau saglabātā prognožu arhīva (1X2 un galvenais totāls)
+  python picks.py --parbaude    → vēsturiskā pārbaude un parametru izvēle (skat. augstāk)
 """
+import json
 import math
 import os
 import sys
@@ -58,6 +69,8 @@ import pandas as pd
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 FAILS = os.path.join(BASE, "sezonas", "picks_arhivs.csv")
+PARAMETRU_FAILS = os.path.join(BASE, "sezonas", "vesture", "picks_parametri.json")
+VARTSARGI_ZINAMI = ("Confirmed", "Expected")      # Daily Faceoff statusi, ar kuriem vārtsargs uzskatāms par paziņotu
 
 NOKLUSETIE = {
     "min_ev": 0.04,             # vismaz +4 % EV
@@ -73,12 +86,42 @@ NOKLUSETIE = {
     "ticamibas_k": {"Augsta": 1.0, "Vidēja": 0.75, "Zema": 0.5},
     "tirgi": ("1x2", "ml", "tot", "pm"),
     "modela_svars": {"1x2": 0.5, "ml": 0.5, "tot": 1.0, "pm": 0.5},   # lēmuma p = svars × modelis + (1 − svars) × tirgus
+    "prasit_vartsargus": True,  # pick tikai ar paziņotiem abu komandu sākuma vārtsargiem
 }
+PARBAUDE = None                 # vēsturiskās pārbaudes rezultāts (picks_parametri.json), ja tāds ir
+
+
+def ielasit_parametrus(fails=PARAMETRU_FAILS):
+    """Vēsturiskās pārbaudes izvēlētie parametri (modeļa svars, min. EV pa tirgiem, ieslēgtie tirgi) → NOKLUSETIE."""
+    global PARBAUDE
+    if not os.path.exists(fails):
+        return None
+    try:
+        with open(fails, encoding="utf-8") as f:
+            d = json.load(f)
+    except (OSError, ValueError):
+        return None
+    par = d.get("parametri") or {}
+    if isinstance(par.get("modela_svars"), dict):
+        NOKLUSETIE["modela_svars"] = {**NOKLUSETIE["modela_svars"], **par["modela_svars"]}
+    if isinstance(par.get("min_ev"), (dict, float, int)):
+        NOKLUSETIE["min_ev"] = par["min_ev"]
+    if isinstance(par.get("tirgi"), list):
+        NOKLUSETIE["tirgi"] = tuple(par["tirgi"])
+    PARBAUDE = d
+    return d
+
+
+def _min_ev(c, tirgus):
+    """min_ev var būt viens skaitlis vai {tirgus: skaitlis}."""
+    m = c["min_ev"]
+    return float(m.get(tirgus, 0.04)) if isinstance(m, dict) else float(m)
+
 BANKROLLS = 1000.0              # virtuālais sākuma bankrolls vēsturē (vienības)
 
 KOLONNAS = ["game_id", "ielade", "sakums_utc", "majas", "viesi", "tirgus", "iznakums", "linija", "izvele", "koef", "bukmeikers",
             "koef_pin", "p_modelis", "p_lemums", "p_tirgus", "implied", "ev", "kelly", "likme_pct", "ticamiba", "avots", "koef_nosl", "p_tirgus_nosl",
-            "nosl_ielade"]
+            "nosl_ielade", "vartsargi"]
 TIRGU_NOS = {"1x2": "Pamatlaikā", "ml": "Uzvarētājs (ar OT)", "tot": "Totāls (ar OT)", "pm": "±1.5 (ar OT)"}
 
 
@@ -234,8 +277,8 @@ def kandidati(game, probs, koef_rindas, cfg=None, papildu=None):
         iemesls = ""
         if not ir_tirgus:
             iemesls = "nav tirgus atsauces (trūkst pretējā iznākuma koeficienta)"
-        elif e < c["min_ev"]:
-            iemesls = f"EV {e * 100:+.1f}% < {c['min_ev'] * 100:.0f}%"
+        elif e < _min_ev(c, tirgus):
+            iemesls = f"EV {e * 100:+.1f}% < {_min_ev(c, tirgus) * 100:.0f}%"
         elif pl < c["min_p"]:
             iemesls = f"varbūtība {pl * 100:.0f}% < {c['min_p'] * 100:.0f}%"
         elif o > c["max_koef"]:
@@ -244,6 +287,9 @@ def kandidati(game, probs, koef_rindas, cfg=None, papildu=None):
             iemesls = f"modelis pret tirgu {(p - p_t) * 100:+.0f} pp – pārāk liela atšķirība"
         elif pl < p_t:
             iemesls = "modelis nav optimistiskāks par tirgu"
+        elif c.get("prasit_vartsargus") and game.get("vartsargi") is not None \
+                and not all(str(v) in VARTSARGI_ZINAMI for v in game["vartsargi"]):
+            iemesls = "der, bet gaida paziņotus sākuma vārtsargus"
         out.append({
             "game_id": int(game["game_id"]), "sakums_utc": game.get("sakums_utc"), "majas": game["majas"], "viesi": game["viesi"],
             "tirgus": tirgus, "iznakums": izn, "linija": lin, "izvele": izveles_nosaukums(tirgus, izn, lin, game["majas"], game["viesi"]),
@@ -251,6 +297,7 @@ def kandidati(game, probs, koef_rindas, cfg=None, papildu=None):
             "p_lemums": float(pl), "modela_svars": w,
             "p_tirgus": float(p_t) if p_t is not None else float("nan"), "tirgus_avots": avots_t, "implied": implied(o), "ev": float(e),
             "kelly": float(kelly(pl, o)), "ticamiba": game.get("ticamiba"), "iemesls": iemesls, "der": iemesls == "",
+            "vartsargi": "/".join(str(v or "–") for v in game["vartsargi"]) if game.get("vartsargi") is not None else "",
         })
     return out
 
@@ -448,11 +495,224 @@ def no_prognozu_arhiva(prog, cfg=None, fails=FAILS):
     return pievienoti, len(ielasit_arhivu(fails))
 
 
+
+# ----------------------------------------------------------------------------
+# VĒSTURISKĀ PĀRBAUDE (backtest) ar iepriekšējo sezonu koeficientiem (vesturiskie_koef.py)
+# ----------------------------------------------------------------------------
+PARB_SVARI = (0.25, 0.5, 0.75, 1.0)                    # modeļa svars (lēmuma p = svars × modelis + (1 − svars) × tirgus)
+PARB_MIN_EV = (0.02, 0.03, 0.04, 0.05, 0.07, 0.10)
+PARB_MIN_LIKMES = 100                                   # parametru izvēlei vajag vismaz tik likmju apmācības sezonās
+PARB_TIRGI = ("ml", "tot", "pm")                        # 1X2 pamatlaikā ASV koeficientos nav – tas seko "ml" lēmumam
+
+
+def _vesturiskie_koeficienti(sezona):
+    c = os.path.join(BASE, "sezonas", "vesture", str(sezona), "koeficienti_vesture.csv")
+    if not os.path.exists(c):
+        return None
+    d = pd.read_csv(c)
+    d["iznakums"] = d["iznakums"].astype(str)
+    d["linija"] = pd.to_numeric(d["linija"], errors="coerce")
+    for k in ("koef", "koef_atv"):
+        d[k] = pd.to_numeric(d[k], errors="coerce")
+    return d
+
+
+def vesturiskas_prognozes(sezonas, solis_dienas=3):
+    """
+    Walk-forward prognozes (tikai no datiem pirms katras spēles) katrai norādīto sezonu spēlei, ar tiem pašiem iestatījumiem
+    un datiem kā lietotnē (vārti + xG, faktiskie sākuma vārtsargi, atpūta, ceļš). Atgriež {game_id: prognoze}.
+    """
+    sys.path.insert(0, BASE)
+    import datu_apstrade as da
+    import modelis
+    raw_db, _ = da.ielasit_db()
+    raw_t = da.ielasit_speles()
+    raw = pd.concat([x for x in (raw_db, raw_t) if x is not None and not x.empty], ignore_index=True)
+    vg_d = [x for x in (da.ielasit_db_tabulu("vartsargi"), da.ielasit_tabulu("vartsargi")) if x is not None and not x.empty]
+    vg = pd.concat(vg_d, ignore_index=True) if vg_d else None
+    p, _ = modelis.ielasit_parametrus()
+    metieni, xmod = None, None
+    if modelis.vajag_metienus(p):
+        import xg as xgm
+        m_d = [x for x in (da.ielasit_db_tabulu("metieni"), da.ielasit_tabulu("metieni")) if x is not None and not x.empty]
+        metieni = pd.concat(m_d, ignore_index=True) if m_d else None
+        xmod = xgm.ielasit_modeli()
+    pirma = pd.Timestamp(raw[raw["sezona"] == min(sezonas)]["datums"].min())
+    g, _, _, _, p_eff = modelis.sagatavot(raw, vg, metieni, p, pirma, min(sezonas), xmod)
+    out = {}
+    for sezona in sezonas:
+        s_ = g[g["sezona"] == sezona]
+        mod, pedeja = None, None
+        datumi = sorted(s_["datums"].unique())
+        for i, d in enumerate(datumi):
+            d = pd.Timestamp(d)
+            if mod is None or (d - pedeja).days >= solis_dienas:
+                mod = modelis.aprekinat_reitingus(g, uz_datumu=d, sezona_tagad=sezona, p=p_eff)
+                pedeja = d
+            if mod is None:
+                continue
+            for r in s_[s_["datums"] == d].itertuples(index=False):
+                nz = (getattr(r, "nz_n", np.nan), getattr(r, "nz_k", np.nan), getattr(r, "nz_L", modelis.NEIZ_ILGTERMINA))
+                t = modelis.prognoze(mod, g, r.home, r.away, p_eff, r.b2b_h, r.b2b_a, r.cels_h, r.cels_a, r.po,
+                                     vg_h=getattr(r, "vg_h", 1.0), vg_a=getattr(r, "vg_a", 1.0), nz=nz)
+                out[int(r.game_id)] = {k: t[k] for k in ("lh", "la", "1x2", "ar_ot", "plus_minus", "totali", "neizskirts_pa_kopsummam", "ticamiba")}
+            if (i + 1) % 30 == 0:
+                print(f"  {sezona}: {i + 1}/{len(datumi)} dienas")
+    return out
+
+
+def _vesturiskie_kandidati(prognozes, koef, speles, cena="koef"):
+    """
+    Visas vēsturiskās izvēles (bez filtriem): modeļa p, tirgus taisnīgā p (vidējie noslēguma koeficienti bez uzcenojuma),
+    labākais koeficients un iznākums. cena – "koef" (noslēgums, ~ pēc vārtsargu paziņošanas) vai "koef_atv" (atvēršana).
+    """
+    cfg = {"min_ev": -9, "min_p": 0, "max_koef": 99, "max_novirze": 9, "prasit_vartsargus": False, "tirgi": PARB_TIRGI,
+           "modela_svars": {t: 1.0 for t in PARB_TIRGI}}
+    sp = speles.set_index("game_id")
+    rindas = []
+    for gid, x in koef.groupby("game_id"):
+        t = prognozes.get(int(gid))
+        if t is None or int(gid) not in sp.index:
+            continue
+        s_ = sp.loc[int(gid)]
+        x = x[x[cena].notna()].assign(koef=lambda d: d[cena])
+        if x.empty:
+            continue
+        game = {"game_id": int(gid), "sakums_utc": str(s_.get("sakums_utc", "")), "majas": s_["home_team"], "viesi": s_["away_team"],
+                "ticamiba": t.get("ticamiba")}
+        rez = {"hg": float(s_[["home_p1", "home_p2", "home_p3"]].fillna(0).sum()), "ag": float(s_[["away_p1", "away_p2", "away_p3"]].fillna(0).sum()),
+               "h_tot": float(s_["home_total"]), "a_tot": float(s_["away_total"])}
+        try:
+            probs = modela_varbutibas(t, x)
+        except Exception:                                                       # noqa: BLE001
+            continue
+        for k in kandidati(game, probs, x, cfg):
+            if not np.isfinite(k["p_tirgus"]):
+                continue
+            k["rezultats"] = izverte(k, rez)
+            k["datums"] = str(s_.get("datums", ""))[:10]
+            k["sezona"] = int(s_.get("sezona", 0))
+            rindas.append(k)
+    return pd.DataFrame(rindas)
+
+
+def _simulet(d, w, min_ev, c=None):
+    """Vienādas likmes (1 vienība) visām izvēlēm, kas iztur filtrus ar svaru w un min_ev: (likmes, uzvaras, ROI, vid. koef)."""
+    c = {**NOKLUSETIE, **(c or {})}
+    pl = w * d["p_modelis"] + (1 - w) * d["p_tirgus"]
+    ev_ = pl * d["koef"] - 1
+    m = (ev_ >= min_ev) & (pl >= c["min_p"]) & (d["koef"] <= c["max_koef"]) & ((d["p_modelis"] - d["p_tirgus"]).abs() <= c["max_novirze"]) \
+        & (pl >= d["p_tirgus"]) & d["rezultats"].isin(["W", "L", "P"])
+    x = d[m]
+    if x.empty:
+        return {"likmes": 0}
+    pel = np.where(x["rezultats"] == "W", x["koef"] - 1, np.where(x["rezultats"] == "L", -1.0, 0.0))
+    n = len(x)
+    roi = float(pel.mean())
+    return {"likmes": n, "uzvaras": int((x["rezultats"] == "W").sum()), "roi": roi, "se": float(pel.std(ddof=1) / math.sqrt(n)) if n > 1 else float("nan"),
+            "vid_koef": float(x["koef"].mean()), "vid_ev": float(ev_[m].mean())}
+
+
+def _bankrola_simulacija(d, cfg):
+    """Pilns algoritms (1 pick spēlē, ¼ Kelly × ticamība, dienas robeža) laika secībā: gala bankrols un lielākais kritums."""
+    bank, augst, kritums, n = BANKROLLS, BANKROLLS, 0.0, 0
+    for dat, x in d.sort_values("datums").groupby("datums", sort=True):
+        kand = []
+        for r in x.to_dict("records"):
+            w = float(cfg["modela_svars"].get(r["tirgus"], 1.0))
+            pl = w * r["p_modelis"] + (1 - w) * r["p_tirgus"]
+            ok = r["tirgus"] in cfg["tirgi"] and pl * r["koef"] - 1 >= _min_ev(cfg, r["tirgus"]) and pl >= cfg["min_p"] \
+                and r["koef"] <= cfg["max_koef"] and abs(r["p_modelis"] - r["p_tirgus"]) <= cfg["max_novirze"] and pl >= r["p_tirgus"]
+            if ok and r["rezultats"] in ("W", "L", "P"):
+                kand.append({**r, "p_lemums": pl, "ev": pl * r["koef"] - 1, "der": True})
+        if not kand:
+            continue
+        pk = atlasit(kand, cfg)
+        for r in pk.to_dict("records"):
+            likme = r["likme_pct"] * bank
+            bank += likme * ((r["koef"] - 1) if r["rezultats"] == "W" else (-1 if r["rezultats"] == "L" else 0))
+            n += 1
+        augst = max(augst, bank)
+        kritums = max(kritums, (augst - bank) / augst)
+    return {"likmes": n, "bankrols": round(bank, 1), "max_kritums": round(kritums, 4)}
+
+
+def parbaude(sezonas=None, izvade=PARAMETRU_FAILS):
+    """Vēsturiskā pārbaude: parametru izvēle uz vecākajām sezonām, godīga pārbaude uz jaunākās → picks_parametri.json."""
+    sys.path.insert(0, BASE)
+    import datu_apstrade as da
+    ves = os.path.join(BASE, "sezonas", "vesture")
+    sezonas = sezonas or sorted(int(x) for x in os.listdir(ves) if x.isdigit() and os.path.exists(os.path.join(ves, x, "koeficienti_vesture.csv")))
+    if len(sezonas) < 2:
+        print("Vajag vēsturiskos koeficientus vismaz 2 sezonām: python vesturiskie_koef.py")
+        return 1
+    print(f"Sezonas ar koeficientiem: {sezonas}. Modeļa prognozes (walk-forward, var aizņemt 10–30 min)…")
+    prog = vesturiskas_prognozes(sezonas)
+    raw_db, _ = da.ielasit_db()
+    kand, kand_atv = [], []
+    for s in sezonas:
+        k = _vesturiskie_koeficienti(s)
+        sp = raw_db[raw_db["sezona"] == s]
+        kand.append(_vesturiskie_kandidati(prog, k, sp, "koef"))
+        kand_atv.append(_vesturiskie_kandidati(prog, k, sp, "koef_atv"))
+        print(f"  {s}: {kand[-1]['game_id'].nunique() if not kand[-1].empty else 0} spēles ar koeficientiem un prognozēm")
+    d = pd.concat(kand, ignore_index=True)
+    d_atv = pd.concat(kand_atv, ignore_index=True)
+    apm_s, test_s = sezonas[:-1], sezonas[-1]
+    apm, test = d[d["sezona"].isin(apm_s)], d[d["sezona"] == test_s]
+    rezgis, tirgi_rez = [], {}
+    for t in PARB_TIRGI:
+        labakais = None
+        for w in PARB_SVARI:
+            for mev in PARB_MIN_EV:
+                a = _simulet(apm[apm["tirgus"] == t], w, mev)
+                b = _simulet(test[test["tirgus"] == t], w, mev)
+                rezgis.append({"tirgus": t, "svars": w, "min_ev": mev, "apmaciba": a, "parbaude": b})
+                # izvēle pēc piesardzīga novērtējuma (ROI − 1 standartkļūda), lai neizvēlētos nejaušu "veiksmīgu" mazu paraugu
+                if a.get("likmes", 0) >= PARB_MIN_LIKMES and (labakais is None or a["roi"] - a["se"] > labakais[2]["roi"] - labakais[2]["se"]):
+                    labakais = (w, mev, a, b)
+        if labakais is None:
+            tirgi_rez[t] = {"iesl": False, "iemesls": "par maz likmju apmācības sezonās"}
+            continue
+        w, mev, a, b = labakais
+        atv = _simulet(d_atv[(d_atv["sezona"] == test_s) & (d_atv["tirgus"] == t)], w, mev)
+        iesl = a["roi"] > 0 and b.get("likmes", 0) > 0 and b["roi"] > 0
+        tirgi_rez[t] = {"iesl": bool(iesl), "svars": w, "min_ev": mev, "apmaciba": a, "parbaude": b, "parbaude_atvershana": atv,
+                        "iemesls": "" if iesl else ("nav pelnošs apmācības sezonās" if a["roi"] <= 0 else "nav pelnošs pārbaudes sezonā")}
+        print(f"  {TIRGU_NOS[t]}: svars {w}, min EV {mev:.0%} → apmācība ROI {a['roi']:+.1%} ({a['likmes']} likmes), "
+              f"pārbaude ROI {b.get('roi', float('nan')):+.1%} ({b.get('likmes', 0)} likmes) → {'IESLĒGTS' if iesl else 'izslēgts'}")
+    svars = {t: tirgi_rez[t].get("svars", NOKLUSETIE["modela_svars"].get(t, 1.0)) for t in PARB_TIRGI}
+    svars["1x2"] = svars["ml"]                                   # 1X2 nāk no tā paša sadalījuma kā "ar OT"
+    min_ev = {t: tirgi_rez[t].get("min_ev", 0.04) for t in PARB_TIRGI}
+    min_ev["1x2"] = min_ev["ml"]
+    tirgi = [t for t in PARB_TIRGI if tirgi_rez[t]["iesl"]] + (["1x2"] if tirgi_rez["ml"]["iesl"] else [])
+    cfg = {**NOKLUSETIE, "modela_svars": svars, "min_ev": min_ev, "tirgi": tuple(tirgi)}
+    bank = _bankrola_simulacija(test, cfg) if tirgi else {"likmes": 0, "bankrols": BANKROLLS, "max_kritums": 0.0}
+    rez = {
+        "izveidots": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
+        "avots": "SportsbookReview – ASV bukmeikeru noslēguma koeficienti (vidējais bez uzcenojuma = tirgus; labākais = likmei)",
+        "apmacibas_sezonas": apm_s, "parbaudes_sezona": test_s,
+        "speles": {str(s): int(d[d["sezona"] == s]["game_id"].nunique()) for s in sezonas},
+        "parametri": {"modela_svars": svars, "min_ev": min_ev, "tirgi": tirgi},
+        "tirgi": tirgi_rez, "bankrols_parbaudes_sezona": bank, "rezgis": rezgis,
+    }
+    os.makedirs(os.path.dirname(izvade), exist_ok=True)
+    with open(izvade, "w", encoding="utf-8") as f:
+        json.dump(rez, f, ensure_ascii=False, indent=1, default=float)
+    print(f"Ieslēgtie tirgi: {tirgi or 'neviens'}; pārbaudes sezonā bankrols {BANKROLLS:.0f} → {bank['bankrols']:.0f} "
+          f"({bank['likmes']} likmes, lielākais kritums {bank['max_kritums']:.0%}). Saglabāts: {izvade}")
+    return 0
+
+
+ielasit_parametrus()
+
 if __name__ == "__main__":
     if "--no-arhiva" in sys.argv:
         sys.path.insert(0, BASE)
         import datu_apstrade as da
         n, kopa = no_prognozu_arhiva(da.ielasit_prognozu_arhivu())
         print(f"Picks vēsture: +{n} (kopā {kopa}) → {FAILS}")
+    elif "--parbaude" in sys.argv:
+        sys.exit(parbaude([int(a) for a in sys.argv[2:] if a.isdigit()] or None))
     else:
         print(__doc__)
