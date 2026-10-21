@@ -74,6 +74,11 @@ jobs:
             *)   python nhl_dati.py --vieglais ${{ inputs.sakums }} ${{ inputs.beigas }} ${{ inputs.atjaunot && '--atjaunot' || '' }} ;;
           esac
 
+      - name: Fantasy rostered % (ESPN)
+        # trešdienas "Fantasy pickups" video (shorts.py --veids fantasy); ja ESPN neatbild, vecais fails paliek
+        continue-on-error: true
+        run: python fantasy_espn.py
+
       - name: Commit and push changes if any
         run: |
           git config --global user.name "GitHub Action"
