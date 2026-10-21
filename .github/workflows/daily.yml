@@ -91,6 +91,13 @@ jobs:
         continue-on-error: true
         run: python fantasy_espn.py
 
+      - name: Advanced fantasy table (Google Sheets via nhl-feed)
+        # sezonas/fantasy_advanced.csv: /60 rādītāji, on-ice 5v5, ESPN rostered % – visiem laukuma spēlētājiem
+        continue-on-error: true
+        run: |
+          pip install pandas numpy
+          python fantasy_adv.py
+
       - name: Commit and push changes if any
         run: |
           git config --global user.name "GitHub Action"
