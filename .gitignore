@@ -12,3 +12,6 @@ dati/*_vecs_*.csv
 __pycache__/
 *.pyc
 .streamlit/secrets.toml
+
+# YouTube Shorts video un to vēsture (tikai lokāli, netiek augšupielādēti)
+video/
