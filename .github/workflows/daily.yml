@@ -79,6 +79,13 @@ jobs:
         continue-on-error: true
         run: python metieni.py --bloketi --aktiva --max 300
 
+      - name: On-ice stats from NHL shift charts (CF/60, xGF/60, 5v5 TOI)
+        # sezonas/onice.csv: katram spēlētājam un spēlei – kas notika, kamēr viņš bija laukumā (pirmajā reizē – visai sezonai)
+        continue-on-error: true
+        run: |
+          pip install pandas numpy
+          python onice.py --aktiva --max 300
+
       - name: Fantasy rostered % (ESPN)
         # trešdienas "Fantasy pickups" video (shorts.py --veids fantasy); ja ESPN neatbild, vecais fails paliek
         continue-on-error: true
