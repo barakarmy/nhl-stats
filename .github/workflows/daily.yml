@@ -74,6 +74,11 @@ jobs:
             *)   python nhl_dati.py --vieglais ${{ inputs.sakums }} ${{ inputs.beigas }} ${{ inputs.atjaunot && '--atjaunot' || '' }} ;;
           esac
 
+      - name: Blocked shots for older games (Corsi / iCF)
+        # papildina sezonas/bloketi.csv spēlēm, kurām to vēl nav (pirmajā reizē – visai sezonai; pēc tam 0 spēles, ~5 s)
+        continue-on-error: true
+        run: python metieni.py --bloketi --aktiva --max 300
+
       - name: Fantasy rostered % (ESPN)
         # trešdienas "Fantasy pickups" video (shorts.py --veids fantasy); ja ESPN neatbild, vecais fails paliek
         continue-on-error: true
