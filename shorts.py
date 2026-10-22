@@ -246,6 +246,83 @@ def zimogs_jauns(no, lidz, dienas):
     return f"STATS THROUGH {dat(lidz, True).upper()}  ·  " + (f"LAST {dienas} DAYS" if dienas else "SEASON TO DATE")
 
 
+# ================================================================ frāzes balsij (dažādība)
+
+class Frazes:
+    """Nejauša frāze no saraksta: katrā video sava kārta, vienā video tā pati grupa neatkārtojas
+    (kamēr saraksts nav izsmelts). Katra ģenerācija – cita kombinācija."""
+    def __init__(self):
+        import random
+        self.rnd = random.Random()
+        self.rindas = {}
+        self.izmantotas = set()
+
+    def __call__(self, grupa):
+        q = self.rindas.get(grupa)
+        if not q:
+            q = list(FRAZES[grupa])
+            self.rnd.shuffle(q)
+            self.rindas[grupa] = q
+        brivas = [x for x in q if x not in self.izmantotas]          # arī starp grupām – nekādu atkārtojumu video
+        x = brivas[-1] if brivas else q[-1]
+        q.remove(x)
+        self.izmantotas.add(x)
+        return x
+
+
+FRAZES = {
+    # xG video
+    "sp_laim": ["Expect a cooldown.", "That pace won't last.", "Regression is coming.",
+                "The shooting luck runs out soon.", "Sell high while you can."],
+    "sp_nelaim": ["He's due.", "The goals will come.", "Buy low.",
+                  "His luck is about to turn.", "Keep shooting like that and the goals will follow."],
+    "kom_laim": ["That's not sustainable.", "Expect a correction.", "The bounces are going their way.",
+                 "Luck is doing a lot of the work.", "That gap usually closes fast."],
+    "kom_nelaim": ["They're playing better than the scoreboard says.", "The results should catch up.",
+                   "Better days are coming.", "The bounces will even out.", "Don't sleep on this team."],
+    "va_labs": ["That's elite, but hard to sustain.", "He's stealing games right now.",
+                "Hot streaks like this usually cool off.", "Ride him while it lasts.", "That's a goalie carrying his team."],
+    "va_slikts": ["That should turn around.", "Cold streaks thaw.", "He's better than this.",
+                  "The saves will come.", "Expect a bounce back."],
+    # xG atskats
+    "maz": ["Too few games to judge.", "Not enough games yet.", "Too small a sample.",
+            "He barely played since.", "Not enough to call it."],
+    "sp_laim_ok": ["Cooled off.", "Called it.", "Regression hit.", "Back to earth.", "Right on cue."],
+    "sp_laim_ne": ["Still hot. Miss.", "Still rolling. Miss.", "He kept scoring. Miss.", "Not yet. Miss.",
+                   "Still beating the odds. Miss."],
+    "sp_nelaim_ok": ["The goals came.", "He broke through.", "Called it.", "There they are.", "It finally paid off."],
+    "sp_nelaim_ne": ["Still waiting. Miss.", "Still snakebitten. Miss.", "Not yet. Miss.", "Still dry. Miss.",
+                     "Still no luck. Miss."],
+    "kom_maz": ["Not enough games.", "Too few games to judge.", "Too small a sample.",
+                "Barely played since.", "Not enough to call it."],
+    "kom_laim_ok": ["Luck ran out.", "The bounces stopped.", "Called it.", "Back to normal.", "Reality caught up."],
+    "kom_laim_ne": ["Still lucky. Miss.", "The bounces kept coming. Miss.", "Not yet. Miss.", "Still riding it. Miss.",
+                    "The luck held. Miss."],
+    "kom_nelaim_ok": ["Better days came.", "The bounces evened out.", "Called it.", "They turned it around.",
+                      "The luck finally turned."],
+    "kom_nelaim_ne": ["Still unlucky. Miss.", "Still snakebitten. Miss.", "Not yet. Miss.", "Still waiting. Miss.",
+                      "No turnaround yet. Miss."],
+    "va_labs_ok": ["Came back to earth.", "The streak cooled.", "Called it.", "Back to normal.", "Regression hit."],
+    "va_labs_ne": ["Still stealing. Miss.", "Still a wall. Miss.", "Not yet. Miss.", "Still unbeatable. Miss.",
+                   "He kept it going. Miss."],
+    "va_slikts_ok": ["Bounced back.", "Turned it around.", "Called it.", "Much better since.", "Found his game."],
+    "va_slikts_ne": ["Still struggling. Miss.", "Still cold. Miss.", "Not yet. Miss.", "No bounce back yet. Miss.",
+                     "Still leaking goals. Miss."],
+    # fantasy
+    "f_add": ["Add him.", "Grab him now.", "Pick him up.", "He's worth a roster spot.", "Get him before your league does."],
+    "f_stream": ["Stream him.", "A great streaming option.", "Use him for the week.", "Ride the schedule with him.",
+                 "Plug him in for the week."],
+    "f_bench": ["Bench him this week.", "Sit him this week.", "Keep him on the bench.", "Not this week.",
+                "Give him a week off your lineup."],
+    "f_drop": ["Time to drop him.", "Cut him loose.", "You can let him go.", "Drop him for a hot pickup.", "Free up that spot."],
+    # fantasy atskats
+    "fa_hit": ["Hit.", "Called it.", "Nailed it.", "That worked.", "Good pickup."],
+    "fa_miss": ["Miss.", "Didn't work.", "Not this time.", "That one missed.", "No luck there."],
+    "fa_good": ["Good call.", "Right call.", "Called it.", "Smart move.", "That paid off."],
+    "fa_bad": ["Bad call.", "Wrong call.", "Missed that one.", "He proved us wrong.", "Not our best call."],
+}
+
+
 # ================================================================ jauni video
 
 def veids_speletaji(m, a):
@@ -273,12 +350,12 @@ def veids_speletaji(m, a):
     kartes = [karte(p, r, i, True) for i, (p, r) in enumerate(laim.iterrows(), 1)]
     kartes += [karte(p, r, i, False) for i, (p, r) in enumerate(nelaim.iterrows(), 1)]
     runa = [f"Which NHL scorers are running on luck? Goals versus expected goals, {dat(no)} to {dat(lidz)}."]
-    b1, b2 = ["Expect a cooldown.", "That pace won't last.", "Regression is coming."], ["He's due.", "The goals will come.", "Buy low."]
+    F = Frazes()
     for i, (_, r) in enumerate(laim.iterrows()):
-        runa.append(f"{r['vards']} has {int(r['G'])} goals on just {r['xG']:.1f} expected. {b1[i % 3]}")
+        runa.append(f"{r['vards']} has {int(r['G'])} goals on just {r['xG']:.1f} expected. {F('sp_laim')}")
     for i, (_, r) in enumerate(nelaim.iterrows()):
         g_ = int(r["G"])
-        runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {r['xG']:.1f} expected. {b2[i % 3]}")
+        runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {r['xG']:.1f} expected. {F('sp_nelaim')}")
     runa.append("Luck runs out. Expected goals don't. We'll check back in two weeks. Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "team": r["team"], "G": sk(r["G"]), "xG": sk(r["xG"]), "sog": sk(r["sog"]), "sp": sk(r["sp"])}  # noqa: E731
     return {
@@ -324,10 +401,11 @@ def veids_komandas(m, a):
     kartes += [karte(k, r, i, False) for i, (k, r) in enumerate(nelaim.iterrows(), 1)]
     zime = lambda v: ("plus " if v >= 0 else "minus ") + f"{abs(v):.0f}"   # noqa: E731
     runa = ["Which NHL teams are living on luck? PDO adds shooting and save percentage. Average is one hundred."]
+    F = Frazes()
     for k, r in laim.iterrows():
-        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, but expected only {zime(r['xGD'])}.")
+        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, but expected only {zime(r['xGD'])}. {F('kom_laim')}")
     for k, r in nelaim.iterrows():
-        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. They're playing better than the scoreboard says.")
+        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, expected {zime(r['xGD'])}. {F('kom_nelaim')}")
     runa.append("PDO always comes back to one hundred. We'll check back in two weeks. Follow for weekly NHL stats.")
     rinda = lambda r: {k_: sk(r[k_]) for k_ in ("PDO", "sh", "sv", "GD", "xGD", "GP")}   # noqa: E731
     return {
@@ -377,10 +455,11 @@ def veids_vartsargi(m, a):
     kartes = [karte(r, i, True) for i, (_, r) in enumerate(labie.iterrows(), 1)]
     kartes += [karte(r, i, False) for i, (_, r) in enumerate(sliktie.iterrows(), 1)]
     runa = ["Which NHL goalies are stealing games, and which are costing them? Goals saved above expected."]
+    F = Frazes()
     for _, r in labie.iterrows():
-        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected.")
+        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. {F('va_labs')}")
     for _, r in sliktie.iterrows():
-        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected.")
+        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. {F('va_slikts')}")
     runa.append("Hot streaks cool, cold streaks thaw. We'll check back in two weeks. Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "kom": r["kom"], **{k_: sk(r[k_]) for k_ in ("GSAx", "GSAx_sp", "GA", "xGA", "SA", "sv", "GP")}}  # noqa: E731
     return {
@@ -421,6 +500,7 @@ def atskats(fails, m, a):
     no2, lidz2 = pec["datums"].min(), pec["datums"].max()
     neitr = "DIDN'T PLAY"
     kartes, runa_k, saraksts, ok_skaits, vert_skaits = [], [], [], 0, 0
+    F = Frazes()
 
     if veids == "speletaji":
         t = speletaju_tabula(pec)
@@ -444,8 +524,7 @@ def atskats(fails, m, a):
                                "bars": [("GOALS SINCE", G2, BALTS, "{:.0f}"), ("EXPECTED (xG) SINCE", xG2, ZILS, "{:.1f}")],
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{spelu(sp2)}  ·  {dat(no2)} – {dat(lidz2)}"})
-                tail = ("Too few games to judge." if ok is None else ("Cooled off." if ok else "Still hot. Miss.") if lucky
-                        else ("The goals came." if ok else "Still waiting. Miss."))
+                tail = F("maz") if ok is None else F(("sp_laim" if lucky else "sp_nelaim") + ("_ok" if ok else "_ne"))
                 runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was due'}. Since then: {G2} goals on {xG2:.1f} expected. {tail}")
                 saraksts.append(f"{r['vards']} ({r['team']}): {int(r['G'])} G / {r['xG']:.1f} xG → {G2} G / {xG2:.1f} xG  {verd}")
                 if ok is not None:
@@ -483,8 +562,7 @@ def atskats(fails, m, a):
                                "bars": bars, "diverg": True, "nulle": "100",
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{gd_txt}{dat(no2)} – {dat(lidz2)}"})
-                tail = ("Not enough games." if ok is None else ("Luck ran out." if ok else "Still lucky. Miss.") if lucky
-                        else ("Better days came." if ok else "Still unlucky. Miss."))
+                tail = F("kom_maz") if ok is None else F(("kom_laim" if lucky else "kom_nelaim") + ("_ok" if ok else "_ne"))
                 p2_txt = "n/a" if not np.isfinite(p2) else f"{p2:.0f}"
                 runa_k.append(f"The {nos}: PDO was {r['PDO']:.0f}. Since then: {p2_txt}. {tail}")
                 saraksts.append(f"{pils} {nos}: PDO {r['PDO']:.1f} → {p2_txt}  {verd}")
@@ -521,8 +599,7 @@ def atskats(fails, m, a):
                                "bars": bars, "diverg": True,
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{sv_txt}{spelu(gp2)}  ·  {dat(no2)} – {dat(lidz2)}"})
-                tail = ("Too few games to judge." if ok is None else ("Came back to earth." if ok else "Still stealing. Miss.") if labs
-                        else ("Bounced back." if ok else "Still struggling. Miss."))
+                tail = F("maz") if ok is None else F(("va_labs" if labs else "va_slikts") + ("_ok" if ok else "_ne"))
                 r2_txt = "n/a" if not np.isfinite(r2) else f"{r2:+.2f}"
                 r2_runa = r2_txt.replace("+", "plus ").replace("-", "minus ")
                 stav = "was red hot" if labs else "was ice cold"
@@ -1028,6 +1105,7 @@ def veids_fantasy(m, a):
     runa = [f"{vardiem.get(n_add, n_add)} fantasy hockey pickup{'' if n_add == 1 else 's'} for next week, all {rost_txt}" + (f", plus {n_drop} player{'' if n_drop == 1 else 's'} to drop or bench." if n_drop else "."),
             f"First, the schedule. {len(cetri)} teams play four games next week" + (f", {len(divi)} play only two." if divi else ".")]
     add_veids = {}
+    F = Frazes()
     for nr, (pid, r) in enumerate(izv.iterrows(), 1):
         veids = "STREAM" if r["forma"] < 0.4 and r["sp_nak"] >= 4 else "ADD"
         add_veids[pid] = veids
@@ -1035,13 +1113,13 @@ def veids_fantasy(m, a):
         ros = "" if not np.isfinite(r["rostered"]) else f" Rostered in only {r['rostered']:.0f} percent of leagues."
         runa.append(f"{r['vards']}, {kom_nos(r['team'])}. {int(r['P'])} points in his last {int(r['GP'])} games, "
                     f"{r['SOG_gp']:.1f} shots a game, and {int(r['sp_nak'])} games next week.{ros} "
-                    + ("Stream him." if veids == "STREAM" else "Add him."))
+                    + F("f_stream" if veids == "STREAM" else "f_add"))
     for nr, (pid, r) in enumerate(drop.iterrows(), 1):
         veids = drop_veids[pid]
         kartes.append(karte(nr, r, veids))
         sakums = ("Now, players to drop or bench. " if n_drop > 1 else "Now, one player to drop or bench. ") if nr == 1 else ""
         runa.append(f"{sakums}{r['vards']}, {kom_nos(r['team'])}. Rostered in {r['rostered']:.0f} percent of leagues, but "
-                    f"{iemesls_drop(r)[0].lower() + iemesls_drop(r)[1:]}. " + ("Bench him this week." if veids == "BENCH" else "Time to drop him."))
+                    f"{iemesls_drop(r)[0].lower() + iemesls_drop(r)[1:]}. " + F("f_bench" if veids == "BENCH" else "f_drop"))
     runa.append("Green matchups are the weakest defenses by expected goals against. Follow for weekly fantasy hockey tips.")
     zimogs = f"STATS THROUGH {dat(lidz_ts, True).upper()}" + (f"  ·  ESPN ROSTERED % {dat(e_dat).upper()}" if e is not None else "")
     # pagājušās nedēļas un sezonas rezultāts (no fantasy atskatiem)
@@ -1242,6 +1320,7 @@ def _rostered_nedelas_sakuma(datums):
 
 
 def atskats_fantasy(j, m, a):
+    F = Frazes()
     no, lidz = j["momentuzn"]["nedela"]
     sp = _lasit("speletaji.csv")
     sp["playerId"] = pd.to_numeric(sp["playerId"], errors="coerce")
@@ -1315,8 +1394,8 @@ def atskats_fantasy(j, m, a):
             })
             runa.append((f"{r['vards']}: " if grupa == "add" else f"Our {r['veids'].lower()} call, {r['vards']}: ")
                         + f"{G} goal{'' if G == 1 else 's'}, {A} assist{'' if A == 1 else 's'}, {P} point{'' if P == 1 else 's'} in {GP} games. "
-                        + {"HIT ✓": "Hit.", "MISS ✗": "Miss.", "DIDN'T PLAY ✗": "He didn't play. Miss.", "GOOD CALL ✓": "Good call.",
-                           "BAD CALL ✗": "Bad call.", "EVEN": "Even."}[verd])
+                        + {"HIT ✓": F("fa_hit"), "MISS ✗": F("fa_miss"), "DIDN'T PLAY ✗": "He didn't play. Miss.",
+                           "GOOD CALL ✓": F("fa_good"), "BAD CALL ✗": F("fa_bad"), "EVEN": "Even."}[verd])
             saraksts.append(f"{grupa.upper()} {r['vards']} ({r['team']}): {GP} GP, {G}G {A}A, {P} P, {SOG} SOG → {verd}")
     if not kartes:
         return None
