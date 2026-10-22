@@ -13,10 +13,18 @@ mainās tikai izskats un kustība:
   • audio: klusa fona mūzika no mapes shorts_muzika\\ + skaņu efekti (swoosh, boom, tick)
 
 Mapes (izveido pats nhl-stats saknē; ja mapes nav vai tā tukša – attiecīgā daļa vienkārši izpaliek):
-  shorts_fons\\     1–5 īsi hokeja video (.mp4/.mov) no Pexels / Pixabay (bezmaksas, komerciāli drīkst).
-                    Skripts katram video izvēlas vienu, izpludina, aptumšo un atkārto cilpā.
-  shorts_muzika\\   1+ fona mūzikas faili (.mp3) no YouTube Audio Library / Pixabay Music.
+  shorts_fons\\     īsi hokeja video (.mp4/.mov) no Pexels / Pixabay (bezmaksas, komerciāli drīkst).
+                    Skripts katru pārvērš melnbaltu, palēnina (slow motion), izpludina, aptumšo un atkārto cilpā.
+                    Iestatījumi faila augšā: FONA_MELNBALTS, FONA_ATRUMS (0.5 = 2× lēnāk), FONA_TUMSUMS.
+  shorts_muzika\\   fona mūzika (.mp3) no YouTube Audio Library / Pixabay Music.
                     Skaļums ~15 %, kamēr runā balss – vēl klusāk; beigās izbalē.
+  NOSAUKUMI – faila sākums nosaka, kuram video tas der (abās mapēs vienādi):
+    speletaji_1.mp4, speletaji_2.mp4, komandas_1.mp4, vartsargi_1.mp4, fantasy_1.mp4,
+    fakts_1.mp4, tiesnesi_1.mp4,
+    atskats_1.mp4 (visi atskati) vai precīzāk atskats_speletaji_1.mp4, atskats_fantasy_1.mp4 ...,
+    visi_1.mp4 (vai jebkurš cits nosaukums) – der jebkuram veidam, kam nav savu failu.
+  Ja veidam ir vairāki faili, tie tiek ņemti pēc kārtas (1, 2, 3, 1 ...); kārta saglabājas
+  video\\shorts_mediji.json. Ja nav ne sava, ne visi_ faila – fons paliek krāsainais / bez mūzikas.
   shorts_sfx\\      (nav obligāti) swoosh.mp3 / boom.mp3 / tick.mp3 – aizstāj skripta ģenerētos efektus.
 Papildu parametri: --bez-fona-video  --bez-muzikas  --bez-sfx
 
@@ -46,6 +54,8 @@ MAPE_SFX = os.path.join(S.BASE, "shorts_sfx")
 MUZIKAS_SKALUMS = 0.15          # fona mūzika (0–1); kamēr runā balss, automātiski vēl klusāk
 SFX_SKALUMS = 0.55              # skaņu efekti
 FONA_TUMSUMS = 0.55             # cik stipri fona video aptumšots (0 = neaptumšots, 1 = melns)
+FONA_MELNBALTS = True           # fona video melnbalts (False = krāsains)
+FONA_ATRUMS = 0.5               # fona video ātrums: 1 = normāls, 0.5 = 2× lēnāk (slow motion), 0.35 = ~3× lēnāk
 SR = 44100
 VIDEO_PAPL = (".mp4", ".mov", ".m4v", ".webm", ".mkv")
 AUDIO_PAPL = (".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac")
@@ -70,6 +80,39 @@ def spilgta(kr, v_min=0.84):
     if s_ < 0.15:
         v = max(v, 0.88)
     return tuple(int(round(x * 255)) for x in colorsys.hsv_to_rgb(h, s_, v))
+
+
+def komandas_josla(d, x0, y0, x1, kom, h=22):
+    """Viena josla kartītes augšā: kreisā puse – komandas primārā krāsa, labā – sekundārā (50/50)."""
+    p = S.kkrasa(kom)
+    s_ = SEKUNDARAS.get(str(kom), (230, 230, 235))
+    if sum(abs(a - b) for a, b in zip(p, s_)) < 90:                   # pārāk līdzīgas → sekundārā = balta
+        s_ = (230, 230, 235)
+    mid = (x0 + x1) / 2
+    d.rounded_rectangle([x0, y0, x1, y0 + h], radius=h / 2, fill=s_)
+    d.rounded_rectangle([x0, y0, mid, y0 + h], radius=h / 2, fill=p)
+    d.rectangle([mid - h / 2, y0, mid, y0 + h], fill=p)
+
+
+def verdikts(d, t, t0, teksts, kr, apaksa, y, x0, x1):
+    """Verdikts kā krāsaina "pill" poga + paskaidrojums zem tās (nepārklājas, ietilpst kartītē)."""
+    k = S.ease((t - t0) / 0.35)
+    if k <= 0:
+        return
+    kb = ease_back((t - t0) / 0.45)
+    f = S.fonts("black", int(78 * (0.85 + 0.15 * kb)))
+    bb = d.textbbox((0, 0), teksts, font=f)
+    w, h = bb[2] - bb[0] + 110, 112
+    px = (S.W - w) / 2
+    d.rounded_rectangle([px, y, px + w, y + h], radius=h / 2, fill=S.ar_alfa(kr, 255 * k))
+    d.text((px + 55 - bb[0], y + (h - (bb[3] - bb[1])) / 2 - bb[1]), teksts, font=f, fill=S.ar_alfa(S.uz_fona(kr), 255 * k))
+    k2 = S.ease((t - t0 - 0.25) / 0.35)
+    if k2 > 0 and apaksa:
+        fa, rr = S.rindas_ietilpinat(d, apaksa, "semi", 40, x1 - x0 - 100, 2)
+        yy = y + h + 22
+        for r in rr:
+            S.teksts_c(d, yy, r, fa, S.ar_alfa(S.BALTS, 225 * k2))
+            yy += int(fa.size * 1.25)
 
 
 def kom_krasas(kom):
@@ -126,8 +169,10 @@ class VideoFons:
     """Izpludināts hokeja video (B-roll) no shorts_fons\\, cilpā, aptumšots; virsū – vieglas krāsu blāzmas."""
     def __init__(self, fails):
         self.w, self.h = 360, 640
-        vf = (f"scale={self.w}:{self.h}:force_original_aspect_ratio=increase,crop={self.w}:{self.h},"
-              f"gblur=sigma=9,eq=saturation=0.8,fps={S.FPS}")
+        lenam = f"setpts=PTS/{FONA_ATRUMS},framerate=fps={S.FPS}," if FONA_ATRUMS < 0.99 else ""   # slow motion ar kadru sapludināšanu
+        krasa = "hue=s=0," if FONA_MELNBALTS else "eq=saturation=0.8,"
+        vf = (f"fps={S.FPS},scale={self.w}:{self.h}:force_original_aspect_ratio=increase,crop={self.w}:{self.h},"
+              f"{lenam}{krasa}gblur=sigma=9,fps={S.FPS}")
         self.p = subprocess.Popen(["ffmpeg", "-loglevel", "error", "-stream_loop", "-1", "-i", fails, "-an", "-vf", vf,
                                    "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
         self.n = self.w * self.h * 3
@@ -144,7 +189,7 @@ class VideoFons:
         im = self.pedejais if self.pedejais is not None else self.tint.copy()
         im = Image.blend(im, self.tint, FONA_TUMSUMS)
         bl = self.blazma.kadrs(T)                                     # krāsu blāzmas pāri video (vieglāk)
-        return Image.blend(im, bl, 0.35)
+        return Image.blend(im, bl, 0.25 if FONA_MELNBALTS else 0.35)
 
     def aizvert(self):
         try:
@@ -153,11 +198,68 @@ class VideoFons:
             pass
 
 
-def izveleties_fonu():
-    if not OPC["fons"] or not os.path.isdir(MAPE_FONS):
+VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "fakts", "tiesnesi", "atskats", "visi")
+MEDIJU_VESTURE = "shorts_mediji.json"
+
+
+def _arg(nos, nokl=None):
+    return sys.argv[sys.argv.index(nos) + 1] if nos in sys.argv and sys.argv.index(nos) + 1 < len(sys.argv) else nokl
+
+
+def veida_atslegas():
+    """Kuri failu nosaukumu sākumi der šim video, svarīgākais pirmais.
+    Piem. xG atskats par spēlētājiem: ['atskats_speletaji', 'atskats', 'visi']."""
+    ats = _arg("--atskats")
+    if ats:
+        veids = ""
+        try:
+            import json
+            js = ats
+            if os.path.isdir(ats):
+                js = os.path.join(ats, sorted(f for f in os.listdir(ats) if f.endswith(".json"))[0])
+            veids = json.load(open(js, encoding="utf-8")).get("veids", "")
+        except Exception:                                             # noqa: BLE001
+            pass
+        return ([f"atskats_{veids}"] if veids else []) + ["atskats", "visi"]
+    return [_arg("--veids", "speletaji"), "visi"]
+
+
+def izveleties_mediju(mape, paplasinajumi, tips):
+    """Fails no mapes pēc video veida: speletaji_1.mp4, speletaji_2.mp4, fantasy_1.mp3 ...
+    Ja šim veidam nav neviena faila – visi_*.  Faili tiek ņemti pēc kārtas (1, 2, 3, 1, 2 ...),
+    lai blakus video nav vienādi; kārta tiek atcerēta video\\shorts_mediji.json."""
+    if not os.path.isdir(mape):
         return None
-    faili = sorted(f for f in os.listdir(MAPE_FONS) if f.lower().endswith(VIDEO_PAPL))
-    return os.path.join(MAPE_FONS, random.choice(faili)) if faili else None
+    visi = sorted(f for f in os.listdir(mape) if f.lower().endswith(paplasinajumi))
+    for atsl in veida_atslegas():
+        faili = [f for f in visi if f.lower().startswith(atsl + "_") or os.path.splitext(f.lower())[0] == atsl]
+        if atsl == "visi":                                            # + faili bez veida priedēkļa
+            faili += [f for f in visi if not f.lower().startswith(VEIDI_PREFIKSI)]
+        if faili:
+            break
+    else:
+        return None
+    import json
+    vm = _arg("--mape", os.path.join(S.BASE, "video"))
+    vp = os.path.join(vm, MEDIJU_VESTURE)
+    try:
+        vest = json.load(open(vp, encoding="utf-8")) if os.path.exists(vp) else {}
+    except Exception:                                                 # noqa: BLE001
+        vest = {}
+    k = f"{tips}:{atsl}"
+    ped = vest.get(k)
+    izv = faili[(faili.index(ped) + 1) % len(faili)] if ped in faili else faili[0]
+    vest[k] = izv
+    try:
+        os.makedirs(vm, exist_ok=True)
+        json.dump(vest, open(vp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    except Exception:                                                 # noqa: BLE001
+        pass
+    return os.path.join(mape, izv)
+
+
+def izveleties_fonu():
+    return izveleties_mediju(MAPE_FONS, VIDEO_PAPL, "fons") if OPC["fons"] else None
 
 
 # ---------------------------------------------------------------- audio: skaņu efekti un mūzika
@@ -265,10 +367,7 @@ def sfx_celins(ainas, kopa, fails):
 
 
 def izveleties_muziku():
-    if not OPC["muzika"] or not os.path.isdir(MAPE_MUZIKA):
-        return None
-    faili = sorted(f for f in os.listdir(MAPE_MUZIKA) if f.lower().endswith(AUDIO_PAPL))
-    return os.path.join(MAPE_MUZIKA, random.choice(faili)) if faili else None
+    return izveleties_mediju(MAPE_MUZIKA, AUDIO_PAPL, "muzika") if OPC["muzika"] else None
 
 
 def miksets(video_tmp, izvade, balss, ainas, kopa, tmp):
@@ -430,8 +529,7 @@ def aina_karte(t, c):
     S.pill(d, 0, 250, c["augsa"], S.fonts("semi", 40), akc, S.MELNS if akc == S.ZALS else S.BALTS, center=True)
     x0, y0, x1, y1 = 70, 380, W - 70, 1640
     d.rounded_rectangle([x0, y0, x1, y1], radius=48, fill=(15, 18, 40, 235), outline=S.ar_alfa(prim, 170), width=4)
-    d.rounded_rectangle([x0, y0, x1, y0 + 22], radius=11, fill=c["bkr"])
-    d.rectangle([x0 + 40, y0 + 22, x1 - 40, y0 + 28], fill=sek)
+    komandas_josla(d, x0, y0, x1, c.get("badge"))
     d.text((x0 + 50, y0 + 60), f"#{c['nr']}", font=S.fonts("black", 92), fill=akc)
     fb = S.fonts("bold", 48)
     S.pill(d, x1 - 50 - S.platums(d, c["badge"], fb) - 68, y0 + 80, c["badge"], fb, c["bkr"], S.uz_fona(c["bkr"]), pad=(34, 14))
@@ -489,17 +587,53 @@ def aina_karte(t, c):
 
 
 def aina_fantasy(t, c):
-    """Fantasy kartīte: flīžu vērtības un lielais verdikts skaitās; rāmis komandas krāsā."""
-    c2 = dict(c)
-    c2["liels"] = skaitit(c["liels"], S.ease((t - 1.3) / 0.9))
-    c2["flizes"] = [(lab, val if ":" in str(val) else skaitit(val, S.ease((t - 0.3 - 0.08 * i) / 0.55)), sub)
-                    for i, (lab, val, sub) in enumerate(c["flizes"])]
-    im = _orig["fantasy"](t, c2)
-    prim, sek = kom_krasas(c.get("badge"))
+    """Fantasy kartīte: komandas josla augšā (50/50), flīžu skaitļi skaitās, verdikts – krāsaina poga."""
+    im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    x0, y0, x1, y1 = 70, 380, S.W - 70, 1640
-    d.rounded_rectangle([x0, y0, x1, y1], radius=48, outline=S.ar_alfa(prim, 170), width=4)
-    d.rectangle([x0 + 40, y0 + 22, x1 - 40, y0 + 28], fill=sek)
+    akc = c["akc"]
+    prim, _ = kom_krasas(c.get("badge"))
+    S.pill(d, 0, 250, c["augsa"], S.ietilpinat(d, c["augsa"], "semi", 40, S.W - 160), akc, S.uz_fona(akc), center=True)
+    x0, y0, x1, y1 = 70, 380, S.W - 70, 1680
+    d.rounded_rectangle([x0, y0, x1, y1], radius=48, fill=(15, 18, 40, 235), outline=S.ar_alfa(prim, 110), width=3)
+    komandas_josla(d, x0, y0, x1, c.get("badge"))
+    d.text((x0 + 50, y0 + 60), f"#{c['nr']}", font=S.fonts("black", 92), fill=akc)
+    fb = S.fonts("bold", 48)
+    S.pill(d, x1 - 50 - S.platums(d, c["badge"], fb) - 68, y0 + 80, c["badge"], fb, c["bkr"], S.uz_fona(c["bkr"]), pad=(34, 14))
+    d.text((x0 + 50, y0 + 200), c["v1"].upper(), font=S.fonts("semi", 50), fill=prim)
+    d.text((x0 + 50, y0 + 258), c["v2"].upper(), font=S.ietilpinat(d, c["v2"].upper(), "black", 112, x1 - x0 - 100), fill=S.BALTS)
+    d.text((x0 + 50, y0 + 400), c["info"], font=S.ietilpinat(d, c["info"], "reg", 40, x1 - x0 - 100), fill=S.PELEKS)
+    tw_, th_, gap = (x1 - x0 - 100 - 2 * 22) / 3, 150, 22
+    for i, (lab, val, sub) in enumerate(c["flizes"]):
+        k = S.ease((t - 0.3 - 0.08 * i) / 0.35)
+        if k <= 0:
+            continue
+        val = val if ":" in str(val) else skaitit(val, S.ease((t - 0.3 - 0.08 * i) / 0.55))
+        ri, ci = divmod(i, 3)
+        fx, fy = x0 + 50 + ci * (tw_ + gap), y0 + 480 + ri * (th_ + gap) + (1 - k) * 24
+        d.rounded_rectangle([fx, fy, fx + tw_, fy + th_], radius=24, fill=S.ar_alfa(S.TUMSS, 255 * k))
+        d.text((fx + 22, fy + 16), lab, font=S.fonts("semi", 28), fill=S.ar_alfa(S.PELEKS, 255 * k))
+        sw = S.platums(d, sub, S.fonts("semi", 26)) + 14 if sub else 0
+        d.text((fx + 22, fy + 52), val, font=S.ietilpinat(d, str(val), "black", 62, tw_ - 40 - sw), fill=S.ar_alfa(S.BALTS, 255 * k))
+        if sub:
+            krs = S.ZALS if sub.startswith("▲") else (S.SARKANS if sub.startswith("▼") else S.PELEKS)
+            fs = S.fonts("semi", 26)
+            d.text((fx + tw_ - 18 - S.platums(d, sub, fs), fy + th_ - 44), sub, font=fs, fill=S.ar_alfa(krs, 255 * k))
+    yg = y0 + 850
+    d.text((x0 + 50, yg), c.get("grafika_virs", "NEXT WEEK"), font=S.fonts("semi", 36), fill=S.PELEKS)
+    pr = c["pretinieki"]
+    if pr:
+        n = len(pr)
+        pw = min(200, (x1 - x0 - 100 - (n - 1) * 16) / n)
+        for i, (dn, o, kr) in enumerate(pr):
+            k = S.ease((t - 0.8 - 0.07 * i) / 0.3)
+            if k <= 0:
+                continue
+            px = x0 + 50 + i * (pw + 16)
+            d.rounded_rectangle([px, yg + 52, px + pw, yg + 172], radius=22, fill=S.ar_alfa(kr, 200 * k))
+            fd, fo = S.fonts("semi", 28), S.ietilpinat(d, o, "black", 44, pw - 20)
+            d.text((px + (pw - S.platums(d, dn, fd)) / 2, yg + 64), dn, font=fd, fill=S.ar_alfa(S.BALTS, 230 * k))
+            d.text((px + (pw - S.platums(d, o, fo)) / 2, yg + 102), o, font=fo, fill=S.ar_alfa(S.BALTS, 255 * k))
+    verdikts(d, t, 1.3, str(c["liels"]), akc, c.get("apaksa", ""), y0 + 1065, x0, x1)
     return im
 
 
