@@ -51,13 +51,16 @@ def periods(sp, m, bl, oi, va, no, lidz, pfx):
     """Viena perioda rādītāji (indekss: playerId)."""
     s = sp[(sp["datums"] >= no) & (sp["datums"] <= lidz)]
     g = s.groupby("playerId").agg(gp=("game_id", "nunique"), G=("goals", "sum"), A=("assists", "sum"), P=("points", "sum"),
-                                  SOG=("sog", "sum"), HIT=("hits", "sum"), BLK=("blockedShots", "sum"), TOI=("toi_m", "sum"))
+                                  SOG=("sog", "sum"), HIT=("hits", "sum"), BLK=("blockedShots", "sum"), TOI=("toi_m", "sum"),
+                                  PM=("plusMinus", "sum"), PIM=("pim", "sum"))
     if va is not None:
-        v = va[(va["datums"] >= no) & (va["datums"] <= lidz) & (va["strength"].astype(str).str.lower() == "pp")]
-        pp = pd.concat([pd.to_numeric(v[c], errors="coerce") for c in ("scorer_id", "assist1_id", "assist2_id")]).dropna().astype(int).value_counts()
-        g["PPP"] = pp.reindex(g.index).fillna(0).astype(int)
+        v0 = va[(va["datums"] >= no) & (va["datums"] <= lidz)]
+        for k, sit in (("PPP", "pp"), ("SHP", "sh")):                # vairākuma / mazākuma punkti
+            v = v0[v0["strength"].astype(str).str.lower() == sit]
+            pp = pd.concat([pd.to_numeric(v[c], errors="coerce") for c in ("scorer_id", "assist1_id", "assist2_id")]).dropna().astype(int).value_counts()
+            g[k] = pp.reindex(g.index).fillna(0).astype(int)
     else:
-        g["PPP"] = np.nan
+        g["PPP"], g["SHP"] = np.nan, np.nan
     mm = m[(m["datums"] >= no) & (m["datums"] <= lidz)]
     mg = mm.groupby("metejs")
     g["iFF"] = mg.size().reindex(g.index).fillna(0)
@@ -72,7 +75,7 @@ def periods(sp, m, bl, oi, va, no, lidz, pfx):
     h = (g["TOI"] / 60).where(g["TOI"] > 0)
     out = pd.DataFrame(index=g.index)
     out["gp"] = g["gp"]
-    for k in ("G", "A", "P", "PPP", "SOG", "HIT", "BLK"):
+    for k in ("G", "A", "P", "PPP", "SOG", "HIT", "BLK", "SHP", "PM", "PIM"):
         out[k.lower() if k != "P" else "pts"] = g[k]
     out["toi_gp"] = _r(g["TOI"] / g["gp"])
     for k, n in (("SOG", "sog60"), ("iFF", "iff60"), ("iCF", "icf60"), ("ixG", "ixg60"), ("iSC", "iscf60"), ("iHD", "ihdcf60")):
