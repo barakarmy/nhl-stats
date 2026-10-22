@@ -527,9 +527,17 @@ def aina_karte(t, c):
     prim, sek = kom_krasas(c.get("badge"))
     akc = c["akc"]
     S.pill(d, 0, 250, c["augsa"], S.fonts("semi", 40), akc, S.MELNS if akc == S.ZALS else S.BALTS, center=True)
-    x0, y0, x1, y1 = 70, 380, W - 70, 1640
-    d.rounded_rectangle([x0, y0, x1, y1], radius=48, fill=(15, 18, 40, 235), outline=S.ar_alfa(prim, 170), width=4)
-    komandas_josla(d, x0, y0, x1, c.get("badge"))
+    x0, y0, x1 = 70, 380, W - 70
+    # apakšas izkārtojums: lielais skaitlis un paskaidrojums – pozīcijas no reālā teksta izmēra (der jebkuram fontam)
+    yb = y0 + 560
+    y_sk = yb + 190 * (max(1, len(c["bars"])) - 1) + 142 + 46
+    f_sk = S.ietilpinat(d, c["liels"], "black", min(170, c.get("liels_izm", 200)), x1 - x0 - 100)
+    bb = d.textbbox((0, 0), c["liels"], font=f_sk)
+    f_ap, rr_ap = S.rindas_ietilpinat(d, c["apaksa"], "semi", 40, x1 - x0 - 100, 2)
+    y_ap = y_sk + bb[3] + 30
+    y1 = max(1640, y_ap + len(rr_ap) * int(f_ap.size * 1.25) + 36)
+    d.rounded_rectangle([x0, y0, x1, y1], radius=48, fill=(15, 18, 40, 235), outline=S.ar_alfa(prim, 150), width=3)
+    komandas_josla(d, x0 + 44, y0 + 26, x1 - 44, c.get("badge"), h=12)
     d.text((x0 + 50, y0 + 60), f"#{c['nr']}", font=S.fonts("black", 92), fill=akc)
     fb = S.fonts("bold", 48)
     S.pill(d, x1 - 50 - S.platums(d, c["badge"], fb) - 68, y0 + 80, c["badge"], fb, c["bkr"], S.uz_fona(c["bkr"]), pad=(34, 14))
@@ -538,7 +546,6 @@ def aina_karte(t, c):
     d.text((x0 + 50, y0 + 275), c["v2"].upper(), font=f2, fill=S.BALTS)
     d.text((x0 + 50, y0 + 425), c["info"], font=S.ietilpinat(d, c["info"], "reg", 44, x1 - x0 - 100), fill=S.PELEKS)
     k = S.ease((t - 0.35) / 0.9)
-    yb = y0 + 560
     bx0, bx1 = x0 + 50, x1 - 50
     div = c.get("diverg", False)
     mx = max([abs(b[1]) for b in c["bars"]] + [1]) * (1.25 if div else 1.08)
@@ -577,12 +584,15 @@ def aina_karte(t, c):
             ieksa = w + tw + 60 >= bx1 - bx0
             tx = bx0 + w - tw - 30 if ieksa else bx0 + max(w, 0) + 20
             d.text((tx, y + 64), txt, font=fv, fill=S.uz_fona(kr) if ieksa else S.BALTS)
-    k2 = S.ease((t - 1.2) / 0.45)
+    k2 = S.ease((t - 1.2) / 0.2)                                     # ātra parādīšanās (bez ilgas caurspīdības)
     if k2 > 0:
         liels = skaitit(c["liels"], S.ease((t - 1.2) / 0.9))
-        f = S.ietilpinat(d, c["liels"], "black", int(c.get("liels_izm", 200) * (0.7 + 0.3 * k2)), x1 - x0 - 80)
-        S.teksts_c(d, yb + 410, liels, f, S.ar_alfa(akc, 255 * k2))
-        S.teksts_c(d, yb + 640, c["apaksa"], S.ietilpinat(d, c["apaksa"], "reg", 42, x1 - x0 - 80), S.ar_alfa(S.PELEKS, 255 * k2))
+        S.teksts_c(d, y_sk, liels, f_sk, S.ar_alfa(akc, 255 * k2))
+        k3 = S.ease((t - 1.5) / 0.3)
+        yy = y_ap
+        for r in rr_ap:
+            S.teksts_c(d, yy, r, f_ap, S.ar_alfa(S.BALTS, 215 * k3))
+            yy += int(f_ap.size * 1.25)
     return im
 
 
@@ -595,7 +605,7 @@ def aina_fantasy(t, c):
     S.pill(d, 0, 250, c["augsa"], S.ietilpinat(d, c["augsa"], "semi", 40, S.W - 160), akc, S.uz_fona(akc), center=True)
     x0, y0, x1, y1 = 70, 380, S.W - 70, 1680
     d.rounded_rectangle([x0, y0, x1, y1], radius=48, fill=(15, 18, 40, 235), outline=S.ar_alfa(prim, 110), width=3)
-    komandas_josla(d, x0, y0, x1, c.get("badge"))
+    komandas_josla(d, x0 + 44, y0 + 26, x1 - 44, c.get("badge"), h=12)
     d.text((x0 + 50, y0 + 60), f"#{c['nr']}", font=S.fonts("black", 92), fill=akc)
     fb = S.fonts("bold", 48)
     S.pill(d, x1 - 50 - S.platums(d, c["badge"], fb) - 68, y0 + 80, c["badge"], fb, c["bkr"], S.uz_fona(c["bkr"]), pad=(34, 14))
@@ -674,7 +684,8 @@ def renderet(s, izvade, kanals="", balss=None):
         print(f"FONS: {os.path.basename(fona_fails)}")
     video_tmp = os.path.join(tmp, "v.mp4")
     p = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{S.W}x{S.H}",
-                          "-r", str(S.FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+                          "-r", str(S.FPS), "-i", "-", "-c:v", "libx264", "-preset", "slow", "-crf", "16",
+                          "-x264-params", "aq-mode=3:deblock=-1,-1", "-pix_fmt", "yuv420p",
                           video_tmp], stdin=subprocess.PIPE)
     fn_map = {"fantasy": aina_fantasy, "grafiks": S.aina_grafiks, "fakts_hook": aina_fakts_hook,
               "fakts_saraksts": aina_fakts_saraksts, "fakts_konteksts": aina_fakts_konteksts,
