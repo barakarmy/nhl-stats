@@ -2428,7 +2428,7 @@ def main():
     ap.add_argument("--drop-max-rostered", type=float, default=90, help="fantasy drop: maks. %% rostered – zvaigznes neiesakām mest ārā (90)")
     ap.add_argument("--top", type=int, default=3)
     ap.add_argument("--min-metieni", type=int, default=15)
-    ap.add_argument("--balss", default="en-US-AndrewNeural", help="edge-tts balss (piem. en-US-GuyNeural)")
+    ap.add_argument("--balss", default="en-CA-LiamNeural", help="edge-tts balss (piem. en-US-AndrewNeural, en-US-GuyNeural)")
     ap.add_argument("--bez-balss", action="store_true")
     ap.add_argument("--kanals", default="", help="kanāla nosaukums beigu kadram, piem. @nhlxg")
     ap.add_argument("--mape", default=os.path.join(BASE, "video"))
