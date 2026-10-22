@@ -14,4 +14,8 @@ __pycache__/
 .streamlit/secrets.toml
 
 # YouTube Shorts video un to vēsture (tikai lokāli, netiek augšupielādēti)
-video/
+video*/
+# ShortsB mediji (fona video, mūzika, skaņu efekti – tikai lokāli)
+shorts_fons/
+shorts_muzika/
+shorts_sfx/
