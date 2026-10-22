@@ -903,7 +903,7 @@ def veids_fantasy(m, a):
         g["rostered"], g["delta7"], g["trauma"] = np.nan, np.nan, ""
         rost_txt = "outside the top 60 scorers"
     g["trauma"] = g["trauma"].fillna("")
-    # traumas (ESPN): OUT / INJURY_RESERVE – ne pickup, ne drop; DAY_TO_DAY – ne pickup
+    # traumas (ESPN): OUT / INJURY_RESERVE / DAY_TO_DAY – ne pickup, ne drop (video rāda tikai veselus spēlētājus)
     izslegti = []
     for pid_, r_ in g[g["trauma"].isin(["OUT", "INJURY_RESERVE", "DAY_TO_DAY"])].iterrows():
         izslegti.append(f"{r_['vards']} ({r_['team']}) – ESPN: {r_['trauma']}")
@@ -930,7 +930,7 @@ def veids_fantasy(m, a):
     if e is not None:
         brivi = g[g["rostered"].notna() & (g["rostered"] <= a.max_rostered) & (g["trauma"].isin(["", "ACTIVE"]))].copy()
         nometami = g[g["rostered"].notna() & (g["rostered"] >= a.drop_min_rostered) & (g["rostered"] <= a.drop_max_rostered)
-                     & (~g["trauma"].isin(["OUT", "INJURY_RESERVE", "IZSLEGTS"]))].copy()
+                     & (~g["trauma"].isin(["OUT", "INJURY_RESERVE", "DAY_TO_DAY", "IZSLEGTS"]))].copy()
     else:
         top = sp.groupby("playerId")["points"].sum().sort_values(ascending=False).index[:60]
         brivi, nometami = g[~g.index.isin(top) & (g["trauma"] != "IZSLEGTS")].copy(), g.iloc[0:0].copy()
@@ -1082,7 +1082,7 @@ def veids_fantasy(m, a):
                        for _, r_ in izv.iterrows()]
                       + [f"  {drop_veids[p_]:<5} {r_['vards']} ({r_['team']})" + (f" – ESPN: {r_['trauma']}" if r_['trauma'] not in ('', 'ACTIVE') else "")
                          for p_, r_ in drop.iterrows()]
-                      + ([f"  Izlaisti (trauma / ar roku): {len(izslegti)}"] + [f"    {x}" for x in izslegti[:12]] if izslegti else [])),
+                      + ([f"  Izlaisti – ne pick, ne drop (trauma / ar roku): {len(izslegti)}"] + [f"    {x}" for x in izslegti[:12]] if izslegti else [])),
         "momentuzn": {"nedela": [start.strftime("%Y-%m-%d"), beigas.strftime("%Y-%m-%d")], "max_rostered": a.max_rostered,
                       "drop_rostered": [a.drop_min_rostered, a.drop_max_rostered],
                       "add": {str(int(p_)): {"vards": r_["vards"], "team": r_["team"], "poz": r_["poz"], "veids": add_veids[p_],
