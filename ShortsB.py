@@ -691,8 +691,11 @@ def renderet(s, izvade, kanals="", balss=None):
         print(f"FONS: {os.path.basename(fona_fails)}")
     video_tmp = os.path.join(tmp, "v.mp4")
     p = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{S.W}x{S.H}",
-                          "-r", str(S.FPS), "-i", "-", "-c:v", "libx264", "-preset", "slow", "-crf", "16",
-                          "-x264-params", "aq-mode=3:deblock=-1,-1", "-pix_fmt", "yuv420p",
+                          "-r", str(S.FPS), "-i", "-", "-vf", "scale=out_color_matrix=bt709:out_range=tv",
+                          "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-profile:v", "high", "-level", "4.1",
+                          "-x264-params", "aq-mode=3:keyint=60:min-keyint=30:bframes=2:ref=3",
+                          "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
+                          "-movflags", "+faststart", "-pix_fmt", "yuv420p",
                           video_tmp], stdin=subprocess.PIPE)
     fn_map = {"fantasy": aina_fantasy, "grafiks": S.aina_grafiks, "fakts_hook": aina_fakts_hook,
               "fakts_saraksts": aina_fakts_saraksts, "fakts_konteksts": aina_fakts_konteksts,
