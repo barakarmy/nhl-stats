@@ -2588,7 +2588,9 @@ def main():
         return 0
     if a.fakti:
         D = fakti_dati(a.lidz)
-        print(f"Nedēļas faktu kandidāti (dati līdz {D['lidz']}; vērtējums = retums 50% + slavenība 30% + svaigums 20% + aktīva sērija +8)")
+        _no = (pd.Timestamp(D['lidz']) - pd.Timedelta(days=6)).strftime('%Y-%m-%d')
+        print(f"Nedēļas faktu kandidāti: spēles {_no} … {D['lidz']} + šobrīd aktīvās sērijas")
+        print("vērtējums = retums 55% + slavenība 25% + svaigums 20% + aktīva sērija +8; bieži notikumi −25 (bieži)")
         fakti_saraksts(fakti_kandidati(D, a.mape))
         return 0
     if a.atskats and os.path.isdir(a.atskats):                     # var norādīt arī mapi – tad ņem tās .json failu
