@@ -486,19 +486,14 @@ def aina_aki(t, s):
     if s.get("kartite"):
         kt = s["kartite"]
         x0, x1, y0 = 120, S.W - 120, max(y + 40, 760)
-        y1 = y0 + 520
-        prim, _ = kom_krasas(kt.get("badge"))
-        d.rounded_rectangle([x0, y0, x1, y1], radius=44, fill=KARTE_KR, outline=jaukt(prim, KARTE_KR, 0.6), width=3)
-        if kt.get("badge"):
-            komandas_josla(d, x0 + 40, y0 + 24, x1 - 40, kt["badge"], h=12)
-            fb = S.fonts("bold", 46)
-            S.pill(d, x1 - 46 - S.platums(d, kt["badge"], fb) - 64, y0 + 64, kt["badge"], fb, S.kkrasa(kt["badge"]),
-                   S.uz_fona(S.kkrasa(kt["badge"])), pad=(32, 12))
-        d.text((x0 + 46, y0 + 50), kt.get("nr", "#1"), font=S.fonts("black", 88), fill=kt["akc"])
+        y1 = y0 + 560
+        d.rounded_rectangle([x0, y0, x1, y1], radius=44, fill=KARTE_KR, outline=jaukt(kt["akc"], KARTE_KR, 0.55), width=3)
+        nr = kt.get("nr", "#1")                                       # bez komandas krāsām/zīmītes – neko neizpaužam
+        S.teksts_c(d, y0 + 26, nr, S.fonts("black", 120), kt["akc"])
         vards = _izpludinats_teksts(kt["vards"], S.ietilpinat(d, kt["vards"], "black", 110, x1 - x0 - 100), S.BALTS)
-        im.alpha_composite(vards, (int((S.W - vards.width) / 2), int(y0 + 150)))
+        im.alpha_composite(vards, (int((S.W - vards.width) / 2), int(y0 + 165)))
         f_sk = S.ietilpinat(d, kt["skaitlis"], "black", 150, x1 - x0 - 80)
-        S.teksts_c(d, y0 + 290, kt["skaitlis"], f_sk, kt["akc"])
+        S.teksts_c(d, y0 + 320, kt["skaitlis"], f_sk, kt["akc"])
         if kt.get("apaksa"):
             S.teksts_c(d, y1 - 66, kt["apaksa"], S.ietilpinat(d, kt["apaksa"], "semi", 38, x1 - x0 - 80), S.PELEKS)
         y_st = y1 + 60
@@ -535,33 +530,84 @@ def pievienot_aki(s, veids):
     k, r = s["kartes"], s["runa"]
     if veids in ("speletaji", "komandas", "vartsargi"):
         n = len(k) // 2
-        hero = k[0]                                                   # #1 "laimīgais" – noslēpjam līdz beigām
-        # secība: laimīgie #3 → #1, tad nelaimīgie #3 → #1
-        s["kartes"] = k[:n][::-1] + k[n:][::-1]
-        r_k = r[1:-1]
-        r_k = r_k[:n][::-1] + r_k[n:][::-1]
+        laim_k, nelaim_k = k[:n], k[n:]
+        r_l, r_n = r[1:1 + n], r[1 + n:-1]
+        # āķa varonis: laimīgais #1 vai nelaimīgais #1 – populārākais (ESPN rostered %) × ekstrēmākais
+        mz = s.get("momentuzn", {})
+        pid_l = next(iter(mz.get("laim", {})), None)
+        pid_n = next(iter(mz.get("nelaim", {})), None)
+        e_ = None
+        if veids != "komandas":
+            try:
+                e_, _ = S.espn_dati()
+            except Exception:                                         # noqa: BLE001
+                e_ = None
+
+        def ekstr(c_, pid):
+            if veids == "komandas":
+                return abs((_parsk(c_["liels"]) or 100) - 100)
+            return abs(_parsk(c_["liels"]) or 0)
+
+        def popul(pid):
+            if e_ is None or pid is None:
+                return None
+            try:
+                v_ = float(e_["rostered"].get(int(float(pid))))
+                return v_ / 100 if v_ == v_ else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+        ex_l, ex_n = ekstr(laim_k[0], pid_l), ekstr(nelaim_k[0], pid_n)
+        mx = max(ex_l, ex_n, 1e-6)
+        p_l, p_n = popul(pid_l), popul(pid_n)
+        if p_l is None or p_n is None:                                # komandas / nav ESPN datu → ekstrēmākais
+            punkti_l, punkti_n = ex_l / mx, ex_n / mx
+        else:
+            punkti_l, punkti_n = (0.25 + p_l) * ex_l / mx, (0.25 + p_n) * ex_n / mx
+        laim_varonis = punkti_l >= punkti_n
+        hero = laim_k[0] if laim_varonis else nelaim_k[0]
+        print(f"ĀĶIS: {'laimīgais' if laim_varonis else 'nelaimīgais'} #1 – {hero.get('v1', '')} {hero.get('v2', '')}".strip()
+              + f"  (punkti {punkti_l:.2f} pret {punkti_n:.2f})")
+        # secība: otra grupa #3 → #1, tad varoņa grupa #3 → #1 (noslēptais #1 atklājas pašās beigās)
+        if laim_varonis:
+            s["kartes"] = nelaim_k[::-1] + laim_k[::-1]
+            r_k = r_n[::-1] + r_l[::-1]
+        else:
+            s["kartes"] = laim_k[::-1] + nelaim_k[::-1]
+            r_k = r_l[::-1] + r_n[::-1]
         tag = s["intro"]["tag"]
         if veids == "speletaji":
             G, xG = hero["bars"][0][1], hero["bars"][1][1]
-            rindas = [(f"{int(G)} GOALS.", S.BALTS), (f"SHOULD HAVE {xG:.1f}.", S.DZELTENS)]
-            sk_, ap = hero["liels"], "goals above expected"
-            runa0 = f"{int(G)} goals. He should have {xG:.1f}. Who is it?"
-            beigas = f"Luck runs out. Expected goals don't. We'll check back in two weeks. Follow, and remember: {int(G)} goals."
+            vv = "GOAL" if int(G) == 1 else "GOALS"
+            rindas = [(f"{int(G)} {vv}.", S.BALTS), (f"SHOULD HAVE {xG:.1f}.", S.DZELTENS)]
+            sk_ = hero["liels"]
+            ap = "goals above expected" if laim_varonis else "goals below expected"
+            runa0 = f"{int(G)} {vv.lower()}. He should have {xG:.1f}. Who is it?"
+            beigas = (f"Luck runs out. Expected goals don't. We'll check back in two weeks. "
+                      f"Follow, and remember: {int(G)} {vv.lower()}.")
         elif veids == "vartsargi":
             GA, xGA = hero["bars"][0][1], hero["bars"][1][1]
-            rindas = [("HE'S STEALING", S.BALTS), ("GAMES.", S.DZELTENS)]
+            gs = abs(_parsk(hero["liels"]) or 0)
+            rindas = [("HE'S STEALING" if laim_varonis else "HE'S COSTING", S.BALTS), ("GAMES.", S.DZELTENS)]
             sk_, ap = hero["liels"], f"{int(GA)} goals allowed on {xGA:.1f} expected"
-            runa0 = f"This goalie is stealing games: {_parsk(hero['liels']) or 0:.1f} goals saved above expected. Who is it?"
-            beigas = "Hot streaks cool. We'll check back in two weeks. Follow, and remember: this goalie is stealing games."
+            runa0 = (f"This goalie is stealing games: {gs:.1f} goals saved above expected. Who is it?" if laim_varonis
+                     else f"This goalie is costing his team: {gs:.1f} goals worse than expected. Who is it?")
+            beigas = ("Hot streaks cool, cold streaks thaw. We'll check back in two weeks. Follow, and remember: this goalie is "
+                      + ("stealing games." if laim_varonis else "costing games."))
         else:
             import re as _re
             m_ = _re.search(r"(\d+)-(\d+)-(\d+)", hero.get("info", ""))
             rek = f"{m_.group(1)}–{m_.group(2)}–{m_.group(3)}" if m_ else ""
-            rindas = ([(f"{rek}.", S.BALTS)] if rek else []) + [("AND IT'S LUCK.", S.DZELTENS)]
+            rindas = ([(f"{rek}.", S.BALTS)] if rek else []) + [("AND IT'S LUCK." if laim_varonis else "AND IT'S BAD LUCK.", S.DZELTENS)]
             sk_, ap = hero["liels"], "PDO · league average ≈ 100"
-            runa0 = (f"This team is {m_.group(1)} and {m_.group(2)}. And it's mostly luck. Who is it?" if m_
-                     else "This team is winning on luck. Who is it?")
-            beigas = "PDO always comes back to one hundred. We'll check back in two weeks. Follow, and remember: this team is winning on luck."
+            if laim_varonis:
+                runa0 = (f"This team is {m_.group(1)} and {m_.group(2)}. And it's mostly luck. Who is it?" if m_
+                         else "This team is winning on luck. Who is it?")
+                beig_ = "this team is winning on luck."
+            else:
+                runa0 = (f"This team is {m_.group(1)} and {m_.group(2)}. But they're better than that. Who is it?" if m_
+                         else "This team is better than its record. Who is it?")
+                beig_ = "this team is better than its record."
+            beigas = f"PDO always comes back to one hundred. We'll check back in two weeks. Follow, and remember: {beig_}"
         vards = (hero.get("v2") or "").upper()
         s["intro"] = {"aki": True, "tag": tag, "rindas": rindas, "ilgums": 2.4,
                       "kartite": {"nr": "#1", "akc": hero["akc"], "badge": hero.get("badge"), "vards": vards,
