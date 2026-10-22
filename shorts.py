@@ -2135,7 +2135,54 @@ def _ref_speles(t):
     return t, g.reset_index()
 
 
+def _n(x):
+    v = pd.to_numeric(x, errors="coerce")
+    return 0 if pd.isna(v) else int(v)
+
+
+# beigu teksti (nejauši; iepriekšējā mēneša variants neatkārtojas). {top} {TOPS} {NEXT} {Next} {low}
+REF_OUTRO = [
+    {"id": "fair", "r": ("STRICT REFS:", "FAIR OR TOO MUCH?"), "k": "FAIR OR TOO MUCH?", "k2": "Tell us in the comments",
+     "v": "Strict refs: fair, or too much? Tell us in the comments."},
+    {"id": "crazy", "r": ("WHICH REF", "DRIVES YOU CRAZY?"), "k": "NAME THE REF", "k2": "Who frustrates you the most?",
+     "v": "Which ref drives you crazy? Name him in the comments."},
+    {"id": "play", "r": ("SHOULD REFS", "LET THEM PLAY?"), "k": "YES OR NO?", "k2": "Comment below",
+     "v": "Should refs put the whistle away and let them play? Yes or no, comment below."},
+    {"id": "worst", "r": ("WORST CALL", "OF THE MONTH?"), "k": "WORST CALL?", "k2": "Drop it in the comments",
+     "v": "What was the worst call you saw this month? Drop it in the comments."},
+    {"id": "again", "r": ("{TOPS} ON TOP", "AGAIN IN {NEXT}?"), "k": "YES OR NO?", "k2": "Predict it in the comments",
+     "v": "Will {top} top the list again in {Next}? Predict it in the comments."},
+    {"id": "playoff", "r": ("STRICT OR LENIENT", "IN A PLAYOFF GAME?"), "k": "STRICT OR LENIENT?", "k2": "Comment below",
+     "v": "Strict ref or let-them-play ref: who do you want in a playoff game? Comment below."},
+    {"id": "lenient", "r": ("IS {LOWS}", "TOO LENIENT?"), "k": "YES OR NO?", "k2": "Comment below",
+     "v": "Is {low} too lenient, or just right? Comment below."},
+]
+
+
+def _ref_nakama_spele(refs, lidz_arg):
+    """Tuvākā plānotā spēle kādam no tiesnešiem (tiesnesi_planotie.csv) – tikai, ja video veido 'tagad' (bez --lidz)."""
+    if lidz_arg:
+        return None
+    try:
+        pl = _lasit("tiesnesi_planotie.csv")
+        if not len(pl):
+            return None
+        pl = pl[pl["loma"].astype(str) == "referee"].copy()
+        pl["t"] = pd.to_datetime(pl["sakums_utc"], utc=True, errors="coerce")
+        tagad_ = pd.Timestamp.now(tz="UTC")
+        pl = pl[(pl["t"] >= tagad_) & (pl["t"] <= tagad_ + timedelta(days=8))]
+        for ref in refs:
+            x = pl[pl["vards"].astype(str) == ref].sort_values("t")
+            if len(x):
+                r_ = x.iloc[0]
+                return ref, r_["away_team"], r_["home_team"], r_["t"].tz_convert("America/New_York")
+    except Exception:                                                 # noqa: BLE001
+        return None
+    return None
+
+
 def veids_tiesnesi(m, a):
+    import random
     t_all = _lasit("tiesnesi.csv")
     if not len(t_all):
         print("Nav sezonas/tiesnesi.csv")
@@ -2156,7 +2203,13 @@ def veids_tiesnesi(m, a):
     beigas = min(pd.Timestamp(g["datums"].max()), men.end_time)
     pilns = beigas.normalize() >= men.end_time.normalize() - timedelta(days=1)
     MEN = MENESI_EN[men.month]
+    NEXT = MENESI_EN[(men + 1).month]
     vid = g["pen_total"].mean()
+    gid_m = set(g["game_id"].astype(str))
+    sp_all = _lasit("speles.csv")
+    sp_m = sp_all[sp_all["game_id"].astype(str).isin(gid_m)].copy() if len(sp_all) else pd.DataFrame()
+    pl_all = _lasit("speletaji.csv")
+    pl_m = pl_all[pl_all["game_id"].astype(str).isin(gid_m)].copy() if len(pl_all) else pd.DataFrame()
 
     # tiesneši: spēles un sodi spēlē
     r = rows.groupby("vards").agg(sp=("game_id", "nunique"), pen=("pen_total", "sum"))
@@ -2178,44 +2231,169 @@ def veids_tiesnesi(m, a):
     h_majas = hg["pen_home"].sum() / max(1, hg["pen_total"].sum()) if len(hg) else 0.485
     h_per = (hg[["pen_p1", "pen_p2", "pen_p3"]].sum() / max(1, hg["pen_total"].sum())).values if len(hg) else np.array([.31, .38, .31])
 
-    # papildainu kandidāti: (atslēga, interesantums 0..~1.5, ainas dati, runa, teksts INFO)
-    kand = []
+    kopa = {"pill_hook": f"NHL  ·  MONTHLY REFEREE REPORT", "badge": "", "aktiva": False}
+    kartes = [
+        {"tips": "fakts_hook", "ilgums": 3.4, **kopa, "hook": [MEN, "REFEREE REPORT"], "v1": "WHO CALLED THE MOST", "vards": "PENALTIES?"},
+        {"tips": "fakts_saraksts", "ilgums": 3.9, **kopa, "saraksts_virs": "STRICTEST · PENALTIES PER GAME", "pill_kr": SARKANS,
+         "vards_w": 430, "vards_kr": BALTS, "rindas": rind(strict), "kopsavilkums": f"LEAGUE AVERAGE: {vid:.1f} PER GAME"},
+        {"tips": "fakts_saraksts", "ilgums": 3.3, **kopa, "saraksts_virs": "MOST LENIENT · LET THEM PLAY", "pill_kr": ZALS,
+         "vards_w": 430, "vards_kr": BALTS, "rindas": rind(lenient), "kopsavilkums": f"MIN. {min_sp} GAMES IN {MEN}"},
+    ]
+    runa = [f"{MEN.capitalize()} referee report. Who called the most penalties in the NHL this month?",
+            f"The strictest: {top}, {top_pg:.1f} penalties per game. League average: {vid:.1f}.",
+            f"The most lenient: {low}, only {low_pg:.1f} per game. Let them play."]
+
+    # ---- 1) stingrākais pret vidējo
     pct = (top_pg / vid - 1) * 100
-    kand.append(("vid", min(1.2, pct / 50), {
-        "pill_k": "STRICTEST VS AVERAGE", "k_skaitlis": f"+{pct:.0f}%",
-        "konteksts": [f"MORE PENALTIES WITH {top.upper()} ON THE ICE", f"{top_pg:.1f} per game vs league average {vid:.1f}"]},
-        f"With {top} on the ice, teams took {pct:.0f} percent more penalties than average.", f"vid: +{pct:.0f}%"))
+    kartes.append({"tips": "fakts_konteksts", "ilgums": 4.0, **kopa, "pill_k": "STRICTEST VS AVERAGE", "k_skaitlis": f"+{pct:.0f}%",
+                   "konteksts": [f"MORE PENALTIES WITH {top.upper()} ON THE ICE", f"{top_pg:.1f} per game vs league average {vid:.1f}"]})
+    runa.append(f"With {top} on the ice, teams took {pct:.0f} percent more penalties than average.")
+
+    # ---- 2) stingrākā tiesneša mēnesis pa spēlēm
+    rt = rows[rows["vards"] == top].sort_values("datums")
+    if len(rt) >= 3:
+        virs = int((rt["pen_total"] > vid).sum())
+        mx = rt.loc[rt["pen_total"].idxmax()]
+        uzv_txt = top.split()[-1].upper()
+        kartes.append({"tips": "fakts_saraksts", "ilgums": 3.8, **kopa, "saraksts_virs": f"{uzv_txt} · GAME BY GAME",
+                       "pill_kr": SARKANS, "vards_w": 240, "vards_kr": PELEKS, "nav_reitings": True,
+                       "rindas": [(dat(x["datums"]), f"{x['away_team']} @ {x['home_team']}", f"{int(x['pen_total'])}")
+                                  for _, x in rt.tail(7).iterrows()],
+                       "kopsavilkums": f"{virs} OF {len(rt)} GAMES ABOVE AVERAGE"})
+        vel_txt = (f"His busiest night was the wildest game of the month. More on that next."
+                   if str(mx["game_id"]) == str(g.sort_values("pen_total", ascending=False).iloc[0]["game_id"]) else
+                   f"His busiest night: {int(mx['pen_total'])} penalties, {kom_nos(mx['away_team'])} at {kom_nos(mx['home_team'])}.")
+        runa.append(f"Game by game: {virs} of his {len(rt)} games went over the league average. " + vel_txt)
+
+    # ---- 3) trakākā spēle + padziļināti (periodi, vairākums, rezultāts)
+    w = g.sort_values("pen_total", ascending=False).iloc[0]
+    H_, A_ = str(w["home_team"]), str(w["away_team"])
+    ws = sp_m[sp_m["game_id"].astype(str) == str(w["game_id"])]
+    ws = ws.iloc[0] if len(ws) else None
+    rez_txt, rez_runa, uzv = "", "", None
+    if ws is not None:
+        hg_, ag_ = _n(ws["home_total"]), _n(ws["away_total"])
+        if hg_ != ag_:
+            uzv = H_ if hg_ > ag_ else A_
+            pap = {"OT": " in overtime", "SO": " in a shootout"}.get(str(ws.get("spele_beidzas", "")), "")
+            rez_txt = f"Final: {kom_nos(uzv)} won {max(hg_, ag_)}–{min(hg_, ag_)}" + (f" ({ws['spele_beidzas']})" if pap else "")
+            rez_runa = f"The {kom_nos(uzv)} won {max(hg_, ag_)} to {min(hg_, ag_)}{pap}."
+    kartes.append({"tips": "fakts_konteksts", "ilgums": 4.0, **kopa, "pill_k": "THE WILDEST GAME", "k_skaitlis": f"{int(w['pen_total'])}",
+                   "konteksts": ["PENALTIES IN ONE GAME", f"{kom_nos(A_)} @ {kom_nos(H_)} · {dat(w['datums'])}", f"Referees: {w['tiesnesi']}"]})
+    runa.append(f"The wildest game of the month: {int(w['pen_total'])} penalties, {kom_nos(A_)} at {kom_nos(H_)}. "
+                f"Referees: {w['tiesnesi'].replace(' & ', ' and ')}.")
+    if ws is not None:
+        per_r = []
+        for i, nos in enumerate(("1ST PERIOD", "2ND PERIOD", "3RD PERIOD", "OVERTIME")):
+            sfx = f"p{i + 1}" if i < 3 else "ot"
+            a_, h_ = _n(ws.get(f"away_pen_{sfx}")), _n(ws.get(f"home_pen_{sfx}"))
+            if i < 3 or a_ + h_:
+                per_r.append((nos, f"{A_} {a_}  ·  {H_} {h_}", f"{a_ + h_}"))
+        pim_a, pim_h = _n(ws.get("away_pim_total")), _n(ws.get("home_pim_total"))
+        ip_ = int(np.argmax([_n(x[2]) for x in per_r]))
+        kartes.append({"tips": "fakts_saraksts", "ilgums": 3.8, **kopa, "saraksts_virs": "THE WILDEST GAME · PERIOD BY PERIOD",
+                       "pill_kr": ZILS, "vards_w": 300, "vards_kr": PELEKS, "nav_reitings": True, "rindas": per_r,
+                       "kopsavilkums": f"PIM: {A_} {pim_a}  ·  {H_} {pim_h}"})
+        runa.append(f"Period by period: the {['first', 'second', 'third', 'overtime'][ip_]}{'' if ip_ == 3 else ' period'} "
+                    f"alone had {per_r[ip_][2]} penalties. {pim_a + pim_h} penalty minutes in total.")
+        ppg_a, ppo_a, ppg_h, ppo_h = (_n(ws.get(k)) for k in ("away_ppg", "away_pp_opp", "home_ppg", "home_pp_opp"))
+        kont = ["POWER-PLAY GOALS", f"{A_} {ppg_a}/{ppo_a}  ·  {H_} {ppg_h}/{ppo_h} on the power play"]
+        if rez_txt:
+            kont.append(rez_txt)
+        if len(pl_m):
+            px = pl_m[pl_m["game_id"].astype(str) == str(w["game_id"])].copy()
+            px["pim"] = pd.to_numeric(px["pim"], errors="coerce").fillna(0)
+            if len(px) and px["pim"].max() >= 4:
+                p0 = px.loc[px["pim"].idxmax()]
+                kont.append(f"Most PIM: {p0['vards']} ({p0['team']}) · {int(p0['pim'])} min")
+        if ppg_a + ppg_h == 0:
+            vr = "And yet: zero power-play goals. Nobody cashed in."
+        else:
+            lab = A_ if (ppg_a / max(1, ppo_a), ppg_a) >= (ppg_h / max(1, ppo_h), ppg_h) else H_
+            g_, o_ = (ppg_a, ppo_a) if lab == A_ else (ppg_h, ppo_h)
+            vr = f"{ppg_a + ppg_h} power-play goals. The {kom_nos(lab)} went {g_} for {o_}."
+            if uzv:
+                marza = abs(_n(ws["home_total"]) - _n(ws["away_total"]))
+                pp_starp = (ppg_h - ppg_a) if uzv == H_ else (ppg_a - ppg_h)
+                if pp_starp >= marza > 0:
+                    vr += " The power play decided it."
+        kartes.append({"tips": "fakts_konteksts", "ilgums": 4.2, **kopa, "pill_k": "DID THE WHISTLES DECIDE IT?",
+                       "k_skaitlis": f"{ppg_a + ppg_h}", "konteksts": kont})
+        if rez_runa and ppg_a + ppg_h and uzv == lab and "decided" not in vr:
+            vr = vr.rstrip(".") + rez_runa.replace(f"The {kom_nos(uzv)} won", " and won")
+            rez_runa = ""
+        runa.append(vr + (" " + rez_runa if rez_runa else ""))
+
+    # ---- 4) periodi visā līgā
+    per = (g[["pen_p1", "pen_p2", "pen_p3"]].sum() / max(1, g["pen_total"].sum())).values
+    per_n = g[["pen_p1", "pen_p2", "pen_p3"]].sum().values
+    ip = int(np.argmax(per))
+    kartes.append({"tips": "fakts_saraksts", "ilgums": 3.6, **kopa, "saraksts_virs": "WHEN DO THE WHISTLES COME?",
+                   "pill_kr": ZILS, "vards_w": 330, "vards_kr": PELEKS, "nav_reitings": True,
+                   "rindas": [(f"{p} PERIOD", f"{int(n_)} calls", f"{v * 100:.0f}%") for p, n_, v in zip(("1ST", "2ND", "3RD"), per_n, per)],
+                   "kopsavilkums": f"SINCE 2023: {h_per[0] * 100:.0f}% · {h_per[1] * 100:.0f}% · {h_per[2] * 100:.0f}%"})
+    dz_p = (per[ip] - h_per[ip]) * 100
+    runa.append(f"Across the league, the {['first', 'second', 'third'][ip]} period had the most whistles: {per[ip] * 100:.0f} percent of all penalties."
+                + (f" That's {'more' if dz_p > 0 else 'less'} than usual." if abs(dz_p) >= 3 else ""))
+
+    # ---- papildainu kandidāti: (atslēga, interesantums, ainas dati, runa, teksts INFO)
+    kand = []
     maj = g["pen_home"].sum() / max(1, g["pen_total"].sum())
     puse, sh = ("ROAD", 1 - maj) if maj < 0.5 else ("HOME", maj)
     kand.append(("majas", abs(maj - 0.5) / 0.05, {
         "pill_k": "HOME VS ROAD", "k_skaitlis": f"{sh * 100:.0f}%",
         "konteksts": [f"OF ALL PENALTIES WENT TO THE {puse} TEAM", f"Since 2023: home teams {h_majas * 100:.0f}% · road teams {(1 - h_majas) * 100:.0f}%"]},
         f"{puse.capitalize()} teams took {sh * 100:.0f} percent of all penalties this month.", f"majas: {puse} {sh * 100:.0f}%"))
-    per = (g[["pen_p1", "pen_p2", "pen_p3"]].sum() / max(1, g["pen_total"].sum())).values
-    ip = int(np.argmax(per))
-    kand.append(("periods", (per[ip] - 1 / 3) / 0.08 + abs(per[ip] - h_per[ip]) / 0.04 * 0.3, {
-        "pill_k": "WHEN DO THE WHISTLES COME?", "k_skaitlis": f"{per[ip] * 100:.0f}%",
-        "konteksts": [f"OF PENALTIES CAME IN THE {['1ST', '2ND', '3RD'][ip]} PERIOD",
-                      f"1st {per[0] * 100:.0f}% · 2nd {per[1] * 100:.0f}% · 3rd {per[2] * 100:.0f}%  (since 2023 {h_per[ip] * 100:.0f}%)"]},
-        f"{per[ip] * 100:.0f} percent of penalties came in the {['first', 'second', 'third'][ip]} period.", f"periods: P{ip + 1} {per[ip] * 100:.0f}%"))
     km = pd.concat([g[["home_team", "pen_home"]].set_axis(["kom", "pen"], axis=1), g[["away_team", "pen_away"]].set_axis(["kom", "pen"], axis=1)])
     kg = km.groupby("kom")["pen"].agg(["mean", "count"])
     kg = kg[kg["count"] >= 4].sort_values("mean", ascending=False)
+    knos = lambda k: kom_nos(k).upper() if len(kom_nos(k)) <= 14 else str(k)
     if len(kg) >= 10:
         k_vid = km["pen"].mean()
-        kt = kg.index[0]
+        kt, kc = kg.index[0], kg.index[-1]
         kand.append(("komanda", (kg["mean"].iloc[0] / k_vid - 1) / 0.35, {
             "tips2": "saraksts", "saraksts_virs": "MOST PENALIZED TEAMS", "pill_kr": SARKANS, "vards_w": 330, "vards_kr": BALTS,
-            "rindas": [(kom_nos(k).upper() if len(kom_nos(k)) <= 14 else k, f"{int(x['count'])} GP", f"{x['mean']:.1f}") for k, x in kg.head(3).iterrows()],
+            "rindas": [(knos(k), f"{int(x['count'])} GP", f"{x['mean']:.1f}") for k, x in kg.head(3).iterrows()],
             "kopsavilkums": f"TEAM AVERAGE: {k_vid:.1f} PER GAME"},
             f"The most penalized team this month: the {kom_nos(kt)}, {kg['mean'].iloc[0]:.1f} penalties per game.",
             f"komanda: {kt} {kg['mean'].iloc[0]:.1f}"))
-    w = g.sort_values("pen_total", ascending=False).iloc[0]
-    kand.append(("spele", (w["pen_total"] / vid - 1) / 1.2, {
-        "pill_k": "THE WILDEST GAME", "k_skaitlis": f"{int(w['pen_total'])}",
-        "konteksts": ["PENALTIES IN ONE GAME", f"{kom_nos(w['away_team'])} @ {kom_nos(w['home_team'])} · {dat(w['datums'])}", f"Referees: {w['tiesnesi']}"]},
-        f"The wildest game: {int(w['pen_total'])} penalties in {kom_nos(w['away_team'])} at {kom_nos(w['home_team'])}.",
-        f"spele: {int(w['pen_total'])} sodi"))
+        kand.append(("tirakie", (1 - kg["mean"].iloc[-1] / k_vid) / 0.35, {
+            "tips2": "saraksts", "saraksts_virs": "MOST DISCIPLINED TEAMS", "pill_kr": ZALS, "vards_w": 330, "vards_kr": BALTS,
+            "rindas": [(knos(k), f"{int(x['count'])} GP", f"{x['mean']:.1f}") for k, x in kg.tail(3).iloc[::-1].iterrows()],
+            "kopsavilkums": f"TEAM AVERAGE: {k_vid:.1f} PER GAME"},
+            f"The most disciplined team: the {kom_nos(kc)}, only {kg['mean'].iloc[-1]:.1f} penalties per game.",
+            f"tirakie: {kc} {kg['mean'].iloc[-1]:.1f}"))
+    if len(sp_m) and "home_pp_opp" in sp_m:
+        pp = pd.concat([sp_m[["home_team", "home_ppg", "home_pp_opp"]].set_axis(["kom", "g", "o"], axis=1),
+                        sp_m[["away_team", "away_ppg", "away_pp_opp"]].set_axis(["kom", "g", "o"], axis=1)])
+        pp[["g", "o"]] = pp[["g", "o"]].apply(pd.to_numeric, errors="coerce").fillna(0)
+        pk = pp.groupby("kom")[["g", "o"]].sum()
+        pk = pk[pk["o"] >= 12]
+        if len(pk) >= 10:
+            pk["pct"] = pk["g"] / pk["o"]
+            pk = pk.sort_values(["pct", "g"], ascending=False)
+            lg = pp["g"].sum() / max(1, pp["o"].sum())
+            kt = pk.index[0]
+            kand.append(("pp", (pk["pct"].iloc[0] / max(0.01, lg) - 1) / 0.6, {
+                "tips2": "saraksts", "saraksts_virs": "WHO MADE THEM PAY? · POWER PLAY", "pill_kr": DZELTENS, "vards_w": 330, "vards_kr": BALTS,
+                "rindas": [(knos(k), f"{int(x['g'])}/{int(x['o'])}", f"{x['pct'] * 100:.0f}%") for k, x in pk.head(3).iterrows()],
+                "kopsavilkums": f"LEAGUE POWER PLAY: {lg * 100:.0f}%"},
+                f"Who made them pay? The {kom_nos(kt)} scored on {pk['pct'].iloc[0] * 100:.0f} percent of their power plays.",
+                f"pp: {kt} {pk['pct'].iloc[0] * 100:.0f}%"))
+    if len(pl_m) and "noraid" in pl_m:
+        pl_m["noraid"] = pd.to_numeric(pl_m["noraid"], errors="coerce").fillna(0)
+        pl_m["pim"] = pd.to_numeric(pl_m["pim"], errors="coerce").fillna(0)
+        ps = pl_m.groupby("playerId").agg(vards=("vards", "last"), kom=("team", "last"), gp=("game_id", "nunique"),
+                                          n=("noraid", "sum"), pim=("pim", "sum"))
+        ps = ps[ps["n"] > 0].sort_values(["n", "pim"], ascending=False)
+        if len(ps) >= 3:
+            p0 = ps.iloc[0]
+            kand.append(("speletajs", 0.6 + 0.15 * (p0["n"] - ps["n"].iloc[2]), {
+                "tips2": "saraksts", "saraksts_virs": "MOST PENALIZED PLAYERS", "pill_kr": SARKANS, "vards_w": 470, "vards_kr": BALTS,
+                "rindas": [(str(x["vards"]), f"{x['kom']} · {int(x['gp'])} GP", f"{int(x['n'])}") for _, x in ps.head(3).iterrows()],
+                "kopsavilkums": f"MINOR PENALTIES TAKEN IN {MEN}"},
+                f"The most penalized player: {p0['vards']}, {int(p0['n'])} minor penalties in {int(p0['gp'])} games.",
+                f"speletajs: {p0['vards']} {int(p0['n'])}"))
     if len(hg):
         hm = hg[pd.to_datetime(hg["datums"]).dt.month == men.month]
         if len(hm) >= 50:
@@ -2228,56 +2406,66 @@ def veids_tiesnesi(m, a):
                 f"Overall, {abs(dz):.0f} percent {'more' if dz >= 0 else 'fewer'} penalties than in {MEN.capitalize()} of the last seasons.",
                 f"tendence: {dz:+.0f}%"))
 
-    # izvēle: 2 interesantākās (iepriekšējā mēnesī rādītās −0.5), vai --ref-ainas
+    # izvēle: 3 interesantākās (iepriekšējā mēnesī rādītās −0.5), vai --ref-ainas
     vest_p = os.path.join(a.mape, REF_VESTURE)
     vest = json.load(open(vest_p, encoding="utf-8")) if os.path.exists(vest_p) else []
     pag = set(vest[-1]["ainas"]) if vest else set()
     vert = {k: v - (0.5 if k in pag else 0) for k, v, *_ in kand}
     if a.ref_ainas:
-        izv_k = [x.strip() for x in a.ref_ainas.split(",") if x.strip() in vert][:2]
+        izv_k = [x.strip() for x in a.ref_ainas.split(",") if x.strip() in vert][:3]
     else:
-        izv_k = sorted(vert, key=lambda k: -vert[k])[:2]
+        izv_k = sorted(vert, key=lambda k: -vert[k])[:3]
     izv = [x for k in izv_k for x in kand if x[0] == k]
-
-    kopa = {"pill_hook": f"NHL  ·  MONTHLY REFEREE REPORT", "badge": "", "aktiva": False}
-    kartes = [
-        {"tips": "fakts_hook", "ilgums": 3.4, **kopa, "hook": [MEN, "REFEREE REPORT"], "v1": "WHO CALLED THE MOST", "vards": "PENALTIES?"},
-        {"tips": "fakts_saraksts", "ilgums": 3.9, **kopa, "saraksts_virs": "STRICTEST · PENALTIES PER GAME", "pill_kr": SARKANS,
-         "vards_w": 430, "vards_kr": BALTS, "rindas": rind(strict), "kopsavilkums": f"LEAGUE AVERAGE: {vid:.1f} PER GAME"},
-        {"tips": "fakts_saraksts", "ilgums": 3.3, **kopa, "saraksts_virs": "MOST LENIENT · LET THEM PLAY", "pill_kr": ZALS,
-         "vards_w": 430, "vards_kr": BALTS, "rindas": rind(lenient), "kopsavilkums": f"MIN. {min_sp} GAMES IN {MEN}"},
-    ]
-    runa = [f"{MEN.capitalize()} referee report. Who called the most penalties in the NHL this month?",
-            f"The strictest: {top}, {top_pg:.1f} penalties per game. League average: {vid:.1f}.",
-            f"The most lenient: {low}, only {low_pg:.1f} per game. Let them play."]
     for k, _, dati, rr, _ in izv:
         if dati.get("tips2") == "saraksts":
             kartes.append({"tips": "fakts_saraksts", "ilgums": 3.4, **kopa, **dati})
         else:
             kartes.append({"tips": "fakts_konteksts", "ilgums": 4.0, **kopa, **dati})
         runa.append(rr)
-    runa.append("Is your team's ref on this list? Follow for the monthly referee report.")
+
+    # ---- beigas: tiesneša nākamā spēle (ja zināma), citādi nejaušs jautājums (ne tas pats, kas pagājušajā mēnesī)
+    nak = _ref_nakama_spele([top, low] + list(strict.index[1:3]), a.lidz)
+    if nak:
+        ref, na, nh, nt = nak
+        pg_ = r.loc[ref, "pg"]
+        sur = ref.split()[-1].upper()
+        diena = f"{nt:%a}".upper() + f" {dat(nt).upper()}"
+        outro_id = "next"
+        rindas_o = [(f"NEXT FOR {sur}:", BALTS), (f"{na} @ {nh} · {diena}", DZELTENS)]
+        kom1, kom2 = f"OVER OR UNDER {pg_:.1f}?", "Penalties in that game – comment below"
+        runa_o = (f"{ref} is back on the ice on {nt:%A}: {kom_nos(na)} at {kom_nos(nh)}. "
+                  f"Over or under {pg_:.1f} penalties? Comment below.")
+    else:
+        pag_o = vest[-1].get("outro") if vest else None
+        izv_o = random.choice([x for x in REF_OUTRO if x["id"] != pag_o])
+        fmt = dict(top=top, TOPS=top.split()[-1].upper(), low=low, LOWS=low.split()[-1].upper(), NEXT=NEXT, Next=NEXT.capitalize())
+        outro_id = izv_o["id"]
+        rindas_o = [(izv_o["r"][0].format(**fmt), BALTS), (izv_o["r"][1].format(**fmt), DZELTENS)]
+        kom1, kom2 = izv_o["k"].format(**fmt), izv_o["k2"].format(**fmt)
+        runa_o = izv_o["v"].format(**fmt)
+    runa.append(runa_o + " Follow for the monthly referee report.")
 
     per_txt = f"{MEN.capitalize()} {men.year}" + ("" if pilns else f" (through {dat(beigas, True)})")
     zim = f"{MEN} {men.year}" + ("" if pilns else f" · THROUGH {dat(beigas).upper()}")
     return {
         "intro": None, "kartes": kartes,
-        "outro": {"rindas": [("IS YOUR TEAM'S REF", BALTS), ("ON THIS LIST?", DZELTENS)],
+        "outro": {"rindas": rindas_o,
                   "info": [f"{len(g)} games · {per_txt}", f"Penalties called per game · min. {min_sp} games"],
-                  "follow": "FOLLOW FOR MONTHLY REF REPORTS"},
+                  "follow": "FOLLOW FOR MONTHLY REF REPORTS", "komentars": kom1, "komentars2": kom2},
         "zimogs": zim, "runa": runa, "lidz": beigas.strftime("%Y-%m-%d"),
         "periods": per_txt + f", {len(g)} games",
         "virsraksts": f"NHL referee report: {MEN.capitalize()} {men.year} 🦓 Who called the most penalties?",
         "saraksts": ["Strictest (penalties per game):"] + [f"{a_}  {b_}  {c_}" for a_, b_, c_ in rind(strict)]
                     + ["Most lenient:"] + [f"{a_}  {b_}  {c_}" for a_, b_, c_ in rind(lenient)]
-                    + [f"League average: {vid:.1f} penalties per game"],
+                    + [f"League average: {vid:.1f} penalties per game",
+                       f"Wildest game: {kom_nos(A_)} @ {kom_nos(H_)}, {dat(w['datums'])} – {int(w['pen_total'])} penalties"],
         "apraksts": " ".join(runa[:-1]),
         "piezime": "Penalties = all penalties called in the game (both referees credited). Database since 2023-24.",
         "tagi": "#NHL #hockey #NHLrefs #referees #NHLstats #Shorts",
         "nosaukums": f"tiesnesi_{men}",
         "thumb": {"tag": "NHL  ·  REFEREE REPORT", "hook": [MEN, "STRICTEST REF"], "vards": top, "badge": "",
                   "skaitlis": f"{top_pg:.1f}", "kr": DZELTENS, "apaksa": "penalties per game", "nedela": f"{MEN} {men.year}"},
-        "ref_vesture": {"menesis": str(men), "ainas": izv_k, "stingrakais": top},
+        "ref_vesture": {"menesis": str(men), "ainas": izv_k, "stingrakais": top, "outro": outro_id},
         "ref_kandidati": [f"{k} {vert[k]:.2f}" + (" ✓" if k in izv_k else "") for k in sorted(vert, key=lambda k: -vert[k])],
     }
 
@@ -2565,8 +2753,8 @@ def main():
     ap.add_argument("--neizmantots", default=None, help="fakta video mape, kas netika publicēts – izņem to no fakti_vesture.json")
     ap.add_argument("--fakts", default=None, help="piektdiena: kandidāta numurs no --fakti saraksta vai 'auto' (= #1)")
     ap.add_argument("--menesis", default=None, help="tiesnesi: mēnesis YYYY-MM (noklusējums: šis mēnesis, ja dati ir līdz 20. datumam vai vēlāk, citādi iepriekšējais)")
-    ap.add_argument("--ref-ainas", default=None, help="tiesnesi: kuras 2 papildu ainas rādīt, piem. 'majas,komanda' "
-                                                      "(varianti: vid, majas, periods, komanda, spele, tendence; noklusējums – automātiski)")
+    ap.add_argument("--ref-ainas", default=None, help="tiesnesi: kuras 3 papildu ainas rādīt, piem. 'majas,komanda,pp' "
+                                                      "(varianti: majas, komanda, tirakie, pp, speletajs, tendence; noklusējums – automātiski)")
     a = ap.parse_args()
     if a.gaida:
         return gaidosie_atskati(a.mape)
