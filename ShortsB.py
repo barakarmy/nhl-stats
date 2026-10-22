@@ -339,7 +339,9 @@ def sfx_notikumi(ainas):
             ev.append((max(0, t0 - 0.12), "swoosh", 0.8))
         tips = c.get("tips") if c else veids
         if nr == 0:
-            ev.append((t0 + 0.12, "boom", 0.7))
+            ev.append((t0, "boom", 0.9))
+            if veids == "intro":
+                ev.append((t0 + 0.5, "tick", 0.9))
         if tips == "fakts_hook":
             ev.append((t0 + 1.0, "tick", 0.9))
         elif tips == "intro":
@@ -460,7 +462,148 @@ def aina_fakts_hook(t, c):
     return im
 
 
+# ================================================================ ĀĶIS (cold open) – pirmās 2 sekundes
+def _izpludinats_teksts(txt, f, kr, blur=24):
+    """Teksts, kas ir pa pusei izlasāms – "kas tas ir?" efekts."""
+    d0 = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    bb = d0.textbbox((0, 0), txt, font=f)
+    w, h = bb[2] - bb[0] + 80, bb[3] - bb[1] + 80
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(im).text((40 - bb[0], 40 - bb[1]), txt, font=f, fill=kr)
+    return im.filter(ImageFilter.GaussianBlur(blur))
+
+
+def aina_aki(t, s):
+    """Pirmais kadrs uzreiz pilns: skaitlis/apgalvojums + noslēpumaina #1 kartīte ar izpludinātu vārdu."""
+    im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    S.pill(d, 0, 250, s["tag"], S.fonts("semi", 40), S.ZILS, S.MELNS, center=True)
+    y = 380
+    for i, (rinda, kr) in enumerate(s["rindas"]):
+        f = S.ietilpinat(d, rinda, "black", 140, S.W - 100)
+        S.teksts_c(d, y, rinda, f, kr)
+        y += int(f.size * 1.12)
+    if s.get("kartite"):
+        kt = s["kartite"]
+        x0, x1, y0 = 120, S.W - 120, max(y + 40, 760)
+        y1 = y0 + 520
+        prim, _ = kom_krasas(kt.get("badge"))
+        d.rounded_rectangle([x0, y0, x1, y1], radius=44, fill=KARTE_KR, outline=jaukt(prim, KARTE_KR, 0.6), width=3)
+        if kt.get("badge"):
+            komandas_josla(d, x0 + 40, y0 + 24, x1 - 40, kt["badge"], h=12)
+            fb = S.fonts("bold", 46)
+            S.pill(d, x1 - 46 - S.platums(d, kt["badge"], fb) - 64, y0 + 64, kt["badge"], fb, S.kkrasa(kt["badge"]),
+                   S.uz_fona(S.kkrasa(kt["badge"])), pad=(32, 12))
+        d.text((x0 + 46, y0 + 50), kt.get("nr", "#1"), font=S.fonts("black", 88), fill=kt["akc"])
+        vards = _izpludinats_teksts(kt["vards"], S.ietilpinat(d, kt["vards"], "black", 110, x1 - x0 - 100), S.BALTS)
+        im.alpha_composite(vards, (int((S.W - vards.width) / 2), int(y0 + 150)))
+        f_sk = S.ietilpinat(d, kt["skaitlis"], "black", 150, x1 - x0 - 80)
+        S.teksts_c(d, y0 + 290, kt["skaitlis"], f_sk, kt["akc"])
+        if kt.get("apaksa"):
+            S.teksts_c(d, y1 - 66, kt["apaksa"], S.ietilpinat(d, kt["apaksa"], "semi", 38, x1 - x0 - 80), S.PELEKS)
+        y_st = y1 + 60
+    else:
+        sk_ = s.get("skaitlis", "")
+        f_sk = S.ietilpinat(d, sk_, "black", 260, S.W - 120)
+        S.teksts_c(d, y + 40, sk_, f_sk, s.get("skaitlis_kr", S.DZELTENS))
+        y_st = y + 40 + int(f_sk.size * 1.15)
+        if s.get("skaitlis_apaksa"):
+            S.teksts_c(d, y_st, s["skaitlis_apaksa"], S.ietilpinat(d, s["skaitlis_apaksa"], "semi", 48, S.W - 140), S.PELEKS)
+            y_st += 110
+    if t > 0.5:                                                       # uzlīme "palieciet līdz beigām"
+        kb = ease_back((t - 0.5) / 0.4)
+        st = Image.new("RGBA", (S.W, 240), (0, 0, 0, 0))
+        uzlime(st, s.get("uzlime", "STAY FOR #1"), 20, -5, S.DZELTENS)
+        if kb < 0.999:
+            sc = max(0.05, kb)
+            st = st.resize((int(S.W * sc), int(240 * sc)), Image.BILINEAR)
+        im.alpha_composite(st, (int((S.W - st.width) / 2), int(min(y_st, 1460))))
+    return im
+
+
+def _parsk(v):
+    try:
+        return float(str(v).replace("−", "-").replace("PDO", "").strip())
+    except ValueError:
+        return None
+
+
+def pievienot_aki(s, veids):
+    """Pārveido video scenāriju: āķis sākumā, #3 → #1 secība, cilpa beigās. Dati un kartītes – tie paši."""
+    if not s or not s.get("kartes"):
+        return s
+    k, r = s["kartes"], s["runa"]
+    if veids in ("speletaji", "komandas", "vartsargi"):
+        n = len(k) // 2
+        hero = k[0]                                                   # #1 "laimīgais" – noslēpjam līdz beigām
+        # secība: laimīgie #3 → #1, tad nelaimīgie #3 → #1
+        s["kartes"] = k[:n][::-1] + k[n:][::-1]
+        r_k = r[1:-1]
+        r_k = r_k[:n][::-1] + r_k[n:][::-1]
+        tag = s["intro"]["tag"]
+        if veids == "speletaji":
+            G, xG = hero["bars"][0][1], hero["bars"][1][1]
+            rindas = [(f"{int(G)} GOALS.", S.BALTS), (f"SHOULD HAVE {xG:.1f}.", S.DZELTENS)]
+            sk_, ap = hero["liels"], "goals above expected"
+            runa0 = f"{int(G)} goals. He should have {xG:.1f}. Who is it?"
+            beigas = f"Luck runs out. Expected goals don't. We'll check back in two weeks. Follow, and remember: {int(G)} goals."
+        elif veids == "vartsargi":
+            GA, xGA = hero["bars"][0][1], hero["bars"][1][1]
+            rindas = [("HE'S STEALING", S.BALTS), ("GAMES.", S.DZELTENS)]
+            sk_, ap = hero["liels"], f"{int(GA)} goals allowed on {xGA:.1f} expected"
+            runa0 = f"This goalie is stealing games: {_parsk(hero['liels']) or 0:.1f} goals saved above expected. Who is it?"
+            beigas = "Hot streaks cool. We'll check back in two weeks. Follow, and remember: this goalie is stealing games."
+        else:
+            import re as _re
+            m_ = _re.search(r"(\d+)-(\d+)-(\d+)", hero.get("info", ""))
+            rek = f"{m_.group(1)}–{m_.group(2)}–{m_.group(3)}" if m_ else ""
+            rindas = ([(f"{rek}.", S.BALTS)] if rek else []) + [("AND IT'S LUCK.", S.DZELTENS)]
+            sk_, ap = hero["liels"], "PDO · league average ≈ 100"
+            runa0 = (f"This team is {m_.group(1)} and {m_.group(2)}. And it's mostly luck. Who is it?" if m_
+                     else "This team is winning on luck. Who is it?")
+            beigas = "PDO always comes back to one hundred. We'll check back in two weeks. Follow, and remember: this team is winning on luck."
+        vards = (hero.get("v2") or "").upper()
+        s["intro"] = {"aki": True, "tag": tag, "rindas": rindas, "ilgums": 2.4,
+                      "kartite": {"nr": "#1", "akc": hero["akc"], "badge": hero.get("badge"), "vards": vards,
+                                  "skaitlis": sk_, "apaksa": ap},
+                      "uzlime": "STAY FOR #1"}
+        s["runa"] = [runa0] + r_k + [beigas]
+    elif veids == "atskats":
+        rez = ""
+        for txt, _ in s["outro"]["rindas"]:
+            if txt.startswith("WENT "):
+                rez = txt[5:].rstrip(".")
+        ok, _, kopa = rez.partition("/")
+        datums = s["intro"]["apaksa"][0].replace("Our list from ", "")
+        trapi = ok.isdigit() and kopa.isdigit() and int(kopa) and int(ok) / int(kopa) >= 0.5
+        s["intro"] = {"aki": True, "tag": s["intro"]["tag"], "ilgums": 2.4,
+                      "rindas": [(f"ON {datums.upper()}", S.BALTS), ("WE MADE A CALL.", S.DZELTENS)],
+                      "skaitlis": f"{rez}", "skaitlis_kr": S.ZALS if trapi else S.SARKANS,
+                      "skaitlis_apaksa": "calls that held up", "uzlime": "SEE EVERY CALL"}
+        r[0] = (f"On {datums} we made a call. We got {ok} out of {kopa} right. Here's every one."
+                if rez else r[0])
+        r[-1] = r[-1].replace("Follow for weekly NHL stats.", "Follow for the next call. Remember:")
+    elif veids == "tiesnesi":
+        c0 = k[0]
+        stingr = next((c for c in k if "STRICTEST" in str(c.get("saraksts_virs", ""))), None)
+        try:
+            top = float(stingr["rindas"][0][2])
+            vid = float(str(stingr["kopsavilkums"]).split(":")[1].split()[0])
+            pct = round((top / vid - 1) * 100)
+        except Exception:                                             # noqa: BLE001
+            pct = None
+        if pct:
+            men = c0["hook"][0]
+            c0["hook"] = ["THIS REF CALLS", f"+{pct}% MORE", "PENALTIES"]
+            c0["v1"], c0["vards"] = f"{men} REFEREE REPORT", "WHO IS IT?"
+            r[0] = f"One NHL referee calls {pct} percent more penalties than average. Who is it? {men.capitalize()} referee report."
+            r[-1] = "Is your team's ref on this list? Follow for the monthly referee report. Remember:"
+    return s
+
+
 def aina_intro(t, s):
+    if s.get("aki"):
+        return aina_aki(t, s)
     im = _orig["intro"](t, s)
     if t > 1.0:
         tag = str(s.get("tag", "")).upper()
@@ -683,7 +826,7 @@ def renderet(s, izvade, kanals="", balss=None):
     import shutil, tempfile
     if not shutil.which("ffmpeg"):
         raise SystemExit("Nav ffmpeg (Windows: winget install ffmpeg, tad jauns terminālis).")
-    ainas = ([("intro", None, 3.2)] if s.get("intro") else []) + [("karte", c, c.get("ilgums", 3.6)) for c in s["kartes"]] \
+    ainas = ([("intro", None, s["intro"].get("ilgums", 3.2))] if s.get("intro") else []) + [("karte", c, c.get("ilgums", 3.6)) for c in s["kartes"]] \
         + [("outro", None, 4.5 if s["outro"].get("cta") else 3.6)]
     tmp = tempfile.mkdtemp(prefix="shorts_")
     audio = S.ierunat(s["runa"], balss, tmp) if balss else None
@@ -720,7 +863,23 @@ def renderet(s, izvade, kanals="", balss=None):
             else:
                 sl = fn_map.get(c.get("tips"), aina_karte)(t, c)
             # pāreja: uzlec no apakšas ar atsitienu; iziet – izbalē un paceļas
-            if t < 0.4:
+            if nr == 0:                                               # 1. aina: pilns kadrs uzreiz + "punch-in"
+                tt = t + (0 if (veids == "intro" and s["intro"].get("aki")) else 1.1)
+                if veids == "intro":
+                    sl = aina_intro(tt, s["intro"])
+                elif veids != "outro":
+                    sl = fn_map.get(c.get("tips"), aina_karte)(tt, c)
+                if t < 0.25:
+                    sc = 1.08 - 0.08 * S.ease(t / 0.25)
+                    w_, h_ = int(S.W * sc), int(S.H * sc)
+                    big = sl.resize((w_, h_), Image.BILINEAR)
+                    yt = int(250 * sc) - 250                          # augšējā zīmīte paliek vietā (nepārklāj datumu)
+                    sl = big.crop(((w_ - S.W) // 2, yt, (w_ - S.W) // 2 + S.W, yt + S.H))
+                alfa, dy = 1, 0
+                if t > ilg - 0.22:
+                    k = S.ease((t - (ilg - 0.22)) / 0.22)
+                    alfa, dy = 1 - k, -k * 120
+            elif t < 0.4:
                 k = ease_back(t / 0.4)
                 alfa, dy = min(1, t / 0.2), (1 - k) * 260
             elif t > ilg - 0.22 and veids != "outro":
@@ -753,6 +912,17 @@ def ieslegt():
     for k in ("fakts_konteksts", "karte", "fantasy", "fakts_hook", "outro", "intro"):
         _orig[k] = getattr(S, "aina_" + k)
     S.renderet = renderet
+    for v_ in ("speletaji", "komandas", "vartsargi", "tiesnesi"):
+        orig_v = S.VEIDI[v_]
+        S.VEIDI[v_] = (lambda f_, vv: (lambda m, a: pievienot_aki(f_(m, a), vv)))(orig_v, v_)
+    orig_ats = S.atskats
+
+    def atskats_ar_aki(fails, m, a):
+        s_ = orig_ats(fails, m, a)
+        if s_ and "FOLLOW-UP" in str(s_.get("intro", {}).get("tag", "")):
+            s_ = pievienot_aki(s_, "atskats")
+        return s_
+    S.atskats = atskats_ar_aki
     for arg, k in (("--bez-fona-video", "fons"), ("--bez-muzikas", "muzika"), ("--bez-sfx", "sfx")):
         if arg in sys.argv:
             OPC[k] = False
