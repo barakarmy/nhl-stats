@@ -628,9 +628,14 @@ def pievienot_aki(s, veids):
         s["intro"] = {"aki": True, "tag": s["intro"]["tag"], "ilgums": 2.4,
                       "rindas": [(f"ON {datums.upper()}", S.BALTS), ("WE MADE A CALL.", S.DZELTENS)],
                       "skaitlis": f"{rez}", "skaitlis_kr": S.ZALS if trapi else S.SARKANS,
-                      "skaitlis_apaksa": "calls that held up" + (f"  ·  {neskait} too early to judge" if neskait else ""),
+                      "skaitlis_apaksa": "calls that held up" + (f"  ·  {neskait} not counted (too few games)" if neskait else ""),
                       "uzlime": "SEE EVERY CALL"}
-        r[0] = (f"On {datums} we made a call. We got {ok} out of {kopa} right. Here's every one."
+        vardi = {1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five"}
+        nesk_runa = ""
+        if neskait:
+            nesk_runa = (f" {vardi.get(neskait, neskait)} {'call was' if neskait == 1 else 'calls were'} not counted:"
+                         f" too few games since.")
+        r[0] = (f"On {datums} we made a call. We got {ok} out of {kopa} right.{nesk_runa} Here's every one."
                 if rez else r[0])
         r[-1] = r[-1].replace("Follow for weekly NHL stats.", "Follow for the next call. Remember:")
     elif veids == "tiesnesi":
