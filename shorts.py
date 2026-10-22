@@ -736,8 +736,8 @@ def _toi_min(s):
 
 
 def _mmss(v):
-    v = abs(v)
-    return f"{int(v)}:{int(round((v - int(v)) * 60)):02d}"
+    sek = int(round(abs(v) * 60))                                     # vispirms noapaļo sekundes (nevis 16:60)
+    return f"{sek // 60}:{sek % 60:02d}"
 
 
 def nakama_nedela(a, lidz):
