@@ -19,7 +19,7 @@ Mapes (izveido pats nhl-stats saknē; ja mapes nav vai tā tukša – attiecīg�
   shorts_muzika\\   fona mūzika (.mp3) no YouTube Audio Library / Pixabay Music.
                     Skaļums ~15 %, kamēr runā balss – vēl klusāk; beigās izbalē.
   NOSAUKUMI – faila sākums nosaka, kuram video tas der (abās mapēs vienādi):
-    speletaji_1.mp4, speletaji_2.mp4, komandas_1.mp4, vartsargi_1.mp4, fantasy_1.mp4,
+    speletaji_1.mp4, speletaji_2.mp4 (der arī komandas un vartsargi video), fantasy_1.mp4,
     fakts_1.mp4, tiesnesi_1.mp4,
     atskats_1.mp4 (visi atskati) vai precīzāk atskats_speletaji_1.mp4, atskats_fantasy_1.mp4 ...,
     visi_1.mp4 (vai jebkurš cits nosaukums) – der jebkuram veidam, kam nav savu failu.
@@ -200,6 +200,7 @@ class VideoFons:
 
 VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "fakts", "tiesnesi", "atskats", "visi")
 MEDIJU_VESTURE = "shorts_mediji.json"
+XG_VEIDI = ("speletaji", "komandas", "vartsargi")      # xG video – izmanto speletaji_ failus (ja nav savu komandas_ / vartsargi_)
 
 
 def _arg(nos, nokl=None):
@@ -220,8 +221,14 @@ def veida_atslegas():
             veids = json.load(open(js, encoding="utf-8")).get("veids", "")
         except Exception:                                             # noqa: BLE001
             pass
-        return ([f"atskats_{veids}"] if veids else []) + ["atskats", "visi"]
-    return [_arg("--veids", "speletaji"), "visi"]
+        a_ = [f"atskats_{veids}"] if veids else []
+        if veids in XG_VEIDI and veids != "speletaji":
+            a_.append("atskats_speletaji")
+        return a_ + ["atskats", "visi"]
+    veids = _arg("--veids", "speletaji")
+    if veids in XG_VEIDI and veids != "speletaji":                  # komandas / vartsargi → kā spēlētājiem
+        return [veids, "speletaji", "visi"]
+    return [veids, "visi"]
 
 
 def izveleties_mediju(mape, paplasinajumi, tips):
