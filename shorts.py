@@ -246,6 +246,20 @@ def zimogs_jauns(no, lidz, dienas):
     return f"STATS THROUGH {dat(lidz, True).upper()}  ·  " + (f"LAST {dienas} DAYS" if dienas else "SEASON TO DATE")
 
 
+ATSKATS_DIENAS = 21        # xG atskats ne agrāk kā pēc 3 nedēļām (vārtsargiem / komandām vajag vairāk spēļu)
+
+
+def atskata_diena():
+    """Kad būs atskats: pirmā ceturtdiena pēc ATSKATS_DIENAS dienām (tāpat kā INFO.txt "ieteicamais")."""
+    d = pd.Timestamp.now().normalize() + timedelta(days=ATSKATS_DIENAS)
+    return d + timedelta(days=(3 - d.weekday()) % 7)
+
+
+def atskata_teksts(runai=True):
+    d = atskata_diena()
+    return f"We'll check back on {d:%B} {d.day}." if runai else f"Check-back: {dat(d)}"
+
+
 def skripts():
     """Faila nosaukums, ar kuru skripts palaists (ShortsB.py) – lai instrukcijās būtu pareizā komanda."""
     n = os.path.basename(sys.argv[0]) if sys.argv and sys.argv[0] else ""
@@ -362,7 +376,7 @@ def veids_speletaji(m, a):
     for i, (_, r) in enumerate(nelaim.iterrows()):
         g_ = int(r["G"])
         runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {r['xG']:.1f} expected. {F('sp_nelaim')}")
-    runa.append("Luck runs out. Expected goals don't. We'll check back in two weeks. Follow for weekly NHL stats.")
+    runa.append(f"Luck runs out. Expected goals don't. {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "team": r["team"], "G": sk(r["G"]), "xG": sk(r["xG"]), "sog": sk(r["sog"]), "sp": sk(r["sp"])}  # noqa: E731
     return {
         "intro": {"tag": "NHL  ·  xG LUCK REPORT", "rindas": [("WHO'S", BALTS), ("RUNNING", BALTS), ("ON LUCK?", DZELTENS)],
@@ -370,7 +384,7 @@ def veids_speletaji(m, a):
                   "legenda": [("LUCKY  →  cooldown", ZALS, MELNS), ("UNLUCKY  →  due for goals", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [("LUCK RUNS OUT.", BALTS), ("xG DOESN'T.", DZELTENS)],
-                  "info": [f"Own xG model · {len(mm):,} unblocked shots".replace(",", " "), "We'll check back in 2 weeks"]},
+                  "info": [f"Own xG model · {len(mm):,} unblocked shots".replace(",", " "), atskata_teksts(False)]},
         "zimogs": zimogs_jauns(no, lidz, a.dienas), "runa": runa, "lidz": lidz, "periods": periods_txt(no, lidz),
         "thumb": {"tag": "NHL  ·  xG LUCK REPORT", "hook": ["RUNNING", "ON LUCK?"], "vards": str(laim.iloc[0]["vards"]).split(" ")[-1],
                   "badge": str(laim.iloc[0]["team"]), "skaitlis": minus(f"{laim.iloc[0]['G'] - laim.iloc[0]['xG']:+.1f}"), "kr": ZALS,
@@ -412,7 +426,7 @@ def veids_komandas(m, a):
         runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, but expected only {zime(r['xGD'])}. {F('kom_laim')}")
     for k, r in nelaim.iterrows():
         runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, expected {zime(r['xGD'])}. {F('kom_nelaim')}")
-    runa.append("PDO always comes back to one hundred. We'll check back in two weeks. Follow for weekly NHL stats.")
+    runa.append(f"PDO always comes back to one hundred. {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {k_: sk(r[k_]) for k_ in ("PDO", "sh", "sv", "GD", "xGD", "GP")}   # noqa: E731
     return {
         "intro": {"tag": "NHL  ·  TEAM LUCK REPORT", "rindas": [("WHICH TEAMS", BALTS), ("ARE LIVING", BALTS), ("ON LUCK?", DZELTENS)],
@@ -420,7 +434,7 @@ def veids_komandas(m, a):
                   "legenda": [("HIGH PDO  →  expect a drop", ZALS, MELNS), ("LOW PDO  →  better days ahead", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [("PDO ALWAYS", BALTS), ("COMES BACK.", DZELTENS)],
-                  "info": ["All situations, empty-net goals excluded", "We'll check back in 2 weeks"]},
+                  "info": ["All situations, empty-net goals excluded", atskata_teksts(False)]},
         "zimogs": zimogs_jauns(no, lidz, a.dienas), "runa": runa, "lidz": lidz, "periods": periods_txt(no, lidz),
         "thumb": {"tag": "NHL  ·  TEAM LUCK REPORT", "hook": ["LIVING", "ON LUCK?"], "vards": kom_nos(laim.index[0]),
                   "badge": laim.index[0], "skaitlis": f"PDO {laim.iloc[0]['PDO']:.1f}", "kr": ZALS,
@@ -466,7 +480,7 @@ def veids_vartsargi(m, a):
         runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. {F('va_labs')}")
     for _, r in sliktie.iterrows():
         runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. {F('va_slikts')}")
-    runa.append("Hot streaks cool, cold streaks thaw. We'll check back in two weeks. Follow for weekly NHL stats.")
+    runa.append(f"Hot streaks cool, cold streaks thaw. {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "kom": r["kom"], **{k_: sk(r[k_]) for k_ in ("GSAx", "GSAx_sp", "GA", "xGA", "SA", "sv", "GP")}}  # noqa: E731
     return {
         "intro": {"tag": "NHL  ·  GOALIE REPORT", "rindas": [("WHO'S", BALTS), ("STEALING", BALTS), ("GAMES?", DZELTENS)],
@@ -474,7 +488,7 @@ def veids_vartsargi(m, a):
                   "legenda": [("+  saves more than expected", ZALS, MELNS), ("−  lets in more than expected", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [("SAVE % LIES.", BALTS), ("GSAx DOESN'T.", DZELTENS)],
-                  "info": ["GSAx = expected goals against − goals allowed", "We'll check back in 2 weeks"]},
+                  "info": ["GSAx = expected goals against − goals allowed", atskata_teksts(False)]},
         "zimogs": zimogs_jauns(no, lidz, a.dienas), "runa": runa, "lidz": lidz, "periods": periods_txt(no, lidz),
         "thumb": {"tag": "NHL  ·  GOALIE REPORT", "hook": ["STEALING", "GAMES"], "vards": str(labie.iloc[0]["vards"]).split(" ")[-1],
                   "badge": str(labie.iloc[0]["kom"]), "skaitlis": minus(f"{labie.iloc[0]['GSAx']:+.1f}"), "kr": ZALS,
@@ -518,10 +532,10 @@ def atskats(fails, m, a):
                     ok, verd = None, (neitr if sp2 == 0 else "TOO FEW GAMES")
                 elif lucky:
                     ok = (G2 - xG2) <= 0.5
-                    verd = "COOLED OFF ✓" if ok else "STILL HOT ✗"
+                    verd = "COOLED OFF" if ok else "STILL HOT"
                 else:
                     ok = (G2 - xG2) >= -0.5 or G2 >= 2
-                    verd = "GOALS CAME ✓" if ok else "STILL WAITING ✗"
+                    verd = "GOALS CAME" if ok else "STILL WAITING"
                 v = str(r["vards"]).split(" ", 1)
                 kartes.append({"nr": nr, "akc": NEITRALS if ok is None else (ZALS if ok else SARKANS),
                                "augsa": "WE SAID: COOLDOWN" if lucky else "WE SAID: DUE FOR GOALS",
@@ -551,7 +565,7 @@ def atskats(fails, m, a):
                 else:
                     p2 = float(x["PDO"])
                     ok = p2 <= r["PDO"] - 2 if lucky else p2 >= r["PDO"] + 2
-                    verd = ("PDO DROPPED ✓" if ok else "STILL LUCKY ✗") if lucky else ("PDO ROSE ✓" if ok else "STILL UNLUCKY ✗")
+                    verd = ("PDO DROPPED" if ok else "STILL LUCKY") if lucky else ("PDO ROSE" if ok else "STILL UNLUCKY")
                 pils, nos, kr = KOMANDAS.get(kom, ("", kom, NEITRALS))
                 w, l_, o, _ = bil.get(kom, (0, 0, 0, 0))
                 bars = [("PDO BEFORE", r["PDO"] - 100, BALTS, "{:.1f}", 100)]
@@ -591,7 +605,7 @@ def atskats(fails, m, a):
                 else:
                     r2, gp2 = float(x["GSAx_sp"]), int(x["GP"])
                     ok = r2 < r1 * 0.5 if labs else r2 > r1 * 0.5
-                    verd = ("CAME BACK DOWN ✓" if ok else "STILL STEALING ✗") if labs else ("BOUNCED BACK ✓" if ok else "STILL STRUGGLING ✗")
+                    verd = ("CAME BACK DOWN" if ok else "STILL STEALING") if labs else ("BOUNCED BACK" if ok else "STILL STRUGGLING")
                 v = str(r["vards"]).split(" ", 1)
                 gsax0 = minus(format(r["GSAx"], "+.1f"))
                 bars = [("GSAx PER GAME BEFORE", r1, BALTS, "{:+.2f}")]
@@ -620,20 +634,25 @@ def atskats(fails, m, a):
     else:
         raise SystemExit(f"Nezināms veids JSON failā: {veids}")
 
+    for c_ in kartes:                                                 # par maz spēļu → netiek skaitīts rezultātā
+        if c_["akc"] == NEITRALS:
+            c_["apaksa"] = "NOT COUNTED  ·  " + c_["apaksa"]
     rez = f"{ok_skaits}/{vert_skaits}"
     zimogs = f"FLAGGED {dat(lidz0, True).upper()}  ·  RESULTS {dat(no2).upper()} – {dat(lidz2).upper()}"
     runa = [f"On {dat(lidz0)}, we flagged {len(kartes)} NHL {vards_k} as lucky or unlucky. Here's what happened next."] + runa_k
-    runa.append(f"The call went {ok_skaits} for {vert_skaits}. No hiding misses. Follow for weekly NHL stats.")
+    neskait = len(kartes) - vert_skaits
+    runa.append(f"The call went {ok_skaits} for {vert_skaits}"
+                + (f", with {neskait} too early to judge" if neskait else "") + ". No hiding misses. Follow for weekly NHL stats.")
     return {
         "intro": {"tag": tag, "rindas": rindas,
                   "apaksa": [f"Our list from {dat(lidz0, True)}", f"Results: {dat(no2)} – {dat(lidz2, True)}"],
-                  "legenda": [("✓  prediction held", ZALS, MELNS), ("✗  prediction missed", SARKANS, BALTS)]},
+                  "legenda": [("GREEN  =  prediction held", ZALS, MELNS), ("RED  =  prediction missed", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [(f"WENT {rez}.", BALTS), ("NO HIDING MISSES.", DZELTENS)],
                   "info": [outro_info, f"{dat(no2)} – {dat(lidz2, True)}"]},
         "zimogs": zimogs, "runa": runa, "lidz": lidz2, "periods": f"flagged {dat(lidz0, True)}, results {dat(no2)} – {dat(lidz2, True)}",
         "thumb": {"tag": tag, "hook": ["DID xG", "CALL IT?"], "vards": {"players": "PLAYERS", "teams": "TEAMS", "goalies": "GOALIES"}[temats],
-                  "badge": "", "skaitlis": f"{rez} ✓", "kr": ZALS if vert_skaits and ok_skaits / vert_skaits >= 0.5 else SARKANS,
+                  "badge": "", "skaitlis": f"{rez}", "kr": ZALS if vert_skaits and ok_skaits / vert_skaits >= 0.5 else SARKANS,
                   "apaksa": f"flagged {dat(lidz0)} · results to {dat(lidz2)}", "datums": lidz2},
         "virsraksts": f"We called these NHL {temats} lucky. Were we right? ({rez}) 🏒",
         "saraksts": saraksts, "apraksts": f"Follow-up on our xG luck list from {dat(lidz0, True)}: what happened next.",
@@ -1134,7 +1153,7 @@ def veids_fantasy(m, a):
     if rez:
         pd_ = rez[-1]
         H, T = sum(x["trapijumi"] for x in rez), sum(x["kopa"] for x in rez)
-        rezultats_txt = f"Last week: {pd_['trapijumi']}/{pd_['kopa']} ✓  ·  Season: {H}/{T} ({H / max(T, 1) * 100:.0f}%)"
+        rezultats_txt = f"Last week: {pd_['trapijumi']}/{pd_['kopa']}  ·  Season: {H}/{T} ({H / max(T, 1) * 100:.0f}%)"
         runa[0] += f" Last week our picks went {pd_['trapijumi']} for {pd_['kopa']}."
     legenda = [("ADD  →  keep him", ZALS, MELNS), ("STREAM  →  ride the schedule", DZELTENS, MELNS)]
     if n_drop:
@@ -1358,7 +1377,7 @@ def atskats_fantasy(j, m, a):
     for r in sg.itertuples(index=False):
         info[(r.game_id, r.home_team)] = ("vs", r.away_team)
         info[(r.game_id, r.away_team)] = ("@", r.home_team)
-    kartes, runa, saraksts, trap, kopa = [], [], [], 0, 0
+    kartes, runa, saraksts, trap, kopa, vien = [], [], [], 0, 0, 0
     nr_add = nr_drop = 0
     for grupa in ("add", "drop"):
         for pid, r in j["momentuzn"][grupa].items():
@@ -1370,17 +1389,19 @@ def atskats_fantasy(j, m, a):
                 nr_add += 1
                 nr = nr_add
                 ok = None if (GP > 0 and P == med) else (P > med)
-                verd = "EVEN" if ok is None else ("HIT ✓" if ok else ("MISS ✗" if GP else "DIDN'T PLAY ✗"))
+                verd = "EVEN" if ok is None else ("HIT" if ok else ("MISS" if GP else "DIDN'T PLAY"))
                 augsa = f"WE SAID: {r['veids']}" + (f"  ·  {r['rostered']:.0f}% ROSTERED" if r.get("rostered") is not None else "")
             else:
                 nr_drop += 1
                 nr = nr_drop
                 ok = None if (GP > 0 and P == med) else (P < med)
-                verd = "EVEN" if ok is None else ("GOOD CALL ✓" if ok else "BAD CALL ✗")
+                verd = "EVEN" if ok is None else ("GOOD CALL" if ok else "BAD CALL")
                 augsa = f"WE SAID: {r['veids']}" + (f"  ·  {r['rostered']:.0f}% ROSTERED" if r.get("rostered") is not None else "")
             if ok is not None:
                 kopa += 1
                 trap += int(ok)
+            else:
+                vien += 1
             akc = NEITRALS if ok is None else (ZALS if ok else SARKANS)
             spel = []
             for g_ in w[w["playerId"] == pid].sort_values("datums").itertuples(index=False):
@@ -1400,8 +1421,8 @@ def atskats_fantasy(j, m, a):
             })
             runa.append((f"{r['vards']}: " if grupa == "add" else f"Our {r['veids'].lower()} call, {r['vards']}: ")
                         + f"{G} goal{'' if G == 1 else 's'}, {A} assist{'' if A == 1 else 's'}, {P} point{'' if P == 1 else 's'} in {GP} games. "
-                        + {"HIT ✓": F("fa_hit"), "MISS ✗": F("fa_miss"), "DIDN'T PLAY ✗": "He didn't play. Miss.",
-                           "GOOD CALL ✓": F("fa_good"), "BAD CALL ✗": F("fa_bad"), "EVEN": "Even."}[verd])
+                        + {"HIT": F("fa_hit"), "MISS": F("fa_miss"), "DIDN'T PLAY": "He didn't play. Miss.",
+                           "GOOD CALL": F("fa_good"), "BAD CALL": F("fa_bad"), "EVEN": "Even."}[verd])
             saraksts.append(f"{grupa.upper()} {r['vards']} ({r['team']}): {GP} GP, {G}G {A}A, {P} P, {SOG} SOG → {verd}")
     if not kartes:
         return None
@@ -1411,15 +1432,17 @@ def atskats_fantasy(j, m, a):
         json.dump(sorted(rez, key=lambda x: x["nedela"]), f, ensure_ascii=False, indent=1)
     H, T = sum(x["trapijumi"] for x in rez), sum(x["kopa"] for x in rez)
     runa = [f"How did our fantasy picks do last week? Week of {dat(no)} to {dat(lidz)}."] + runa
-    runa.append(f"We went {trap} for {kopa} last week, and {H} for {T} this season. Follow for weekly fantasy hockey tips.")
+    vien_txt = f", with {vien} even call{'' if vien == 1 else 's'} not counted" if vien else ""
+    runa.append(f"We went {trap} for {kopa} last week{vien_txt}, and {H} for {T} this season. Follow for weekly fantasy hockey tips.")
     kr_rez = ZALS if kopa and trap / kopa >= 0.5 else SARKANS
     return {
         "intro": {"tag": "NHL  ·  FANTASY RECAP", "rindas": [("HOW DID", BALTS), ("WE DO?", DZELTENS)],
                   "apaksa": [f"Our picks for {dat(no)} – {dat(lidz, True)}", "vs a typical player in the same pool"],
-                  "legenda": [("✓  better than typical", ZALS, MELNS), ("✗  worse than typical", SARKANS, BALTS)]},
+                  "legenda": [("GREEN  =  better than typical", ZALS, MELNS), ("RED  =  worse than typical", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [(f"LAST WEEK: {trap}/{kopa}", BALTS), (f"SEASON: {H}/{T} ({H / max(T, 1) * 100:.0f}%)", DZELTENS)],
-                  "info": ["Typical = median points of players in the same", "rostered % range with 2+ games that week"]},
+                  "info": ([f"{trap} right · {kopa - trap} wrong · {vien} even (not counted)"] if vien else [f"{trap} right · {kopa - trap} wrong"])
+                          + ["Typical = median points in the same rostered % range"]},
         "zimogs": f"WEEK OF {dat(no).upper()} – {dat(lidz).upper()}  ·  RESULTS", "runa": runa, "lidz": lidz,
         "periods": f"week of {dat(no)} – {dat(lidz, True)}",
         "virsraksts": f"Our fantasy hockey picks went {trap}/{kopa} last week – full results 🏒",
@@ -1428,7 +1451,7 @@ def atskats_fantasy(j, m, a):
         "apraksts": f"Fantasy hockey recap for the week of {dat(no)} – {dat(lidz, True)}: how our pickups and drops performed.",
         "nosaukums": f"xg_atskats_fantasy_{no}",
         "thumb": {"tag": "NHL  ·  FANTASY RECAP", "hook": ["HOW DID", "WE DO?"], "vards": "FANTASY PICKS", "badge": "",
-                  "skaitlis": f"{trap}/{kopa} ✓", "kr": kr_rez, "apaksa": f"season {H}/{T} ({H / max(T, 1) * 100:.0f}%)",
+                  "skaitlis": f"{trap}/{kopa}", "kr": kr_rez, "apaksa": f"season {H}/{T} ({H / max(T, 1) * 100:.0f}%)",
                   "datums": None, "nedela": f"WEEK OF {dat(no).upper()}"},
     }
 
@@ -2639,9 +2662,9 @@ def main():
             agrakais, ieteicamais, kad_txt = s["atskats_datumi"]
             agr_txt = "pēc fantasy nedēļas beigām"
         else:
-            agrakais = tagad.normalize() + timedelta(days=14)
-            ieteicamais = agrakais + timedelta(days=(3 - agrakais.weekday()) % 7)        # pirmā ceturtdiena pēc 14 dienām
-            kad_txt, agr_txt = "ceturtdiena pēc grafika", "pēc 14 dienām"
+            agrakais = tagad.normalize() + timedelta(days=ATSKATS_DIENAS)
+            ieteicamais = agrakais + timedelta(days=(3 - agrakais.weekday()) % 7)        # pirmā ceturtdiena pēc 21 dienas
+            kad_txt, agr_txt = "ceturtdiena pēc grafika", f"pēc {ATSKATS_DIENAS} dienām"
         info += ["ATSKATS:      vajadzīgs",
                  f"  agrākais:    {agrakais:%Y-%m-%d} ({agr_txt})",
                  f"  ieteicamais: {ieteicamais:%Y-%m-%d} ({kad_txt})",
