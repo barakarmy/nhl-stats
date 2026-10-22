@@ -56,6 +56,10 @@ SFX_SKALUMS = 0.55              # skaņu efekti
 FONA_TUMSUMS = 0.55             # cik stipri fona video aptumšots (0 = neaptumšots, 1 = melns)
 FONA_MELNBALTS = True           # fona video melnbalts (False = krāsains)
 FONA_ATRUMS = 0.5               # fona video ātrums: 1 = normāls, 0.5 = 2× lēnāk (slow motion), 0.35 = ~3× lēnāk
+# atsevišķs ātrums konkrētam video veidam: skaitlis (piem. 0.2 = 5× lēnāk) vai "auto" = tik lēni, lai fona klips
+# vienreiz izstieptos pa visu video (8 s klips → 65 s video ≈ 8× lēnāk, bez atkārtošanās). Ļoti lēnam – kustības interpolācija.
+FONA_ATRUMS_VEIDAM = {"tiesnesi": "auto"}
+FONA_ATRUMS_MIN = 0.08          # "auto" ne lēnāk par ~12×
 SR = 44100
 VIDEO_PAPL = (".mp4", ".mov", ".m4v", ".webm", ".mkv")
 AUDIO_PAPL = (".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac")
@@ -174,11 +178,39 @@ class Fons:
         return im
 
 
+def _ilgums(fails):
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", fails],
+                             capture_output=True, text=True, timeout=30).stdout.strip()
+        return float(out)
+    except Exception:                                                 # noqa: BLE001
+        return None
+
+
+def fona_atrums(fails, video_ilgums):
+    """Fona ātrums šim video veidam (FONA_ATRUMS_VEIDAM), citādi FONA_ATRUMS."""
+    v = FONA_ATRUMS_VEIDAM.get(_arg("--veids", "speletaji")) if not _arg("--atskats") else None
+    if v is None:
+        return FONA_ATRUMS
+    if v == "auto":
+        d = _ilgums(fails)
+        if not d or not video_ilgums:
+            return FONA_ATRUMS
+        return float(min(FONA_ATRUMS, max(FONA_ATRUMS_MIN, d / video_ilgums)))
+    return float(v)
+
+
 class VideoFons:
     """Izpludināts hokeja video (B-roll) no shorts_fons\\, cilpā, aptumšots; virsū – vieglas krāsu blāzmas."""
-    def __init__(self, fails):
+    def __init__(self, fails, atrums=None):
         self.w, self.h = 360, 640
-        lenam = f"setpts=PTS/{FONA_ATRUMS},framerate=fps={S.FPS}," if FONA_ATRUMS < 0.99 else ""   # slow motion ar kadru sapludināšanu
+        atrums = FONA_ATRUMS if atrums is None else atrums
+        if atrums < 0.3:                                              # super slow motion: kustības interpolācija (gludāk)
+            lenam = (f"setpts=PTS/{atrums:.4f},minterpolate=fps={S.FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,")
+        elif atrums < 0.99:                                           # slow motion ar kadru sapludināšanu
+            lenam = f"setpts=PTS/{atrums:.4f},framerate=fps={S.FPS},"
+        else:
+            lenam = ""
         krasa = "hue=s=0," if FONA_MELNBALTS else "eq=saturation=0.8,"
         vf = (f"fps={S.FPS},scale={self.w}:{self.h}:force_original_aspect_ratio=increase,crop={self.w}:{self.h},"
               f"{lenam}{krasa}gblur=sigma=9,fps={S.FPS}")
@@ -1170,9 +1202,10 @@ def renderet(s, izvade, kanals="", balss=None):
         audio = None
     kopa = sum(a[2] for a in ainas)
     fona_fails = izveleties_fonu()
-    fons = VideoFons(fona_fails) if fona_fails else Fons()
+    atr = fona_atrums(fona_fails, kopa) if fona_fails else None
+    fons = VideoFons(fona_fails, atr) if fona_fails else Fons()
     if fona_fails:
-        print(f"FONS: {os.path.basename(fona_fails)}")
+        print(f"FONS: {os.path.basename(fona_fails)}" + (f"  (ātrums {atr:.2f} = {1 / atr:.1f}× lēnāk)" if atr and atr < 0.99 else ""))
     video_tmp = os.path.join(tmp, "v.mp4")
     p = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{S.W}x{S.H}",
                           "-r", str(S.FPS), "-i", "-", "-vf", "scale=out_color_matrix=bt709:out_range=tv",
