@@ -346,6 +346,8 @@ def sfx_notikumi(ainas):
             ev.append((t0 + 1.0, "tick", 0.9))
         elif tips == "intro":
             ev.append((t0 + 1.0, "tick", 0.9))
+        elif tips == "fakts_mini":
+            ev += [(t0 + 0.9, "boom", 0.8)] + [(t0 + 1.3 + 0.15 * j, "tick", 0.6) for j in range(len(c.get("stat_rindas", [])))]
         elif tips == "fakts_konteksts":
             ev.append((t0 + 0.9, "boom", 1.0))
         elif tips == "fantasy":
@@ -448,7 +450,7 @@ def uzlime(im, txt, y, lenkis=-6, kr=S.DZELTENS):
 def aina_fakts_hook(t, c):
     im = _orig["fakts_hook"](t, c)
     k = ease_back((t - 1.0) / 0.45)
-    if k > 0.02:
+    if k > 0.02 and not c.get("bez_uzlimes"):
         sc = max(0.05, k)
         st = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
         uzlime(st, "GUESS BEFORE THE REVEAL", 1380)
@@ -645,6 +647,283 @@ def pievienot_aki(s, veids):
             r[0] = f"One NHL referee calls {pct} percent more penalties than average. Who is it? {men.capitalize()} referee report."
             r[-1] = "Is your team's ref on this list? Follow for the monthly referee report. Remember:"
     return s
+
+
+# ================================================================ NEDĒĻAS FAKTI (1–5 faktu vienā video)
+FAKTI_PAPILDU = {}     # papildu fakti vēsturei (pieraksta pēc main(), kad zināma mape)
+
+
+def _toi_min(x):
+    try:
+        mm, ss = str(x).split(":")
+        return int(mm) + int(ss) / 60
+    except ValueError:
+        return 0.0
+
+
+def fakta_statistika(D, c):
+    """Papildu statistika par faktu: spēlētāja / vārtsarga / komandas sezona vai spēles protokols.
+    → (virsraksts, rindas[(nos, "", vērtība)], kopsavilkums, balss teikums) vai None."""
+    np, pd = S.np, S.pd
+    atsl = str(c.get("atsl", ""))
+    veids, _, rest = atsl.partition(":")
+    dal = rest.split(":")
+    sg = D["sg"]
+    try:
+        if veids in ("points_serija", "goals_serija", "liela"):
+            pid = float(dal[0])
+            x = D["sp"][D["sp"]["playerId"] == pid]
+            if x.empty:
+                return None
+            GP, G, A = x["game_id"].nunique(), int(x["goals"].sum()), int(x["assists"].sum())
+            P, SOG = int(x["points"].sum()), int(pd.to_numeric(x["sog"], errors="coerce").fillna(0).sum())
+            PPG = int(pd.to_numeric(x["powerPlayGoals"], errors="coerce").fillna(0).sum())
+            pm = int(pd.to_numeric(x["plusMinus"], errors="coerce").fillna(0).sum())
+            toi = x["toi"].map(_toi_min).mean()
+            rindas = [("Games played", "", f"{GP}"), ("Goals", "", f"{G}"), ("Assists", "", f"{A}"), ("Points", "", f"{P}"),
+                      ("Shots on goal", "", f"{SOG}"), ("Power-play goals", "", f"{PPG}"),
+                      ("Plus / minus", "", f"{pm:+d}".replace("-", "−")), ("Ice time / game", "", f"{int(toi)}:{int(round((toi % 1) * 60)) % 60:02d}")]
+            return ("SEASON SO FAR", rindas, f"{P / max(GP, 1):.2f} POINTS PER GAME",
+                    f"On the season: {G} goals and {A} assists in {GP} games.")
+        if veids == "vartsargs":
+            pid = float(dal[0])
+            x = D["vg"][pd.to_numeric(D["vg"]["playerId"], errors="coerce") == pid]
+            x = x[x["toi"].map(_toi_min) > 0]
+            if x.empty:
+                return None
+            GP = x["game_id"].nunique()
+            W = int((x["decision"].astype(str) == "W").sum())
+            L = int((x["decision"].astype(str) == "L").sum())
+            O = int((x["decision"].astype(str) == "O").sum())
+            SA, SV = pd.to_numeric(x["shotsAgainst"]).sum(), pd.to_numeric(x["saves"]).sum()
+            GA = pd.to_numeric(x["goalsAgainst"]).sum()
+            mins = x["toi"].map(_toi_min).sum()
+            SO = int(((pd.to_numeric(x["goalsAgainst"]) == 0) & (x["starter"].astype(str) == "True")).sum())
+            svp = SV / SA if SA else 0
+            rindas = [("Games played", "", f"{GP}"), ("Record", "", f"{W}-{L}-{O}"), ("Save %", "", f".{round(svp * 1000):03d}"),
+                      ("Goals against avg", "", f"{GA / mins * 60:.2f}" if mins else "–"), ("Shutouts", "", f"{SO}"),
+                      ("Shots faced", "", f"{int(SA)}")]
+            return ("SEASON SO FAR", rindas, f"{int(SV)} SAVES THIS SEASON",
+                    f"On the season: {W} win{'' if W == 1 else 's'} and a .{round(svp * 1000):03d} save percentage.")
+        if veids in ("kom_uzv", "kom_zaud"):
+            kom = dal[0]
+            x = sg[(sg["home_team"] == kom) | (sg["away_team"] == kom)].sort_values("datums")
+            if x.empty:
+                return None
+            W = int((x["uzvaretajs"] == kom).sum())
+            OT = int(((x["uzvaretajs"] != kom) & (x["spele_beidzas"].astype(str) != "REG")).sum())
+            L = len(x) - W - OT
+            GF = int(np.where(x["home_team"] == kom, x["home_total"], x["away_total"]).sum())
+            GA = int(np.where(x["home_team"] == kom, x["away_total"], x["home_total"]).sum())
+            ppg = pd.to_numeric(np.where(x["home_team"] == kom, x["home_ppg"], x["away_ppg"]), errors="coerce")
+            ppo = pd.to_numeric(np.where(x["home_team"] == kom, x["home_pp_opp"], x["away_pp_opp"]), errors="coerce")
+            pp = f"{np.nansum(ppg) / np.nansum(ppo) * 100:.0f}%" if np.nansum(ppo) else "–"
+            pec5 = "".join("W" if u == kom else ("O" if b != "REG" else "L")
+                           for u, b in zip(x["uzvaretajs"].tail(5), x["spele_beidzas"].astype(str).tail(5)))
+            rindas = [("Record", "", f"{W}-{L}-{OT}"), ("Points", "", f"{2 * W + OT}"), ("Goals for", "", f"{GF}"),
+                      ("Goals against", "", f"{GA}"), ("Goal difference", "", f"{GF - GA:+d}".replace("-", "−")),
+                      ("Power play", "", pp), ("Last 5", "", " ".join(pec5))]
+            return ("SEASON SO FAR", rindas, f"{2 * W + OT} POINTS IN {len(x)} GAMES",
+                    f"The {S.kom_nos(kom)} have {W} win{'' if W == 1 else 's'}, {L} regulation loss{'' if L == 1 else 'es'} "
+                    f"and {OT} overtime loss{'' if OT == 1 else 'es'} this season.")
+        if veids in ("comeback", "periods", "atri", "metieni"):
+            gid = dal[0]
+            x = sg[sg["game_id"].astype(str) == str(gid)]
+            if x.empty:
+                return None
+            r = x.iloc[0]
+            h, a_ = r["home_team"], r["away_team"]
+
+            def pr(kh, ka, fmt="{:.0f}"):
+                try:
+                    return (fmt.format(float(r[ka])), fmt.format(float(r[kh])))
+                except (TypeError, ValueError):
+                    return ("–", "–")
+            rindas = [("", a_, h)]
+            for nos, kh, ka in (("Shots", "home_sog_total", "away_sog_total"), ("Hits", "home_hits", "away_hits"),
+                                ("Blocked shots", "home_blocked_shots", "away_blocked_shots"),
+                                ("Penalty minutes", "home_pim_total", "away_pim_total"), ("Giveaways", "home_giveaways", "away_giveaways")):
+                av, hv = pr(kh, ka)
+                rindas.append((nos, av, hv))
+            try:
+                rindas.insert(2, ("Power play", f"{int(r['away_ppg'])}/{int(r['away_pp_opp'])}", f"{int(r['home_ppg'])}/{int(r['home_pp_opp'])}"))
+            except (TypeError, ValueError):
+                pass
+            gal = f"FINAL: {a_} {int(r['away_total'])} – {int(r['home_total'])} {h}" + ("" if str(r["spele_beidzas"]) == "REG" else f" {r['spele_beidzas']}")
+            return ("BOX SCORE", rindas, gal,
+                    f"Shots were {int(r['away_sog_total'])} to {int(r['home_sog_total'])}.")
+    except Exception:                                                 # noqa: BLE001
+        return None
+    return None
+
+
+def aina_fakts_mini(t, c):
+    """Viens fakts vienā ainā: virsraksts, vārds + komanda, liels skaitlis, konteksts un 3 statistikas rindas."""
+    im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    S.pill(d, 0, 236, f"#{c['nr']}", S.fonts("black", 56), S.DZELTENS, S.MELNS, pad=(40, 10), center=True)
+    y = 360
+    hook = c["hook"]
+    for i, r_ in enumerate(hook):
+        k = S.ease((t - 0.06 * i) / 0.35)
+        f = S.ietilpinat(d, r_, "black", 104, S.W - 100)
+        S.teksts_c(d, y + (1 - k) * 30, r_, f, S.ar_alfa(S.DZELTENS if i == len(hook) - 1 else S.BALTS, 255 * k))
+        y += int(f.size * 1.1)
+    x0, x1, y0 = 80, S.W - 80, y + 40
+    rindas = c.get("stat_rindas", [])[:3]
+    y1 = y0 + 520 + 64 * len(rindas)
+    prim, _ = kom_krasas(c.get("badge"))
+    k0 = S.ease((t - 0.25) / 0.35)
+    if k0 > 0:
+        d.rounded_rectangle([x0, y0, x1, y1], radius=44, fill=KARTE_KR, outline=jaukt(prim, KARTE_KR, 0.6), width=3)
+        if c.get("badge"):
+            komandas_josla(d, x0 + 40, y0 + 24, x1 - 40, c["badge"], h=12)
+            fb = S.fonts("bold", 44)
+            S.pill(d, x1 - 44 - S.platums(d, c["badge"], fb) - 60, y0 + 56, c["badge"], fb, S.kkrasa(c["badge"]),
+                   S.uz_fona(S.kkrasa(c["badge"])), pad=(30, 10))
+        if c.get("v1"):
+            d.text((x0 + 44, y0 + 60), c["v1"].upper(), font=S.fonts("semi", 44), fill=prim)
+        vn = c["vards"].upper()
+        d.text((x0 + 44, y0 + 112), vn, font=S.ietilpinat(d, vn, "black", 96, x1 - x0 - 90), fill=S.BALTS)
+        k1 = S.ease((t - 0.6) / 0.3)
+        if k1 > 0:
+            sk_ = skaitit(c["k_skaitlis"], S.ease((t - 0.6) / 0.6))
+            f = S.ietilpinat(d, c["k_skaitlis"], "black", 150, x1 - x0 - 80)
+            S.teksts_c(d, y0 + 225, sk_, f, S.ar_alfa(S.DZELTENS, 255 * k1))
+            fk, rr = S.rindas_ietilpinat(d, c["konteksts"][0], "bold", 40, x1 - x0 - 90, 2)
+            yy = y0 + 400
+            for r_ in rr:
+                S.teksts_c(d, yy, r_, fk, S.ar_alfa(S.BALTS, 235 * k1))
+                yy += int(fk.size * 1.2)
+        for j, (a_, b_, v_) in enumerate(rindas):
+            kj = S.ease((t - 1.3 - 0.15 * j) / 0.3)
+            if kj <= 0:
+                continue
+            yy = y0 + 510 + 64 * j
+            d.line([(x0 + 40, yy - 8), (x1 - 40, yy - 8)], fill=(40, 46, 70), width=2)
+            d.text((x0 + 44, yy), str(a_), font=S.fonts("semi", 38), fill=S.ar_alfa(S.PELEKS, 255 * kj))
+            fv = S.fonts("black", 42)
+            v_ = f"{b_}  –  {v_}" if b_ else str(v_)                    # protokolam: viesi – mājinieki
+            d.text((x1 - 44 - S.platums(d, v_, fv), yy - 4), v_, font=fv, fill=S.ar_alfa(S.BALTS, 255 * kj))
+    return im
+
+
+def _fakti_izvele(arg, kand):
+    """--fakts 3 | 1,3,5 | top3 | auto  → kandidātu saraksts (max 5), sakārtots pēc vērtējuma (augstākais pirmais)."""
+    arg = str(arg or "auto").strip().lower()
+    if arg in ("auto", ""):
+        idx = [0]
+    elif arg.startswith("top"):
+        n = int(arg[3:] or 5)
+        idx = list(range(min(max(1, n), 5)))
+    else:
+        idx = []
+        for x in arg.replace(" ", "").split(","):
+            if x.isdigit() and 1 <= int(x) <= len(kand) and int(x) - 1 not in idx:
+                idx.append(int(x) - 1)
+        idx = idx[:5]
+    izv = [kand[i] for i in idx if i < len(kand)]
+    return sorted(izv, key=lambda c: -c["vert"])
+
+
+def veids_fakti_b(m, a):
+    D = S.fakti_dati(a.lidz)
+    kand = S.fakti_kandidati(D, a.mape)
+    if not kand:
+        print("Šonedēļ nav atrasts neviens fakts.")
+        return None
+    if a.fakts is None:
+        S.fakti_saraksts(kand)
+        print("\n(--fakts nav norādīts → izmantoju #1. Vairāki: --fakts 1,3,5 vai --fakts top5)")
+    izv = _fakti_izvele(a.fakts, kand)
+    if not izv:
+        S.fakti_saraksts(kand)
+        print(f"\nNav faktu ar numuru {a.fakts}. Piem.: --fakts 3  vai  --fakts 1,4,6  vai  --fakts top5")
+        return None
+    n = len(izv)
+    hero, citi = izv[0], izv[1:]
+    lidz = D["lidz"]
+    kartes, runa = [], []
+    # āķis
+    hook_runa = " ".join(hero["hook"]).lower().capitalize()
+    tag = f"NHL  ·  {n} FACTS OF THE WEEK" if n > 1 else "NHL  ·  FACT OF THE WEEK"
+    intro = {"aki": True, "tag": tag, "ilgums": 2.6,
+             "rindas": [(r_, S.DZELTENS if i == len(hero["hook"]) - 1 else S.BALTS) for i, r_ in enumerate(hero["hook"])],
+             "kartite": {"nr": "#1", "akc": S.DZELTENS, "badge": None, "vards": str(hero["vards"]).upper(),
+                         "skaitlis": str(hero.get("k_skaitlis") or hero.get("skaitlis")), "apaksa": hero.get("skaitlis_apaksa", "")},
+             "uzlime": "STAY FOR #1" if n > 1 else "WHO IS IT?"}
+    runa.append((f"{n} wild NHL facts from this week. Number one: {hook_runa}. Who is it?" if n > 1
+                 else f"{hook_runa}. Who is it?"))
+    # #n → #2: viena aina katram
+    for nr, c in zip(range(n, 1, -1), citi[::-1]):
+        st = fakta_statistika(D, c)
+        kartes.append({"tips": "fakts_mini", "ilgums": 5.0, **c, "nr": nr,
+                       "stat_rindas": [r_ for r_ in (st[1] if st else c["rindas"]) if r_[0]][:3]})
+        runa.append(f"Number {nr}. {c['runa'][0]} {c['runa'][2]}".replace("  ", " "))
+    # #1 – pilnais stāsts
+    st = fakta_statistika(D, hero)
+    kopa = {"pill_hook": "#1  ·  FACT OF THE WEEK" if n > 1 else "NHL  ·  FACT OF THE WEEK", "bez_uzlimes": True}
+    kartes.append({"tips": "fakts_hook", "ilgums": 3.2, **hero, **kopa})
+    runa.append(("Number one. " if n > 1 else "") + hero["runa"][0])
+    kartes.append({"tips": "fakts_saraksts", "ilgums": 2.6 + 0.22 * min(9, len(hero["rindas"])), **hero})
+    runa.append(hero["runa"][1])
+    if st:
+        kartes.append({"tips": "fakts_saraksts", "ilgums": 3.6, **hero, "saraksts_virs": st[0], "rindas": st[1],
+                       "kopsavilkums": st[2], "pill_kr": S.ZILS, "vards_w": 420 if st[0] != "BOX SCORE" else 330,
+                       "vards_kr": S.BALTS})
+        runa.append(st[3])
+    kartes.append({"tips": "fakts_konteksts", "ilgums": 4.0, **hero, "pill_k": "HOW RARE IS IT?"})
+    runa.append(hero["runa"][2])
+    if hero.get("nakamais"):
+        kartes.append({"tips": "fakts_nakamais", "ilgums": 3.6, **hero})
+        runa.append(hero["runa"][3])
+    if n > 1:
+        outro = {"rindas": [("WHICH ONE", S.BALTS), ("SURPRISED YOU?", S.DZELTENS)],
+                 "info": [f"Stats through {S.dat(lidz, True)}", "History: our database since 2023-24"],
+                 "follow": "FOLLOW FOR WEEKLY NHL FACTS", "komentars": f"COMMENT 1–{n}",
+                 "komentars2": "Which fact surprised you most?"}
+        runa.append("Which one surprised you most? Comment the number. Follow for weekly NHL facts, and remember:")
+    else:
+        outro = {"rindas": [("NHL FACT", S.BALTS), ("OF THE WEEK.", S.DZELTENS)],
+                 "info": [f"Stats through {S.dat(lidz, True)}", "History: our database since 2023-24"],
+                 "follow": "FOLLOW FOR WEEKLY NHL FACTS"}
+        runa.append("Follow for weekly NHL facts, and remember:")
+    FAKTI_PAPILDU["fakti"] = [{"atsl": c["atsl"], "garums": c["garums"], "teksts": c["teksts"]} for c in citi]
+    return {
+        "intro": intro, "kartes": kartes, "outro": outro,
+        "zimogs": f"STATS THROUGH {S.dat(lidz, True).upper()}", "runa": runa, "lidz": lidz,
+        "periods": f"through {S.dat(lidz, True)}",
+        "virsraksts": hero["yt"] + (f" + {n - 1} more wild NHL facts" if n > 1 else ""),
+        "saraksts": [f"#{i + 1}  {c['teksts']}" for i, c in enumerate(izv)],
+        "apraksts": " ".join(x for x in hero["runa"] if x),
+        "piezime": "History: our database since 2023-24.",
+        "tagi": "#NHL #hockey #NHLstats #NHLfacts #Shorts",
+        "nosaukums": f"fakti_{lidz}" if n > 1 else f"fakts_{lidz}",
+        "thumb": {"tag": "NHL  ·  FACT OF THE WEEK" if n == 1 else f"NHL  ·  {n} FACTS OF THE WEEK",
+                  "hook": hero.get("th_hook") or hero["hook"][:2], "vards": hero["vards"], "badge": hero["badge"],
+                  "skaitlis": hero["skaitlis"], "kr": S.DZELTENS if hero["aktiva"] else S.ZALS,
+                  "apaksa": hero["skaitlis_apaksa"], "datums": lidz},
+        "fakts_atsl": {"atsl": hero["atsl"], "garums": hero["garums"],
+                       "teksts": hero["teksts"] + (f"  (+ {n - 1} citi: " + "; ".join(c["teksts"] for c in citi) + ")" if citi else "")},
+    }
+
+
+def pierakstit_papildu_faktus(mape_video):
+    """main() pieraksta vēsturē tikai galveno faktu – pārējos pievienojam ar to pašu video mapi."""
+    citi = FAKTI_PAPILDU.get("fakti")
+    if not citi:
+        return
+    import json
+    p_ = os.path.join(mape_video, S.FAKTU_VESTURE)
+    if not os.path.exists(p_):
+        return
+    vest = json.load(open(p_, encoding="utf-8"))
+    if not vest:
+        return
+    ped = vest[-1]
+    for c in citi:
+        vest.append({**c, "datums": ped.get("datums"), "mape": ped.get("mape")})
+    json.dump(vest, open(p_, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
 def aina_intro(t, s):
@@ -860,8 +1139,8 @@ def aina_outro(t, s, kanals):
         x0, y0, x1, y1 = 120, 1440, S.W - 120, 1600
         dy = (1 - k) * 80
         d.rounded_rectangle([x0, y0 + dy, x1, y1 + dy], radius=36, fill=(245, 247, 250))
-        S.teksts_c(d, y0 + 30 + dy, "COMMENT BELOW", S.fonts("black", 54), S.MELNS)
-        S.teksts_c(d, y0 + 98 + dy, "What should we cover next?", S.fonts("semi", 36), (71, 85, 105))
+        S.teksts_c(d, y0 + 30 + dy, s.get("komentars", "COMMENT BELOW"), S.fonts("black", 54), S.MELNS)
+        S.teksts_c(d, y0 + 98 + dy, s.get("komentars2", "What should we cover next?"), S.fonts("semi", 36), (71, 85, 105))
     return im
 
 
@@ -897,7 +1176,7 @@ def renderet(s, izvade, kanals="", balss=None):
                           video_tmp], stdin=subprocess.PIPE)
     fn_map = {"fantasy": aina_fantasy, "grafiks": S.aina_grafiks, "fakts_hook": aina_fakts_hook,
               "fakts_saraksts": aina_fakts_saraksts, "fakts_konteksts": aina_fakts_konteksts,
-              "fakts_nakamais": S.aina_fakts_nakamais}
+              "fakts_nakamais": S.aina_fakts_nakamais, "fakts_mini": aina_fakts_mini}
     t0 = 0.0
     for nr, (veids, c, ilg) in enumerate(ainas):
         for fr in range(int(round(ilg * S.FPS))):
@@ -969,6 +1248,7 @@ def ieslegt():
             s_ = pievienot_aki(s_, "atskats")
         return s_
     S.atskats = atskats_ar_aki
+    S.VEIDI["fakts"] = veids_fakti_b
     for arg, k in (("--bez-fona-video", "fons"), ("--bez-muzikas", "muzika"), ("--bez-sfx", "sfx")):
         if arg in sys.argv:
             OPC[k] = False
@@ -978,4 +1258,7 @@ def ieslegt():
 if __name__ == "__main__":
     ieslegt()
     print(f"STILS {STILS}: STORY")
-    sys.exit(S.main())
+    rc = S.main()
+    if FAKTI_PAPILDU.get("fakti"):
+        pierakstit_papildu_faktus(_arg("--mape", os.path.join(S.BASE, "video")))
+    sys.exit(rc)
