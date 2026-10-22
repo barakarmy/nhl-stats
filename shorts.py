@@ -7,14 +7,14 @@ JAUNS VIDEO (--veids):
   vartsargi  – 3 vārtsargi ar labāko GSAx (karsti → atdzisīs) un 3 ar sliktāko (atkopsies)
   Katram jaunam video blakus MP4 tiek saglabāts .json ar parādīto sarakstu un datu periodu.
 
-OTRDIENAS VIDEO (fantasy atskats): python shorts.py --atskats video/<datums>_fantasy – pagājušās nedēļas ieteikumi pret
+OTRDIENAS VIDEO (fantasy atskats): python ShortsB.py --atskats video/<datums>_fantasy – pagājušās nedēļas ieteikumi pret
   "tipisku" spēlētāju tajā pašā rostered % grupā (mediāna, 2+ spēles): ADD/STREAM trāpīja, ja punktu vairāk par mediānu,
   DROP/BENCH – ja mazāk. Sezonas rezultāts – video/fantasy_rezultati.json (parādās arī trešdienas video ievadā).
 
 TREŠDIENAS VIDEO (--veids fantasy): "3 fantasy pickups nākamajai nedēļai" – nākamās nedēļas grafiks (komandas ar 4 un 2
   spēlēm) un 3 spēlētāji, kuri ESPN līgās paņemti ≤ 40 % (--max-rostered), ar labāko formu pēdējās 14 dienās
   (punkti, metieni, ixG, laiks uz ledus, punkti vairākumā) + nākamās nedēļas spēļu skaits un pretinieku aizsardzība.
-  Vajag sezonas/fantasy_espn.csv (fantasy_espn.py, ikdienas darbplūsmā). Komanda: python shorts.py --veids fantasy
+  Vajag sezonas/fantasy_espn.csv (fantasy_espn.py, ikdienas darbplūsmā). Komanda: python ShortsB.py --veids fantasy
 
 ATSKATS (--atskats <json>): ņem tieši to sarakstu, kas tika parādīts video, un rāda, kas notika PĒC tā datuma
   (vārti pret xG / PDO / GSAx spēlē) ar ✓ (prognoze piepildījās) vai ✗ (nepiepildījās). Spēlētājs, kurš pēc tam
@@ -27,14 +27,14 @@ video, kas publicēts pirms ~2,5 nedēļām. Lai dati starp viena veida video ne
 
 Palaišana (repozitorija mapē):
     pip install pandas numpy pillow edge-tts     (+ ffmpeg: Windows – winget install ffmpeg, tad jauns terminālis)
-    python shorts.py --veids speletaji --dienas 21 --kanals @tavskanals
-    python shorts.py --veids komandas  --dienas 21
-    python shorts.py --veids vartsargi --dienas 21
-    python shorts.py --atskats video/2026-10-26_speletaji        (mape, ko izveidoja jaunais video)
-    python shorts.py --gaida                                     → kuriem video vēl jātaisa atskats un kad
-    python shorts.py --fakti                                     → piektdiena: nedēļas faktu kandidāti (bez video)
-    python shorts.py --veids fakts --fakts 2                     → video par kandidātu #2 (vai --fakts auto)
-    python shorts.py --neizmantots video/2026-10-30_fakts        → fakts netika publicēts – izņemt no vēstures
+    python ShortsB.py --veids speletaji --dienas 21 --kanals @tavskanals
+    python ShortsB.py --veids komandas  --dienas 21
+    python ShortsB.py --veids vartsargi --dienas 21
+    python ShortsB.py --atskats video/2026-10-26_speletaji        (mape, ko izveidoja jaunais video)
+    python ShortsB.py --gaida                                     → kuriem video vēl jātaisa atskats un kad
+    python ShortsB.py --fakti                                     → piektdiena: nedēļas faktu kandidāti (bez video)
+    python ShortsB.py --veids fakts --fakts 2                     → video par kandidātu #2 (vai --fakts auto)
+    python ShortsB.py --neizmantots video/2026-10-30_fakts        → fakts netika publicēts – izņemt no vēstures
     citi parametri: --top 3  --min-metieni 15  --balss en-US-GuyNeural  --bez-balss
                     --lidz 2026-10-25   (izmantot datus tikai līdz šim datumam; noder pārbaudei / atkārtošanai)
 Rezultāts: katrai ģenerācijai sava mape video/<šodienas datums>_<veids>/ (piem. video/2026-10-26_speletaji/):
@@ -244,6 +244,12 @@ def bilance(no=None, lidz=None):
 
 def zimogs_jauns(no, lidz, dienas):
     return f"STATS THROUGH {dat(lidz, True).upper()}  ·  " + (f"LAST {dienas} DAYS" if dienas else "SEASON TO DATE")
+
+
+def skripts():
+    """Faila nosaukums, ar kuru skripts palaists (ShortsB.py) – lai instrukcijās būtu pareizā komanda."""
+    n = os.path.basename(sys.argv[0]) if sys.argv and sys.argv[0] else ""
+    return n if n.lower().endswith(".py") and n.lower() != "shorts.py" else "ShortsB.py"
 
 
 # ================================================================ frāzes balsij (dažādība)
@@ -1430,6 +1436,8 @@ def atskats_fantasy(j, m, a):
 # ================================================================ piektdienas video: nedēļas fakts
 
 DIENAS_GARI = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+DIENAS_PILNAS = {"MON": "Monday", "TUE": "Tuesday", "WED": "Wednesday", "THU": "Thursday", "FRI": "Friday",
+                 "SAT": "Saturday", "SUN": "Sunday"}
 FAKTU_VESTURE = "fakti_vesture.json"
 
 
@@ -1608,7 +1616,7 @@ def f_serijas(D):
                          (f"That's {G} goals and {A} assists, {P} points in {n} games." if kol == "points"
                           else f"That's {G} goals in {n} games."),
                          galv.capitalize().replace("nhl", "NHL") + ".",
-                         (f"Next up: {nak[0].split(',')[0].title()}, {nak[1].lower().replace('vs ', 'against the ').replace('@ ', 'at the ')}. "
+                         (f"Next up: {DIENAS_PILNAS.get(nak[0].split(',')[0], nak[0].split(',')[0].title())}, {nak[1].title().replace('Vs ', 'against the ').replace('@ ', 'at the ')}. "
                           f"Can he make it {n + 1}?") if nak else ""],
                 "yt": f"{vards} has a {nos.lower()} in {n} straight games 🔥",
             })
@@ -1683,7 +1691,7 @@ def f_komandu_serijas(D):
             "runa": [f"The {nos} have {'won' if val else 'gone without a win in'} {n} straight games.",
                      f"Goals in the streak: {gf} for, {ga} against.",
                      galv.capitalize().replace("nhl", "NHL") + ".",
-                     (f"Next up: {nak[0].split(',')[0].title()}, {nak[1].lower().replace('vs ', 'against the ').replace('@ ', 'at the ')}. "
+                     (f"Next up: {DIENAS_PILNAS.get(nak[0].split(',')[0], nak[0].split(',')[0].title())}, {nak[1].title().replace('Vs ', 'against the ').replace('@ ', 'at the ')}. "
                       + (f"Can they make it {n + 1}?" if val else "Will it end?")) if nak else ""],
             "yt": f"The {nos} have {'won' if val else 'gone winless in'} {n} straight 🏒",
         })
@@ -1924,6 +1932,7 @@ def f_speles(D):
         if z_met - u_met >= 15:
             starp = z_met - u_met
             pct = float(np.mean([v < starp for v in h_met])) if h_met else 0.9
+            biez = sum(v >= starp for v in h_met) / nh if h_met else 50
             rindas = []
             for p_ in (1, 2, 3):
                 hk, ak = getattr(r, f"home_sog_p{p_}"), getattr(r, f"away_sog_p{p_}")
@@ -1933,13 +1942,14 @@ def f_speles(D):
                 rindas.append((f"P{p_}", f"shots {int(us)}–{int(zs)}", f"goals {int(ug)}–{int(zg)}"))
             out.append({
                 "atsl": f"metieni:{r.game_id}", "garums": starp, "aktiva": False, "datums": r.datums,
-                "retums": float(np.clip((pct - 0.9) * 10, 0.3, 1)), "slav": 0.6, "sv": _sv(D, r.datums),
+                "retums": _retums_no_biezuma(biez), "slav": 0.6, "sv": _sv(D, r.datums),
                 "teksts": f"{kom_nos(uzv)} uzvarēja {rez}, lai gan metieni {u_met}–{z_met} ({dat(r.datums)})",
                 "hook": [f"OUTSHOT {z_met}–{u_met}", "AND WON"], "v1": KOMANDAS.get(uzv, ("", uzv))[0], "vards": kom_nos(uzv), "badge": uzv,
                 "skaitlis": f"{u_met} vs {z_met}", "skaitlis_apaksa": f"shots, but won {rez}",
                 "saraksts_virs": "SHOTS & GOALS BY PERIOD", "rindas": rindas,
                 "kopsavilkums": f"FINAL: {uzv} {rez} {zaud}",
-                "k_skaitlis": f"−{starp}", "konteksts": [f"BIGGER SHOT GAP THAN {pct * 100:.0f}% OF WINS SINCE 2023", "Goalies win games"],
+                "k_skaitlis": f"−{starp}", "konteksts": [f"BIGGER SHOT GAP THAN {pct * 100:.0f}% OF WINS SINCE 2023",
+                                                          f"Happens about {biez:.0f} times a season" if biez >= 1 else "Happens less than once a season"],
                 "nakamais": None,
                 "runa": [f"The {kom_nos(uzv)} were outshot {z_met} to {u_met}, and still beat the {kom_nos(zaud)}.",
                          f"Final score: {i.get('gf')} to {i.get('ga')}.",
@@ -1983,6 +1993,10 @@ def f_tiesnesi(D):
     }]
 
 
+RETUMS_MIN = 0.45          # zem šī – notiek bieži (vairāk nekā ~20× sezonā vai īsa sērija) → "(bieži)" un saraksta beigās
+SPELU_KOMANDU_FAKTI = ("kom_uzv", "kom_zaud", "comeback", "periods", "atri", "metieni")
+
+
 def fakti_kandidati(D, mape_video):
     kand = []
     for f in (f_serijas, f_komandu_serijas, f_lielas_speles, f_vartsargi, f_speles):     # tiesneši – atsevišķs mēneša video
@@ -1998,13 +2012,21 @@ def fakti_kandidati(D, mape_video):
             vest = json.load(f)
     robeza = (pd.Timestamp.now() - timedelta(days=28)).strftime("%Y-%m-%d")
     for c in kand:
-        c["vert"] = 100 * (0.5 * min(1, c["retums"]) + 0.3 * min(1, c["slav"]) + 0.2 * c["sv"]) + (8 if c["aktiva"] else 0)
+        # komandu / spēļu faktiem "slavenība" ne lielāka par 0,5 (citādi bieži notikumi izlec augšā)
+        slav = min(c["slav"], 0.5) if c["atsl"].split(":")[0] in SPELU_KOMANDU_FAKTI else c["slav"]
+        r_ = min(1, c["retums"])
+        c["biezi"] = r_ < RETUMS_MIN
+        # retums svarīgāks: 55 % retums + 25 % slavenība + 20 % svaigums; aktīva sērija +8 (ja nav ikdienišķa)
+        c["vert"] = 100 * (0.55 * r_ + 0.25 * min(1, slav) + 0.2 * c["sv"]) + (8 if c["aktiva"] and not c["biezi"] else 0)
+        if c["biezi"]:
+            c["vert"] -= 25                                           # notiek bieži – nav video vērts
+            c["teksts"] += "  (bieži)"
         for v in vest:
             if v["atsl"] == c["atsl"] and v["datums"] >= robeza and c["garums"] < v["garums"] + 3:
                 c["vert"] -= 40
                 c["teksts"] += "  (jau bija)"
         c["vert"] = round(float(np.clip(c["vert"], 0, 100)))
-    kand.sort(key=lambda c: -c["vert"])
+    kand.sort(key=lambda c: (c["biezi"], -c["vert"]))                # ikdienišķie vienmēr saraksta beigās
     # dažādībai: no katras kategorijas (atsl sākums) ne vairāk kā 3 kandidāti
     skaits, out = {}, []
     for c in kand:
@@ -2019,7 +2041,7 @@ def fakti_saraksts(kand, n=12):
     print(f"\n {'#':>2}  VĒRT.  FAKTS")
     for i, c in enumerate(kand[:n], 1):
         print(f" {i:>2}   {c['vert']:>3}   {c['teksts']}" + ("  ▶ AKTĪVA" if c["aktiva"] else ""))
-    print("\nVideo: python shorts.py --veids fakts --fakts <numurs> --kanals @tavskanals   (vai --fakts auto)")
+    print(f"\nVideo: python {skripts()} --veids fakts --fakts <numurs> --kanals @tavskanals   (vai --fakts auto)")
 
 
 def veids_fakts(m, a):
@@ -2487,7 +2509,7 @@ def gaidosie_atskati(mape):
             stav = f"var taisīt – ieteicams {ieteic}"
         else:
             stav = f"JĀTAISA (ieteicamais datums {ieteic} pagājis)"
-        rindas.append(f"  {d:<34} {stav}\n      python shorts.py --atskats {os.path.relpath(os.path.join(mape, d), BASE)}")
+        rindas.append(f"  {d:<34} {stav}\n      python {skripts()} --atskats {os.path.relpath(os.path.join(mape, d), BASE)}")
     print("Gaidošie atskati:" if rindas else "Gaidošu atskatu nav.")
     print("\n".join(rindas))
     return 0
@@ -2605,7 +2627,7 @@ def main():
                       f, ensure_ascii=False, indent=1)
 
     # INFO.txt: kad un kā ģenerēts, kādi dati, vai un kad jātaisa atskats
-    komanda = "python shorts.py " + " ".join(f'"{x}"' if " " in x else x for x in sys.argv[1:])
+    komanda = f"python {skripts()} " + " ".join(f'"{x}"' if " " in x else x for x in sys.argv[1:])
     info = [f"VEIDS:        {veids_txt}",
             f"ĢENERĒTS:     {tagad:%Y-%m-%d %H:%M} ({['pirmdiena', 'otrdiena', 'trešdiena', 'ceturtdiena', 'piektdiena', 'sestdiena', 'svētdiena'][tagad.weekday()]})",
             f"DATI:         {s['periods']}",
@@ -2623,7 +2645,7 @@ def main():
         info += ["ATSKATS:      vajadzīgs",
                  f"  agrākais:    {agrakais:%Y-%m-%d} ({agr_txt})",
                  f"  ieteicamais: {ieteicamais:%Y-%m-%d} ({kad_txt})",
-                 f"  komanda:     python shorts.py --atskats {os.path.relpath(mape, BASE)} --kanals {a.kanals or '@tavskanals'}"]
+                 f"  komanda:     python {skripts()} --atskats {os.path.relpath(mape, BASE)} --kanals {a.kanals or '@tavskanals'}"]
     elif a.atskats:
         orig = os.path.dirname(os.path.abspath(a.atskats))
         info += [f"ATSKATS PAR:  {os.path.relpath(orig, BASE)}", "Šis ir atskats – jauns atskats nav vajadzīgs."]
