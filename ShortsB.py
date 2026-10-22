@@ -82,6 +82,15 @@ def spilgta(kr, v_min=0.84):
     return tuple(int(round(x * 255)) for x in colorsys.hsv_to_rgb(h, s_, v))
 
 
+KARTE_KR = (15, 18, 40)          # kartīšu fons – PILNĪGI necaurspīdīgs: caurspīdīgā kartītē kustīgais fons
+                                 # spīdēja cauri un video saspiešana to rādīja kā mirgojošus krāsainus kvadrātiņus
+
+
+def jaukt(a, b, k):
+    """Krāsa a un b sajaukumā (k = a daļa) – necaurspīdīga kontūra caurspīdīgas vietā."""
+    return tuple(int(round(x * k + y * (1 - k))) for x, y in zip(a[:3], b[:3]))
+
+
 def komandas_josla(d, x0, y0, x1, kom, h=22):
     """Viena josla kartītes augšā: kreisā puse – komandas primārā krāsa, labā – sekundārā (50/50)."""
     p = S.kkrasa(kom)
@@ -489,7 +498,7 @@ def aina_fakts_saraksts(t, c):
     rindas = c["rindas"][-9:]
     n = len(rindas)
     rh, y0 = 112, 400
-    d.rounded_rectangle([x0, y0, x1, y0 + 40 + rh * max(1, n)], radius=40, fill=(15, 18, 42, 225), outline=(255, 255, 255, 40), width=3)
+    d.rounded_rectangle([x0, y0, x1, y0 + 40 + rh * max(1, n)], radius=40, fill=KARTE_KR, outline=(52, 58, 84), width=3)
     solis = 0.2
     reit = _ir_reitings(rindas)                                       # reitings → atklāj no apakšas, #1 izgaismo
     if not reit:
@@ -543,7 +552,7 @@ def aina_karte(t, c):
     f_ap, rr_ap = S.rindas_ietilpinat(d, c["apaksa"], "semi", 40, x1 - x0 - 100, 2)
     y_ap = y_sk + bb[3] + 30
     y1 = max(1640, y_ap + len(rr_ap) * int(f_ap.size * 1.25) + 36)
-    d.rounded_rectangle([x0, y0, x1, y1], radius=48, fill=(15, 18, 40, 235), outline=S.ar_alfa(prim, 150), width=3)
+    d.rounded_rectangle([x0, y0, x1, y1], radius=48, fill=KARTE_KR, outline=jaukt(prim, KARTE_KR, 0.6), width=3)
     komandas_josla(d, x0 + 44, y0 + 26, x1 - 44, c.get("badge"), h=12)
     d.text((x0 + 50, y0 + 60), f"#{c['nr']}", font=S.fonts("black", 92), fill=akc)
     fb = S.fonts("bold", 48)
@@ -611,7 +620,7 @@ def aina_fantasy(t, c):
     prim, _ = kom_krasas(c.get("badge"))
     S.pill(d, 0, 250, c["augsa"], S.ietilpinat(d, c["augsa"], "semi", 40, S.W - 160), akc, S.uz_fona(akc), center=True)
     x0, y0, x1, y1 = 70, 380, S.W - 70, 1680
-    d.rounded_rectangle([x0, y0, x1, y1], radius=48, fill=(15, 18, 40, 235), outline=S.ar_alfa(prim, 110), width=3)
+    d.rounded_rectangle([x0, y0, x1, y1], radius=48, fill=KARTE_KR, outline=jaukt(prim, KARTE_KR, 0.45), width=3)
     komandas_josla(d, x0 + 44, y0 + 26, x1 - 44, c.get("badge"), h=12)
     d.text((x0 + 50, y0 + 60), f"#{c['nr']}", font=S.fonts("black", 92), fill=akc)
     fb = S.fonts("bold", 48)
@@ -661,7 +670,7 @@ def aina_outro(t, s, kanals):
         d = ImageDraw.Draw(im)
         x0, y0, x1, y1 = 120, 1440, S.W - 120, 1600
         dy = (1 - k) * 80
-        d.rounded_rectangle([x0, y0 + dy, x1, y1 + dy], radius=36, fill=(255, 255, 255, 235))
+        d.rounded_rectangle([x0, y0 + dy, x1, y1 + dy], radius=36, fill=(245, 247, 250))
         S.teksts_c(d, y0 + 30 + dy, "COMMENT BELOW", S.fonts("black", 54), S.MELNS)
         S.teksts_c(d, y0 + 98 + dy, "What should we cover next?", S.fonts("semi", 36), (71, 85, 105))
     return im
