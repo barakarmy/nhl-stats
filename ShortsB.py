@@ -356,7 +356,7 @@ def sfx_notikumi(ainas):
         elif tips == "fakts_saraksts":
             rindas = c["rindas"][-9:]
             n = len(rindas)
-            reit = _ir_reitings(rindas)
+            reit = _ir_reitings(rindas) and not c.get("nav_reitings")
             solis = 0.2 if reit else 0.16
             ev += [(t0 + 0.2 + solis * j, "tick", 0.7) for j in range(n)]
             if reit and n > 1:
@@ -584,7 +584,7 @@ def pievienot_aki(s, veids):
             sk_ = hero["liels"]
             ap = "goals above expected" if laim_varonis else "goals below expected"
             runa0 = f"{int(G)} {vv.lower()}. He should have {xG:.1f}. Who is it?"
-            beigas = (f"Luck runs out. Expected goals don't. We'll check back in two weeks. "
+            beigas = (f"Luck runs out. Expected goals don't. {S.atskata_teksts()} "
                       f"Follow, and remember: {int(G)} {vv.lower()}.")
         elif veids == "vartsargi":
             GA, xGA = hero["bars"][0][1], hero["bars"][1][1]
@@ -593,7 +593,7 @@ def pievienot_aki(s, veids):
             sk_, ap = hero["liels"], f"{int(GA)} goals allowed on {xGA:.1f} expected"
             runa0 = (f"This goalie is stealing games: {gs:.1f} goals saved above expected. Who is it?" if laim_varonis
                      else f"This goalie is costing his team: {gs:.1f} goals worse than expected. Who is it?")
-            beigas = ("Hot streaks cool, cold streaks thaw. We'll check back in two weeks. Follow, and remember: this goalie is "
+            beigas = (f"Hot streaks cool, cold streaks thaw. {S.atskata_teksts()} Follow, and remember: this goalie is "
                       + ("stealing games." if laim_varonis else "costing games."))
         else:
             import re as _re
@@ -609,7 +609,7 @@ def pievienot_aki(s, veids):
                 runa0 = (f"This team is {m_.group(1)} and {m_.group(2)}. But they're better than that. Who is it?" if m_
                          else "This team is better than its record. Who is it?")
                 beig_ = "this team is better than its record."
-            beigas = f"PDO always comes back to one hundred. We'll check back in two weeks. Follow, and remember: {beig_}"
+            beigas = f"PDO always comes back to one hundred. {S.atskata_teksts()} Follow, and remember: {beig_}"
         vards = (hero.get("v2") or "").upper()
         s["intro"] = {"aki": True, "tag": tag, "rindas": rindas, "ilgums": 2.4,
                       "kartite": {"nr": "#1", "akc": hero["akc"], "badge": hero.get("badge"), "vards": vards,
@@ -624,10 +624,12 @@ def pievienot_aki(s, veids):
         ok, _, kopa = rez.partition("/")
         datums = s["intro"]["apaksa"][0].replace("Our list from ", "")
         trapi = ok.isdigit() and kopa.isdigit() and int(kopa) and int(ok) / int(kopa) >= 0.5
+        neskait = sum(1 for c_ in k if c_.get("akc") == S.NEITRALS)
         s["intro"] = {"aki": True, "tag": s["intro"]["tag"], "ilgums": 2.4,
                       "rindas": [(f"ON {datums.upper()}", S.BALTS), ("WE MADE A CALL.", S.DZELTENS)],
                       "skaitlis": f"{rez}", "skaitlis_kr": S.ZALS if trapi else S.SARKANS,
-                      "skaitlis_apaksa": "calls that held up", "uzlime": "SEE EVERY CALL"}
+                      "skaitlis_apaksa": "calls that held up" + (f"  ·  {neskait} too early to judge" if neskait else ""),
+                      "uzlime": "SEE EVERY CALL"}
         r[0] = (f"On {datums} we made a call. We got {ok} out of {kopa} right. Here's every one."
                 if rez else r[0])
         r[-1] = r[-1].replace("Follow for weekly NHL stats.", "Follow for the next call. Remember:")
@@ -645,7 +647,7 @@ def pievienot_aki(s, veids):
             c0["hook"] = ["THIS REF CALLS", f"+{pct}% MORE", "PENALTIES"]
             c0["v1"], c0["vards"] = f"{men} REFEREE REPORT", "WHO IS IT?"
             r[0] = f"One NHL referee calls {pct} percent more penalties than average. Who is it? {men.capitalize()} referee report."
-            r[-1] = "Is your team's ref on this list? Follow for the monthly referee report. Remember:"
+            r[-1] = r[-1].rstrip() + " Remember:"
     return s
 
 
@@ -968,7 +970,7 @@ def aina_fakts_saraksts(t, c):
     rh, y0 = 112, 400
     d.rounded_rectangle([x0, y0, x1, y0 + 40 + rh * max(1, n)], radius=40, fill=KARTE_KR, outline=(52, 58, 84), width=3)
     solis = 0.2
-    reit = _ir_reitings(rindas)                                       # reitings → atklāj no apakšas, #1 izgaismo
+    reit = _ir_reitings(rindas) and not c.get("nav_reitings")        # reitings → atklāj no apakšas, #1 izgaismo
     if not reit:
         solis = 0.16
     for i, (a_, b_, c_) in enumerate(rindas):
