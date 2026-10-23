@@ -126,24 +126,29 @@ def komandas_josla(d, x0, y0, x1, kom, h=22):
 
 
 def verdikts(d, t, t0, teksts, kr, apaksa, y, x0, x1):
-    """Verdikts kā krāsaina "pill" poga + paskaidrojums zem tās (nepārklājas, ietilpst kartītē)."""
+    """Verdikts kā slīpa krāsaina josla (THE FINAL VERDICT stilā) + paskaidrojums zem tās (ietilpst kartītē)."""
     k = S.ease((t - t0) / 0.35)
     if k <= 0:
         return
     kb = ease_back((t - t0) / 0.45)
-    f = S.fonts("black", int(78 * (0.85 + 0.15 * kb)))
+    f = S.fonts("black", int(66 * (0.85 + 0.15 * kb)))
     bb = d.textbbox((0, 0), teksts, font=f)
-    w, h = bb[2] - bb[0] + 110, 112
+    h, sl = 92, 30
+    w = bb[2] - bb[0] + 2 * sl + 70
     px = (S.W - w) / 2
-    d.rounded_rectangle([px, y, px + w, y + h], radius=h / 2, fill=S.ar_alfa(kr, 255 * k))
-    d.text((px + 55 - bb[0], y + (h - (bb[3] - bb[1])) / 2 - bb[1]), teksts, font=f, fill=S.ar_alfa(S.uz_fona(kr), 255 * k))
+    d.polygon([(px + sl, y), (px + w, y), (px + w - sl, y + h), (px, y + h)], fill=S.ar_alfa(kr, 255 * k))
+    for i_ in range(2):                                               # "//" svītras abās pusēs
+        for xx in (px - 38 - i_ * 24, px + w + 12 + i_ * 24):
+            d.polygon([(xx + 18, y + 14), (xx + 28, y + 14), (xx + 10, y + h - 14), (xx, y + h - 14)],
+                      fill=S.ar_alfa(kr, 200 * k))
+    d.text((px + sl + 35 - bb[0], y + (h - (bb[3] - bb[1])) / 2 - bb[1]), teksts, font=f, fill=S.ar_alfa(S.uz_fona(kr), 255 * k))
     k2 = S.ease((t - t0 - 0.25) / 0.35)
     if k2 > 0 and apaksa:
-        fa, rr = S.rindas_ietilpinat(d, apaksa, "semi", 40, x1 - x0 - 100, 2)
-        yy = y + h + 22
+        fa, rr = S.rindas_ietilpinat(d, apaksa, "semi", 36, x1 - x0 - 100, 2)
+        yy = y + h + 20
         for r in rr:
             S.teksts_c(d, yy, r, fa, S.ar_alfa(S.BALTS, 225 * k2))
-            yy += int(fa.size * 1.25)
+            yy += int(fa.size * 1.22)
 
 
 def kom_krasas(kom):
@@ -1265,7 +1270,7 @@ def aina_fantasy(t, c):
             fd, fo = S.fonts("semi", 28), S.ietilpinat(d, o, "black", 44, pw - 20)
             d.text((px + (pw - S.platums(d, dn, fd)) / 2, yg + 64), dn, font=fd, fill=S.ar_alfa(S.BALTS, 230 * k))
             d.text((px + (pw - S.platums(d, o, fo)) / 2, yg + 102), o, font=fo, fill=S.ar_alfa(S.BALTS, 255 * k))
-    verdikts(d, t, 1.3, str(c["liels"]), akc, c.get("apaksa", ""), y0 + 1065, x0, x1)
+    verdikts(d, t, 1.3, str(c["liels"]), akc, c.get("apaksa", ""), y0 + 1050, x0, x1)
     return im
 
 
