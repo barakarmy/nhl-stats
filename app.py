@@ -949,6 +949,24 @@ html.tumss .pk-d summary { color: var(--t-zils); }
 .pc-s { margin-top: .45rem; font-size: .74rem; opacity: .65; }
 .pr-w { color: #15803d; font-weight: 800; } .pr-l { color: #b91c1c; font-weight: 800; } .pr-p { opacity: .7; font-weight: 700; }
 .pc-spark { width: 100%; height: 70px; display: block; margin: .2rem 0 .6rem; }
+/* bankrola līkne: uzejot ar peli (vai pieskaroties) – informācija par konkrēto likmi */
+.bk { position: relative; height: 130px; margin: .4rem 0 .8rem; padding-left: 2.6rem; }
+.bk-g { position: relative; height: 100%; }
+.bk-g svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.bk-y { position: absolute; left: 0; font-size: .68rem; opacity: .55; transform: translateY(-50%); font-variant-numeric: tabular-nums; }
+.bk-s { position: absolute; top: 0; bottom: 0; cursor: crosshair; outline: none; z-index: 2; }
+.bk-s > i { position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1px dashed rgba(128,128,128,.6); display: none; }
+.bk-s > b { position: absolute; left: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--bk-k);
+  border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25); display: none; }
+.bk-t { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 40; width: max-content; max-width: 17rem;
+  padding: .45rem .7rem; background: #ffffff; color: #31333f; border: 1px solid rgba(49,51,63,.12); border-radius: .5rem;
+  box-shadow: 0 .25rem 1rem rgba(0,0,0,.18); font-size: .78rem; line-height: 1.45; text-align: left; white-space: nowrap; pointer-events: none; }
+.bk-t.pa-k { left: 0; transform: none; } .bk-t.pa-l { left: auto; right: 0; transform: none; }
+.bk-t .bk-h { font-weight: 700; opacity: .65; font-size: .7rem; letter-spacing: .03em; }
+.bk-t .bk-b { font-weight: 800; font-size: .95rem; }
+.bk-s:hover > i, .bk-s:hover > b, .bk-s:hover > .bk-t, .bk-s:focus > i, .bk-s:focus > b, .bk-s:focus > .bk-t { display: block; }
+html.tumss .bk-t { background: #0e1626; color: var(--t-teksts); border-color: rgba(255,255,255,.14); }
+html.tumss .bk-s > b { border-color: #1a2433; }
 html.tumss .pc-ev, html.tumss .pr-w { color: #4ade80; } html.tumss .pr-l { color: #f87171; }
 html.tumss .pc-r div { background: rgba(255,255,255,.06); }
 @media (max-width: 640px) { .kf-r { gap: .35rem; flex-wrap: nowrap; } .kf-s { padding: .3rem .5rem; gap: .25rem; } .kf-s b { font-size: .95rem; } .kf-p { display: none; } }
@@ -2045,21 +2063,56 @@ def picks_vesture_dati(versija):
 
 
 def _bankrola_svg(a):
-    """Virtuālā bankrola līkne (Kelly likmes) pa izšķirtajām likmēm laika secībā."""
+    """Virtuālā bankrola līkne (Kelly likmes) pa izšķirtajām likmēm laika secībā.
+    Uzejot ar peli (telefonā – pieskaroties) uz jebkuru vietu līknē, redzama attiecīgā likme un bankrols pēc tās."""
     x = a[a["rezultats"].isin(["W", "L", "P"])].sort_values(["sakums_utc", "game_id"])
     if len(x) < 2:
         return ""
-    y = picks.BANKROLLS + x["pelna_bank"].cumsum().to_numpy()
-    y = np.concatenate([[picks.BANKROLLS], y])
-    lo, hi = min(y.min(), picks.BANKROLLS), max(y.max(), picks.BANKROLLS)
-    rng = (hi - lo) or 1.0
-    w, h = 600, 70
-    pts = " ".join(f"{i / (len(y) - 1) * w:.1f},{h - 4 - (v - lo) / rng * (h - 8):.1f}" for i, v in enumerate(y))
-    y0 = h - 4 - (picks.BANKROLLS - lo) / rng * (h - 8)
-    kr = "#16a34a" if y[-1] >= picks.BANKROLLS else "#dc2626"
-    return (f'<svg class="pc-spark" viewBox="0 0 {w} {h}" preserveAspectRatio="none" role="img" aria-label="Bankrola līkne">'
-            f'<line x1="0" y1="{y0:.1f}" x2="{w}" y2="{y0:.1f}" stroke="currentColor" stroke-opacity=".25" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>'
-            f'<polyline points="{pts}" fill="none" stroke="{kr}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>')
+    e = _html.escape
+    B = picks.BANKROLLS
+    y = np.concatenate([[B], B + x["pelna_bank"].cumsum().to_numpy()])
+    n = len(y)
+    lo, hi = min(y.min(), B), max(y.max(), B)
+    pad = (hi - lo) * 0.08 or 1.0
+    lo, hi = lo - pad, hi + pad
+    w, h = 600, 130
+    ypc = lambda v: (hi - v) / (hi - lo) * 100                                              # noqa: E731
+    xs = [i / (n - 1) * w for i in range(n)]
+    pts = " ".join(f"{xs[i]:.1f},{ypc(v) * h / 100:.1f}" for i, v in enumerate(y))
+    y0 = ypc(B) * h / 100
+    kr = "#16a34a" if y[-1] >= B else "#dc2626"
+    svg = (f'<svg viewBox="0 0 {w} {h}" preserveAspectRatio="none" role="img" aria-label="Bankrola līkne">'
+           f'<polygon points="0,{y0:.1f} {pts} {w},{y0:.1f}" fill="{kr}" fill-opacity=".08"/>'
+           f'<line x1="0" y1="{y0:.1f}" x2="{w}" y2="{y0:.1f}" stroke="currentColor" stroke-opacity=".3" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>'
+           f'<polyline points="{pts}" fill="none" stroke="{kr}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>')
+    # ass: maksimums, sākuma bankrols, minimums (bez pārklāšanās)
+    ass = [(y.max(), f"{y.max():.0f}"), (B, f"{B:.0f}"), (y.min(), f"{y.min():.0f}")]
+    ylab, bij = "", []
+    for v, t in ass:
+        if all(abs(ypc(v) - p_) > 12 for p_ in bij):
+            bij.append(ypc(v))
+            ylab += f'<span class="bk-y" style="top:{ypc(v):.1f}%">{t}</span>'
+    sak = pd.to_datetime(x["sakums_utc"], utc=True).dt.tz_convert(da.LV_TZ).to_list()
+    rk = {"W": ("#16a34a", "Uzvara"), "L": ("#dc2626", "Zaudējums"), "P": ("#64748b", "Atgriezta")}
+    solis = 100 / (n - 1)
+    joslas = []
+    for i in range(n):
+        if i == 0:
+            saturs = f'<div class="bk-h">SĀKUMS</div><div class="bk-b">Bankrols {B:.0f}</div>'
+        else:
+            r = x.iloc[i - 1]
+            k_, rt = rk.get(r["rezultats"], ("#64748b", ""))
+            gala = f' · {e(str(r["gala"]))}' if isinstance(r.get("gala"), str) and r["gala"] else ""
+            saturs = (f'<div class="bk-h">#{i} · {sak[i - 1]:%d.%m %H:%M}</div>'
+                      f'<div>{e(str(r["viesi"]))} @ {e(str(r["majas"]))}</div>'
+                      f'<div><b>{e(str(r["izvele"]))}</b> @ {float(r["koef"]):.2f} · likme {float(r["likme_pct"]) * 100:.1f}%</div>'
+                      f'<div><b style="color:{k_}">{rt}</b>{gala} · {float(r["pelna_bank"]):+.1f} vien.</div>'
+                      f'<div class="bk-b">Bankrols {y[i]:.0f} <small style="opacity:.6;font-weight:600">({y[i] - B:+.0f})</small></div>')
+        poz = "pa-k" if i < n * 0.2 else "pa-l" if i > n * 0.8 else ""
+        kr_i = rk.get(x.iloc[i - 1]["rezultats"], (kr,))[0] if i else kr
+        joslas.append(f'<div class="bk-s" tabindex="0" style="left:{i * solis - solis / 2:.3f}%;width:{solis:.3f}%;--bk-k:{kr_i}">'
+                      f'<i></i><b style="top:{ypc(y[i]):.1f}%"></b><div class="bk-t {poz}">{saturs}</div></div>')
+    return f'<div class="bk">{ylab}<div class="bk-g">{svg}{"".join(joslas)}</div></div>'
 
 
 def picks_vesture():
