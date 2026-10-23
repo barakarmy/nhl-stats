@@ -256,78 +256,148 @@ def skripts():
 # ================================================================ frāzes balsij (dažādība)
 
 class Frazes:
-    """Nejauša frāze no saraksta: katrā video sava kārta, vienā video tā pati grupa neatkārtojas
-    (kamēr saraksts nav izsmelts). Katra ģenerācija – cita kombinācija."""
+    """Kontekstuāla frāžu izvēle.
+    Katra frāze = (teksts, tonis, tagi). Toņi: analytical / cheeky / dramatic / accountability.
+    Tagi: "=x" – frāze der TIKAI, ja situācijā ir x (piem. "=sv" – PDO galvenokārt no vārtsarga);
+          "x"  – frāze īpaši der situācijai x (piem. "maz" – maza izlase), bet var tikt izmantota arī citur.
+    Izvēle: neatkārto frāzi vienā video, izvairās no frāzēm, kas bija pēdējos video (video/frazes_vesture.json),
+    un nedod divreiz pēc kārtas vienu toni."""
+    vesture = set()          # frāzes no pēdējiem video (ielādē main)
+    jaunas = []              # šajā palaišanā izmantotās (main saglabā vēsturē)
+
     def __init__(self):
         import random
         self.rnd = random.Random()
-        self.rindas = {}
         self.izmantotas = set()
+        self.tonis = None
 
-    def __call__(self, grupa):
-        q = self.rindas.get(grupa)
-        if not q:
-            q = list(FRAZES[grupa])
-            self.rnd.shuffle(q)
-            self.rindas[grupa] = q
-        brivas = [x for x in q if x not in self.izmantotas]          # arī starp grupām – nekādu atkārtojumu video
-        x = brivas[-1] if brivas else q[-1]
-        q.remove(x)
-        self.izmantotas.add(x)
-        return x
+    def __call__(self, grupa, ctx=()):
+        ctx = set(ctx)
+        visas = FRAZES[grupa]
+        der = [f for f in visas if all(t[1:] in ctx for t in f[2] if t.startswith("="))] or list(visas)
 
+        def punkti(f):
+            p_ = self.rnd.random() * 2.5
+            if f[0] in self.izmantotas:
+                p_ -= 100                                             # nekad divreiz vienā video
+            if f[0] in Frazes.vesture:
+                p_ -= 6                                               # bija pēdējos video
+            if any(t.lstrip("=") in ctx for t in f[2]):
+                p_ += 3                                               # tieši par šo situāciju
+            if f[1] == self.tonis:
+                p_ -= 1.5                                             # cits tonis nekā iepriekšējai frāzei
+            return p_
+        x = max(der, key=punkti)
+        self.izmantotas.add(x[0])
+        self.tonis = x[1]
+        Frazes.jaunas.append(x[0])
+        return x[0]
+
+
+FRAZU_VESTURE = "frazes_vesture.json"
+
+
+def _fr(*rindas):
+    """("teksts", "tonis", "tagi atstarpēm") → [(teksts, tonis, (tagi,))]."""
+    return [(r[0], r[1], tuple(r[2].split()) if len(r) > 2 else ()) for r in rindas]
+
+
+_ATS_OK = _fr(("Called it.", "accountability"), ("Right on cue.", "cheeky"), ("The numbers held up.", "analytical"))
+_ATS_NE = _fr(("Not this time.", "accountability"), ("The model missed.", "accountability"), ("The story changed.", "dramatic"))
+_ATS_MAZ = _fr(("Too early to tell.", "analytical"), ("Small sample.", "analytical"), ("Check back later.", "accountability"))
 
 FRAZES = {
-    # xG video
-    "sp_laim": ["Expect a cooldown.", "That pace won't last.", "Regression is coming.",
-                "The shooting luck runs out soon.", "Sell high while you can."],
-    "sp_nelaim": ["He's due.", "The goals will come.", "Buy low.",
-                  "His luck is about to turn.", "Keep shooting like that and the goals will follow."],
-    "kom_laim": ["That's not sustainable.", "Expect a correction.", "The bounces are going their way.",
-                 "Luck is doing a lot of the work.", "That gap usually closes fast."],
-    "kom_nelaim": ["They're playing better than the scoreboard says.", "The results should catch up.",
-                   "Better days are coming.", "The bounces will even out.", "Don't sleep on this team."],
-    "va_labs": ["That's elite, but hard to sustain.", "He's stealing games right now.",
-                "Hot streaks like this usually cool off.", "Ride him while it lasts.", "That's a goalie carrying his team."],
-    "va_slikts": ["That should turn around.", "Cold streaks thaw.", "He's better than this.",
-                  "The saves will come.", "Expect a bounce back."],
-    # xG atskats
-    "maz": ["Too few games to judge.", "Not enough games yet.", "Too small a sample.",
-            "He barely played since.", "Not enough to call it."],
-    "sp_laim_ok": ["Cooled off.", "Called it.", "Regression hit.", "Back to earth.", "Right on cue."],
-    "sp_laim_ne": ["Still hot. Miss.", "Still rolling. Miss.", "He kept scoring. Miss.", "Not yet. Miss.",
-                   "Still beating the odds. Miss."],
-    "sp_nelaim_ok": ["The goals came.", "He broke through.", "Called it.", "There they are.", "It finally paid off."],
-    "sp_nelaim_ne": ["Still waiting. Miss.", "Still snakebitten. Miss.", "Not yet. Miss.", "Still dry. Miss.",
-                     "Still no luck. Miss."],
-    "kom_maz": ["Not enough games.", "Too few games to judge.", "Too small a sample.",
-                "Barely played since.", "Not enough to call it."],
-    "kom_laim_ok": ["Luck ran out.", "The bounces stopped.", "Called it.", "Back to normal.", "Reality caught up."],
-    "kom_laim_ne": ["Still lucky. Miss.", "The bounces kept coming. Miss.", "Not yet. Miss.", "Still riding it. Miss.",
-                    "The luck held. Miss."],
-    "kom_nelaim_ok": ["Better days came.", "The bounces evened out.", "Called it.", "They turned it around.",
-                      "The luck finally turned."],
-    "kom_nelaim_ne": ["Still unlucky. Miss.", "Still snakebitten. Miss.", "Not yet. Miss.", "Still waiting. Miss.",
-                      "No turnaround yet. Miss."],
-    "va_labs_ok": ["Came back to earth.", "The streak cooled.", "Called it.", "Back to normal.", "Regression hit."],
-    "va_labs_ne": ["Still stealing. Miss.", "Still a wall. Miss.", "Not yet. Miss.", "Still unbeatable. Miss.",
-                   "He kept it going. Miss."],
-    "va_slikts_ok": ["Bounced back.", "Turned it around.", "Called it.", "Much better since.", "Found his game."],
-    "va_slikts_ne": ["Still struggling. Miss.", "Still cold. Miss.", "Not yet. Miss.", "No bounce back yet. Miss.",
-                     "Still leaking goals. Miss."],
-    # fantasy
-    "f_add": ["Add him.", "Grab him now.", "Pick him up.", "He's worth a roster spot.", "Get him before your league does."],
-    "f_stream": ["Stream him.", "A great streaming option.", "Use him for the week.", "Ride the schedule with him.",
-                 "Plug him in for the week."],
-    "f_bench": ["Bench him this week.", "Sit him this week.", "Keep him on the bench.", "Not this week.",
-                "Give him a week off your lineup."],
-    "f_drop": ["Time to drop him.", "Cut him loose.", "You can let him go.", "Drop him for a hot pickup.", "Free up that spot."],
-    # fantasy atskats
-    "fa_hit": ["Hit.", "Called it.", "Nailed it.", "That worked.", "Good pickup."],
-    "fa_miss": ["Miss.", "Didn't work.", "Not this time.", "That one missed.", "No luck there."],
-    "fa_good": ["Good call.", "Right call.", "Called it.", "Smart move.", "That paid off."],
-    "fa_bad": ["Bad call.", "Wrong call.", "Missed that one.", "He proved us wrong.", "Not our best call."],
+    # ---- xG video: spēlētāji (maz = < 20 metieni; xg_aug = 3+ xG – stiprs process)
+    "sp_laim": _fr(("The finishing is running hot.", "analytical"),
+                   ("He's scoring more than the chances suggest.", "analytical"),
+                   ("Can he keep this pace?", "dramatic", "maz"),
+                   ("Regression risk: elevated.", "analytical"),
+                   ("Great results. Let's see the shot quality.", "cheeky", "maz"),
+                   ("Sell high?", "cheeky")),
+    "sp_nelaim": _fr(("The chances are there.", "analytical", "xg_aug"),
+                     ("The finishing hasn't followed.", "analytical"),
+                     ("Bad results. Promising process.", "cheeky", "=xg_aug"),
+                     ("A buy-low candidate?", "dramatic"),
+                     ("The shot quality is encouraging.", "analytical", "=xg_aug"),
+                     ("Don't judge the player by goals alone.", "cheeky")),
+    # ---- komandas (sh / sv – no kā galvenokārt nāk PDO novirze; xgd+ / xgd- – xG starpība; maz = < 6 spēles)
+    "kom_laim": _fr(("The bounces are going their way.", "cheeky"),
+                    ("They're finishing everything right now.", "analytical", "=sh"),
+                    ("Their goalie is doing a lot of the work.", "analytical", "=sv"),
+                    ("The scoreboard may be flattering them.", "cheeky", "=xgd-"),
+                    ("Can the hot streak hold?", "dramatic", "maz"),
+                    ("The results are running ahead of the process.", "analytical", "=xgd-"),
+                    ("Good team. Unsustainably good results?", "dramatic", "=xgd+")),
+    "kom_nelaim": _fr(("The scoreboard is telling a different story.", "dramatic"),
+                      ("The process looks better than the results.", "analytical", "xgd+"),
+                      ("They're creating more than they're getting.", "analytical", "=sh"),
+                      ("Don't confuse bad results with bad hockey.", "cheeky", "=xgd+"),
+                      ("The finishing hasn't caught up.", "analytical", "=sh"),
+                      ("The saves haven't been there.", "analytical", "=sv"),
+                      ("Worth watching before the turnaround.", "dramatic", "maz")),
+    # ---- vārtsargi (maz = < 5 spēles; xga_aug = komanda ielaiž daudz xG – aizsardzība nepalīdz)
+    "va_labs": _fr(("He's saving more than expected.", "analytical"),
+                   ("That's a serious hot streak.", "dramatic"),
+                   ("The numbers are elite right now.", "analytical"),
+                   ("Can he sustain this level?", "dramatic", "maz"),
+                   ("He's keeping them in games.", "cheeky", "xga_aug")),
+    "va_slikts": _fr(("The results look worse than the saves.", "analytical", "=xga_aug"),
+                     ("Below expected. But for how long?", "dramatic"),
+                     ("The defense matters, too.", "analytical", "=xga_aug"),
+                     ("Is this a slump or a warning sign?", "dramatic"),
+                     ("The next stretch will tell us more.", "accountability", "maz")),
+    # ---- xG atskats: pēc rezultāta (vispārīgās + konkrētās situācijas frāzes)
+    "maz": _ATS_MAZ,
+    "kom_maz": _ATS_MAZ,
+    "sp_laim_ok": _ATS_OK + _fr(("Back to earth.", "cheeky")),
+    "sp_laim_ne": _ATS_NE + _fr(("Still hot.", "dramatic"), ("The heater continues.", "cheeky"),
+                                ("Regression can wait.", "cheeky")),
+    "sp_nelaim_ok": _ATS_OK + _fr(("The goals came.", "dramatic")),
+    "sp_nelaim_ne": _ATS_NE + _fr(("Still snakebitten.", "cheeky"), ("The chances are there.", "analytical"),
+                                  ("No payoff yet.", "analytical")),
+    "kom_laim_ok": _ATS_OK + _fr(("The bounces evened out.", "cheeky")),
+    "kom_laim_ne": _ATS_NE + _fr(("Still riding the bounces.", "cheeky"), ("The luck held.", "dramatic")),
+    "kom_nelaim_ok": _ATS_OK + _fr(("The results caught up.", "analytical")),
+    "kom_nelaim_ne": _ATS_NE + _fr(("Still waiting on the bounces.", "cheeky"), ("No turnaround yet.", "analytical")),
+    "va_labs_ok": _ATS_OK + _fr(("Back to earth.", "cheeky")),
+    "va_labs_ne": _ATS_NE + _fr(("Still stealing games.", "dramatic"), ("The wall is still standing.", "cheeky")),
+    "va_slikts_ok": _ATS_OK + _fr(("Found his game.", "dramatic")),
+    "va_slikts_ne": _ATS_NE + _fr(("Still searching for saves.", "analytical"), ("No bounce back yet.", "analytical")),
+    # ---- fantasy (īsi – rīcība, ne filozofija; sched4 = 4 spēles nākamnedēļ)
+    "f_add": _fr(("Worth a pickup.", "analytical"), ("Get ahead of the rush.", "cheeky"),
+                 ("Add before the schedule turns.", "dramatic", "=sched4")),
+    "f_stream": _fr(("Good short-term play.", "analytical"), ("Ride the schedule.", "cheeky", "sched4"),
+                    ("A matchup play.", "analytical")),
+    "f_bench": _fr(("Sit him for now.", "analytical"), ("Better options this week.", "analytical"),
+                   ("Wait for a better spot.", "cheeky")),
+    "f_drop": _fr(("Time to move on?", "dramatic"), ("The roster spot matters.", "analytical"),
+                  ("There may be better options.", "analytical")),
+    # ---- fantasy atskats
+    "fa_hit": _fr(("Pickup paid off.", "analytical"), ("Good read.", "cheeky"), ("That worked.", "accountability")),
+    "fa_miss": _fr(("This one missed.", "accountability"), ("Not the result we wanted.", "accountability"),
+                   ("Back to the waiver wire.", "cheeky")),
+    "fa_good": _fr(("The process was right.", "analytical"), ("Good call. Good result.", "accountability")),
+    "fa_bad": _fr(("We got this wrong.", "accountability"), ("The numbers didn't deliver.", "analytical")),
 }
+
+# beigu kadra jautājums skatītājam (komentāru lodziņā) – pēc video veida
+JAUTAJUMI = {
+    "speletaji": ["BUY LOW OR STAY AWAY?", "SELL HIGH OR RIDE IT?", "WILL THIS HOLD FOR A MONTH?", "WHO'S THE REAL DEAL?"],
+    "komandas": ["CONTENDER OR MIRAGE?", "WILL THE BOUNCES LAST?", "WHICH TEAM TURNS IT AROUND?", "REAL OR LUCKY?"],
+    "vartsargi": ["REAL OR REGRESSION?", "SLUMP OR WARNING SIGN?", "WHO'S THE BEST GOALIE RIGHT NOW?", "WILL THE WALL HOLD?"],
+    "atskats": ["DID WE GET THIS ONE RIGHT?", "WHICH CALL SURPRISED YOU?", "WHO SHOULD WE FLAG NEXT?"],
+}
+
+
+def jautajums(veids):
+    import random
+    v = JAUTAJUMI.get(veids)
+    if not v:
+        return None
+    sv = [x for x in v if x not in Frazes.vesture] or v
+    x = random.choice(sv)
+    Frazes.jaunas.append(x)
+    return x
 
 
 # ================================================================ jauni video
@@ -348,7 +418,8 @@ def veids_speletaji(m, a):
         num = "" if pd.isna(r["numurs"]) else f"#{int(r['numurs'])}  ·  "
         sh = r["G"] / r["sog"] * 100 if r["sog"] else 0
         return {"nr": nr, "akc": ZALS if lucky else SARKANS,
-                "augsa": "LUCKY  ·  EXPECT A COOLDOWN" if lucky else "UNLUCKY  ·  DUE FOR GOALS",
+                "augsa": ("LUCKY  ·  " + ("SMALL SAMPLE" if r["sog"] < 20 else "REGRESSION RISK")) if lucky
+                         else ("UNLUCKY  ·  " + ("STRONG PROCESS" if r["xG"] >= 3 else ("SMALL SAMPLE" if r["sog"] < 20 else "DUE FOR GOALS"))),
                 "v1": v[0] if len(v) > 1 else "", "v2": v[-1], "badge": str(r["team"]), "bkr": kkrasa(r["team"]),
                 "info": f"{num}{poz}  ·  {int(r['sp'])} GP",
                 "bars": [("GOALS", r["G"], BALTS, "{:.0f}"), ("EXPECTED (xG)", r["xG"], ZILS, "{:.1f}")],
@@ -359,10 +430,12 @@ def veids_speletaji(m, a):
     runa = [f"Which NHL scorers are running on luck? Goals versus expected goals, {dat(no)} to {dat(lidz)}."]
     F = Frazes()
     for i, (_, r) in enumerate(laim.iterrows()):
-        runa.append(f"{r['vards']} has {int(r['G'])} goals on just {r['xG']:.1f} expected. {F('sp_laim')}")
+        runa.append(f"{r['vards']} has {int(r['G'])} goals on just {r['xG']:.1f} expected. "
+                    + F("sp_laim", ["maz"] if r["sog"] < 20 else []))
     for i, (_, r) in enumerate(nelaim.iterrows()):
         g_ = int(r["G"])
-        runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {r['xG']:.1f} expected. {F('sp_nelaim')}")
+        ctx = (["xg_aug"] if r["xG"] >= 3 else []) + (["maz"] if r["sog"] < 20 else [])
+        runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {r['xG']:.1f} expected. " + F("sp_nelaim", ctx))
     runa.append(f"Luck runs out. Expected goals don't. {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "team": r["team"], "G": sk(r["G"]), "xG": sk(r["xG"]), "sog": sk(r["sog"]), "sp": sk(r["sp"])}  # noqa: E731
     return {
@@ -371,7 +444,8 @@ def veids_speletaji(m, a):
                   "legenda": [("LUCKY  →  cooldown", ZALS, MELNS), ("UNLUCKY  →  due for goals", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [("LUCK RUNS OUT.", BALTS), ("xG DOESN'T.", DZELTENS)],
-                  "info": [f"Own xG model · {len(mm):,} unblocked shots".replace(",", " "), atskata_teksts(False)]},
+                  "info": [f"Own xG model · {len(mm):,} unblocked shots".replace(",", " "), atskata_teksts(False)],
+                  "komentars": jautajums("speletaji"), "komentars2": "Tell us in the comments"},
         "zimogs": zimogs_jauns(no, lidz, a.dienas), "runa": runa, "lidz": lidz, "periods": periods_txt(no, lidz),
         "thumb": {"tag": "NHL  ·  xG LUCK REPORT", "hook": ["RUNNING", "ON LUCK?"], "vards": str(laim.iloc[0]["vards"]).split(" ")[-1],
                   "badge": str(laim.iloc[0]["team"]), "skaitlis": minus(f"{laim.iloc[0]['G'] - laim.iloc[0]['xG']:+.1f}"), "kr": ZALS,
@@ -399,7 +473,8 @@ def veids_komandas(m, a):
         pils, nos, kr = KOMANDAS.get(kom, ("", kom, NEITRALS))
         w, l_, o, p = bil.get(kom, (0, 0, 0, 0))
         return {"nr": nr, "akc": ZALS if lucky else SARKANS,
-                "augsa": "RIDING LUCK  ·  EXPECT A DROP" if lucky else "UNLUCKY  ·  BETTER THAN RECORD",
+                "augsa": ("HIGH PDO  ·  " + ("GOOD TEAM, LUCKY TOO" if r["xGD"] >= 0 else "REGRESSION RISK")) if lucky
+                         else ("LOW PDO  ·  " + ("STRONG PROCESS" if r["xGD"] >= 0 else "BETTER THAN RECORD")),
                 "v1": pils, "v2": nos, "badge": kom, "bkr": kr, "info": f"Season record {w}-{l_}-{o}  ·  {p} PTS",
                 "bars": [("GOAL DIFFERENCE", r["GD"], BALTS, "{:+.0f}"), ("EXPECTED (xG DIFF)", r["xGD"], ZILS, "{:+.1f}")],
                 "diverg": True, "liels": f"PDO {r['PDO']:.1f}",
@@ -409,10 +484,19 @@ def veids_komandas(m, a):
     zime = lambda v: ("plus " if v >= 0 else "minus ") + f"{abs(v):.0f}"   # noqa: E731
     runa = ["Which NHL teams are living on luck? PDO adds shooting and save percentage. Average is one hundred."]
     F = Frazes()
+    lg_sh = t["GF"].sum() / max(1, t["SF"].sum()) * 100
+    lg_sv = (1 - t["GA"].sum() / max(1, t["SA"].sum())) * 100
+
+    def kom_ctx(r, lucky):
+        d_sh, d_sv = r["sh"] - lg_sh, r["sv"] - lg_sv                 # no kā nāk PDO novirze
+        avots = ("sh" if d_sh >= d_sv else "sv") if lucky else ("sh" if d_sh <= d_sv else "sv")
+        return [avots, "xgd+" if r["xGD"] >= 0 else "xgd-"] + (["maz"] if r["GP"] < 6 else [])
     for k, r in laim.iterrows():
-        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, but expected only {zime(r['xGD'])}. {F('kom_laim')}")
+        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, but expected only {zime(r['xGD'])}. "
+                    + F("kom_laim", kom_ctx(r, True)))
     for k, r in nelaim.iterrows():
-        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, expected {zime(r['xGD'])}. {F('kom_nelaim')}")
+        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, expected {zime(r['xGD'])}. "
+                    + F("kom_nelaim", kom_ctx(r, False)))
     runa.append(f"PDO always comes back to one hundred. {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {k_: sk(r[k_]) for k_ in ("PDO", "sh", "sv", "GD", "xGD", "GP")}   # noqa: E731
     return {
@@ -421,7 +505,8 @@ def veids_komandas(m, a):
                   "legenda": [("HIGH PDO  →  expect a drop", ZALS, MELNS), ("LOW PDO  →  better days ahead", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [("PDO ALWAYS", BALTS), ("COMES BACK.", DZELTENS)],
-                  "info": ["All situations, empty-net goals excluded", atskata_teksts(False)]},
+                  "info": ["All situations, empty-net goals excluded", atskata_teksts(False)],
+                  "komentars": jautajums("komandas"), "komentars2": "Tell us in the comments"},
         "zimogs": zimogs_jauns(no, lidz, a.dienas), "runa": runa, "lidz": lidz, "periods": periods_txt(no, lidz),
         "thumb": {"tag": "NHL  ·  TEAM LUCK REPORT", "hook": ["LIVING", "ON LUCK?"], "vards": kom_nos(laim.index[0]),
                   "badge": laim.index[0], "skaitlis": f"PDO {laim.iloc[0]['PDO']:.1f}", "kr": ZALS,
@@ -447,13 +532,17 @@ def veids_vartsargi(m, a):
     g = g[g["vards"].notna()]
     labie = g.sort_values("GSAx", ascending=False).head(a.top)
     sliktie = g.sort_values("GSAx").head(a.top)
+    xga_vid = g["xGA"].sum() / max(1, g["GP"].sum())                  # līgas vidējais xGA spēlē (šiem vārtsargiem)
+    va_ctx = lambda r: (["maz"] if r["GP"] < 5 else []) + (["xga_aug"] if r["xGA"] / r["GP"] >= xga_vid * 1.1 else [])  # noqa: E731
     no, lidz = mm["datums"].min(), mm["datums"].max()
 
     def karte(r, nr, labs):
         v = str(r["vards"]).split(" ", 1)
         num = "" if pd.isna(r["numurs"]) else f"#{int(r['numurs'])}  ·  "
         return {"nr": nr, "akc": ZALS if labs else SARKANS,
-                "augsa": "RED HOT  ·  STEALING GAMES" if labs else "ICE COLD  ·  COSTING GAMES",
+                "augsa": ("RED HOT  ·  " + ("SMALL SAMPLE" if r["GP"] < 5 else "SAVING ABOVE EXPECTED")) if labs
+                         else ("ICE COLD  ·  " + ("DEFENSE NOT HELPING" if r["xGA"] / r["GP"] >= xga_vid * 1.1
+                                                   else ("SMALL SAMPLE" if r["GP"] < 5 else "BELOW EXPECTED"))),
                 "v1": v[0] if len(v) > 1 else "", "v2": v[-1], "badge": str(r["kom"]), "bkr": kkrasa(r["kom"]),
                 "info": f"{num}Goalie  ·  {int(r['GP'])} GP",
                 "bars": [("GOALS ALLOWED", r["GA"], BALTS, "{:.0f}"), ("EXPECTED (xGA)", r["xGA"], ZILS, "{:.1f}")],
@@ -464,9 +553,9 @@ def veids_vartsargi(m, a):
     runa = ["Which NHL goalies are stealing games, and which are costing them? Goals saved above expected."]
     F = Frazes()
     for _, r in labie.iterrows():
-        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. {F('va_labs')}")
+        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. " + F("va_labs", va_ctx(r)))
     for _, r in sliktie.iterrows():
-        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. {F('va_slikts')}")
+        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. " + F("va_slikts", va_ctx(r)))
     runa.append(f"Hot streaks cool, cold streaks thaw. {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "kom": r["kom"], **{k_: sk(r[k_]) for k_ in ("GSAx", "GSAx_sp", "GA", "xGA", "SA", "sv", "GP")}}  # noqa: E731
     return {
@@ -475,7 +564,8 @@ def veids_vartsargi(m, a):
                   "legenda": [("+  saves more than expected", ZALS, MELNS), ("−  lets in more than expected", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [("SAVE % LIES.", BALTS), ("GSAx DOESN'T.", DZELTENS)],
-                  "info": ["GSAx = expected goals against − goals allowed", atskata_teksts(False)]},
+                  "info": ["GSAx = expected goals against − goals allowed", atskata_teksts(False)],
+                  "komentars": jautajums("vartsargi"), "komentars2": "Tell us in the comments"},
         "zimogs": zimogs_jauns(no, lidz, a.dienas), "runa": runa, "lidz": lidz, "periods": periods_txt(no, lidz),
         "thumb": {"tag": "NHL  ·  GOALIE REPORT", "hook": ["STEALING", "GAMES"], "vards": str(labie.iloc[0]["vards"]).split(" ")[-1],
                   "badge": str(labie.iloc[0]["kom"]), "skaitlis": minus(f"{labie.iloc[0]['GSAx']:+.1f}"), "kr": ZALS,
@@ -636,7 +726,8 @@ def atskats(fails, m, a):
                   "legenda": [("GREEN  =  prediction held", ZALS, MELNS), ("RED  =  prediction missed", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [(f"WENT {rez}.", BALTS), ("NO HIDING MISSES.", DZELTENS)],
-                  "info": [outro_info, f"{dat(no2)} – {dat(lidz2, True)}"]},
+                  "info": [outro_info, f"{dat(no2)} – {dat(lidz2, True)}"],
+                  "komentars": jautajums("atskats"), "komentars2": "Tell us in the comments"},
         "zimogs": zimogs, "runa": runa, "lidz": lidz2, "periods": f"flagged {dat(lidz0, True)}, results {dat(no2)} – {dat(lidz2, True)}",
         "thumb": {"tag": tag, "hook": ["DID xG", "CALL IT?"], "vards": {"players": "PLAYERS", "teams": "TEAMS", "goalies": "GOALIES"}[temats],
                   "badge": "", "skaitlis": f"{rez}", "kr": ZALS if vert_skaits and ok_skaits / vert_skaits >= 0.5 else SARKANS,
@@ -1125,7 +1216,7 @@ def veids_fantasy(m, a):
         ros = "" if not np.isfinite(r["rostered"]) else f" Rostered in only {r['rostered']:.0f} percent of leagues."
         runa.append(f"{r['vards']}, {kom_nos(r['team'])}. {int(r['P'])} points in his last {int(r['GP'])} games, "
                     f"{r['SOG_gp']:.1f} shots a game, and {int(r['sp_nak'])} games next week.{ros} "
-                    + F("f_stream" if veids == "STREAM" else "f_add"))
+                    + F("f_stream" if veids == "STREAM" else "f_add", ["sched4"] if r["sp_nak"] >= 4 else []))
     for nr, (pid, r) in enumerate(drop.iterrows(), 1):
         veids = drop_veids[pid]
         kartes.append(karte(nr, r, veids))
@@ -1408,7 +1499,7 @@ def atskats_fantasy(j, m, a):
             })
             runa.append((f"{r['vards']}: " if grupa == "add" else f"Our {r['veids'].lower()} call, {r['vards']}: ")
                         + f"{G} goal{'' if G == 1 else 's'}, {A} assist{'' if A == 1 else 's'}, {P} point{'' if P == 1 else 's'} in {GP} games. "
-                        + {"HIT": F("fa_hit"), "MISS": F("fa_miss"), "DIDN'T PLAY": "He didn't play. Miss.",
+                        + {"HIT": F("fa_hit"), "MISS": F("fa_miss"), "DIDN'T PLAY": "He didn't play. That one counts as a miss.",
                            "GOOD CALL": F("fa_good"), "BAD CALL": F("fa_bad"), "EVEN": "Even."}[verd])
             saraksts.append(f"{grupa.upper()} {r['vards']} ({r['team']}): {GP} GP, {G}G {A}A, {P} P, {SOG} SOG → {verd}")
     if not kartes:
@@ -1429,7 +1520,8 @@ def atskats_fantasy(j, m, a):
         "kartes": kartes,
         "outro": {"rindas": [(f"LAST WEEK: {trap}/{kopa}", BALTS), (f"SEASON: {H}/{T} ({H / max(T, 1) * 100:.0f}%)", DZELTENS)],
                   "info": ([f"{trap} right · {kopa - trap} wrong · {vien} even (not counted)"] if vien else [f"{trap} right · {kopa - trap} wrong"])
-                          + ["Typical = median points in the same rostered % range"]},
+                          + ["Typical = median points in the same rostered % range"],
+                  "komentars": jautajums("atskats"), "komentars2": "Tell us in the comments"},
         "zimogs": f"WEEK OF {dat(no).upper()} – {dat(lidz).upper()}  ·  RESULTS", "runa": runa, "lidz": lidz,
         "periods": f"week of {dat(no)} – {dat(lidz, True)}",
         "virsraksts": f"Our fantasy hockey picks went {trap}/{kopa} last week – full results 🏒",
@@ -2778,6 +2870,13 @@ def main():
         print(f"Nav faila {a.atskats}")
         return 1
     m = ielasit(a.lidz)
+    fv_p = os.path.join(a.mape, FRAZU_VESTURE)                       # frāzes no pēdējiem 3 video – neatkārtot
+    try:
+        fv = json.load(open(fv_p, encoding="utf-8")) if os.path.exists(fv_p) else []
+    except Exception:                                                 # noqa: BLE001
+        fv = []
+    Frazes.vesture = {x for v in fv[-3:] for x in v.get("frazes", [])}
+    Frazes.jaunas = []
     if a.atskats:
         s = atskats(a.atskats, m, a)
         with open(a.atskats, encoding="utf-8") as f:
@@ -2805,6 +2904,13 @@ def main():
     os.makedirs(mape)
     izv = os.path.join(mape, (s.get("nosaukums") or f"xg_{a.veids}_{s['lidz']}") + ".mp4")
     kopa, ar_balsi = renderet(s, izv, a.kanals, None if a.bez_balss else a.balss)
+    try:
+        os.makedirs(a.mape, exist_ok=True)
+        fv.append({"datums": f"{tagad:%Y-%m-%d}", "veids": veids_txt, "frazes": Frazes.jaunas})
+        with open(fv_p, "w", encoding="utf-8") as f:
+            json.dump(fv[-20:], f, ensure_ascii=False, indent=1)
+    except Exception:                                                 # noqa: BLE001
+        pass
     if s.get("thumb"):
         zimet_thumbnail(s["thumb"], os.path.join(mape, "thumbnail.png"))
     if s.get("csv") is not None:
