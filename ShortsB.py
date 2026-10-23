@@ -410,12 +410,28 @@ def _swoosh():
 
 
 def _boom():
-    d = 1.0
-    n = int(SR * d)
+    """Hokeja "slap shot": nūjas sitiens pa ripu (ass klikšķis + koka rezonanse) + ripa atsitas pret bortu (atbalss).
+    (Nosaukums paliek "boom" – shorts_sfx\\boom.mp3 joprojām to aizstāj.)"""
+    rng = S.np.random.default_rng(7)
+    n = int(SR * 0.6)
     t = S.np.arange(n) / SR
-    f = 42 + 95 * S.np.exp(-t * 7)
-    y = S.np.sin(2 * S.np.pi * S.np.cumsum(f) / SR) * S.np.exp(-t * 4.2)
-    y[:int(SR * 0.012)] += S.np.random.default_rng(5).standard_normal(int(SR * 0.012)) * 0.35 * S.np.linspace(1, 0, int(SR * 0.012))
+    y = S.np.zeros(n)
+    # 1) sitiens: īss augstfrekvences troksnis (nūja + ripa)
+    m = int(SR * 0.03)
+    tr = rng.standard_normal(m)
+    tr = S.np.diff(S.np.concatenate([[0], tr]))                      # "augstfrekvenču" troksnis (ass)
+    y[:m] += tr * S.np.exp(-S.np.arange(m) / SR * 160) * 0.9
+    # 2) nūjas / ripas rezonanse: dažas slāpētas frekvences
+    for fr_, dec, amp in ((1350, 70, 0.55), (2650, 110, 0.3), (520, 45, 0.35), (190, 28, 0.25)):
+        y += amp * S.np.sin(2 * S.np.pi * fr_ * t) * S.np.exp(-t * dec)
+    # 3) ripa ietriecas bortā pēc ~0,12 s – dobjš, klusāks "thud" ar nelielu atbalsi
+    o = int(SR * 0.12)
+    tt = t[: n - o]
+    th = (0.45 * S.np.sin(2 * S.np.pi * 140 * tt) + 0.25 * S.np.sin(2 * S.np.pi * 310 * tt)) * S.np.exp(-tt * 22)
+    k = int(SR * 0.008)
+    th[:k] += rng.standard_normal(k) * 0.25 * S.np.linspace(1, 0, k)
+    y[o:] += th * 0.6
+    y[o + int(SR * 0.09):] += th[: n - o - int(SR * 0.09)] * 0.18     # atbalss arēnā
     return 0.95 * y / max(1e-6, abs(y).max())
 
 
@@ -433,7 +449,7 @@ def _ielasit_audio(fails):
 
 
 def skanas():
-    """Efektu paraugi: no shorts_sfx\\ (ja ir swoosh/boom/tick fails), citādi ģenerēti."""
+    """Efektu paraugi: no shorts_sfx\\ (ja ir swoosh/boom/tick fails), citādi ģenerēti (boom = hokeja slap shot)."""
     out = {"swoosh": _swoosh(), "boom": _boom(), "tick": _tick()}
     if os.path.isdir(MAPE_SFX):
         for f in os.listdir(MAPE_SFX):
