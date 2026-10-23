@@ -2245,6 +2245,21 @@ def fakti_kandidati(D, mape_video):
                 c["teksts"] += "  (jau bija)"
         c["vert"] = round(float(np.clip(c["vert"], 0, 100)))
     kand.sort(key=lambda c: (c["biezi"], -c["vert"]))                # ikdienišķie vienmēr saraksta beigās
+    # viens spēlētājs / komanda – tikai viens (labākais) fakts; nākamie no saraksta paceļas augstāk
+    def vienums(c):
+        a_ = str(c["atsl"]).split(":")
+        if a_[0].endswith("_serija") or a_[0] in ("liela", "vartsargs"):
+            return "sp:" + a_[1]
+        if a_[0] in ("kom_uzv", "kom_zaud"):
+            return "kom:" + a_[1]
+        return str(c["atsl"])
+    redz, uniq = set(), []
+    for c in kand:
+        v_ = vienums(c)
+        if v_ not in redz:
+            redz.add(v_)
+            uniq.append(c)
+    kand = uniq
     # dažādībai: no katras kategorijas (atsl sākums) ne vairāk kā 3 kandidāti
     skaits, out = {}, []
     for c in kand:
