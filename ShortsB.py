@@ -1,5 +1,5 @@
 """
-ShortsB.py – STILS "STORY" (spilgts, kā Instagram/TikTok stāsti, ar "uzmini pats" sajūtu)
+ShortsB.py – Ice Math (@IceMathHockey) Shorts ģenerators, stils "STORY" (palaid ŠO failu)
 
 Izmanto shorts.py (tam jābūt tajā pašā mapē) – visi dati, teksti un komandas paliek tieši tādi paši,
 mainās tikai izskats un kustība:
@@ -10,6 +10,9 @@ mainās tikai izskats un kustība:
   • āķa ainā uzlīme "GUESS BEFORE THE REVEAL", beigās – aicinājums komentēt
   • komandu krāsas kartītēs un datu joslās (primārā + sekundārā krāsa)
   • fons – izpludināts hokeja video (B-roll) no mapes shorts_fons\\ (ja tur ir video)
+  • āķis pirmajās ~2,4 s (konkrēts skaitlis + izpludināts #1), secība #3 → #1, cilpa beigās ("…remember:")
+  • pelēka ūdenszīme (ripa + @IceMathHockey) augšā pa kreisi, krāsains ICE MATH logo beigu kadrā
+  • tiesnešu video fons automātiski palēnināts tā, lai klips izstieptos pa visu video (FONA_ATRUMS_VEIDAM)
   • audio: klusa fona mūzika no mapes shorts_muzika\\ + skaņu efekti (swoosh, boom, tick)
 
 Mapes (izveido pats nhl-stats saknē; ja mapes nav vai tā tukša – attiecīgā daļa vienkārši izpaliek):
@@ -31,10 +34,10 @@ Mapes (izveido pats nhl-stats saknē; ja mapes nav vai tā tukša – attiecīg�
   Rokturis pēc noklusējuma: KANALS_NOKL (zemāk); --kanals @cits to aizstāj.
 Papildu parametri: --bez-fona-video  --bez-muzikas  --bez-sfx  --bez-logo
 
-Lietošana – tieši tāpat kā shorts.py, tikai cits faila nosaukums:
-    python ShortsB.py --veids tiesnesi
-Video, INFO.txt un vēsture (fakti, tiesneši, fantasy rezultāti, atskati) – parastajā mapē video\\, tāpat kā shorts.py.
-Failu var saukt kā grib (piem. ShortsB.py), bet shorts.py jāatrodas tajā pašā mapē.
+Lietošana (nhl-stats mapē datorā; pirms tam git pull – dati atjaunojas ~08:40 pēc Rīgas laika):
+    python ShortsB.py --veids speletaji --dienas 21      (visi veidi un parametri – SHORTS_KOMANDAS.txt)
+Video, INFO.txt un vēsture (fakti, tiesneši, fantasy rezultāti, atskati) – mapē video\\.
+shorts.py jāatrodas tajā pašā mapē. Abi faili glabājas TIKAI datorā (.gitignore – nav publiskajā repozitorijā).
 """
 import colorsys
 import math
