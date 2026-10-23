@@ -1194,7 +1194,10 @@ def aina_karte(t, c):
             w = (bx1 - bx0) / 2 * (abs(vv) / mx)
             if w > 6:
                 xa, xb = (cx, cx + w) if vv >= 0 else (cx - w, cx)
-                d.rounded_rectangle([xa, y + 62, xb, y + 142], radius=min(40, w / 2), fill=kr)
+                r_ = min(40, w / 2)
+                d.rounded_rectangle([xa, y + 62, xb, y + 142], radius=r_, fill=kr)
+                # pie centra līnijas – taisna mala, ārējais gals paliek noapaļots
+                d.rectangle([xa, y + 62, xa + r_, y + 142] if vv >= 0 else [xb - r_, y + 62, xb, y + 142], fill=kr)
             arpus = (cx + w + 20 + tw <= bx1 - 10) if vv >= 0 else (cx - w - 20 - tw >= bx0 + 10)
             if arpus:
                 tx, krt = (cx + w + 20 if vv >= 0 else cx - w - 20 - tw), S.BALTS
