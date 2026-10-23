@@ -400,6 +400,24 @@ def jautajums(veids):
     return x
 
 
+# ================================================================ THE FINAL VERDICT (beigu aina ar 3 mini kartītēm)
+def ripas_punkti(x, n=150):
+    """Metieni uzbrukuma zonā (spoguļoti uz x ≥ 0): [(x, y, vārti)] – mini laukumam kartītē."""
+    if x is None or not len(x):
+        return []
+    x = x.tail(n)
+    xs = pd.to_numeric(x["x"], errors="coerce").to_numpy()
+    ys = pd.to_numeric(x["y"], errors="coerce").to_numpy()
+    sg = np.where(xs < 0, -1, 1)
+    return [(float(a), float(b), int(g)) for a, b, g in zip(xs * sg, ys * sg, x["varti"]) if np.isfinite(a) and np.isfinite(b)]
+
+
+def vk(virs, vards, flizes, sal, birka, kr, vizu="badge", badge="", bkr=None, punkti=None, varti_kr=None, liels=""):
+    """Viena verdikta kartīte. vizu: rink (mini laukums ar metieniem) / badge (komandas aplis) / skaitlis / logo."""
+    return {"virs": virs, "vards": vards, "flizes": flizes, "sal": sal, "birka": birka, "kr": kr, "vizu": vizu,
+            "badge": badge, "bkr": bkr, "punkti": punkti or [], "varti_kr": varti_kr, "liels": liels}
+
+
 # ================================================================ jauni video
 
 def veids_speletaji(m, a):
@@ -429,13 +447,27 @@ def veids_speletaji(m, a):
     kartes += [karte(p, r, i, False) for i, (p, r) in enumerate(nelaim.iterrows(), 1)]
     runa = [f"Which NHL scorers are running on luck? Goals versus expected goals, {dat(no)} to {dat(lidz)}."]
     F = Frazes()
+    fr = []
     for i, (_, r) in enumerate(laim.iterrows()):
-        runa.append(f"{r['vards']} has {int(r['G'])} goals on just {r['xG']:.1f} expected. "
-                    + F("sp_laim", ["maz"] if r["sog"] < 20 else []))
+        fr.append(F("sp_laim", ["maz"] if r["sog"] < 20 else []))
+        runa.append(f"{r['vards']} has {int(r['G'])} goals on just {r['xG']:.1f} expected. " + fr[-1])
     for i, (_, r) in enumerate(nelaim.iterrows()):
         g_ = int(r["G"])
         ctx = (["xg_aug"] if r["xG"] >= 3 else []) + (["maz"] if r["sog"] < 20 else [])
-        runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {r['xG']:.1f} expected. " + F("sp_nelaim", ctx))
+        fr.append(F("sp_nelaim", ctx))
+        runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {r['xG']:.1f} expected. " + fr[-1])
+    lg_sh = mm["varti"].sum() / max(1, mm["uz_v"].sum()) * 100
+
+    def sp_vk(pid, r, lucky, frase):
+        sh_ = r["G"] / r["sog"] * 100 if r["sog"] else 0
+        return vk("THE LUCKIEST" if lucky else "THE UNLUCKIEST", f"{r['vards']}  ·  {r['team']}",
+                  [("GOALS", f"{int(r['G'])}"), ("xG", f"{r['xG']:.1f}")],
+                  f"{sh_:.0f}% shooting  (league {lg_sh:.1f}%)", frase, ZALS if lucky else SARKANS, vizu="rink",
+                  badge=str(r["team"]), bkr=kkrasa(r["team"]), punkti=ripas_punkti(mm[mm["metejs"] == pid]))
+    verdikts = [sp_vk(laim.index[0], laim.iloc[0], True, fr[0]),
+                sp_vk(nelaim.index[0], nelaim.iloc[0], False, fr[len(laim)]),
+                vk("THE MODEL", "OWN xG MODEL", [("SHOTS", f"{len(mm):,}".replace(",", " ")), ("LEAGUE SH%", f"{lg_sh:.1f}%")],
+                   periods_txt(no, lidz), atskata_teksts(False), ZILS, vizu="logo")]
     runa.append(f"Luck runs out. Expected goals don't. {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "team": r["team"], "G": sk(r["G"]), "xG": sk(r["xG"]), "sog": sk(r["sog"]), "sp": sk(r["sp"])}  # noqa: E731
     return {
@@ -445,7 +477,7 @@ def veids_speletaji(m, a):
         "kartes": kartes,
         "outro": {"rindas": [("LUCK RUNS OUT.", BALTS), ("xG DOESN'T.", DZELTENS)],
                   "info": [f"Own xG model · {len(mm):,} unblocked shots".replace(",", " "), atskata_teksts(False)],
-                  "komentars": jautajums("speletaji"), "komentars2": "Tell us in the comments"},
+                  "komentars": jautajums("speletaji"), "komentars2": "Tell us in the comments", "verdikts": verdikts},
         "zimogs": zimogs_jauns(no, lidz, a.dienas), "runa": runa, "lidz": lidz, "periods": periods_txt(no, lidz),
         "thumb": {"tag": "NHL  ·  xG LUCK REPORT", "hook": ["RUNNING", "ON LUCK?"], "vards": str(laim.iloc[0]["vards"]).split(" ")[-1],
                   "badge": str(laim.iloc[0]["team"]), "skaitlis": minus(f"{laim.iloc[0]['G'] - laim.iloc[0]['xG']:+.1f}"), "kr": ZALS,
@@ -491,12 +523,22 @@ def veids_komandas(m, a):
         d_sh, d_sv = r["sh"] - lg_sh, r["sv"] - lg_sv                 # no kā nāk PDO novirze
         avots = ("sh" if d_sh >= d_sv else "sv") if lucky else ("sh" if d_sh <= d_sv else "sv")
         return [avots, "xgd+" if r["xGD"] >= 0 else "xgd-"] + (["maz"] if r["GP"] < 6 else [])
+    fr = []
     for k, r in laim.iterrows():
-        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, but expected only {zime(r['xGD'])}. "
-                    + F("kom_laim", kom_ctx(r, True)))
+        fr.append(F("kom_laim", kom_ctx(r, True)))
+        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, but expected only {zime(r['xGD'])}. " + fr[-1])
     for k, r in nelaim.iterrows():
-        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, expected {zime(r['xGD'])}. "
-                    + F("kom_nelaim", kom_ctx(r, False)))
+        fr.append(F("kom_nelaim", kom_ctx(r, False)))
+        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, expected {zime(r['xGD'])}. " + fr[-1])
+
+    def kom_vk(k, r, lucky, frase):
+        return vk("HIGHEST PDO" if lucky else "LOWEST PDO", f"{kom_nos(k).upper()}  ·  PDO {r['PDO']:.1f}",
+                  [("GOAL DIFF", f"{r['GD']:+.0f}"), ("xG DIFF", f"{r['xGD']:+.1f}")],
+                  f"{r['sh']:.1f} SH% + {r['sv']:.1f} SV%", frase, ZALS if lucky else SARKANS, vizu="rink",
+                  badge=k, bkr=KOMANDAS.get(k, ("", k, NEITRALS))[2], punkti=ripas_punkti(mm[mm["komanda"] == k]))
+    verdikts = [kom_vk(laim.index[0], laim.iloc[0], True, fr[0]), kom_vk(nelaim.index[0], nelaim.iloc[0], False, fr[len(laim)]),
+                vk("THE LEAGUE", "PDO AVERAGE ≈ 100", [("SH%", f"{lg_sh:.1f}%"), ("SV%", f"{lg_sv:.1f}%")],
+                   periods_txt(no, lidz), atskata_teksts(False), ZILS, vizu="logo")]
     runa.append(f"PDO always comes back to one hundred. {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {k_: sk(r[k_]) for k_ in ("PDO", "sh", "sv", "GD", "xGD", "GP")}   # noqa: E731
     return {
@@ -506,7 +548,7 @@ def veids_komandas(m, a):
         "kartes": kartes,
         "outro": {"rindas": [("PDO ALWAYS", BALTS), ("COMES BACK.", DZELTENS)],
                   "info": ["All situations, empty-net goals excluded", atskata_teksts(False)],
-                  "komentars": jautajums("komandas"), "komentars2": "Tell us in the comments"},
+                  "komentars": jautajums("komandas"), "komentars2": "Tell us in the comments", "verdikts": verdikts},
         "zimogs": zimogs_jauns(no, lidz, a.dienas), "runa": runa, "lidz": lidz, "periods": periods_txt(no, lidz),
         "thumb": {"tag": "NHL  ·  TEAM LUCK REPORT", "hook": ["LIVING", "ON LUCK?"], "vards": kom_nos(laim.index[0]),
                   "badge": laim.index[0], "skaitlis": f"PDO {laim.iloc[0]['PDO']:.1f}", "kr": ZALS,
@@ -552,10 +594,25 @@ def veids_vartsargi(m, a):
     kartes += [karte(r, i, False) for i, (_, r) in enumerate(sliktie.iterrows(), 1)]
     runa = ["Which NHL goalies are stealing games, and which are costing them? Goals saved above expected."]
     F = Frazes()
+    fr = []
     for _, r in labie.iterrows():
-        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. " + F("va_labs", va_ctx(r)))
+        fr.append(F("va_labs", va_ctx(r)))
+        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. " + fr[-1])
     for _, r in sliktie.iterrows():
-        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. " + F("va_slikts", va_ctx(r)))
+        fr.append(F("va_slikts", va_ctx(r)))
+        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. " + fr[-1])
+    lg_sv_ = (1 - g["GA"].sum() / max(1, g["SA"].sum())) * 100
+    svf = lambda v: f".{round(v * 10):03d}"   # noqa: E731
+
+    def va_vk(gid, r, labs, frase):
+        return vk("SAVING THE MOST" if labs else "COSTING THE MOST", f"{r['vards']}  ·  {r['kom']}",
+                  [("SV%", svf(r["sv"])), ("GSAx", minus(f"{r['GSAx']:+.1f}"))],
+                  f"league {svf(lg_sv_)}  ·  {int(r['GP'])} GP  ·  {int(r['SA'])} shots", frase, ZALS if labs else SARKANS,
+                  vizu="rink", badge=str(r["kom"]), bkr=kkrasa(r["kom"]), punkti=ripas_punkti(mm[mm["vartsargs"] == gid]),
+                  varti_kr=SARKANS)
+    verdikts = [va_vk(labie.index[0], labie.iloc[0], True, fr[0]), va_vk(sliktie.index[0], sliktie.iloc[0], False, fr[len(labie)]),
+                vk("THE LEAGUE", "GOALIES THIS PERIOD", [("SV%", svf(lg_sv_)), ("SHOTS", f"{int(g['SA'].sum()):,}".replace(",", " "))],
+                   periods_txt(no, lidz), atskata_teksts(False), ZILS, vizu="logo")]
     runa.append(f"Hot streaks cool, cold streaks thaw. {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "kom": r["kom"], **{k_: sk(r[k_]) for k_ in ("GSAx", "GSAx_sp", "GA", "xGA", "SA", "sv", "GP")}}  # noqa: E731
     return {
@@ -565,7 +622,7 @@ def veids_vartsargi(m, a):
         "kartes": kartes,
         "outro": {"rindas": [("SAVE % LIES.", BALTS), ("GSAx DOESN'T.", DZELTENS)],
                   "info": ["GSAx = expected goals against − goals allowed", atskata_teksts(False)],
-                  "komentars": jautajums("vartsargi"), "komentars2": "Tell us in the comments"},
+                  "komentars": jautajums("vartsargi"), "komentars2": "Tell us in the comments", "verdikts": verdikts},
         "zimogs": zimogs_jauns(no, lidz, a.dienas), "runa": runa, "lidz": lidz, "periods": periods_txt(no, lidz),
         "thumb": {"tag": "NHL  ·  GOALIE REPORT", "hook": ["STEALING", "GAMES"], "vards": str(labie.iloc[0]["vards"]).split(" ")[-1],
                   "badge": str(labie.iloc[0]["kom"]), "skaitlis": minus(f"{labie.iloc[0]['GSAx']:+.1f}"), "kr": ZALS,
@@ -622,6 +679,7 @@ def atskats(fails, m, a):
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{spelu(sp2)}  ·  {dat(no2)} – {dat(lidz2)}"})
                 tail = F("maz") if ok is None else F(("sp_laim" if lucky else "sp_nelaim") + ("_ok" if ok else "_ne"))
+                kartes[-1]["_frase"] = tail
                 runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was due'}. Since then: {G2} goals on {xG2:.1f} expected. {tail}")
                 saraksts.append(f"{r['vards']} ({r['team']}): {int(r['G'])} G / {r['xG']:.1f} xG → {G2} G / {xG2:.1f} xG  {verd}")
                 if ok is not None:
@@ -660,6 +718,7 @@ def atskats(fails, m, a):
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{gd_txt}{dat(no2)} – {dat(lidz2)}"})
                 tail = F("kom_maz") if ok is None else F(("kom_laim" if lucky else "kom_nelaim") + ("_ok" if ok else "_ne"))
+                kartes[-1]["_frase"] = tail
                 p2_txt = "n/a" if not np.isfinite(p2) else f"{p2:.0f}"
                 runa_k.append(f"The {nos}: PDO was {r['PDO']:.0f}. Since then: {p2_txt}. {tail}")
                 saraksts.append(f"{pils} {nos}: PDO {r['PDO']:.1f} → {p2_txt}  {verd}")
@@ -697,6 +756,7 @@ def atskats(fails, m, a):
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{sv_txt}{spelu(gp2)}  ·  {dat(no2)} – {dat(lidz2)}"})
                 tail = F("maz") if ok is None else F(("va_labs" if labs else "va_slikts") + ("_ok" if ok else "_ne"))
+                kartes[-1]["_frase"] = tail
                 r2_txt = "n/a" if not np.isfinite(r2) else f"{r2:+.2f}"
                 r2_runa = r2_txt.replace("+", "plus ").replace("-", "minus ")
                 stav = "was red hot" if labs else "was ice cold"
@@ -715,6 +775,26 @@ def atskats(fails, m, a):
         if c_["akc"] == NEITRALS:
             c_["apaksa"] = "NOT COUNTED  ·  " + c_["apaksa"]
     rez = f"{ok_skaits}/{vert_skaits}"
+
+    def ats_vk(c_, virs):
+        fl = [(str(b[0]), b[3].format(b[1]) if np.isfinite(b[1]) else "n/a") for b in c_.get("bars", [])[:2]]
+        return vk(virs, f"{c_.get('v1', '')} {c_.get('v2', '')}".strip().upper(), fl, c_.get("info", ""), c_.get("_frase", ""),
+                  c_["akc"], vizu="badge", badge=c_.get("badge", ""), bkr=c_.get("bkr"))
+    labakie = [c_ for c_ in kartes if c_["akc"] == ZALS]
+    garam = [c_ for c_ in kartes if c_["akc"] == SARKANS]
+    neskait_ = len(kartes) - vert_skaits
+    verdikts = [vk("THE SCORE", "CALLS THAT HELD UP", [("HELD UP", f"{ok_skaits}"), ("MISSED", f"{vert_skaits - ok_skaits}")],
+                   (f"{neskait_} not counted (too few games)" if neskait_ else f"flagged {dat(lidz0)}"),
+                   "NO HIDING MISSES.", ZALS if vert_skaits and ok_skaits / vert_skaits >= 0.5 else SARKANS, vizu="skaitlis", liels=rez)]
+    if labakie:
+        verdikts.append(ats_vk(labakie[0], "THE CALL THAT HELD"))
+    if garam:
+        verdikts.append(ats_vk(garam[0], "THE MISS"))
+    for c_ in kartes:
+        if len(verdikts) >= 3:
+            break
+        if all(str(c_.get("v2", "")).upper() not in v_["vards"] for v_ in verdikts[1:]):
+            verdikts.append(ats_vk(c_, "ALSO ON THE LIST"))
     zimogs = f"FLAGGED {dat(lidz0, True).upper()}  ·  RESULTS {dat(no2).upper()} – {dat(lidz2).upper()}"
     runa = [f"On {dat(lidz0)}, we flagged {len(kartes)} NHL {vards_k} as lucky or unlucky. Here's what happened next."] + runa_k
     neskait = len(kartes) - vert_skaits
@@ -727,7 +807,7 @@ def atskats(fails, m, a):
         "kartes": kartes,
         "outro": {"rindas": [(f"WENT {rez}.", BALTS), ("NO HIDING MISSES.", DZELTENS)],
                   "info": [outro_info, f"{dat(no2)} – {dat(lidz2, True)}"],
-                  "komentars": jautajums("atskats"), "komentars2": "Tell us in the comments"},
+                  "komentars": jautajums("atskats"), "komentars2": "Tell us in the comments", "verdikts": verdikts},
         "zimogs": zimogs, "runa": runa, "lidz": lidz2, "periods": f"flagged {dat(lidz0, True)}, results {dat(no2)} – {dat(lidz2, True)}",
         "thumb": {"tag": tag, "hook": ["DID xG", "CALL IT?"], "vards": {"players": "PLAYERS", "teams": "TEAMS", "goalies": "GOALIES"}[temats],
                   "badge": "", "skaitlis": f"{rez}", "kr": ZALS if vert_skaits and ok_skaits / vert_skaits >= 0.5 else SARKANS,
@@ -1209,20 +1289,38 @@ def veids_fantasy(m, a):
             f"First, the schedule. {len(cetri)} teams play four games next week" + (f", {len(divi)} play only two." if divi else ".")]
     add_veids = {}
     F = Frazes()
+    fr_add, fr_drop = [], []
     for nr, (pid, r) in enumerate(izv.iterrows(), 1):
         veids = "STREAM" if r["forma"] < 0.4 and r["sp_nak"] >= 4 else "ADD"
         add_veids[pid] = veids
         kartes.append(karte(nr, r, veids))
         ros = "" if not np.isfinite(r["rostered"]) else f" Rostered in only {r['rostered']:.0f} percent of leagues."
+        fr_add.append(F("f_stream" if veids == "STREAM" else "f_add", ["sched4"] if r["sp_nak"] >= 4 else []))
         runa.append(f"{r['vards']}, {kom_nos(r['team'])}. {int(r['P'])} points in his last {int(r['GP'])} games, "
-                    f"{r['SOG_gp']:.1f} shots a game, and {int(r['sp_nak'])} games next week.{ros} "
-                    + F("f_stream" if veids == "STREAM" else "f_add", ["sched4"] if r["sp_nak"] >= 4 else []))
+                    f"{r['SOG_gp']:.1f} shots a game, and {int(r['sp_nak'])} games next week.{ros} " + fr_add[-1])
     for nr, (pid, r) in enumerate(drop.iterrows(), 1):
         veids = drop_veids[pid]
         kartes.append(karte(nr, r, veids))
         sakums = ("Now, players to drop or bench. " if n_drop > 1 else "Now, one player to drop or bench. ") if nr == 1 else ""
+        fr_drop.append(F("f_bench" if veids == "BENCH" else "f_drop"))
         runa.append(f"{sakums}{r['vards']}, {kom_nos(r['team'])}. Rostered in {r['rostered']:.0f} percent of leagues, but "
-                    f"{iemesls_drop(r)[0].lower() + iemesls_drop(r)[1:]}. " + F("f_bench" if veids == "BENCH" else "f_drop"))
+                    f"{iemesls_drop(r)[0].lower() + iemesls_drop(r)[1:]}. " + fr_drop[-1])
+
+    def fa_vk(pid, r, virs, frase, kr):
+        ros_ = f"rostered {r['rostered']:.0f}%  ·  " if np.isfinite(r["rostered"]) else ""
+        return vk(virs, f"{r['vards']}  ·  {r['team']}",
+                  [("PTS / GP", f"{r['P'] / max(1, r['GP']):.2f}"), ("NEXT WEEK", f"{int(r['sp_nak'])} GP")],
+                  f"{ros_}{r['SOG_gp']:.1f} shots a game", frase, kr, vizu="rink", badge=str(r["team"]),
+                  bkr=kkrasa(r["team"]), punkti=ripas_punkti(mm[mm["metejs"] == pid]))
+    verdikts = [fa_vk(izv.index[0], izv.iloc[0], f"THE TOP {add_veids[izv.index[0]]}", fr_add[0], ZALS)]
+    if n_drop:
+        verdikts.append(fa_vk(drop.index[0], drop.iloc[0], f"THE {drop_veids[drop.index[0]]}", fr_drop[0], SARKANS))
+    elif n_add > 1:
+        verdikts.append(fa_vk(izv.index[1], izv.iloc[1], f"ALSO {add_veids[izv.index[1]]}", fr_add[1], ZALS))
+    verdikts.append(vk("THE SCHEDULE", f"WEEK OF {dat(start).upper()} – {dat(beigas).upper()}",
+                       [("4-GAME TEAMS", f"{len(cetri)}"), ("2-GAME TEAMS", f"{len(divi)}")],
+                       ("4 games: " + " · ".join(cetri[:9])) if cetri else "No team plays four games",
+                       "Ride the schedule", DZELTENS, vizu="skaitlis", liels=f"{len(cetri)}×4"))
     runa.append("Green matchups are the weakest defenses by expected goals against. Follow for weekly fantasy hockey tips.")
     zimogs = f"STATS THROUGH {dat(lidz_ts, True).upper()}" + (f"  ·  ESPN ROSTERED % {dat(e_dat).upper()}" if e is not None else "")
     # pagājušās nedēļas un sezonas rezultāts (no fantasy atskatiem)
@@ -1247,7 +1345,8 @@ def veids_fantasy(m, a):
                   "legenda": legenda},
         "kartes": kartes,
         "outro": {"rindas": [("GRAB THEM", BALTS), ("BEFORE THEY'RE GONE.", DZELTENS)],
-                  "info": ["Rostered % from ESPN  ·  stats from NHL", "Green = soft matchup (high xG against)"]},
+                  "info": ["Rostered % from ESPN  ·  stats from NHL", "Green = soft matchup (high xG against)"],
+                  "komentars": "WHO ARE YOU ADDING?", "verdikts": verdikts},
         "zimogs": zimogs, "runa": runa, "lidz": lidz, "periods": f"{dat(no)} – {dat(lidz, True)}; week of {dat(start)} – {dat(beigas, True)}",
         "thumb": {"tag": "NHL  ·  FANTASY WAIVER WIRE", "hook": [f"{n_add} PICKUP{'' if n_add == 1 else 'S'}", f"+ {n_drop} DROP{'' if n_drop == 1 else 'S'}" if n_drop else "NEXT WEEK"],
                   "vards": str(izv.iloc[0]["vards"]).split(" ")[-1], "badge": str(izv.iloc[0]["team"]),
@@ -1497,10 +1596,13 @@ def atskats_fantasy(j, m, a):
                 "apaksa": (f"{P} pt{'' if P == 1 else 's'} vs {med:.0f} for a typical waiver player" if grupa == "add"
                            else f"{P} pt{'' if P == 1 else 's'} vs {med:.0f} for a typical rostered player"),
             })
+            frase = {"HIT": F("fa_hit"), "MISS": F("fa_miss"), "DIDN'T PLAY": "He didn't play. That one counts as a miss.",
+                     "GOOD CALL": F("fa_good"), "BAD CALL": F("fa_bad"), "EVEN": "Even."}[verd]
+            kartes[-1]["_frase"] = frase if verd != "DIDN'T PLAY" else "He didn't play."
+            kartes[-1]["_pts"], kartes[-1]["_med"] = P, med
             runa.append((f"{r['vards']}: " if grupa == "add" else f"Our {r['veids'].lower()} call, {r['vards']}: ")
                         + f"{G} goal{'' if G == 1 else 's'}, {A} assist{'' if A == 1 else 's'}, {P} point{'' if P == 1 else 's'} in {GP} games. "
-                        + {"HIT": F("fa_hit"), "MISS": F("fa_miss"), "DIDN'T PLAY": "He didn't play. That one counts as a miss.",
-                           "GOOD CALL": F("fa_good"), "BAD CALL": F("fa_bad"), "EVEN": "Even."}[verd])
+                        + frase)
             saraksts.append(f"{grupa.upper()} {r['vards']} ({r['team']}): {GP} GP, {G}G {A}A, {P} P, {SOG} SOG → {verd}")
     if not kartes:
         return None
@@ -1513,6 +1615,20 @@ def atskats_fantasy(j, m, a):
     vien_txt = f", with {vien} even call{'' if vien == 1 else 's'} not counted" if vien else ""
     runa.append(f"We went {trap} for {kopa} last week{vien_txt}, and {H} for {T} this season. Follow for weekly fantasy hockey tips.")
     kr_rez = ZALS if kopa and trap / kopa >= 0.5 else SARKANS
+
+    def far_vk(c_, virs):
+        return vk(virs, f"{c_['v1']} {c_['v2']}".strip().upper() + f"  ·  {c_['badge']}",
+                  [("POINTS", f"{c_['_pts']}"), ("TYPICAL", f"{c_['_med']:.0f}")], c_["augsa"].replace("WE SAID: ", "We said ").lower().capitalize(),
+                  c_.get("_frase", ""), c_["akc"], vizu="badge", badge=c_["badge"], bkr=c_["bkr"])
+    verdikts = [vk("THE SCORE", "LAST WEEK'S CALLS", [("LAST WEEK", f"{trap}/{kopa}"), ("SEASON", f"{H}/{T}")],
+                   (f"{vien} even (not counted)  ·  " if vien else "") + f"season {H / max(T, 1) * 100:.0f}%",
+                   "No hiding misses", kr_rez, vizu="skaitlis", liels=f"{trap}/{kopa}")]
+    hit_ = [c_ for c_ in kartes if c_["akc"] == ZALS]
+    miss_ = [c_ for c_ in kartes if c_["akc"] == SARKANS]
+    if hit_:
+        verdikts.append(far_vk(max(hit_, key=lambda c_: c_["_pts"] - c_["_med"]), "THE BEST CALL"))
+    if miss_:
+        verdikts.append(far_vk(min(miss_, key=lambda c_: c_["_pts"] - c_["_med"]), "THE MISS"))
     return {
         "intro": {"tag": "NHL  ·  FANTASY RECAP", "rindas": [("HOW DID", BALTS), ("WE DO?", DZELTENS)],
                   "apaksa": [f"Our picks for {dat(no)} – {dat(lidz, True)}", "vs a typical player in the same pool"],
@@ -1521,7 +1637,7 @@ def atskats_fantasy(j, m, a):
         "outro": {"rindas": [(f"LAST WEEK: {trap}/{kopa}", BALTS), (f"SEASON: {H}/{T} ({H / max(T, 1) * 100:.0f}%)", DZELTENS)],
                   "info": ([f"{trap} right · {kopa - trap} wrong · {vien} even (not counted)"] if vien else [f"{trap} right · {kopa - trap} wrong"])
                           + ["Typical = median points in the same rostered % range"],
-                  "komentars": jautajums("atskats"), "komentars2": "Tell us in the comments"},
+                  "komentars": jautajums("atskats"), "komentars2": "Tell us in the comments", "verdikts": verdikts},
         "zimogs": f"WEEK OF {dat(no).upper()} – {dat(lidz).upper()}  ·  RESULTS", "runa": runa, "lidz": lidz,
         "periods": f"week of {dat(no)} – {dat(lidz, True)}",
         "virsraksts": f"Our fantasy hockey picks went {trap}/{kopa} last week – full results 🏒",
@@ -2524,13 +2640,32 @@ def veids_tiesnesi(m, a):
         runa_o = izv_o["v"].format(**fmt)
     runa.append(runa_o + " Follow for the monthly referee report.")
 
+    # THE FINAL VERDICT
+    verdikts = [vk("THE STRICTEST", top.upper(), [("PEN / GAME", f"{top_pg:.1f}"), ("GAMES", f"{int(strict['sp'].iloc[0])}")],
+                   f"league average {vid:.1f}", random.choice(["Expect the whistle", "No free passes", "The box stays busy"]),
+                   SARKANS, vizu="skaitlis", liels=f"+{pct:.0f}%")]
+    if ws is not None:
+        pp_tot = ppg_a + ppg_h
+        birka_w = ("The power play decided it" if "decided it" in vr else
+                   ("Nobody cashed in" if pp_tot == 0 else "Whistles everywhere"))
+        verdikts.append(vk("THE WILDEST GAME", f"{A_} @ {H_}  ·  {dat(w['datums']).upper()}",
+                           [("PENALTIES", f"{int(w['pen_total'])}"), ("PP GOALS", f"{pp_tot}")],
+                           rez_txt or f"Referees: {w['tiesnesi']}", birka_w, DZELTENS, vizu="badge", badge=H_, bkr=kkrasa(H_)))
+    if nak:
+        verdikts.append(vk("NEXT UP", ref.upper(), [("GAME", f"{na} @ {nh}"), ("HIS AVERAGE", f"{pg_:.1f}")],
+                           diena, f"Over or under {pg_:.1f}?", ZILS, vizu="badge",
+                           badge=nh, bkr=kkrasa(nh)))
+    else:
+        verdikts.append(vk("THE MOST LENIENT", low.upper(), [("PEN / GAME", f"{low_pg:.1f}"), ("GAMES", f"{int(lenient['sp'].iloc[0])}")],
+                           f"league average {vid:.1f}", "Let them play", ZALS, vizu="skaitlis", liels=f"{low_pg:.1f}"))
+
     per_txt = f"{MEN.capitalize()} {men.year}" + ("" if pilns else f" (through {dat(beigas, True)})")
     zim = f"{MEN} {men.year}" + ("" if pilns else f" · THROUGH {dat(beigas).upper()}")
     return {
         "intro": None, "kartes": kartes,
         "outro": {"rindas": rindas_o,
                   "info": [f"{len(g)} games · {per_txt}", f"Penalties called per game · min. {min_sp} games"],
-                  "follow": "FOLLOW FOR MONTHLY REF REPORTS", "komentars": kom1, "komentars2": kom2},
+                  "follow": "FOLLOW FOR MONTHLY REF REPORTS", "komentars": kom1, "komentars2": kom2, "verdikts": verdikts},
         "zimogs": zim, "runa": runa, "lidz": beigas.strftime("%Y-%m-%d"),
         "periods": per_txt + f", {len(g)} games",
         "virsraksts": f"NHL referee report: {MEN.capitalize()} {men.year} 🦓 Who called the most penalties?",
