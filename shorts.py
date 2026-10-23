@@ -1280,8 +1280,12 @@ def veids_fantasy(m, a):
     kartes = []
     cetri = sorted([k for k, v in grafiks.items() if len(v) >= 4])
     divi = sorted([k for k, v in grafiks.items() if len(v) <= 2])
+    sp_dienā = kal.groupby("datums").size()
+    dienu_n = [int(sp_dienā.get((start + timedelta(days=j)).strftime("%Y-%m-%d"), 0)) for j in range(7)]
+    dienas_idx = {k: sorted({(pd.Timestamp(x[0]) - start).days for x in v}) for k, v in grafiks.items()}
     kartes.append({"tips": "grafiks", "cetri": cetri, "divi": divi,
-                   "nedela": f"{dat(start).upper()} – {dat(beigas).upper()}"})
+                   "nedela": f"{dat(start).upper()} – {dat(beigas).upper()}",
+                   "dienu_n": dienu_n, "dienas_idx": dienas_idx})
     n_drop = len(drop)
     n_add = len(izv)
     vardiem = {1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five"}
