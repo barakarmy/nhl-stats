@@ -3,7 +3,7 @@ balsu_paraugi.py – noklausies dažādas AI balsis, pirms izvēlies vienu Short
 
 Izveido mapi video_test\\balsis\\ ar MP3 failu katrai balsij (viens un tas pats teksts),
 lai tās var ērti salīdzināt. Pēc tam izvēlēto balsi lieto ar --balss, piem.:
-    python shorts_B.py --veids tiesnesi --kanals @tests --balss en-US-GuyNeural
+    python ShortsB.py --veids tiesnesi --balss en-US-GuyNeural
 
 Lietošana:
     python balsu_paraugi.py                      ieteiktās balsis (sporta stilam)
@@ -17,7 +17,7 @@ import asyncio
 import os
 
 IETEIKTAS = [
-    "en-US-AndrewNeural",       # shorts.py noklusējums – mierīgs, dabisks
+    "en-US-AndrewNeural",       # mierīgs, dabisks
     "en-US-GuyNeural",          # enerģisks, "ziņu diktora" stils
     "en-US-ChristopherNeural",  # dziļš, nopietns
     "en-US-EricNeural",         # skaidrs, neitrāls
@@ -26,7 +26,7 @@ IETEIKTAS = [
     "en-US-SteffanNeural",      # mierīgs
     "en-GB-RyanNeural",         # britu akcents
     "en-AU-WilliamNeural",      # austrāliešu akcents
-    "en-CA-LiamNeural",         # kanādiešu akcents (hokejs!)
+    "en-CA-LiamNeural",         # kanādiešu akcents (hokejs!) – ShortsB noklusējums
     "en-US-AriaNeural",         # sieviete, enerģiska
     "en-US-JennyNeural",        # sieviete, mierīga
     "en-US-EmmaNeural",         # sieviete, sarunvalodas
@@ -75,7 +75,7 @@ def main():
         except Exception as ex:                                       # noqa: BLE001
             print(f"  ✗ {b}: {type(ex).__name__}: {ex}")
     print(f"\nGatavs: {ok} paraugi mapē {os.path.relpath(mape)}\\ – atver un noklausies.")
-    print("Izvēlēto balsi lieto:  python shorts_B.py --veids ... --balss <nosaukums>")
+    print("Izvēlēto balsi lieto:  python ShortsB.py --veids ... --balss <nosaukums>")
     return 0
 
 
