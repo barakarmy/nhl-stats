@@ -526,10 +526,10 @@ def veids_komandas(m, a):
     fr = []
     for k, r in laim.iterrows():
         fr.append(F("kom_laim", kom_ctx(r, True)))
-        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, but expected only {zime(r['xGD'])}. " + fr[-1])
+        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.1f}. Goal difference {zime(r['GD'])}, but expected only {zime(r['xGD'])}. " + fr[-1])
     for k, r in nelaim.iterrows():
         fr.append(F("kom_nelaim", kom_ctx(r, False)))
-        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.0f}. Goal difference {zime(r['GD'])}, expected {zime(r['xGD'])}. " + fr[-1])
+        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.1f}. Goal difference {zime(r['GD'])}, expected {zime(r['xGD'])}. " + fr[-1])
 
     def kom_vk(k, r, lucky, frase):
         return vk("HIGHEST PDO" if lucky else "LOWEST PDO", f"{kom_nos(k).upper()}  ·  PDO {r['PDO']:.1f}",
@@ -719,8 +719,8 @@ def atskats(fails, m, a):
                                "apaksa": f"{gd_txt}{dat(no2)} – {dat(lidz2)}"})
                 tail = F("kom_maz") if ok is None else F(("kom_laim" if lucky else "kom_nelaim") + ("_ok" if ok else "_ne"))
                 kartes[-1]["_frase"] = tail
-                p2_txt = "n/a" if not np.isfinite(p2) else f"{p2:.0f}"
-                runa_k.append(f"The {nos}: PDO was {r['PDO']:.0f}. Since then: {p2_txt}. {tail}")
+                p2_txt = "n/a" if not np.isfinite(p2) else f"{p2:.1f}"
+                runa_k.append(f"The {nos}: PDO was {r['PDO']:.1f}. Since then: {p2_txt}. {tail}")
                 saraksts.append(f"{pils} {nos}: PDO {r['PDO']:.1f} → {p2_txt}  {verd}")
                 if ok is not None:
                     vert_skaits += 1
@@ -2796,6 +2796,68 @@ def aina_fakts_nakamais(t, c):
 
 # ================================================================ balss un video
 
+# ---------------------------------------------------------------- balss: teksts ekrānam ≠ teksts balsij
+# Ekrānā (birkās) paliek īsās frāzes; balss saka pilnu teikumu – edge-tts īsām frāzēm un jautājumiem liek dīvainu intonāciju.
+BALSIJ = {
+    "Sell high?": "Is it time to sell high?",
+    "Regression risk: elevated.": "The regression risk is high.",
+    "Great results. Let's see the shot quality.": "Great results, but let's look at the shot quality.",
+    "Bad results. Promising process.": "The results are bad, but the process looks promising.",
+    "A buy-low candidate?": "Is he a buy-low candidate?",
+    "Good team. Unsustainably good results?": "A good team, but are these results sustainable?",
+    "Below expected. But for how long?": "He's below expected, but for how long?",
+    "Called it.": "We called it.",
+    "Still hot.": "He's still hot.",
+    "Still snakebitten.": "He's still snakebitten.",
+    "Back to earth.": "Back down to earth.",
+    "Still riding the bounces.": "They're still riding the bounces.",
+    "Still waiting on the bounces.": "They're still waiting on the bounces.",
+    "Still stealing games.": "He's still stealing games.",
+    "Found his game.": "He found his game.",
+    "Still searching for saves.": "He's still searching for saves.",
+    "Small sample.": "It's a small sample.",
+    "Check back later.": "We'll check back later.",
+    "Worth a pickup.": "He's worth a pickup.",
+    "Good short-term play.": "He's a good short-term play.",
+    "A matchup play.": "It's a matchup play.",
+    "Better options this week.": "There are better options this week.",
+    "Time to move on?": "Is it time to move on?",
+    "Pickup paid off.": "That pickup paid off.",
+    "Good read.": "That was a good read.",
+    "Good call. Good result.": "Good call, and a good result.",
+}
+BALSS_ATRUMS = "+8%"           # parastais runas ātrums
+FRAZES_ATRUMS = "+0%"          # noslēguma frāzei (lēnāk, ar īsu pauzi pirms tās)
+
+
+def balsij(txt):
+    """Teksts balsij: pilni teikumi īso frāžu vietā, saīsinājumi un simboli – vārdos."""
+    t = str(txt)
+    for k in sorted(BALSIJ, key=len, reverse=True):
+        t = t.replace(k, BALSIJ[k])
+    t = t.replace("GSAx", "goals saved above expected")
+    t = re.sub(r"\bxGA\b", "expected goals against", t)
+    t = re.sub(r"\bxG\b", "expected goals", t)
+    t = re.sub(r"\bPDO\b", "P-D-O", t)
+    t = t.replace("SV%", "save percentage").replace("SH%", "shooting percentage")
+    t = re.sub(r"(\d+)G (\d+)A\b", lambda m: f"{m.group(1)} goal{'' if m.group(1) == '1' else 's'}, "
+               f"{m.group(2)} assist{'' if m.group(2) == '1' else 's'}", t)
+    t = re.sub(r"(\d+):(\d+)\s*(so|SO)\b", r"\1 to \2 in a shootout", t)
+    t = re.sub(r"(\d+):(\d+)\s*(ot|OT)\b", r"\1 to \2 in overtime", t)
+    t = re.sub(r"(\d+):(\d+)", r"\1 to \2", t)
+    t = re.sub(r"\s*→\s*", ", then ", t).replace("−", "minus ").replace(" @ ", " at ")
+    t = re.sub(r"#(\d+)", r"number \1", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _frazu_balsij():
+    v = set()
+    for grupa in FRAZES.values():
+        for f in grupa:
+            v.add(BALSIJ.get(f[0], f[0]))
+    return sorted(v, key=len, reverse=True)
+
+
 def ierunat(teksti, balss, mape):
     try:
         import edge_tts
@@ -2806,8 +2868,9 @@ def ierunat(teksti, balss, mape):
         print("BALSS: nav ffprobe (nāk kopā ar ffmpeg) – pārinstalē ffmpeg (video tiks bez skaņas)")
         return None
 
-    async def viens(txt, fails):
-        await edge_tts.Communicate(txt, balss, rate="+8%").save(fails)
+    async def viens(txt, fails, atrums):
+        await edge_tts.Communicate(txt, balss, rate=atrums).save(fails)
+
     def tirs(txt):
         """Rezerves teksts: tikai ASCII burti, cipari un pamata pieturzīmes (ja Microsoft balss kādu simbolu neņem pretī)."""
         import unicodedata
@@ -2815,25 +2878,46 @@ def ierunat(teksti, balss, mape):
         t = re.sub(r"[^A-Za-z0-9 .,!?'%:-]", " ", t)
         return re.sub(r"\s+", " ", t).strip() or "."
 
-    out = []
-    for i, txt in enumerate(teksti):
-        f = os.path.join(mape, f"a{i}.mp3")
+    def sint(txt, f, atrums):
+        """Ierunā vienu tekstu (2 mēģinājumi + vienkāršots teksts). Atgriež kļūdu vai None."""
         kluda = None
-        for meg, teksts in enumerate([txt, txt, tirs(txt)]):          # 2× tas pats teksts, tad "tīrs" teksts
+        for meg, teksts in enumerate([txt, txt, tirs(txt)]):
             try:
                 if meg:
                     time.sleep(2 * meg)
-                asyncio.run(viens(teksts, f))
+                asyncio.run(viens(teksts, f, atrums))
                 if os.path.exists(f) and os.path.getsize(f) > 0:
                     if meg == 2:
-                        print(f"BALSS: aina {i + 1} ierunāta ar vienkāršotu tekstu: {teksts!r}")
-                    kluda = None
-                    break
+                        print(f"BALSS: ierunāts ar vienkāršotu tekstu: {teksts!r}")
+                    return None
                 kluda = "tukšs audio fails"
             except Exception as ex:                                   # noqa: BLE001
                 kluda = f"{type(ex).__name__}: {ex}"
+        return kluda
+
+    frazes = _frazu_balsij()
+    out = []
+    for i, txt in enumerate(teksti):
+        tb = balsij(txt)
+        f = os.path.join(mape, f"a{i}.mp3")
+        # noslēguma frāze (piem. "Is it time to sell high?") – atsevišķi, lēnāk, ar īsu pauzi
+        beigu = next((p_ for p_ in frazes if tb.endswith(p_) and len(tb) > len(p_) + 8), None)
+        kluda = None
+        if beigu:
+            f1, f2, fw = os.path.join(mape, f"a{i}_1.mp3"), os.path.join(mape, f"a{i}_2.mp3"), os.path.join(mape, f"a{i}.wav")
+            kluda = sint(tb[:-len(beigu)].strip(), f1, BALSS_ATRUMS) or sint(beigu, f2, FRAZES_ATRUMS)
+            if not kluda:
+                r_ = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", f1, "-i", f2, "-filter_complex",
+                                     "[1:a]adelay=220|220[b];[0:a][b]concat=n=2:v=0:a=1[o]", "-map", "[o]", fw],
+                                    capture_output=True)
+                if r_.returncode == 0 and os.path.exists(fw):
+                    f = fw
+                else:
+                    beigu = None                                      # neizdevās salikt → viss teksts vienā gabalā
+        if not beigu:
+            kluda = sint(tb, f, BALSS_ATRUMS)
         if kluda:
-            print(f"BALSS neizdevās ainai {i + 1}: {kluda}\n  teksts: {txt!r}\n  – video bez skaņas "
+            print(f"BALSS neizdevās ainai {i + 1}: {kluda}\n  teksts: {tb!r}\n  – video bez skaņas "
                   f"(pamegini vēlreiz pēc brīža vai ar citu balsi, piem. --balss en-US-GuyNeural)")
             return None
         dur = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f],
