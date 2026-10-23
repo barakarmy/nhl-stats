@@ -1,47 +1,34 @@
 """
-shorts.py – vertikāli YouTube Shorts video (1080×1920, MP4) no lietotnes datiem: "xG LUCK REPORT" + atskati.
+shorts.py – Ice Math (@IceMathHockey) YouTube Shorts: dati, teksti un loģika visiem video veidiem.
 
-JAUNS VIDEO (--veids):
-  speletaji  – 3 spēlētāji ar vārtiem krietni VIRS xG (veiksme → atdzisīs) un 3 krietni ZEM xG (gaidāmi vārti)
-  komandas   – 3 komandas ar augstāko PDO (veicas → kritīsies) un 3 ar zemāko (neveicas → uzlabosies)
-  vartsargi  – 3 vārtsargi ar labāko GSAx (karsti → atdzisīs) un 3 ar sliktāko (atkopsies)
-  Katram jaunam video blakus MP4 tiek saglabāts .json ar parādīto sarakstu un datu periodu.
+PATS NETIEK PALAISTS – palaid ShortsB.py (izskats, kustība, fons, mūzika, logo), kas importē šo failu,
+tāpēc abiem jābūt vienā mapē. Abi faili glabājas TIKAI datorā nhl-stats mapē (.gitignore; nav publiskajā repo).
+No repozitorija vajag: xg.py, sezonas/ (dati, xG modelis, vēsture kopš 2023/24), sezonas/fantasy_espn*.csv.
+Pilna pamācība: SHORTS_KOMANDAS.txt.
 
-OTRDIENAS VIDEO (fantasy atskats): python ShortsB.py --atskats video/<datums>_fantasy – pagājušās nedēļas ieteikumi pret
-  "tipisku" spēlētāju tajā pašā rostered % grupā (mediāna, 2+ spēles): ADD/STREAM trāpīja, ja punktu vairāk par mediānu,
-  DROP/BENCH – ja mazāk. Sezonas rezultāts – video/fantasy_rezultati.json (parādās arī trešdienas video ievadā).
+VIDEO VEIDI (python ShortsB.py ...):
+  --veids speletaji | vartsargi | komandas  xG Luck Report (pirmdienās pa kārtai, ar --dienas 21):
+        spēlētāji – vārti pret xG; vārtsargi – GSAx; komandas – PDO, GD pret xGD. 3 "laimīgie" + 3 "nelaimīgie".
+        Blakus MP4 – .json ar sarakstu atskatam.
+  --atskats video/<mape>   ceturtdienā ~3,5 nedēļas vēlāk (pirmā ceturtdiena pēc ATSKATS_DIENAS = 21 dienas):
+        tas pats saraksts, visas spēles no oriģinālā datu datuma līdz jaunākajiem datiem; zaļš = prognoze
+        piepildījās, sarkans = nē; < 2 spēles – "TOO FEW GAMES · NOT COUNTED" (pateikts jau ievadā).
+        Der arī fantasy video (otrdienas atskats: ADD/STREAM pret mediānu brīvajiem, DROP/BENCH pret savu grupu,
+        EVEN netiek skaitīts; sezonas rezultāts – video/fantasy_rezultati.json).
+  --veids fantasy          trešdienā: nākamās nedēļas grafiks + 3 pickups (≤ 40 % ESPN rostered) + 2 drops.
+  --fakti / --veids fakts --fakts 1,3,5   piektdienā: līdz 5 faktiem (pēdējās 7 dienas līdz datu datumam +
+        šobrīd aktīvās sērijas). Vērtējums: retums 55 % + slavenība 25 % + svaigums 20 % + aktīva sērija +8;
+        bieži notikumi −25 "(bieži)", atkārtojums 28 dienās −40. Vēsture – video/fakti_vesture.json.
+  --veids tiesnesi         mēneša pēdējā piektdienā: ~14 ainas (stingrākie/saudzīgākie, tiesnesis pa spēlēm,
+        trakākā spēle pa periodiem + vairākums, periodi līgā, 3 papildainas, mainīgas beigas).
+  --gaida                  kuriem video jātaisa atskats un kad.
 
-TREŠDIENAS VIDEO (--veids fantasy): "3 fantasy pickups nākamajai nedēļai" – nākamās nedēļas grafiks (komandas ar 4 un 2
-  spēlēm) un 3 spēlētāji, kuri ESPN līgās paņemti ≤ 40 % (--max-rostered), ar labāko formu pēdējās 14 dienās
-  (punkti, metieni, ixG, laiks uz ledus, punkti vairākumā) + nākamās nedēļas spēļu skaits un pretinieku aizsardzība.
-  Vajag sezonas/fantasy_espn.csv (fantasy_espn.py, ikdienas darbplūsmā). Komanda: python ShortsB.py --veids fantasy
+DATI UN DATUMI: dati GitHub atjaunojas ~08:40 pēc Rīgas laika → pirms ģenerēšanas git pull (pēc ~09:00).
+  Katrā kadrā "STATS THROUGH <datums>" = pēdējā NHL spēļu diena (ASV datums), Latvijā parasti vakardiena.
+  --lidz 2026-10-18 – izmantot datus tikai līdz šim datumam (citai nedēļai / atkārtošanai).
 
-ATSKATS (--atskats <json>): ņem tieši to sarakstu, kas tika parādīts video, un rāda, kas notika PĒC tā datuma
-  (vārti pret xG / PDO / GSAx spēlē) ar ✓ (prognoze piepildījās) vai ✗ (nepiepildījās). Spēlētājs, kurš pēc tam
-  nav spēlējis, rezultātā netiek skaitīts.
-
-Katrā kadrā augšā redzams datu datums: jaunam video "STATS THROUGH <datums>", atskatam "FLAGGED <datums> · RESULTS <no – līdz>".
-
-Ieteicamais grafiks: pirmdienās jauns video (speletaji → komandas → vartsargi → ...), ceturtdienās atskats par
-video, kas publicēts pirms ~2,5 nedēļām. Lai dati starp viena veida video nepārklātos, lieto --dienas 21.
-
-Palaišana (repozitorija mapē):
-    pip install pandas numpy pillow edge-tts     (+ ffmpeg: Windows – winget install ffmpeg, tad jauns terminālis)
-    python ShortsB.py --veids speletaji --dienas 21
-    python ShortsB.py --veids komandas  --dienas 21
-    python ShortsB.py --veids vartsargi --dienas 21
-    python ShortsB.py --atskats video/2026-10-26_speletaji        (mape, ko izveidoja jaunais video)
-    python ShortsB.py --gaida                                     → kuriem video vēl jātaisa atskats un kad
-    python ShortsB.py --fakti                                     → piektdiena: nedēļas faktu kandidāti (bez video)
-    python ShortsB.py --veids fakts --fakts 2                     → video par kandidātu #2 (vai --fakts auto)
-    python ShortsB.py --neizmantots video/2026-10-30_fakts        → fakts netika publicēts – izņemt no vēstures
-    citi parametri: --top 3  --min-metieni 15  --balss en-US-GuyNeural  --bez-balss
-                    --lidz 2026-10-25   (izmantot datus tikai līdz šim datumam; noder pārbaudei / atkārtošanai)
-Rezultāts: katrai ģenerācijai sava mape video/<šodienas datums>_<veids>/ (piem. video/2026-10-26_speletaji/):
-  .mp4 video, .txt (virsraksts, apraksts, runa), .json (tikai xG video – atskatam) un INFO.txt (kad ģenerēts, kādi dati,
-  ar kādu komandu, un vai/kad jātaisa atskats + gatava komanda). Atskata mape: video/<datums>_atskats_<veids>/;
-  izveidojot atskatu, oriģinālās mapes INFO.txt tiek atzīmēts "ATSKATS IZVEIDOTS".
-.txt failā: virsraksts, apraksts ar tēmturiem, datu periods un runas teksts.
+REZULTĀTS: katrai ģenerācijai sava mape video/<datums>_<veids>/ – .mp4, .txt (virsraksts, apraksts, runa,
+  piespraužamais komentārs), thumbnail.png, INFO.txt (kad, kādi dati, komanda, vai/kad atskats), .json (xG, fantasy).
 """
 import argparse
 import asyncio
