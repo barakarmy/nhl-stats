@@ -1278,10 +1278,13 @@ def aina_fantasy(t, c):
     leg = ([("POINT", S.ZALS), ("NO POINT", S.NEITRALS)] if c.get("grafika_virs") == "GAMES THAT WEEK"
            else [("SOFT D", S.ZALS), ("AVERAGE", S.NEITRALS), ("TOUGH D", S.SARKANS)])
     fl = S.fonts("semi", 26)
+    vb = d.textbbox((x0 + 50, yg), c.get("grafika_virs", "NEXT WEEK"), font=S.fonts("semi", 36))
+    cy = (vb[1] + vb[3]) / 2                                          # virsraksta burtu vertikālais centrs
     lx = x0 + 50 + virs_w + 34
     for txt_, kr_ in leg:
-        d.ellipse([lx, yg + 12, lx + 20, yg + 32], fill=kr_)
-        d.text((lx + 28, yg + 7), txt_, font=fl, fill=S.PELEKS)
+        d.ellipse([lx, cy - 10, lx + 20, cy + 10], fill=kr_)
+        tb = d.textbbox((0, 0), txt_, font=fl)
+        d.text((lx + 28, cy - (tb[1] + tb[3]) / 2), txt_, font=fl, fill=S.PELEKS)
         lx += 28 + d.textlength(txt_, font=fl) + 26
     pr = c["pretinieki"]
     if pr:
