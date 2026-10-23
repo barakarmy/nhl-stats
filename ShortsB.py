@@ -1809,6 +1809,30 @@ def renderet(s, izvade, kanals="", balss=None):
     return kopa, bool(audio)
 
 
+TESTA_MAPE = "video_test"
+VESTURES_FAILI = ("fakti_vesture.json", "frazes_vesture.json", "tiesnesi_vesture.json", "fantasy_rezultati.json",
+                  "shorts_mediji.json")
+
+
+def testa_mape():
+    """--tests: video tiek saglabāti video_test\\ (nevis video\\). Pirms katras palaišanas uz turieni nokopē īstās vēstures
+    (fakti, frāzes, tiesneši, fantasy rezultāti, fona/mūzikas kārta) – tests izvēlas TIEŠI to pašu, ko izvēlētos īstais video,
+    bet īstā vēsture video\\ netiek aiztikta."""
+    import shutil
+    ista = os.path.join(S.BASE, "video")
+    tm = os.path.join(S.BASE, TESTA_MAPE)
+    os.makedirs(tm, exist_ok=True)
+    for f in VESTURES_FAILI:
+        src = os.path.join(ista, f)
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(tm, f))
+        elif os.path.exists(os.path.join(tm, f)):
+            os.remove(os.path.join(tm, f))
+    if "--mape" not in sys.argv:
+        sys.argv += ["--mape", tm]
+    print(f"TESTS: video mapē {TESTA_MAPE}\\ (īstā vēsture video\\ netiek mainīta)")
+
+
 def ieslegt():
     for k in ("fakts_konteksts", "karte", "fantasy", "fakts_hook", "outro", "intro"):
         _orig[k] = getattr(S, "aina_" + k)
@@ -1827,6 +1851,9 @@ def ieslegt():
         return s_
     S.atskats = atskats_ar_aki
     S.VEIDI["fakts"] = veids_fakti_b
+    if "--tests" in sys.argv:                                         # testa režīms – atsevišķa mape video_test\\
+        sys.argv.remove("--tests")
+        testa_mape()
     if "--kanals" not in sys.argv:
         sys.argv += ["--kanals", KANALS_NOKL]
     for arg, k in (("--bez-fona-video", "fons"), ("--bez-muzikas", "muzika"), ("--bez-sfx", "sfx"), ("--bez-logo", "logo")):
