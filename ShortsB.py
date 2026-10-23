@@ -450,6 +450,11 @@ def sfx_notikumi(ainas):
         if veids == "outro" and c and c.get("verdikts"):               # THE FINAL VERDICT: boom + tick katrai kartītei
             ev.append((t0 + 0.05, "boom", 0.7))
             ev += [(t0 + 0.5 + 0.45 * j, "tick", 0.8) for j in range(min(3, len(c["verdikts"])))]
+        if veids == "outro" and c and c.get("fakti_tiles"):            # faktu beigas: boom + tick katrai flīzei
+            ev.append((t0 + 0.05, "boom", 0.7))
+            ev += [(t0 + 0.45 + 0.22 * j, "tick", 0.7) for j in range(len(c["fakti_tiles"]))]
+            if c.get("streak"):
+                ev.append((t0 + 0.6 + 0.22 * len(c["fakti_tiles"]), "boom", 0.5))
         if nr == 0:
             ev.append((t0, "boom", 0.9))
             if veids == "intro":
@@ -997,11 +1002,27 @@ def veids_fakti_b(m, a):
         kartes.append({"tips": "fakts_nakamais", "ilgums": 3.6, **hero})
         runa.append(hero["runa"][3])
     if n > 1:
+        tiles = [{"skaitlis": c_.get("skaitlis", ""), "apaksa": c_.get("skaitlis_apaksa", ""),
+                  "vards": (f"{c_.get('vards', '')}" + (f" ({c_['badge']})" if c_.get("badge") and c_["badge"] not in str(c_.get("vards", "")) else "")),
+                  "retums": c_.get("retums", 0)} for c_ in izv]
+        sr = next((c_ for c_ in izv if c_.get("aktiva") and c_.get("nakamais")), None)
+        streak = None
+        if sr is not None:
+            streak = {"vards": str(sr.get("vards", "")).upper(), "garums": sr.get("garums", 0), "nakamais": sr["nakamais"],
+                      "konteksts": (sr.get("konteksts") or [""])[0]}
         outro = {"rindas": [("WHICH ONE", S.BALTS), ("SURPRISED YOU?", S.DZELTENS)],
                  "info": [f"Stats through {S.dat(lidz, True)}", "History: our database since 2023-24"],
                  "follow": "FOLLOW FOR WEEKLY NHL FACTS", "komentars": f"COMMENT 1–{n}",
-                 "komentars2": "Which fact surprised you most?"}
-        runa.append("Which one surprised you most? Comment the number. Follow for weekly NHL facts, and remember:")
+                 "komentars2": "Which fact surprised you most?", "fakti_tiles": tiles, "streak": streak}
+        sw = ""
+        if streak:
+            nk = sr["nakamais"]
+            dn = {"MON": "Monday", "TUE": "Tuesday", "WED": "Wednesday", "THU": "Thursday", "FRI": "Friday", "SAT": "Saturday",
+                  "SUN": "Sunday"}.get(str(nk[0]).split(",")[0].strip().upper()[:3], "")
+            pret = str(nk[1]).replace("@", "").replace("vs", "").strip().title()
+            sw = (f" Streak watch: {sr.get('vards', '')}, {sr.get('garums')} straight. Next up: the {pret}"
+                  + (f" on {dn}" if dn else "") + f". {str(nk[2]).capitalize()}")
+        runa.append("Which one surprised you most? Comment the number." + sw + " Follow for weekly NHL facts, and remember:")
     else:
         outro = {"rindas": [("NHL FACT", S.BALTS), ("OF THE WEEK.", S.DZELTENS)],
                  "info": [f"Stats through {S.dat(lidz, True)}", "History: our database since 2023-24"],
@@ -1415,7 +1436,132 @@ def pill_slips(d, x, y, txt, f, bg, fg=None, pad=(26, 12), center=False):
     return w, h
 
 
+def _jauna_beigu_aina(o):
+    return bool(o.get("verdikts") or o.get("fakti_tiles"))
+
+
+RETUMS_TXT = ((0.85, "EXTREMELY RARE"), (0.7, "VERY RARE"), (0.55, "RARE"), (0.0, "UNCOMMON"))
+
+
+def aina_fakti_beigas(t, s, kanals):
+    """Faktu video beigas: "YOUR PICK" – visi fakti numurētās flīzēs ar retumu + "STREAK WATCH" aktīvai sērijai."""
+    im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    # virsraksts
+    k = S.ease(t / 0.35)
+    f = S.fonts("black", 74)
+    txt = "YOUR PICK"
+    bb = d.textbbox((0, 0), txt, font=f)
+    h_, sl = 112, 40
+    w_ = (bb[2] - bb[0]) + 2 * sl + 60
+    x0 = (S.W - w_) / 2 - (1 - k) * 700
+    y0 = 226
+    d.polygon([(x0 + sl, y0), (x0 + w_, y0), (x0 + w_ - sl, y0 + h_), (x0, y0 + h_)], fill=S.ar_alfa(S.DZELTENS, 255 * k))
+    for i_ in range(2):
+        for xx in (x0 - 44 - i_ * 26, x0 + w_ + 12 + i_ * 26):
+            d.polygon([(xx + 22, y0 + 18), (xx + 34, y0 + 18), (xx + 12, y0 + h_ - 18), (xx, y0 + h_ - 18)],
+                      fill=S.ar_alfa(S.DZELTENS, 200 * k))
+    d.text((x0 + sl + 30 - bb[0], y0 + (h_ - (bb[3] - bb[1])) / 2 - bb[1]), txt, font=f, fill=S.MELNS)
+    S.teksts_c(d, 364, "WHICH ONE SURPRISED YOU MOST?", S.fonts("semi", 36),
+               S.ar_alfa((147, 197, 253), 255 * S.ease((t - 0.25) / 0.4)))
+
+    flizes = s["fakti_tiles"]
+    st = s.get("streak")
+    n = len(flizes)
+    X0, X1, Y = 70, S.W - 70, 430
+    RH = int(min(190, (1430 - Y - (400 if st else 0)) / max(1, n) - 14))
+    if not st:                                                        # bez sērijas – flīzes vertikāli centrā
+        Y += max(0, (1430 - Y - n * (RH + 14)) // 2 - 20)
+    for i, c in enumerate(flizes):
+        kc = S.ease((t - 0.45 - 0.22 * i) / 0.35)
+        if kc <= 0:
+            continue
+        y = Y + i * (RH + 14) + (1 - kc) * 40
+        d.rounded_rectangle([X0, y, X1, y + RH], radius=26, fill=S.ar_alfa(KARTE_KR, 255 * kc),
+                            outline=S.ar_alfa(S.DZELTENS if i == 0 else (52, 58, 84), 255 * kc), width=3)
+        # numurs
+        r_ = RH * 0.32
+        cx, cy = X0 + 26 + r_, y + RH / 2
+        d.ellipse([cx - r_, cy - r_, cx + r_, cy + r_], fill=S.ar_alfa(S.DZELTENS, 255 * kc))
+        fn = S.fonts("black", int(r_ * 1.0))
+        nb = d.textbbox((0, 0), f"#{i + 1}", font=fn)
+        d.text((cx - (nb[2] - nb[0]) / 2 - nb[0], cy - (nb[3] - nb[1]) / 2 - nb[1]), f"#{i + 1}", font=fn, fill=S.MELNS)
+        # lielais skaitlis + apraksts
+        tx = cx + r_ + 26
+        sk_ = str(c.get("skaitlis", ""))
+        fs = S.ietilpinat(d, sk_, "black", int(min(84, RH * 0.40)), 360)
+        d.text((tx, y + RH * 0.12), sk_, font=fs, fill=S.ar_alfa(S.BALTS, 255 * kc))
+        apr = f"{c.get('vards', '')}  ·  {c.get('apaksa', '')}".strip(" ·")
+        d.text((tx, y + RH * 0.12 + fs.size * 1.08), apr,
+               font=S.ietilpinat(d, apr, "semi", int(min(32, RH * 0.19)), X1 - 30 - 5 * 34 - tx - 24),
+               fill=S.ar_alfa(S.PELEKS, 255 * kc))
+        # retums: punkti + teksts (labajā pusē)
+        ret = float(c.get("retums") or 0)
+        pk = max(1, min(5, round(ret * 5)))
+        lab = next(tx_ for lim, tx_ in RETUMS_TXT if ret >= lim)
+        rx = X1 - 30 - 5 * 34
+        for j in range(5):
+            xx = rx + j * 34
+            d.ellipse([xx, cy - 30, xx + 22, cy - 8], fill=S.ar_alfa(S.DZELTENS if j < pk else (52, 58, 84), 255 * kc))
+        fl = S.fonts("bold", 24)
+        d.text((X1 - 30 - d.textlength(lab, font=fl), cy + 6), lab, font=fl, fill=S.ar_alfa(S.DZELTENS if pk >= 4 else S.PELEKS, 255 * kc))
+
+    # STREAK WATCH
+    yk = Y + n * (RH + 14) + 10
+    if st:
+        ks = S.ease((t - 0.6 - 0.22 * n) / 0.4)
+        if ks > 0:
+            hh = min(1430 - yk, 400)
+            yy = yk + (1430 - yk - hh) / 2 + (1 - ks) * 60
+            d.rounded_rectangle([X0, yy, X1, yy + hh], radius=30, fill=S.ar_alfa(KARTE_KR, 255 * ks), outline=S.ar_alfa(S.ZALS, 255 * ks), width=3)
+            _slips(d, X0 + 20, yy + 20, 50, "STREAK WATCH", 30, ks, fill=S.ZALS)
+            nos = f"{st['vards']}  ·  {st['garums']} STRAIGHT"
+            d.text((X0 + 30, yy + 88), nos, font=S.ietilpinat(d, nos, "black", 46, X1 - X0 - 60), fill=S.ar_alfa(S.BALTS, 255 * ks))
+            # sērijas mērītājs: katra spēle – aizpildīts kvadrātiņš, nākamā – "?"
+            g_ = int(st["garums"])
+            n_kv = min(g_, 18)
+            kv = min(44, (X1 - X0 - 60 - 60) / (n_kv + 1) - 8)
+            for j in range(n_kv + 1):
+                xx = X0 + 30 + j * (kv + 8)
+                kj = S.ease((t - 0.9 - 0.22 * n - 0.03 * j) / 0.2)
+                if j < n_kv:
+                    d.rounded_rectangle([xx, yy + 156, xx + kv, yy + 156 + kv], radius=8, fill=S.ar_alfa(S.DZELTENS, 255 * ks * kj))
+                else:
+                    d.rounded_rectangle([xx, yy + 156, xx + kv, yy + 156 + kv], radius=8, outline=S.ar_alfa(S.BALTS, 255 * ks),
+                                        width=3)
+                    fq = S.fonts("black", int(kv * 0.7))
+                    qb = d.textbbox((0, 0), "?", font=fq)
+                    d.text((xx + (kv - (qb[2] - qb[0])) / 2 - qb[0], yy + 156 + (kv - (qb[3] - qb[1])) / 2 - qb[1]), "?", font=fq,
+                           fill=S.ar_alfa(S.BALTS, 255 * ks))
+            if g_ > n_kv:
+                d.text((X0 + 30 + (n_kv + 1) * (kv + 8) + 6, yy + 160), f"+{g_ - n_kv}", font=S.fonts("bold", 30),
+                       fill=S.ar_alfa(S.PELEKS, 255 * ks))
+            nk = st.get("nakamais") or ("", "", "")
+            nxt = f"NEXT: {nk[0]}  {nk[1]}".strip()
+            d.text((X0 + 30, yy + 156 + kv + 22), nxt, font=S.ietilpinat(d, nxt, "bold", 34, X1 - X0 - 60),
+                   fill=S.ar_alfa(S.PELEKS, 255 * ks))
+            if st.get("konteksts") and hh >= 380:
+                kt = str(st["konteksts"]).upper()
+                d.text((X0 + 30, yy + 156 + kv + 68), kt, font=S.ietilpinat(d, kt, "semi", 28, X1 - X0 - 60),
+                       fill=S.ar_alfa(S.DZELTENS, 255 * ks))
+            if nk[2]:
+                fq = S.ietilpinat(d, nk[2], "black", 54, X1 - X0 - 60)
+                d.text((X0 + 30, yy + hh - fq.size - 26), nk[2], font=fq, fill=S.ar_alfa(S.ZALS, 255 * ks))
+
+    # komentārs
+    kq = ease_back((t - 0.9 - 0.22 * n - (0.4 if st else 0)) / 0.5)
+    if kq > 0:
+        x0, y0, x1, y1 = 120, 1462, S.W - 120, 1602
+        dy = (1 - kq) * 80
+        d.rounded_rectangle([x0, y0 + dy, x1, y1 + dy], radius=34, fill=(245, 247, 250))
+        S.teksts_c(d, y0 + 22 + dy, s.get("komentars", "COMMENT BELOW"), S.fonts("black", 50), S.MELNS)
+        S.teksts_c(d, y0 + 88 + dy, f"Comment the number  ·  follow {kanals}".strip(" ·"), S.fonts("semi", 32), (71, 85, 105))
+    return im
+
+
 def aina_outro(t, s, kanals):
+    if s.get("fakti_tiles"):
+        return aina_fakti_beigas(t, s, kanals)
     if s.get("verdikts"):
         return aina_verdikts(t, s, kanals)
     im = _orig["outro"](t, s, kanals)
@@ -1444,8 +1590,8 @@ def renderet(s, izvade, kanals="", balss=None):
     if not shutil.which("ffmpeg"):
         raise SystemExit("Nav ffmpeg (Windows: winget install ffmpeg, tad jauns terminālis).")
     ainas = ([("intro", None, s["intro"].get("ilgums", 3.2))] if s.get("intro") else []) + [("karte", c, c.get("ilgums", 3.6)) for c in s["kartes"]] \
-        + [("outro", s["outro"] if s["outro"].get("verdikts") else None,
-            VERDIKTS_ILGUMS if s["outro"].get("verdikts") else (4.5 if s["outro"].get("cta") else 3.6))]
+        + [("outro", s["outro"] if _jauna_beigu_aina(s["outro"]) else None,
+            VERDIKTS_ILGUMS if _jauna_beigu_aina(s["outro"]) else (4.5 if s["outro"].get("cta") else 3.6))]
     tmp = tempfile.mkdtemp(prefix="shorts_")
     audio = S.ierunat(s["runa"], balss, tmp) if balss else None
     if audio and len(audio) == len(ainas) and all(dur > 0 for _, dur in audio):
