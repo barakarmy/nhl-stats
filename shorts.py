@@ -27,7 +27,7 @@ video, kas publicēts pirms ~2,5 nedēļām. Lai dati starp viena veida video ne
 
 Palaišana (repozitorija mapē):
     pip install pandas numpy pillow edge-tts     (+ ffmpeg: Windows – winget install ffmpeg, tad jauns terminālis)
-    python ShortsB.py --veids speletaji --dienas 21 --kanals @tavskanals
+    python ShortsB.py --veids speletaji --dienas 21
     python ShortsB.py --veids komandas  --dienas 21
     python ShortsB.py --veids vartsargi --dienas 21
     python ShortsB.py --atskats video/2026-10-26_speletaji        (mape, ko izveidoja jaunais video)
@@ -2064,7 +2064,7 @@ def fakti_saraksts(kand, n=12):
     print(f"\n {'#':>2}  VĒRT.  FAKTS")
     for i, c in enumerate(kand[:n], 1):
         print(f" {i:>2}   {c['vert']:>3}   {c['teksts']}" + ("  ▶ AKTĪVA" if c["aktiva"] else ""))
-    print(f"\nVideo: python {skripts()} --veids fakts --fakts <numurs> --kanals @tavskanals   (vai --fakts auto)")
+    print(f"\nVideo: python {skripts()} --veids fakts --fakts <numurs>   (vai --fakts auto)")
 
 
 def veids_fakts(m, a):
