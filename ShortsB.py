@@ -1257,6 +1257,16 @@ def aina_fantasy(t, c):
             d.text((fx + tw_ - 18 - S.platums(d, sub, fs), fy + th_ - 44), sub, font=fs, fill=S.ar_alfa(krs, 255 * k))
     yg = y0 + 850
     d.text((x0 + 50, yg), c.get("grafika_virs", "NEXT WEEK"), font=S.fonts("semi", 36), fill=S.PELEKS)
+    # krāsu skaidrojums blakus virsrakstam
+    virs_w = d.textlength(c.get("grafika_virs", "NEXT WEEK"), font=S.fonts("semi", 36))
+    leg = ([("POINT", S.ZALS), ("NO POINT", S.NEITRALS)] if c.get("grafika_virs") == "GAMES THAT WEEK"
+           else [("SOFT D", S.ZALS), ("AVERAGE", S.NEITRALS), ("TOUGH D", S.SARKANS)])
+    fl = S.fonts("semi", 26)
+    lx = x0 + 50 + virs_w + 34
+    for txt_, kr_ in leg:
+        d.ellipse([lx, yg + 12, lx + 20, yg + 32], fill=kr_)
+        d.text((lx + 28, yg + 7), txt_, font=fl, fill=S.PELEKS)
+        lx += 28 + d.textlength(txt_, font=fl) + 26
     pr = c["pretinieki"]
     if pr:
         n = len(pr)
