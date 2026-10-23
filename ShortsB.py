@@ -11,7 +11,8 @@ mainās tikai izskats un kustība:
   • komandu krāsas kartītēs un datu joslās (primārā + sekundārā krāsa)
   • fons – izpludināts hokeja video (B-roll) no mapes shorts_fons\\ (ja tur ir video)
   • āķis pirmajās ~2,4 s (konkrēts skaitlis + izpludināts #1), secība #3 → #1, cilpa beigās ("…remember:")
-  • pelēka ūdenszīme (ripa + @IceMathHockey) augšā pa kreisi, krāsains ICE MATH logo beigu kadrā
+  • sākumā "brand header" (dzeltena ripa + balts @IceMathHockey), tad maza dzeltena ripa kā watermark (70 %),
+    augšā pa kreisi; krāsains ICE MATH logo beigu kadrā
   • tiesnešu video fons automātiski palēnināts tā, lai klips izstieptos pa visu video (FONA_ATRUMS_VEIDAM)
   • audio: klusa fona mūzika no mapes shorts_muzika\\ + skaņu efekti (swoosh, boom, tick)
 
@@ -29,7 +30,7 @@ Mapes (izveido pats nhl-stats saknē; ja mapes nav vai tā tukša – attiecīg�
   Ja veidam ir vairāki faili, tie tiek ņemti pēc kārtas (1, 2, 3, 1 ...); kārta saglabājas
   video\\shorts_mediji.json. Ja nav ne sava, ne visi_ faila – fons paliek krāsainais / bez mūzikas.
   shorts_sfx\\      (nav obligāti) swoosh.mp3 / boom.mp3 / tick.mp3 – aizstāj skripta ģenerētos efektus.
-  shorts_logo.png      kanāla ikona (caurspīdīga) – mazs logo + @rokturis augšējā kreisajā stūrī katrā kadrā.
+  shorts_logo.png      kanāla ikona (caurspīdīga) – sākumā ar @rokturi (galvene), tad maza ripa (watermark).
   shorts_wordmark.png  logo ar nosaukumu (caurspīdīgs) – beigu kadrā. Ja failu nav, rāda tikai @rokturi.
   Rokturis pēc noklusējuma: KANALS_NOKL (zemāk); --kanals @cits to aizstāj.
 Papildu parametri: --bez-fona-video  --bez-muzikas  --bez-sfx  --bez-logo
@@ -73,10 +74,14 @@ OPC = {"fons": True, "muzika": True, "sfx": True, "logo": True}
 KANALS_NOKL = "@IceMathHockey"            # rokturis, ja --kanals nav norādīts
 LOGO_FAILS = os.path.join(S.BASE, "shorts_logo.png")           # ikona ūdenszīmei (caurspīdīgs PNG)
 WORDMARK_FAILS = os.path.join(S.BASE, "shorts_wordmark.png")   # logo ar nosaukumu beigu kadram
-LOGO_AUGSTUMS = 62                        # ūdenszīmes augstums pikseļos (kadrs 1080×1920)
-LOGO_ALFA = 0.45                          # ūdenszīmes redzamība (0–1)
-LOGO_MELNBALTS = True                     # ūdenszīme pelēka (kā watermark); False = krāsaina
-LOGO_POZ = (38, 40)                       # augšējais kreisais stūris (Shorts pogas ir labajā pusē un apakšā)
+# Video sākumā – "brand header" (krāsaina ripa + balts @rokturis), pēc tam – tikai maza ripa (watermark).
+GALVENE_AUGSTUMS = 62                     # galvenes ikonas augstums pikseļos (kadrs 1080×1920)
+GALVENE_LAIKS = 2.6                       # cik sekundes galvene redzama video sākumā (0 = uzreiz tikai watermark)
+LOGO_AUGSTUMS = 50                        # watermark ripas augstums pikseļos
+LOGO_ALFA = 0.70                          # watermark necaurspīdīgums (0.65–0.75 = watermark efekts)
+LOGO_MELNBALTS = False                    # True = pelēka ripa
+LOGO_MALA = 46                            # atstarpe no kreisās un augšējās malas (augšējais kreisais stūris –
+                                          #  Shorts pogas ir labajā pusē un apakšā)
 
 # komandu sekundārās krāsas (primārās – shorts.KOMANDAS)
 SEKUNDARAS = {
@@ -207,34 +212,71 @@ def _logo(fails, augstums):
     return _logo_kesa[k]
 
 
-def udenszime(kanals):
-    """Mazs logo + @rokturis (sagatavo vienreiz video sākumā). None, ja nav ne logo, ne roktura."""
-    if not OPC["logo"]:
+def _ar_alfu(im, k):
+    """Kopija ar reizinātu caurspīdīgumu (0..1)."""
+    out = im.copy()
+    out.putalpha(im.getchannel("A").point(lambda v: int(v * k)))
+    return out
+
+
+def zimola_galvene(kanals):
+    """Video sākumam: krāsaina ripa + balts @rokturis (pilnā redzamībā). None, ja nav ne logo, ne roktura."""
+    if not OPC["logo"] or GALVENE_LAIKS <= 0:
         return None
-    ik = _logo(LOGO_FAILS, LOGO_AUGSTUMS)
+    ik = _logo(LOGO_FAILS, GALVENE_AUGSTUMS)
     txt = (kanals or "").strip()
     if ik is None and not txt:
         return None
-    f = S.fonts("bold", 34)
+    f = S.fonts("bold", 36)
     d0 = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     tw = int(d0.textlength(txt, font=f)) if txt else 0
-    gap = 14 if (ik is not None and txt) else 0
+    gap = 16 if (ik is not None and txt) else 0
     iw = ik.width if ik is not None else 0
-    im = Image.new("RGBA", (iw + gap + tw + 6, LOGO_AUGSTUMS + 6), (0, 0, 0, 0))
+    im = Image.new("RGBA", (iw + gap + tw + 6, GALVENE_AUGSTUMS + 6), (0, 0, 0, 0))
     if ik is not None:
-        if LOGO_MELNBALTS:                                            # pelēka ikona ar to pašu caurspīdīgumu
-            g = ik.convert("L").point(lambda v: int(150 + v * 0.42)).convert("RGBA")
-            g.putalpha(ik.getchannel("A"))
-            ik = g
         im.alpha_composite(ik, (0, 0))
     if txt:
         d = ImageDraw.Draw(im)
         bb = d.textbbox((0, 0), txt, font=f)
-        y = (LOGO_AUGSTUMS - (bb[3] - bb[1])) // 2 - bb[1]
-        d.text((iw + gap + 2, y + 2), txt, font=f, fill=(0, 0, 0, 90))    # viegla ēna – lasāms arī uz gaiša fona
-        d.text((iw + gap, y), txt, font=f, fill=(226, 232, 240, 255) if LOGO_MELNBALTS else (255, 255, 255, 255))
-    im.putalpha(im.getchannel("A").point(lambda v: int(v * LOGO_ALFA)))
+        y = (GALVENE_AUGSTUMS - (bb[3] - bb[1])) // 2 - bb[1]
+        d.text((iw + gap + 2, y + 2), txt, font=f, fill=(0, 0, 0, 120))   # ēna – lasāms arī uz gaiša fona
+        d.text((iw + gap, y), txt, font=f, fill=(255, 255, 255, 255))
     return im
+
+
+def udenszime(kanals):
+    """Pastāvīgā watermark: tikai ripa ar Σ, maza, LOGO_ALFA necaurspīdīgumā. Bez logo faila – mazs @rokturis."""
+    if not OPC["logo"]:
+        return None
+    ik = _logo(LOGO_FAILS, LOGO_AUGSTUMS)
+    if ik is not None:
+        if LOGO_MELNBALTS:
+            g = ik.convert("L").point(lambda v: int(150 + v * 0.42)).convert("RGBA")
+            g.putalpha(ik.getchannel("A"))
+            ik = g
+        return _ar_alfu(ik, LOGO_ALFA)
+    txt = (kanals or "").strip()
+    if not txt:
+        return None
+    f = S.fonts("bold", 30)
+    d0 = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    im = Image.new("RGBA", (int(d0.textlength(txt, font=f)) + 6, 44), (0, 0, 0, 0))
+    ImageDraw.Draw(im).text((0, 4), txt, font=f, fill=(255, 255, 255, 255))
+    return _ar_alfu(im, LOGO_ALFA)
+
+
+def logo_slanis(galv, uz, T):
+    """Kas redzams laikā T: [(attēls, alfa)]. Galvene: fade-in 0,3 s → GALVENE_LAIKS → fade-out 0,4 s;
+    watermark: īss fade-in (0,4 s) pēc galvenes, tad nekustīgs."""
+    out = []
+    if galv is not None and T < GALVENE_LAIKS + 0.4:
+        a = min(1.0, T / 0.3) if T < GALVENE_LAIKS else 1 - (T - GALVENE_LAIKS) / 0.4
+        out.append((galv, max(0.0, a)))
+    if uz is not None:
+        t0 = (GALVENE_LAIKS + 0.2) if galv is not None else 0.0
+        if T >= t0:
+            out.append((uz, min(1.0, (T - t0) / 0.4)))
+    return out
 
 
 def _ilgums(fails):
@@ -1280,6 +1322,7 @@ def renderet(s, izvade, kanals="", balss=None):
                           "-movflags", "+faststart", "-pix_fmt", "yuv420p",
                           video_tmp], stdin=subprocess.PIPE)
     uz = udenszime(kanals)
+    galv = zimola_galvene(kanals)
     fn_map = {"fantasy": aina_fantasy, "grafiks": S.aina_grafiks, "fakts_hook": aina_fakts_hook,
               "fakts_saraksts": aina_fakts_saraksts, "fakts_konteksts": aina_fakts_konteksts,
               "fakts_nakamais": S.aina_fakts_nakamais, "fakts_mini": aina_fakts_mini}
@@ -1328,8 +1371,11 @@ def renderet(s, izvade, kanals="", balss=None):
             # progresa josla: dzeltena līnija augšā (kā shorts.py)
             dd.rectangle([0, 0, S.W, 10], fill=(255, 255, 255, 30))
             dd.rectangle([0, 0, S.W * min(1, (t0 + t) / kopa), 10], fill=S.DZELTENS)
-            if uz is not None and veids != "outro":                   # ūdenszīme (beigu kadrā – lielais logo)
-                kadrs.paste(uz, LOGO_POZ, uz)
+            if veids != "outro":                                      # galvene / watermark (beigu kadrā – lielais logo)
+                for lim, a_ in logo_slanis(galv, uz, t0 + t):
+                    if a_ > 0:
+                        l2 = lim if a_ >= 1 else _ar_alfu(lim, a_)
+                        kadrs.paste(l2, (LOGO_MALA, LOGO_MALA), l2)
             p.stdin.write(kadrs.tobytes())
         t0 += ilg
     p.stdin.close()
