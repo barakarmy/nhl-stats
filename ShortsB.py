@@ -26,10 +26,13 @@ Mapes (izveido pats nhl-stats saknē; ja mapes nav vai tā tukša – attiecīg�
   Ja veidam ir vairāki faili, tie tiek ņemti pēc kārtas (1, 2, 3, 1 ...); kārta saglabājas
   video\\shorts_mediji.json. Ja nav ne sava, ne visi_ faila – fons paliek krāsainais / bez mūzikas.
   shorts_sfx\\      (nav obligāti) swoosh.mp3 / boom.mp3 / tick.mp3 – aizstāj skripta ģenerētos efektus.
-Papildu parametri: --bez-fona-video  --bez-muzikas  --bez-sfx
+  shorts_logo.png      kanāla ikona (caurspīdīga) – mazs logo + @rokturis augšējā kreisajā stūrī katrā kadrā.
+  shorts_wordmark.png  logo ar nosaukumu (caurspīdīgs) – beigu kadrā. Ja failu nav, rāda tikai @rokturi.
+  Rokturis pēc noklusējuma: KANALS_NOKL (zemāk); --kanals @cits to aizstāj.
+Papildu parametri: --bez-fona-video  --bez-muzikas  --bez-sfx  --bez-logo
 
 Lietošana – tieši tāpat kā shorts.py, tikai cits faila nosaukums:
-    python ShortsB.py --veids tiesnesi --kanals @tavskanals
+    python ShortsB.py --veids tiesnesi
 Video, INFO.txt un vēsture (fakti, tiesneši, fantasy rezultāti, atskati) – parastajā mapē video\\, tāpat kā shorts.py.
 Failu var saukt kā grib (piem. ShortsB.py), bet shorts.py jāatrodas tajā pašā mapē.
 """
@@ -63,7 +66,14 @@ FONA_ATRUMS_MIN = 0.08          # "auto" ne lēnāk par ~12×
 SR = 44100
 VIDEO_PAPL = (".mp4", ".mov", ".m4v", ".webm", ".mkv")
 AUDIO_PAPL = (".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac")
-OPC = {"fons": True, "muzika": True, "sfx": True}
+OPC = {"fons": True, "muzika": True, "sfx": True, "logo": True}
+KANALS_NOKL = "@IceMathHockey"            # rokturis, ja --kanals nav norādīts
+LOGO_FAILS = os.path.join(S.BASE, "shorts_logo.png")           # ikona ūdenszīmei (caurspīdīgs PNG)
+WORDMARK_FAILS = os.path.join(S.BASE, "shorts_wordmark.png")   # logo ar nosaukumu beigu kadram
+LOGO_AUGSTUMS = 62                        # ūdenszīmes augstums pikseļos (kadrs 1080×1920)
+LOGO_ALFA = 0.45                          # ūdenszīmes redzamība (0–1)
+LOGO_MELNBALTS = True                     # ūdenszīme pelēka (kā watermark); False = krāsaina
+LOGO_POZ = (38, 40)                       # augšējais kreisais stūris (Shorts pogas ir labajā pusē un apakšā)
 
 # komandu sekundārās krāsas (primārās – shorts.KOMANDAS)
 SEKUNDARAS = {
@@ -176,6 +186,52 @@ class Fons:
         d.line([(0, 1250), (S.W, 1250)], fill=(220, 38, 38, 30), width=6)
         d.ellipse([S.W / 2 - 330, 920, S.W / 2 + 330, 1580], outline=(255, 255, 255, 18), width=5)
         return im
+
+
+_logo_kesa = {}
+
+
+def _logo(fails, augstums):
+    """Ielādē caurspīdīgu PNG, apgriež tukšās malas un samazina līdz augstumam (kešā)."""
+    k = (fails, augstums)
+    if k not in _logo_kesa:
+        try:
+            im = Image.open(fails).convert("RGBA")
+            im = im.crop(im.getbbox())
+            _logo_kesa[k] = im.resize((max(1, int(im.width * augstums / im.height)), augstums), Image.LANCZOS)
+        except Exception:                                             # noqa: BLE001
+            _logo_kesa[k] = None
+    return _logo_kesa[k]
+
+
+def udenszime(kanals):
+    """Mazs logo + @rokturis (sagatavo vienreiz video sākumā). None, ja nav ne logo, ne roktura."""
+    if not OPC["logo"]:
+        return None
+    ik = _logo(LOGO_FAILS, LOGO_AUGSTUMS)
+    txt = (kanals or "").strip()
+    if ik is None and not txt:
+        return None
+    f = S.fonts("bold", 34)
+    d0 = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    tw = int(d0.textlength(txt, font=f)) if txt else 0
+    gap = 14 if (ik is not None and txt) else 0
+    iw = ik.width if ik is not None else 0
+    im = Image.new("RGBA", (iw + gap + tw + 6, LOGO_AUGSTUMS + 6), (0, 0, 0, 0))
+    if ik is not None:
+        if LOGO_MELNBALTS:                                            # pelēka ikona ar to pašu caurspīdīgumu
+            g = ik.convert("L").point(lambda v: int(150 + v * 0.42)).convert("RGBA")
+            g.putalpha(ik.getchannel("A"))
+            ik = g
+        im.alpha_composite(ik, (0, 0))
+    if txt:
+        d = ImageDraw.Draw(im)
+        bb = d.textbbox((0, 0), txt, font=f)
+        y = (LOGO_AUGSTUMS - (bb[3] - bb[1])) // 2 - bb[1]
+        d.text((iw + gap + 2, y + 2), txt, font=f, fill=(0, 0, 0, 90))    # viegla ēna – lasāms arī uz gaiša fona
+        d.text((iw + gap, y), txt, font=f, fill=(226, 232, 240, 255) if LOGO_MELNBALTS else (255, 255, 255, 255))
+    im.putalpha(im.getchannel("A").point(lambda v: int(v * LOGO_ALFA)))
+    return im
 
 
 def _ilgums(fails):
@@ -1172,6 +1228,12 @@ def aina_fantasy(t, c):
 
 def aina_outro(t, s, kanals):
     im = _orig["outro"](t, s, kanals)
+    wm = _logo(WORDMARK_FAILS, 200) if OPC["logo"] else None
+    if wm is not None and t > 0.05:                                   # logo ar nosaukumu beigu kadra augšā
+        k = S.ease(t / 0.45)
+        w2 = wm.copy()
+        w2.putalpha(w2.getchannel("A").point(lambda v: int(v * k)))
+        im.alpha_composite(w2, ((S.W - wm.width) // 2, int(300 + (1 - k) * 40)))
     if not s.get("cta") and t > 0.9:
         k = ease_back((t - 0.9) / 0.5)
         d = ImageDraw.Draw(im)
@@ -1214,6 +1276,7 @@ def renderet(s, izvade, kanals="", balss=None):
                           "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
                           "-movflags", "+faststart", "-pix_fmt", "yuv420p",
                           video_tmp], stdin=subprocess.PIPE)
+    uz = udenszime(kanals)
     fn_map = {"fantasy": aina_fantasy, "grafiks": S.aina_grafiks, "fakts_hook": aina_fakts_hook,
               "fakts_saraksts": aina_fakts_saraksts, "fakts_konteksts": aina_fakts_konteksts,
               "fakts_nakamais": S.aina_fakts_nakamais, "fakts_mini": aina_fakts_mini}
@@ -1262,6 +1325,8 @@ def renderet(s, izvade, kanals="", balss=None):
             # progresa josla: dzeltena līnija augšā (kā shorts.py)
             dd.rectangle([0, 0, S.W, 10], fill=(255, 255, 255, 30))
             dd.rectangle([0, 0, S.W * min(1, (t0 + t) / kopa), 10], fill=S.DZELTENS)
+            if uz is not None and veids != "outro":                   # ūdenszīme (beigu kadrā – lielais logo)
+                kadrs.paste(uz, LOGO_POZ, uz)
             p.stdin.write(kadrs.tobytes())
         t0 += ilg
     p.stdin.close()
@@ -1289,7 +1354,9 @@ def ieslegt():
         return s_
     S.atskats = atskats_ar_aki
     S.VEIDI["fakts"] = veids_fakti_b
-    for arg, k in (("--bez-fona-video", "fons"), ("--bez-muzikas", "muzika"), ("--bez-sfx", "sfx")):
+    if "--kanals" not in sys.argv:
+        sys.argv += ["--kanals", KANALS_NOKL]
+    for arg, k in (("--bez-fona-video", "fons"), ("--bez-muzikas", "muzika"), ("--bez-sfx", "sfx"), ("--bez-logo", "logo")):
         if arg in sys.argv:
             OPC[k] = False
             sys.argv.remove(arg)
