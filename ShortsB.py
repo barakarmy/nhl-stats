@@ -248,16 +248,20 @@ def logo_slani(kanals):
 
 
 def logo_alfas(T, T1, ir_ripa):
-    """Ripas un teksta redzamība laikā T. T1 = pirmās ainas beigas (ainu maiņa ar swoosh).
-    Sākumā fade-in 0,3 s; maiņas brīdī (T1 − 0,22 … T1 + 0,18) teksts 1 → 0, ripa 1 → LOGO_ALFA; tālāk nekustīgs."""
+    """(ripas redzamība, teksta redzamība, teksta "savākšana" 0..1) laikā T. T1 = pirmās ainas beigas (swoosh).
+    Maiņas brīdī (T1 − 0,3 … T1 + 0,25) teksts aizslīd pa kreisi un pazūd ripā; kad teksts savākts,
+    ripa plūstoši kļūst caurspīdīga (LOGO_ALFA); tālāk nekustīgs."""
     k_in = min(1.0, T / 0.3)
     if not GALVENE:
-        return k_in * LOGO_ALFA, 0.0
-    p = S.ease(min(1.0, max(0.0, (T - (T1 - 0.22)) / 0.4)))
-    a_txt = k_in * (1 - p)
+        return k_in * LOGO_ALFA, 0.0, 1.0
     if not ir_ripa:                                                   # nav logo faila – teksts paliek kā watermark
-        a_txt = k_in * (1 - p * (1 - LOGO_ALFA))
-    return k_in * (1 - p * (1 - LOGO_ALFA)), a_txt
+        p = S.ease(min(1.0, max(0.0, (T - (T1 - 0.22)) / 0.4)))
+        return 0.0, k_in * (1 - p * (1 - LOGO_ALFA)), 0.0
+    sav = min(1.0, max(0.0, (T - (T1 - 0.3)) / 0.45))
+    sav = sav * sav * (3 - 2 * sav)                                   # gluda paātrināšanās / palēnināšanās
+    a_txt = k_in * (1 - max(0.0, (sav - 0.75) / 0.25))                # pēdējā brīdī izdziest
+    q = S.ease(min(1.0, max(0.0, (T - (T1 + 0.05)) / 0.35)))          # pēc tam ripa → caurspīdīga
+    return k_in * (1 - q * (1 - LOGO_ALFA)), a_txt, sav
 
 
 def _ilgums(fails):
@@ -1792,15 +1796,21 @@ def renderet(s, izvade, kanals="", balss=None):
             dd.rectangle([0, 0, S.W, 10], fill=(255, 255, 255, 30))
             dd.rectangle([0, 0, S.W * min(1, (t0 + t) / kopa), 10], fill=S.DZELTENS)
             if (veids != "outro" or c) and (ripa is not None or rtekst is not None):   # galvene → watermark (beigās – lielais logo)
-                a_r, a_t = logo_alfas(t0 + t, T1, ripa is not None)
-                x_ = LOGO_MALA
-                if ripa is not None:
-                    l2 = ripa if a_r >= 1 else _ar_alfu(ripa, a_r)
-                    kadrs.paste(l2, (x_, LOGO_MALA), l2)
-                    x_ += ripa.width + 14
-                if rtekst is not None and a_t > 0.01:
+                a_r, a_t, sav = logo_alfas(t0 + t, T1, ripa is not None)
+                if rtekst is not None and a_t > 0.01:                 # teksts – zem ripas, slīd ripā un pazūd
                     l2 = rtekst if a_t >= 1 else _ar_alfu(rtekst, a_t)
-                    kadrs.paste(l2, (x_, LOGO_MALA), l2)
+                    if ripa is not None:
+                        cx_r = LOGO_MALA + ripa.width / 2             # ripas centrs – tur teksts "ieiet"
+                        x_t = LOGO_MALA + ripa.width + 14 - sav * (rtekst.width + 14 + ripa.width / 2)
+                        nogriezt = int(max(0, cx_r - x_t))
+                        if nogriezt < l2.width:
+                            l2 = l2.crop((nogriezt, 0, l2.width, l2.height))
+                            kadrs.paste(l2, (int(x_t) + nogriezt, LOGO_MALA), l2)
+                    else:
+                        kadrs.paste(l2, (LOGO_MALA, LOGO_MALA), l2)
+                if ripa is not None:                                  # ripa virsū
+                    l2 = ripa if a_r >= 1 else _ar_alfu(ripa, a_r)
+                    kadrs.paste(l2, (LOGO_MALA, LOGO_MALA), l2)
             p.stdin.write(kadrs.tobytes())
         t0 += ilg
     p.stdin.close()
