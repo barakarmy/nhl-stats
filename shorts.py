@@ -2847,6 +2847,7 @@ def balsij(txt):
     t = re.sub(r"(\d+):(\d+)", r"\1 to \2", t)
     t = re.sub(r"\s*→\s*", ", then ", t).replace("−", "minus ").replace(" @ ", " at ")
     t = re.sub(r"#(\d+)", r"number \1", t)
+    t = re.sub(r"\b[Cc]an (he|they) make it (\d+)\?", r"Can \1 make it \2 in a row?", t)
     return re.sub(r"\s+", " ", t).strip()
 
 
@@ -2902,6 +2903,10 @@ def ierunat(teksti, balss, mape):
         f = os.path.join(mape, f"a{i}.mp3")
         # noslēguma frāze (piem. "Is it time to sell high?") – atsevišķi, lēnāk, ar īsu pauzi
         beigu = next((p_ for p_ in frazes if tb.endswith(p_) and len(tb) > len(p_) + 8), None)
+        if not beigu:                                                 # īss noslēguma jautājums ("Will it end?")
+            m_ = re.search(r"(?:^|(?<=[.!?]) )([^.!?]{3,60}\?)$", tb)
+            if m_ and len(m_.group(1).split()) <= 8 and len(tb) > len(m_.group(1)) + 8:
+                beigu = m_.group(1)
         kluda = None
         if beigu:
             f1, f2, fw = os.path.join(mape, f"a{i}_1.mp3"), os.path.join(mape, f"a{i}_2.mp3"), os.path.join(mape, f"a{i}.wav")
