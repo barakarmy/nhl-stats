@@ -62,7 +62,7 @@ MUZIKAS_SKALUMS = 0.15          # fona mūzika (0–1); kamēr runā balss, auto
 SFX_SKALUMS = 0.55              # skaņu efekti
 FONA_TUMSUMS = 0.55             # cik stipri fona video aptumšots (0 = neaptumšots, 1 = melns)
 FONA_MELNBALTS = True           # fona video melnbalts (False = krāsains)
-FONA_ATRUMS = 0.5               # fona video ātrums: 1 = normāls, 0.5 = 2× lēnāk (slow motion), 0.35 = ~3× lēnāk
+FONA_ATRUMS = 0.25              # fona video ātrums: 1 = normāls, 0.5 = 2× lēnāk, 0.25 = 4× lēnāk (plūstoši, ar kustības interpolāciju)
 # atsevišķs ātrums konkrētam video veidam: skaitlis (piem. 0.2 = 5× lēnāk) vai "auto" = tik lēni, lai fona klips
 # vienreiz izstieptos pa visu video (8 s klips → 65 s video ≈ 8× lēnāk, bez atkārtošanās). Ļoti lēnam – kustības interpolācija.
 FONA_ATRUMS_VEIDAM = {"tiesnesi": "auto"}
@@ -273,7 +273,7 @@ def fona_atrums(fails, video_ilgums):
         d = _ilgums(fails)
         if not d or not video_ilgums:
             return FONA_ATRUMS
-        return float(min(FONA_ATRUMS, max(FONA_ATRUMS_MIN, d / video_ilgums)))
+        return float(min(0.5, max(FONA_ATRUMS_MIN, d / video_ilgums)))          # "auto" (tiesneši) – neatkarīgi no FONA_ATRUMS
     return float(v)
 
 
@@ -1005,7 +1005,8 @@ def veids_fakti_b(m, a):
         tiles = [{"skaitlis": c_.get("skaitlis", ""), "apaksa": c_.get("skaitlis_apaksa", ""),
                   "vards": (f"{c_.get('vards', '')}" + (f" ({c_['badge']})" if c_.get("badge") and c_["badge"] not in str(c_.get("vards", "")) else "")),
                   "retums": c_.get("retums", 0)} for c_ in izv]
-        sr = next((c_ for c_ in izv if c_.get("aktiva") and c_.get("nakamais")), None)
+        # STREAK WATCH – tikai, ja aktīva sērija ir kādam NO PĀRĒJIEM faktiem (galvenā fakta "NEXT UP" jau bija stāstā)
+        sr = next((c_ for c_ in citi if c_.get("aktiva") and c_.get("nakamais")), None)
         streak = None
         if sr is not None:
             streak = {"vards": str(sr.get("vards", "")).upper(), "garums": sr.get("garums", 0), "nakamais": sr["nakamais"],
@@ -1014,15 +1015,9 @@ def veids_fakti_b(m, a):
                  "info": [f"Stats through {S.dat(lidz, True)}", "History: our database since 2023-24"],
                  "follow": "FOLLOW FOR WEEKLY NHL FACTS", "komentars": f"COMMENT 1–{n}",
                  "komentars2": "Which fact surprised you most?", "fakti_tiles": tiles, "streak": streak}
-        sw = ""
-        if streak:
-            nk = sr["nakamais"]
-            dn = {"MON": "Monday", "TUE": "Tuesday", "WED": "Wednesday", "THU": "Thursday", "FRI": "Friday", "SAT": "Saturday",
-                  "SUN": "Sunday"}.get(str(nk[0]).split(",")[0].strip().upper()[:3], "")
-            pret = str(nk[1]).replace("@", "").replace("vs", "").strip().title()
-            sw = (f" Streak watch: {sr.get('vards', '')}, {sr.get('garums')} straight. Next up: the {pret}"
-                  + (f" on {dn}" if dn else "") + f". {str(nk[2]).capitalize()}")
-        runa.append("Which one surprised you most? Comment the number." + sw + " Follow for weekly NHL facts, and remember:")
+        # beigās īsi – viss jau pateikts; sērija redzama ekrānā
+        runa.append("Which one surprised you? Comment the number." + (f" And watch the {sr.get('vards', '')} streak." if streak else "")
+                    + " Follow, and remember:")
     else:
         outro = {"rindas": [("NHL FACT", S.BALTS), ("OF THE WEEK.", S.DZELTENS)],
                  "info": [f"Stats through {S.dat(lidz, True)}", "History: our database since 2023-24"],
