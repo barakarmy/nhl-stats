@@ -447,6 +447,9 @@ def sfx_notikumi(ainas):
         if nr > 0:
             ev.append((max(0, t0 - 0.12), "swoosh", 0.8))
         tips = c.get("tips") if c else veids
+        if veids == "outro" and c and c.get("verdikts"):               # THE FINAL VERDICT: boom + tick katrai kartītei
+            ev.append((t0 + 0.05, "boom", 0.7))
+            ev += [(t0 + 0.5 + 0.45 * j, "tick", 0.8) for j in range(min(3, len(c["verdikts"])))]
         if nr == 0:
             ev.append((t0, "boom", 0.9))
             if veids == "intro":
@@ -1247,7 +1250,174 @@ def aina_fantasy(t, c):
     return im
 
 
+# ---------------------------------------------------------------- THE FINAL VERDICT
+VERDIKTS_ILGUMS = 7.0          # sekundes (ar balsi – ne īsāks par runu)
+
+
+def _mini_laukums(d, x0, y0, w, h, punkti, varti_kr, k):
+    """Uzbrukuma zona (x 0..100, y −42.5..42.5) ar metieniem: vārti – krāsaini, pārējie – pelēki punkti."""
+    lin = S.ar_alfa((148, 163, 184), 120 * k)
+    d.rounded_rectangle([x0, y0, x0 + w, y0 + h], radius=int(h * 0.28), fill=S.ar_alfa((10, 14, 30), 255 * k), outline=lin, width=3)
+    X = lambda v: x0 + (v / 100) * w                                  # noqa: E731
+    Y = lambda v: y0 + (v + 42.5) / 85 * h                            # noqa: E731
+    d.line([(X(25), y0 + 4), (X(25), y0 + h - 4)], fill=S.ar_alfa((56, 189, 248), 150 * k), width=4)   # zilā līnija
+    d.line([(X(89), y0 + 8), (X(89), y0 + h - 8)], fill=S.ar_alfa((239, 68, 68), 150 * k), width=2)   # vārtu līnija
+    d.pieslice([X(89) - h * 0.09, Y(0) - h * 0.09, X(89) + h * 0.09, Y(0) + h * 0.09], 90, 270,
+               fill=S.ar_alfa((56, 189, 248), 70 * k))                                                   # vārtu laukums
+    for yc in (-22, 22):
+        r_ = h * 0.18
+        d.ellipse([X(69) - r_, Y(yc) - r_, X(69) + r_, Y(yc) + r_], outline=S.ar_alfa((239, 68, 68), 110 * k), width=2)
+    gk = varti_kr or S.ZALS
+    for (px, py, g) in sorted(punkti, key=lambda q: q[2]):            # vārti virsū
+        if not (0 <= px <= 100):
+            continue
+        r_ = 9 if g else 5
+        c_ = S.ar_alfa(gk, 255 * k) if g else S.ar_alfa((203, 213, 225), 120 * k)
+        d.ellipse([X(px) - r_, Y(py) - r_, X(px) + r_, Y(py) + r_], fill=c_)
+
+
+def _slips(d, x0, y0, h, teksts, fonts_, k, fill=None, txt=None, max_w=None):
+    """Dzeltena slīpa birka ar melnu tekstu; atgriež platumu."""
+    fill = fill or S.DZELTENS
+    f = S.ietilpinat(d, teksts, "black", fonts_, max_w) if max_w else S.fonts("black", fonts_)
+    tw = d.textlength(teksts, font=f)
+    sl = h * 0.35
+    w = tw + 2 * sl + 30
+    d.polygon([(x0 + sl, y0), (x0 + w, y0), (x0 + w - sl, y0 + h), (x0, y0 + h)], fill=S.ar_alfa(fill, 255 * k))
+    bb = d.textbbox((0, 0), teksts, font=f)
+    d.text((x0 + sl + 15, y0 + (h - (bb[3] - bb[1])) / 2 - bb[1]), teksts, font=f, fill=S.ar_alfa(txt or S.MELNS, 255 * k))
+    return w
+
+
+def aina_verdikts(t, s, kanals):
+    im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    # virsraksts – slīpa dzeltena josla ar "THE FINAL VERDICT"
+    k = S.ease(t / 0.35)
+    f = S.fonts("black", 74)
+    tw = d.textlength("THE FINAL VERDICT", font=f)
+    h_, sl = 112, 40
+    w_ = tw + 2 * sl + 60
+    x0 = (S.W - w_) / 2 - (1 - k) * 700
+    y0 = 226
+    d.polygon([(x0 + sl, y0), (x0 + w_, y0), (x0 + w_ - sl, y0 + h_), (x0, y0 + h_)], fill=S.ar_alfa(S.DZELTENS, 255 * k))
+    for i_ in range(2):                                               # mazas svītras abās pusēs
+        xx = x0 - 44 - i_ * 26
+        d.polygon([(xx + 22, y0 + 18), (xx + 34, y0 + 18), (xx + 12, y0 + h_ - 18), (xx, y0 + h_ - 18)], fill=S.ar_alfa(S.DZELTENS, 200 * k))
+        xx = x0 + w_ + 12 + i_ * 26
+        d.polygon([(xx + 22, y0 + 18), (xx + 34, y0 + 18), (xx + 12, y0 + h_ - 18), (xx, y0 + h_ - 18)], fill=S.ar_alfa(S.DZELTENS, 200 * k))
+    bb = d.textbbox((0, 0), "THE FINAL VERDICT", font=f)
+    d.text((x0 + sl + 30, y0 + (h_ - (bb[3] - bb[1])) / 2 - bb[1]), "THE FINAL VERDICT", font=f, fill=S.MELNS)
+    k2 = S.ease((t - 0.25) / 0.4)
+    S.teksts_c(d, 364, "NUMBERS TELL A STORY. HERE'S WHAT IT MEANS.", S.fonts("semi", 34), S.ar_alfa((147, 197, 253), 255 * k2))
+
+    # 3 kartītes
+    kartites = s["verdikts"][:3]
+    X0, X1, Y0, KH, GAP = 70, S.W - 70, 430, 318, 22
+    for i, c in enumerate(kartites):
+        kc = S.ease((t - 0.45 - 0.45 * i) / 0.4)
+        if kc <= 0:
+            continue
+        y = Y0 + i * (KH + GAP) + (1 - kc) * 60
+        akc = c.get("kr") or S.ZILS
+        d.rounded_rectangle([X0, y, X1, y + KH], radius=30, fill=S.ar_alfa(KARTE_KR, 255 * kc),
+                            outline=S.ar_alfa(akc, 200 * kc), width=3)
+        # kreisā vizualizācija (300 × 196)
+        vx, vy, vw, vh = X0 + 24, y + 24, 300, 196
+        viz = c.get("vizu")
+        if viz == "rink":
+            _mini_laukums(d, vx, vy, vw, vh, c.get("punkti", []), c.get("varti_kr"), kc)
+            if c.get("badge"):
+                bk = tuple(c.get("bkr") or S.NEITRALS)
+                fb = S.fonts("bold", 26)
+                bw = d.textlength(c["badge"], font=fb) + 26
+                d.rounded_rectangle([vx + 10, vy + 10, vx + 10 + bw, vy + 48], radius=19, fill=S.ar_alfa(bk, 255 * kc))
+                d.text((vx + 23, vy + 14), c["badge"], font=fb, fill=S.ar_alfa(S.uz_fona(bk), 255 * kc))
+        elif viz == "badge":
+            bk = tuple(c.get("bkr") or S.NEITRALS)
+            r_ = 86
+            cx, cy = vx + vw / 2, vy + vh / 2
+            d.ellipse([cx - r_, cy - r_, cx + r_, cy + r_], fill=S.ar_alfa(bk, 255 * kc), outline=S.ar_alfa(akc, 255 * kc), width=6)
+            fb = S.ietilpinat(d, c.get("badge", ""), "black", 64, 150)
+            bb = d.textbbox((0, 0), c.get("badge", ""), font=fb)
+            d.text((cx - (bb[2] - bb[0]) / 2 - bb[0], cy - (bb[3] - bb[1]) / 2 - bb[1]), c.get("badge", ""), font=fb,
+                   fill=S.ar_alfa(S.uz_fona(bk), 255 * kc))
+        elif viz == "skaitlis":
+            fb = S.ietilpinat(d, c.get("liels", ""), "black", 130, vw - 20)
+            bb = d.textbbox((0, 0), c.get("liels", ""), font=fb)
+            d.text((vx + (vw - (bb[2] - bb[0])) / 2 - bb[0], vy + (vh - (bb[3] - bb[1])) / 2 - bb[1]), c.get("liels", ""),
+                   font=fb, fill=S.ar_alfa(akc, 255 * kc))
+        else:                                                         # logo
+            lg = _logo(LOGO_FAILS, 130) if OPC["logo"] else None
+            if lg is not None:
+                im.alpha_composite(_ar_alfu(lg, kc), (int(vx + (vw - lg.width) / 2), int(vy + (vh - lg.height) / 2)))
+            else:
+                S.teksts_c(d, vy + 50, "xG", S.fonts("black", 96), S.ar_alfa(S.DZELTENS, 255 * kc))
+        # labā puse
+        rx, rw = vx + vw + 26, X1 - 24 - (vx + vw + 26)
+        d.text((rx, y + 22), c.get("virs", ""), font=S.fonts("semi", 26), fill=S.ar_alfa(akc, 255 * kc))
+        fv = S.ietilpinat(d, c.get("vards", ""), "black", 38, rw)
+        d.text((rx, y + 54), c.get("vards", ""), font=fv, fill=S.ar_alfa(S.BALTS, 255 * kc))
+        tw_ = (rw - 14) / 2
+        for j, (lab, val) in enumerate(c.get("flizes", [])[:2]):
+            tx = rx + j * (tw_ + 14)
+            d.rounded_rectangle([tx, y + 104, tx + tw_, y + 196], radius=16, fill=S.ar_alfa((24, 32, 64), 255 * kc))
+            d.text((tx + 16, y + 112), str(lab), font=S.ietilpinat(d, str(lab), "semi", 22, tw_ - 28), fill=S.ar_alfa(S.PELEKS, 255 * kc))
+            fvv = S.ietilpinat(d, str(val), "black", 48, tw_ - 28)
+            d.text((tx + 16, y + 138), str(val), font=fvv, fill=S.ar_alfa(S.BALTS if j else akc, 255 * kc))
+        d.text((rx, y + 206), c.get("sal", ""), font=S.ietilpinat(d, c.get("sal", ""), "reg", 26, rw),
+               fill=S.ar_alfa(S.PELEKS, 255 * kc))
+        if c.get("birka"):
+            kb = S.ease((t - 0.75 - 0.45 * i) / 0.3)
+            if kb > 0:
+                _slips(d, X0 + 16, y + KH - 70, 52, str(c["birka"]).upper().rstrip("."), 30, kb, max_w=X1 - X0 - 140)
+
+    # jautājums skatītājam (fantasy – Google Sheets piedāvājums)
+    kq = ease_back((t - 0.6 - 0.45 * len(kartites)) / 0.5)
+    cta = s.get("cta")
+    if kq > 0 and cta:
+        x0, y0, x1, y1 = 100, 1452, S.W - 100, 1652
+        dy = (1 - kq) * 80
+        d.rounded_rectangle([x0, y0 + dy, x1, y1 + dy], radius=30, fill=(15, 23, 42, 245), outline=S.DZELTENS, width=4)
+        S.teksts_c(d, y0 + 24 + dy, cta[0], S.ietilpinat(d, cta[0], "black", 50, x1 - x0 - 60), S.DZELTENS)
+        for i_, rinda in enumerate(cta[1:]):
+            S.teksts_c(d, y0 + 96 + i_ * 48 + dy, rinda, S.ietilpinat(d, rinda, "semi", 36, x1 - x0 - 60), S.BALTS)
+    elif kq > 0:
+        x0, y0, x1, y1 = 120, 1462, S.W - 120, 1602
+        dy = (1 - kq) * 80
+        d.rounded_rectangle([x0, y0 + dy, x1, y1 + dy], radius=34, fill=(245, 247, 250))
+        q = s.get("komentars") or "WHAT DO YOU THINK?"
+        S.teksts_c(d, y0 + 22 + dy, q, S.ietilpinat(d, q, "black", 50, x1 - x0 - 60), S.MELNS)
+        S.teksts_c(d, y0 + 88 + dy, f"Comment below  ·  follow {kanals}".strip(" ·"), S.fonts("semi", 32), (71, 85, 105))
+    return im
+
+
+def pill_slips(d, x, y, txt, f, bg, fg=None, pad=(26, 12), center=False):
+    """Augšējā zīmīte (y ≈ 250–300, centrā) – slīpa josla "THE FINAL VERDICT" stilā; citas zīmītes – parastais ovāls."""
+    if not (center and 230 <= y <= 310):
+        return _orig["pill"](d, x, y, txt, f, bg, S.BALTS if fg is None else fg, pad, center)
+    izm = getattr(f, "size", 40)
+    fb = S.fonts("black", izm)
+    while d.textlength(txt, font=fb) > S.W - 330 and izm > 24:
+        izm -= 2
+        fb = S.fonts("black", izm)
+    bb = d.textbbox((0, 0), txt, font=fb)
+    h, sl = 76, 26
+    w = (bb[2] - bb[0]) + 2 * sl + 52
+    x0, y0 = (S.W - w) / 2, y - 6
+    a = bg[3] if len(bg) > 3 else 255
+    kr = tuple(bg[:3])
+    d.polygon([(x0 + sl, y0), (x0 + w, y0), (x0 + w - sl, y0 + h), (x0, y0 + h)], fill=kr + (int(a),))
+    for i in range(2):                                                # "//" svītras abās pusēs
+        for xx in (x0 - 36 - i * 22, x0 + w + 10 + i * 22):
+            d.polygon([(xx + 16, y0 + 12), (xx + 26, y0 + 12), (xx + 10, y0 + h - 12), (xx, y0 + h - 12)], fill=kr + (int(a * 0.8),))
+    d.text((x0 + sl + 26 - bb[0], y0 + (h - (bb[3] - bb[1])) / 2 - bb[1]), txt, font=fb, fill=S.MELNS if fg is None else fg)
+    return w, h
+
+
 def aina_outro(t, s, kanals):
+    if s.get("verdikts"):
+        return aina_verdikts(t, s, kanals)
     im = _orig["outro"](t, s, kanals)
     wm = _logo(WORDMARK_FAILS, 200) if OPC["logo"] else None
     if wm is not None and t > 0.05:                                   # logo ar nosaukumu beigu kadra augšā
@@ -1274,7 +1444,8 @@ def renderet(s, izvade, kanals="", balss=None):
     if not shutil.which("ffmpeg"):
         raise SystemExit("Nav ffmpeg (Windows: winget install ffmpeg, tad jauns terminālis).")
     ainas = ([("intro", None, s["intro"].get("ilgums", 3.2))] if s.get("intro") else []) + [("karte", c, c.get("ilgums", 3.6)) for c in s["kartes"]] \
-        + [("outro", None, 4.5 if s["outro"].get("cta") else 3.6)]
+        + [("outro", s["outro"] if s["outro"].get("verdikts") else None,
+            VERDIKTS_ILGUMS if s["outro"].get("verdikts") else (4.5 if s["outro"].get("cta") else 3.6))]
     tmp = tempfile.mkdtemp(prefix="shorts_")
     audio = S.ierunat(s["runa"], balss, tmp) if balss else None
     if audio and len(audio) == len(ainas) and all(dur > 0 for _, dur in audio):
@@ -1347,7 +1518,7 @@ def renderet(s, izvade, kanals="", balss=None):
             # progresa josla: dzeltena līnija augšā (kā shorts.py)
             dd.rectangle([0, 0, S.W, 10], fill=(255, 255, 255, 30))
             dd.rectangle([0, 0, S.W * min(1, (t0 + t) / kopa), 10], fill=S.DZELTENS)
-            if veids != "outro" and (ripa is not None or rtekst is not None):   # galvene → watermark (beigās – lielais logo)
+            if (veids != "outro" or c) and (ripa is not None or rtekst is not None):   # galvene → watermark (beigās – lielais logo)
                 a_r, a_t = logo_alfas(t0 + t, T1, ripa is not None)
                 x_ = LOGO_MALA
                 if ripa is not None:
@@ -1371,6 +1542,8 @@ def renderet(s, izvade, kanals="", balss=None):
 def ieslegt():
     for k in ("fakts_konteksts", "karte", "fantasy", "fakts_hook", "outro", "intro"):
         _orig[k] = getattr(S, "aina_" + k)
+    _orig["pill"] = S.pill
+    S.pill = pill_slips                                               # augšējās zīmītes – slīpas joslas
     S.renderet = renderet
     for v_ in ("speletaji", "komandas", "vartsargi", "tiesnesi"):
         orig_v = S.VEIDI[v_]
