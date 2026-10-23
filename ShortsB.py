@@ -1439,6 +1439,101 @@ def pill_slips(d, x, y, txt, f, bg, fg=None, pad=(26, 12), center=False):
     return w, h
 
 
+VIEGLA_DIENA = 7                 # ≤ 7 NHL spēles dienā = "light day"
+
+
+def aina_grafiks(t, c):
+    """Nākamās nedēļas grafiks kā kalendārs: TARGET (4 spēles) un AVOID (2 spēles) kartītes ar spēļu dienām,
+    izgaismotām vieglajām dienām un back-to-back savienojumiem + flīzes LIGHT DAYS / BEST SCHEDULE."""
+    if not c.get("dienas_idx"):
+        return S.aina_grafiks(t, c)
+    im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    S.pill(d, 0, 250, "NEXT WEEK'S SCHEDULE", S.fonts("semi", 40), S.ZILS, S.MELNS, center=True)
+    k0 = S.ease(t / 0.4)
+    S.teksts_c(d, 350, c["nedela"], S.fonts("black", 88), S.ar_alfa(S.BALTS, 255 * k0))
+    S.teksts_c(d, 458, "EVERYONE ELSE PLAYS 3", S.fonts("semi", 30), S.ar_alfa(S.PELEKS, 255 * k0))
+    dn = c["dienu_n"]
+    viegla = [n_ <= VIEGLA_DIENA and n_ > 0 for n_ in dn]
+    idx = c["dienas_idx"]
+    grupas = [(g, kr, virs, birka) for g, kr, virs, birka in
+              ((c["cetri"], S.ZALS, "TARGET", "4 GAMES · TARGET THEIR PLAYERS"),
+               (c["divi"], S.SARKANS, "AVOID", "ONLY 2 GAMES · BENCH OR DROP")) if g]
+    X0, X1, Y = 70, S.W - 70, 520
+    rindas_kopa = sum(len(g[0]) for g in grupas)
+    rh = int(min(66, (1440 - Y - len(grupas) * 186) / max(1, rindas_kopa)))
+    kol0 = X0 + 214
+    kw = (X1 - 28 - kol0) / 7
+    for gi, (komandas, kr, virs, birka) in enumerate(grupas):
+        kc = S.ease((t - 0.3 - 0.5 * gi) / 0.4)
+        h = 106 + len(komandas) * rh + 80
+        if kc > 0:
+            y = Y + (1 - kc) * 50
+            d.rounded_rectangle([X0, y, X1, y + h], radius=30, fill=S.ar_alfa(KARTE_KR, 255 * kc), outline=S.ar_alfa(kr, 220 * kc), width=3)
+            d.text((X0 + 26, y + 18), virs, font=S.fonts("black", 40), fill=S.ar_alfa(kr, 255 * kc))
+            # vieglo dienu kolonnas
+            for j in range(7):
+                cx = kol0 + j * kw + kw / 2
+                if viegla[j]:
+                    d.rounded_rectangle([cx - kw / 2 + 4, y + 66, cx + kw / 2 - 4, y + 106 + len(komandas) * rh],
+                                        radius=14, fill=S.ar_alfa((34, 197, 94), 40 * kc))
+                lt = "MTWTFSS"[j]
+                fl = S.fonts("bold", 30)
+                d.text((cx - d.textlength(lt, font=fl) / 2, y + 70), lt, font=fl,
+                       fill=S.ar_alfa(S.ZALS if viegla[j] else S.PELEKS, 255 * kc))
+            for ri, kom in enumerate(komandas):
+                yr = y + 106 + ri * rh
+                bk = tuple(S.kkrasa(kom))
+                fb = S.fonts("bold", int(rh * 0.5))
+                bw = 150
+                d.rounded_rectangle([X0 + 26, yr + rh * 0.12, X0 + 26 + bw, yr + rh * 0.88], radius=rh * 0.38,
+                                    fill=S.ar_alfa(bk, 255 * kc))
+                tb = d.textbbox((0, 0), kom, font=fb)
+                d.text((X0 + 26 + (bw - (tb[2] - tb[0])) / 2 - tb[0], yr + (rh - (tb[3] - tb[1])) / 2 - tb[1]), kom, font=fb,
+                       fill=S.ar_alfa(S.uz_fona(bk), 255 * kc))
+                if ri < len(komandas) - 1:
+                    d.line([(kol0, yr + rh), (X1 - 28, yr + rh)], fill=S.ar_alfa((255, 255, 255), 18 * kc), width=1)
+                dienas = idx.get(kom, [])
+                r_ = rh * 0.26
+                for a_, b_ in zip(dienas, dienas[1:]):                # back-to-back – savienojums
+                    if b_ - a_ == 1:
+                        kb = S.ease((t - 0.6 - 0.5 * gi - 0.07 * b_) / 0.25)
+                        if kb > 0:
+                            xa, xb = kol0 + a_ * kw + kw / 2, kol0 + b_ * kw + kw / 2
+                            d.rounded_rectangle([xa, yr + rh / 2 - r_ * 0.45, xb, yr + rh / 2 + r_ * 0.45], radius=r_ * 0.45,
+                                                fill=S.ar_alfa(kr, 150 * kb))
+                for j in dienas:
+                    kd = S.ease((t - 0.6 - 0.5 * gi - 0.07 * j) / 0.25)
+                    if kd > 0 and 0 <= j < 7:
+                        cx, cy = kol0 + j * kw + kw / 2, yr + rh / 2
+                        rr = r_ * (0.6 + 0.4 * kd)
+                        d.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], fill=S.ar_alfa(kr, 255 * kd))
+            kb2 = S.ease((t - 1.0 - 0.5 * gi) / 0.3)
+            if kb2 > 0:
+                _slips(d, X0 + 16, y + h - 66, 50, birka, 28, kb2, fill=kr, txt=S.uz_fona(kr))
+        Y += h + 20
+    # flīzes: LIGHT DAYS / BEST SCHEDULE
+    kf = S.ease((t - 1.4 - 0.5 * (len(grupas) - 1)) / 0.4)
+    if kf > 0:
+        dnos = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+        vd = [dnos[j] for j in range(7) if viegla[j]]
+        lab = " · ".join(vd) if vd else "NONE"
+        lab2 = "≤ %d NHL games" % VIEGLA_DIENA
+        best = max(c["cetri"] or [""], key=lambda k_: sum(1 for j in idx.get(k_, []) if 0 <= j < 7 and viegla[j]))
+        bn = sum(1 for j in idx.get(best, []) if 0 <= j < 7 and viegla[j]) if best else 0
+        fl_ = [("LIGHT DAYS", lab, lab2), ("BEST SCHEDULE", f"{best}" if best else "–", f"{bn} game{'s' if bn != 1 else ''} on light days" if best else "")]
+        yt = min(Y, 1480) + (1 - kf) * 40
+        tw = (X1 - X0 - 20) / 2
+        for i, (l1, v_, l2) in enumerate(fl_):
+            tx = X0 + i * (tw + 20)
+            d.rounded_rectangle([tx, yt, tx + tw, yt + 140], radius=24, fill=S.ar_alfa(KARTE_KR, 255 * kf),
+                                outline=S.ar_alfa((52, 58, 84), 255 * kf), width=3)
+            d.text((tx + 22, yt + 14), l1, font=S.fonts("semi", 26), fill=S.ar_alfa(S.PELEKS, 255 * kf))
+            d.text((tx + 22, yt + 46), v_, font=S.ietilpinat(d, v_, "black", 50, tw - 44), fill=S.ar_alfa(S.ZALS if i == 0 else S.BALTS, 255 * kf))
+            d.text((tx + 22, yt + 104), l2, font=S.ietilpinat(d, l2, "reg", 24, tw - 44), fill=S.ar_alfa(S.PELEKS, 255 * kf))
+    return im
+
+
 def _jauna_beigu_aina(o):
     return bool(o.get("verdikts") or o.get("fakti_tiles"))
 
@@ -1619,7 +1714,7 @@ def renderet(s, izvade, kanals="", balss=None):
                           video_tmp], stdin=subprocess.PIPE)
     ripa, rtekst = logo_slani(kanals)
     T1 = ainas[0][2]                                                  # pirmās ainas beigas – galvene pārvēršas watermark
-    fn_map = {"fantasy": aina_fantasy, "grafiks": S.aina_grafiks, "fakts_hook": aina_fakts_hook,
+    fn_map = {"fantasy": aina_fantasy, "grafiks": aina_grafiks, "fakts_hook": aina_fakts_hook,
               "fakts_saraksts": aina_fakts_saraksts, "fakts_konteksts": aina_fakts_konteksts,
               "fakts_nakamais": S.aina_fakts_nakamais, "fakts_mini": aina_fakts_mini}
     t0 = 0.0
