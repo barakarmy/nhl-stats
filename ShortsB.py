@@ -733,8 +733,8 @@ def pievienot_aki(s, veids):
             gs = abs(_parsk(hero["liels"]) or 0)
             rindas = [("HE'S STEALING" if laim_varonis else "HE'S COSTING", S.BALTS), ("GAMES.", S.DZELTENS)]
             sk_, ap = hero["liels"], f"{int(GA)} goals allowed on {S.xgv(xGA, uz=GA)} expected"
-            runa0 = (f"This goalie is stealing games: {gs:.1f} goals saved above expected. Who is it?" if laim_varonis
-                     else f"This goalie is costing his team: {gs:.1f} goals worse than expected. Who is it?")
+            runa0 = (f"This goalie is stealing games: {S.varti_v(gs, uz=0)} saved above expected. Who is it?" if laim_varonis
+                     else f"This goalie is costing his team: {S.varti_v(gs, uz=0)} worse than expected. Who is it?")
             beigas = (f"{S.beigu_frase('vartsargi')} {S.atskata_teksts()} Follow, and remember: this goalie is "
                       + ("stealing games." if laim_varonis else "costing games."))
         else:
