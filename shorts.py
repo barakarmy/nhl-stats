@@ -1312,6 +1312,18 @@ def veids_fantasy(m, a):
             "pretinieki": pretinieki, "liels": veids,
             "apaksa": iemesls(r) if veids in ("ADD", "STREAM") else iemesls_drop(r)}
 
+    def grafika_runa(r):
+        """Balsij: ja VISAS nākamās nedēļas spēles ir pret vāju (vai visas pret stipru) aizsardzību – pasaka to."""
+        n_ = int(r["sp_nak"])
+        if n_ < 2:
+            return ""
+        visas = {2: "Both games", 3: "All three games", 4: "All four games", 5: "All five games"}.get(n_, f"All {n_} games")
+        if int(r["vajie"]) == n_:
+            return f" {visas} against weak defenses."
+        if int(r["stipras"]) == n_:
+            return f" But {visas.lower()} against tough defenses." if r.name in izv.index else f" {visas} against tough defenses."
+        return ""
+
     kartes = []
     cetri = sorted([k for k, v in grafiks.items() if len(v) >= 4])
     divi = sorted([k for k, v in grafiks.items() if len(v) <= 2])
@@ -1336,14 +1348,15 @@ def veids_fantasy(m, a):
         ros = "" if not np.isfinite(r["rostered"]) else f" Rostered in only {r['rostered']:.0f} percent of leagues."
         fr_add.append(F("f_stream" if veids == "STREAM" else "f_add", ["sched4"] if r["sp_nak"] >= 4 else []))
         runa.append(f"{r['vards']}, {kom_nos(r['team'])}. {int(r['P'])} points in his last {int(r['GP'])} games, "
-                    f"{r['SOG_gp']:.1f} shots a game, and {int(r['sp_nak'])} games next week.{ros} " + fr_add[-1])
+                    f"{r['SOG_gp']:.1f} shots a game, and {int(r['sp_nak'])} games next week.{grafika_runa(r)}{ros} " + fr_add[-1])
     for nr, (pid, r) in enumerate(drop.iterrows(), 1):
         veids = drop_veids[pid]
         kartes.append(karte(nr, r, veids))
         sakums = ("Now, players to drop or bench. " if n_drop > 1 else "Now, one player to drop or bench. ") if nr == 1 else ""
         fr_drop.append(F("f_bench" if veids == "BENCH" else "f_drop"))
+        ie_ = iemesls_drop(r)
         runa.append(f"{sakums}{r['vards']}, {kom_nos(r['team'])}. Rostered in {r['rostered']:.0f} percent of leagues, but "
-                    f"{iemesls_drop(r)[0].lower() + iemesls_drop(r)[1:]}. " + fr_drop[-1])
+                    f"{ie_[0].lower() + ie_[1:]}.{'' if 'tough' in ie_ else grafika_runa(r)} " + fr_drop[-1])
 
     def fa_vk(pid, r, virs, frase, kr):
         ros_ = f"rostered {r['rostered']:.0f}%  ·  " if np.isfinite(r["rostered"]) else ""
