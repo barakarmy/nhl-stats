@@ -1410,12 +1410,10 @@ def aina_fantasy(t, c):
         fx, fy = x0 + 50 + ci * (tw_ + gap), y0 + 480 + ri * (th_ + gap) + (1 - k) * 24
         d.rounded_rectangle([fx, fy, fx + tw_, fy + th_], radius=24, fill=S.ar_alfa(S.TUMSS, 255 * k))
         d.text((fx + 22, fy + 16), lab, font=S.fonts("semi", 28), fill=S.ar_alfa(S.PELEKS, 255 * k))
-        sw = S.platums(d, sub, S.fonts("semi", 26)) + 14 if sub else 0
+        sw = S.flizes_sub(d, fx + tw_ - 18, fy + th_ - 44, sub, k, tikai_platums=True) + 14 if sub else 0
         d.text((fx + 22, fy + 52), val, font=S.ietilpinat(d, str(val), "black", 62, tw_ - 40 - sw), fill=S.ar_alfa(S.BALTS, 255 * k))
         if sub:
-            krs = S.ZALS if sub.startswith("▲") else (S.SARKANS if sub.startswith("▼") else S.PELEKS)
-            fs = S.fonts("semi", 26)
-            d.text((fx + tw_ - 18 - S.platums(d, sub, fs), fy + th_ - 44), sub, font=fs, fill=S.ar_alfa(krs, 255 * k))
+            S.flizes_sub(d, fx + tw_ - 18, fy + th_ - 44, sub, k)
     yg = y0 + 850
     d.text((x0 + 50, yg), c.get("grafika_virs", "NEXT WEEK"), font=S.fonts("semi", 36), fill=S.PELEKS)
     # krāsu skaidrojums blakus virsrakstam
