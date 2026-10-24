@@ -2061,6 +2061,7 @@ def _apvienot_lielas(D, out):
                     lomas.append(f"{u.upper()} A")
             if lomas:
                 rindas.append((f"P{g_.period}" if g_.period <= 3 else "OT", str(g_.laiks), " · ".join(lomas)))
+        varti = all(d_["G"] >= 3 for d_ in dd)                         # hat trick → rāda vārtus, citādi punktus
         stat_txt = " / ".join(str(d_["G"]) + "G " + str(d_["A"]) + "A" for d_ in dd)
         skaits_v = {2: "Two", 3: "Three", 4: "Four"}.get(len(dd), str(len(dd)))
         nos_v = dd[0]["nos"] if len({d_["nos"] for d_ in dd}) == 1 else "BIG GAME"
@@ -2084,6 +2085,12 @@ def _apvienot_lielas(D, out):
             "yt": f"{vardi_txt}: " + (f"a {dd[0]['nos'].lower()} EACH in one game 🔥" if vienadi else "a combined "
                                        + f"{sum(d_['P'] for d_ in dd)} points in one game 🔥"),
             "pids": [d_["pid"] for d_ in dd],
+            # āķim: balss teikums, jautājums daudzskaitlī, kartītē – punkti
+            "aki_runa": (f"{skaits_v} teammates, a {nos_v.lower()} each, in the same game" if vienadi
+                         else f"{skaits_v} teammates, {' and '.join(str(d_['P']) for d_ in dd)} points, in the same game"),
+            "aki_jaut": "Who are they?",
+            "aki_skaitlis": " + ".join(str(d_["G"] if varti else d_["P"]) for d_ in dd),
+            "aki_apaksa": f"{'goals' if varti else 'points'}  ·  vs {kom_nos(i.get('o', ''))}, {dat(cc[0]['datums'])}",
         })
     for c in rez:
         c.pop("_d", None)
