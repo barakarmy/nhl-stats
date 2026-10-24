@@ -1223,7 +1223,9 @@ def veids_fantasy(m, a):
         brivi, nometami = g[~g.index.isin(top) & (g["trauma"] != "IZSLEGTS")].copy(), g.iloc[0:0].copy()
     if len(brivi) < a.top:
         return None
-    brivi["score"] = brivi["forma"] + 0.40 * (brivi["sp_nak"] - 3.5) + 0.05 * brivi["vajie"] + 0.10 * z(brivi["delta7"].fillna(0))
+    # pretinieki: katra spēle pret vāju aizsardzību +0.15, pret stipru −0.15 (spēļu skaits joprojām svarīgākais – 0.40 par spēli)
+    brivi["score"] = (brivi["forma"] + 0.40 * (brivi["sp_nak"] - 3.5) + 0.15 * brivi["vajie"] - 0.15 * brivi["stipras"]
+                      + 0.10 * z(brivi["delta7"].fillna(0)))
     def ar_limitu(df, kol, n):
         """Top n pēc kol, bet ne vairāk kā 1 aizsargs (fantasy līgās vairāk vajag uzbrucējus) un 1 spēlētājs no komandas."""
         out, d_, kom_ = [], 0, set()
@@ -1238,7 +1240,8 @@ def veids_fantasy(m, a):
         return df.loc[out]
     izv = ar_limitu(brivi, "score", a.top)
     # drop: daudzās līgās paņemts, bet vāja forma un/vai mazs/grūts nākamās nedēļas grafiks
-    nometami["dscore"] = -nometami["forma"] + 0.40 * (3.5 - nometami["sp_nak"]) + 0.05 * nometami["stipras"] - 0.10 * z(nometami["delta7"].fillna(0))
+    nometami["dscore"] = (-nometami["forma"] + 0.40 * (3.5 - nometami["sp_nak"]) + 0.15 * nometami["stipras"] - 0.15 * nometami["vajie"]
+                          - 0.10 * z(nometami["delta7"].fillna(0)))
     drop = ar_limitu(nometami[nometami["forma"] < 0], "dscore", a.drop) if a.drop > 0 else nometami.iloc[0:0]
     drop_veids = {pid_: ("BENCH" if r_["forma"] > -0.4 and r_["sp_nak"] <= 2 else "DROP") for pid_, r_ in drop.iterrows()}
 
@@ -1279,6 +1282,11 @@ def veids_fantasy(m, a):
 
     poz_nos = {"C": "Center", "L": "Left wing", "R": "Right wing", "D": "Defense"}
 
+    def pretinieku_txt(r):
+        v_, s_ = int(r["vajie"]), int(r["stipras"])
+        # krāsaini punkti katram pretiniekam (zaļš – vāja aizsardzība, pelēks – vidēja, sarkans – stipra), kā leģendā
+        return "dots:" + "".join("s" if o in vajas else ("t" if o in stipras else "a") for _, _, o, _ in grafiks.get(r["team"], []))
+
     def karte(nr, r, veids):
         vv = str(r["vards"]).split(" ", 1)
         rost = "" if not np.isfinite(r["rostered"]) else f"{r['rostered']:.0f}% ROSTERED (ESPN)"
@@ -1296,11 +1304,11 @@ def veids_fantasy(m, a):
             "v1": vv[0] if len(vv) > 1 else "", "v2": vv[-1], "badge": str(r["team"]), "bkr": kkrasa(r["team"]),
             "info": f"{poz_nos.get(str(r['poz']), str(r['poz']))}  ·  last {dienas} days: {int(r['GP'])} GP" + (f"  ·  {d_txt}" if d_txt else ""),
             "flizes": [("PTS", f"{int(r['P'])}", f"{int(r['G'])}G {int(r['A'])}A"),
-                       ("SHOTS/60", f"{r['SOG60']:.1f}", f"iCF {r['iCF60']:.1f}" if np.isfinite(r["iCF60"]) else f"iFF {r['iFF60']:.1f}"),
+                       ("SOG / GP", f"{r['SOG_gp']:.1f}", f"{r['SOG60']:.1f}/60"),
                        ("ixG/60", f"{r['ixG60']:.2f}", f"HD {r['iHD60']:.1f}"),
                        ("TOI / GP", _mmss(r["TOI"]), toi_sub),
                        ("PP PTS", f"{int(r['PPP'])}", ""),
-                       ("NEXT WEEK", f"{int(r['sp_nak'])} GP", "")],
+                       ("NEXT WEEK", f"{int(r['sp_nak'])} GP", pretinieku_txt(r))],
             "pretinieki": pretinieki, "liels": veids,
             "apaksa": iemesls(r) if veids in ("ADD", "STREAM") else iemesls_drop(r)}
 
@@ -1459,12 +1467,10 @@ def aina_fantasy(t, c):
         fx, fy = x0 + 50 + ci * (tw_ + gap), y0 + 480 + ri * (th_ + gap) + (1 - k) * 24
         d.rounded_rectangle([fx, fy, fx + tw_, fy + th_], radius=24, fill=ar_alfa(TUMSS, 255 * k))
         d.text((fx + 22, fy + 16), lab, font=fonts("semi", 28), fill=ar_alfa(PELEKS, 255 * k))
-        sw = platums(d, sub, fonts("semi", 26)) + 14 if sub else 0
+        sw = flizes_sub(d, fx + tw_ - 18, fy + th_ - 44, sub, k, tikai_platums=True) + 14 if sub else 0
         d.text((fx + 22, fy + 52), val, font=ietilpinat(d, val, "black", 62, tw_ - 40 - sw), fill=ar_alfa(BALTS, 255 * k))
         if sub:
-            krs = ZALS if sub.startswith("▲") else (SARKANS if sub.startswith("▼") else PELEKS)
-            fs = fonts("semi", 26)
-            d.text((fx + tw_ - 18 - platums(d, sub, fs), fy + th_ - 44), sub, font=fs, fill=ar_alfa(krs, 255 * k))
+            flizes_sub(d, fx + tw_ - 18, fy + th_ - 44, sub, k)
     # nākamās nedēļas pretinieki
     yg = y0 + 850
     d.text((x0 + 50, yg), c.get("grafika_virs", "NEXT WEEK"), font=fonts("semi", 36), fill=PELEKS)
@@ -1486,6 +1492,26 @@ def aina_fantasy(t, c):
         teksts_c(d, y0 + 1040, c["liels"], fonts("black", int(150 * (0.75 + 0.25 * k2))), ar_alfa(akc, 255 * k2))
         teksts_c(d, y0 + 1200, c["apaksa"], ietilpinat(d, c["apaksa"], "reg", 40, x1 - x0 - 80), ar_alfa(PELEKS, 255 * k2))
     return im
+
+
+def flizes_sub(d, x_lab, y, sub, k, tikai_platums=False):
+    """Flīzes apakšteksts labajā apakšējā stūrī (x_lab = labā mala): teksts (▲ zaļš / ▼ sarkans) vai "dots:ssat" – punkti."""
+    if str(sub).startswith("dots:"):
+        kodi = str(sub)[5:]
+        r_, solis = 9, 24
+        w = len(kodi) * solis - (solis - 2 * r_) if kodi else 0
+        if not tikai_platums:
+            kr = {"s": ZALS, "t": SARKANS, "a": NEITRALS}
+            for j, c_ in enumerate(kodi):
+                cx = x_lab - w + r_ + j * solis
+                d.ellipse([cx - r_, y + 14 - r_, cx + r_, y + 14 + r_], fill=ar_alfa(kr.get(c_, NEITRALS), 255 * k))
+        return w
+    fs = fonts("semi", 26)
+    w = platums(d, sub, fs)
+    if not tikai_platums:
+        krs = ZALS if sub.startswith("▲") else (SARKANS if sub.startswith("▼") else PELEKS)
+        d.text((x_lab - w, y), sub, font=fs, fill=ar_alfa(krs, 255 * k))
+    return w
 
 
 def zimet_thumbnail(th, fails):
