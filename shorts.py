@@ -540,6 +540,7 @@ def veids_komandas(m, a):
     kartes = [karte(k, r, i, True) for i, (k, r) in enumerate(laim.iterrows(), 1)]
     kartes += [karte(k, r, i, False) for i, (k, r) in enumerate(nelaim.iterrows(), 1)]
     zime = lambda v: ("plus " if v >= 0 else "minus ") + f"{abs(v):.0f}"   # noqa: E731
+    zime_xg = lambda v: ("plus " if v >= 0 else "minus ") + xgv(abs(v))     # noqa: E731  (x.5 paliek)
     runa = ["Which NHL teams are living on luck? PDO adds shooting and save percentage. Average is one hundred."]
     F = Frazes()
     lg_sh = t["GF"].sum() / max(1, t["SF"].sum()) * 100
@@ -552,10 +553,10 @@ def veids_komandas(m, a):
     fr = []
     for k, r in laim.iterrows():
         fr.append(F("kom_laim", kom_ctx(r, True)))
-        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.1f}. Goal difference {zime(r['GD'])}, but expected only {zime(r['xGD'])}. " + fr[-1])
+        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.1f}. Goal difference {zime(r['GD'])}, but expected {'only ' if r['xGD'] >= 0 else ''}{zime_xg(r['xGD'])}. " + fr[-1])
     for k, r in nelaim.iterrows():
         fr.append(F("kom_nelaim", kom_ctx(r, False)))
-        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.1f}. Goal difference {zime(r['GD'])}, expected {zime(r['xGD'])}. " + fr[-1])
+        runa.append(f"The {kom_nos(k)}: PDO {r['PDO']:.1f}. Goal difference {zime(r['GD'])}, expected {zime_xg(r['xGD'])}. " + fr[-1])
 
     def kom_vk(k, r, lucky, frase):
         return vk("HIGHEST PDO" if lucky else "LOWEST PDO", f"{kom_nos(k).upper()}  ·  PDO {r['PDO']:.1f}",
@@ -623,10 +624,10 @@ def veids_vartsargi(m, a):
     fr = []
     for _, r in labie.iterrows():
         fr.append(F("va_labs", va_ctx(r)))
-        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {xgv(r['xGA'])} expected. " + fr[-1])
+        runa.append(f"{r['vards']}: {varti_v(r['GSAx'])} saved above expected. {int(r['GA'])} allowed on {xgv(r['xGA'])} expected. " + fr[-1])
     for _, r in sliktie.iterrows():
         fr.append(F("va_slikts", va_ctx(r)))
-        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {xgv(r['xGA'])} expected. " + fr[-1])
+        runa.append(f"{r['vards']}: {varti_v(abs(r['GSAx']))} worse than expected. {int(r['GA'])} allowed on {xgv(r['xGA'])} expected. " + fr[-1])
     lg_sv_ = (1 - g["GA"].sum() / max(1, g["SA"].sum())) * 100
     svf = lambda v: f".{round(v * 10):03d}"   # noqa: E731
 
@@ -1700,11 +1701,19 @@ def xgv(x, uz=None):
     uz=<īstais skaits> (video āķim): vienmēr vesels; x.5 noapaļo UZ īsto skaitu, lai starpība nekad netiek pārspīlēta
     (7 vārti, 2.5 xG → "should have 3"; 1 vārti, 6.5 xG → "should have 6")."""
     v = int(round(float(f"{float(x):.1f}") * 10))                     # tas pats, kas ekrānā ar .1f
+    if abs(v) < 10:                                                   # zem 1 – desmitdaļas paliek (0.4, nevis 0)
+        return f"{v / 10:.1f}"
     if abs(v) % 10 == 5:
         if uz is None:
             return f"{v / 10:.1f}"
         return f"{int(np.ceil(v / 10)) if float(uz) > v / 10 else int(np.floor(v / 10))}"
     return f"{int(np.floor(v / 10 + 0.5))}"
+
+
+def varti_v(x, uz=None):
+    """'10 goals' / '1 goal' / '2.5 goals' / '0.4 goals' – xgv() ar pareizu vienskaitli."""
+    v = xgv(x, uz)
+    return f"{v} goal" + ("" if v == "1" else "s")
 
 
 def _kartas(n):
