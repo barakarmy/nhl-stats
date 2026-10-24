@@ -1852,6 +1852,38 @@ def aina_outro(t, s, kanals):
 
 
 _orig = {}
+_THUMB = {"im": None}
+
+
+def thumbnail_kadrs(aina, s, fona_fails, atr, fn_map):
+    """Sīktēls: video pirmā aina (āķis) pilnā izskatā, uz tā paša fona – bez uzlīmes, datuma, progresa joslas un logo."""
+    veids, c, _ = aina
+    if veids == "intro":
+        i_ = dict(s["intro"])
+        if i_.get("aki"):
+            sl = aina_aki(0.4, i_)                                    # līdz 0.5 s – vēl bez "STAY FOR #1" uzlīmes
+        else:
+            sl = _orig["intro"](3.0, i_)
+    else:
+        c2 = dict(c or {}, bez_uzlimes=True)
+        sl = fn_map.get(c2.get("tips"), aina_karte)(3.0, c2)
+    if fona_fails:
+        f_ = VideoFons(fona_fails, atr)
+        for _ in range(int(0.6 * S.FPS)):                             # mazliet tālāk par pašu pirmo kadru
+            kadrs = f_.kadrs(0)
+        f_.aizvert()
+    else:
+        kadrs = Fons().kadrs(0)
+    kadrs = kadrs.convert("RGBA")
+    kadrs.alpha_composite(sl)
+    return kadrs.convert("RGB")
+
+
+def zimet_thumbnail_b(th, fails):
+    if _THUMB.get("im") is not None:
+        _THUMB["im"].save(fails)
+    else:
+        _orig["thumbnail"](th, fails)
 
 
 def renderet(s, izvade, kanals="", balss=None):
@@ -1955,6 +1987,11 @@ def renderet(s, izvade, kanals="", balss=None):
     p.wait()
     if fona_fails:
         fons.aizvert()
+    try:                                                              # sīktēls = āķa kadrs ar to pašu fonu
+        _THUMB["im"] = thumbnail_kadrs(ainas[0], s, fona_fails, atr, fn_map)
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"SĪKTĒLS: neizdevās no āķa ({type(ex).__name__}: {ex}) – vecais variants")
+        _THUMB["im"] = None
     miksets(video_tmp, izvade, audio, ainas, kopa, tmp)
     shutil.rmtree(tmp, ignore_errors=True)
     return kopa, bool(audio)
@@ -1988,6 +2025,8 @@ def ieslegt():
     for k in ("fakts_konteksts", "karte", "fantasy", "fakts_hook", "outro", "intro"):
         _orig[k] = getattr(S, "aina_" + k)
     _orig["pill"] = S.pill
+    _orig["thumbnail"] = S.zimet_thumbnail
+    S.zimet_thumbnail = zimet_thumbnail_b
     S.pill = pill_slips                                               # augšējās zīmītes – slīpas joslas
     S.renderet = renderet
     for v_ in ("speletaji", "komandas", "vartsargi", "tiesnesi"):
