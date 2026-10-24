@@ -3016,6 +3016,45 @@ BALSS_ATRUMS = "+8%"           # parastais runas ātrums
 FRAZES_ATRUMS = "+0%"          # noslēguma frāzei (lēnāk, ar īsu pauzi pirms tās)
 
 
+# ---------------------------------------------------------------- vārdu izruna balsij (tikai balsij – ekrānā paliek īstais vārds)
+# Atslēga = vārds/uzvārds tieši tā, kā tas ir datos; vērtība = kā to rakstīt, lai edge-tts izrunā pareizi.
+# Ja kāds vārds skan nepareizi: python balsu_paraugi.py --vardi  → noklausies, tad pieliec / izlabo šeit.
+VARDI_BALSIJ = {
+    # tiesneši (franču, poļu, somu, čehu u.c. izcelsme)
+    "L'Ecuyer": "Lay-kwee-yay",
+    "St-Laurent": "Saint Laurent",
+    "Francois": "Fran-swah",
+    "Jean Hebert": "Zhahn Ay-bear",
+    "Chmielewski": "Shmeh-leff-skee",
+    "Syvret": "Sih-vret",
+    "Hautamaeki": "How-tah-mah-kee",
+    "Suchanek": "Soo-khah-neck",
+    "Deschamps": "Day-shawn",
+    "Faucher": "Foe-shay",
+    "Fournier": "Foor-nyay",
+    "Brisebois": "Breez-bwah",
+    "Pierre Lambert": "Pee-air Lom-bear",
+    "Charron": "Sha-rohn",
+    "Marquis": "Mar-kee",
+    "Lapointe": "La-pwant",
+    "Shewchyk": "Shoe-chick",
+    "Blujus": "Bloo-jus",
+    "Maaskant": "Mahs-kant",
+    "Halkidis": "Hal-kee-dis",
+    "Justin Kea": "Justin Kee",
+    "Knorr": "Nor",
+    "Kiel Murchison": "Keel Murchison",
+    "Cherrey": "Cherry",
+    "Furlatt": "Fur-lat",
+}
+
+
+def vardi_balsij(t):
+    for k in sorted(VARDI_BALSIJ, key=len, reverse=True):
+        t = t.replace(k, VARDI_BALSIJ[k])
+    return t
+
+
 _VIENI = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen",
           "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
 _DESMITI = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
@@ -3043,7 +3082,7 @@ def kartas_vardiem(n):
 
 def balsij(txt):
     """Teksts balsij: pilni teikumi īso frāžu vietā, saīsinājumi un simboli – vārdos."""
-    t = str(txt)
+    t = vardi_balsij(str(txt))
     for k in sorted(BALSIJ, key=len, reverse=True):
         t = t.replace(k, BALSIJ[k])
     t = t.replace("GSAx", "goals saved above expected")
