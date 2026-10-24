@@ -1994,8 +1994,74 @@ def f_lielas_speles(D):
                      f"The {kom_nos(kom)} still lost {i.get('gf', '')} to {i.get('ga', '')}.",
                      f"That's the {_kartas(max(sez_k, 1))} {nos.lower()} of the season.", ""],
             "yt": f"{vards} goes off: {G} goals, {A} assists 🔥" if G >= 3 else f"{vards} drops {P} points in one game 🔥",
+            "_d": {"pid": int(r["playerId"]), "gid": r["game_id"], "G": G, "A": A, "P": P, "vards": vards, "kom": kom, "nos": nos,
+                   "sez_k": sez_k, "i": i},
         })
-    return out
+    return _apvienot_lielas(D, out)
+
+
+def _apvienot_lielas(D, out):
+    """Divi (vai vairāki) vienas komandas spēlētāji ar lielu spēli TAJĀ PAŠĀ spēlē → viens kopīgs fakts (nevis #1 un #2 ar vieniem datiem)."""
+    grupas = {}
+    for c in out:
+        grupas.setdefault((c["_d"]["gid"], c["_d"]["kom"]), []).append(c)
+    rez = []
+    for (gid, kom), cc in grupas.items():
+        if len(cc) == 1:
+            rez.append(cc[0])
+            continue
+        cc = sorted(cc, key=lambda c: (-c["_d"]["P"], -c["_d"]["G"]))
+        dd = [c["_d"] for c in cc]
+        i = dd[0]["i"]
+        uzv = [d_["vards"].split(" ", 1)[-1] for d_ in dd]
+        vardi_txt = " and ".join([", ".join(d_["vards"] for d_ in dd[:-1]), dd[-1]["vards"]])
+        vienadi = len({(d_["G"], d_["A"]) for d_ in dd}) == 1
+        P0 = dd[0]["P"]
+        if vienadi:
+            hook = [f"{len(dd)}× {dd[0]['nos']}", "SAME GAME"]
+            sk = f"{len(dd)} {dd[0]['nos']}S"
+        else:
+            hook = [f"{' + '.join(str(d_['P']) for d_ in dd)} POINTS", "SAME GAME"]
+            sk = " + ".join(str(d_["P"]) for d_ in dd)
+        # vārti pa kārtai ar uzvārdu
+        va = D["va"][D["va"]["game_id"] == gid]
+        rindas = []
+        for g_ in va.sort_values(["period", "laiks"]).itertuples(index=False):
+            lomas = []
+            for d_, u in zip(dd, uzv):
+                if g_.scorer_id == d_["pid"]:
+                    lomas.append(f"{u.upper()} G")
+                elif d_["pid"] in (g_.assist1_id, g_.assist2_id):
+                    lomas.append(f"{u.upper()} A")
+            if lomas:
+                rindas.append((f"P{g_.period}" if g_.period <= 3 else "OT", str(g_.laiks), " · ".join(lomas)))
+        stat_txt = " / ".join(str(d_["G"]) + "G " + str(d_["A"]) + "A" for d_ in dd)
+        skaits_v = {2: "Two", 3: "Three", 4: "Four"}.get(len(dd), str(len(dd)))
+        nos_v = dd[0]["nos"] if len({d_["nos"] for d_ in dd}) == 1 else "BIG GAME"
+        sez_k = max(d_["sez_k"] for d_ in dd)
+        rez.append({
+            "atsl": f"liela_duo:{'-'.join(str(d_['pid']) for d_ in dd)}:{gid}", "garums": sum(d_["P"] for d_ in dd), "aktiva": False,
+            "datums": cc[0]["datums"], "retums": min(1.0, max(c["retums"] for c in cc) + 0.15),
+            "slav": max(c["slav"] for c in cc), "sv": cc[0]["sv"],
+            "teksts": f"{vardi_txt} ({kom}) – {stat_txt} vienā spēlē pret {i.get('o', '')} ({dat(cc[0]['datums'])})",
+            "hook": hook, "v1": "", "vards": " & ".join(u.upper() for u in uzv), "badge": kom,
+            "skaitlis": sk, "skaitlis_apaksa": f"vs {kom_nos(i.get('o', ''))}, {dat(cc[0]['datums'])}",
+            "saraksts_virs": "HOW IT HAPPENED", "rindas": rindas[-9:],
+            "kopsavilkums": cc[0]["kopsavilkums"],
+            "k_skaitlis": str(len(dd)),
+            "konteksts": [f"TEAMMATES WITH A {nos_v} – SAME NIGHT", f"NHL total so far this season: {sez_k}"],
+            "nakamais": None,
+            "runa": [f"{vardi_txt}: " + (f"a {dd[0]['nos'].lower()} each" if vienadi else " and ".join(f"{d_['P']} points" for d_ in dd))
+                     + f" against the {kom_nos(i.get('o', ''))}.",
+                     cc[0]["runa"][1],
+                     f"{skaits_v} teammates with a {nos_v.lower()} in the same night. That's rare.", ""],
+            "yt": f"{vardi_txt}: " + (f"a {dd[0]['nos'].lower()} EACH in one game 🔥" if vienadi else "a combined "
+                                       + f"{sum(d_['P'] for d_ in dd)} points in one game 🔥"),
+            "pids": [d_["pid"] for d_ in dd],
+        })
+    for c in rez:
+        c.pop("_d", None)
+    return rez
 
 
 def f_vartsargi(D):
@@ -2304,18 +2370,20 @@ def fakti_kandidati(D, mape_video):
         c["vert"] = round(float(np.clip(c["vert"], 0, 100)))
     kand.sort(key=lambda c: (c["biezi"], -c["vert"]))                # ikdienišķie vienmēr saraksta beigās
     # viens spēlētājs / komanda – tikai viens (labākais) fakts; nākamie no saraksta paceļas augstāk
-    def vienums(c):
+    def vienumi(c):
         a_ = str(c["atsl"]).split(":")
+        if a_[0] == "liela_duo":
+            return {"sp:" + x for x in a_[1].split("-")}
         if a_[0].endswith("_serija") or a_[0] in ("liela", "vartsargs"):
-            return "sp:" + a_[1]
+            return {"sp:" + a_[1]}
         if a_[0] in ("kom_uzv", "kom_zaud"):
-            return "kom:" + a_[1]
-        return str(c["atsl"])
+            return {"kom:" + a_[1]}
+        return {str(c["atsl"])}
     redz, uniq = set(), []
     for c in kand:
-        v_ = vienums(c)
-        if v_ not in redz:
-            redz.add(v_)
+        v_ = vienumi(c)
+        if not (v_ & redz):
+            redz |= v_
             uniq.append(c)
     kand = uniq
     # dažādībai: no katras kategorijas (atsl sākums) ne vairāk kā 3 kandidāti
