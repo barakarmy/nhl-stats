@@ -296,6 +296,32 @@ class Frazes:
 
 FRAZU_VESTURE = "frazes_vesture.json"
 
+# video beigu teikums (pirms "Follow…") – nejauši, neatkārto pēdējos video lietotos
+BEIGU_FRAZES = {
+    "speletaji": ["Luck runs out. Expected goals don't.",
+                  "Shooting luck fades. Good chances don't.",
+                  "Hot sticks cool off. The chances tell you who's for real.",
+                  "Finishing streaks come and go. Shot quality stays."],
+    "komandas": ["PDO always comes back to one hundred.",
+                 "Over a full season, PDO drifts back to one hundred.",
+                 "Bounces even out. They always do.",
+                 "Luck evens out over a season. The process stays."],
+    "vartsargi": ["Goalies run hot and cold. The numbers show which one is real.",
+                  "Save percentage swings. Expected goals tell the real story.",
+                  "A hot goalie can steal a month. Can he keep it up?",
+                  "Every goalie streak ends. The only question is when."],
+}
+
+
+def beigu_frase(veids):
+    import random
+    v = BEIGU_FRAZES[veids]
+    der = [x for x in v if x not in Frazes.vesture and x not in Frazes.jaunas] or v
+    x = random.choice(der)
+    if x not in Frazes.jaunas:
+        Frazes.jaunas.append(x)
+    return x
+
 
 def _fr(*rindas):
     """("teksts", "tonis", "tagi atstarpēm") → [(teksts, tonis, (tagi,))]."""
@@ -468,7 +494,7 @@ def veids_speletaji(m, a):
                 sp_vk(nelaim.index[0], nelaim.iloc[0], False, fr[len(laim)]),
                 vk("THE MODEL", "OWN xG MODEL", [("SHOTS", f"{len(mm):,}".replace(",", " ")), ("LEAGUE SH%", f"{lg_sh:.1f}%")],
                    periods_txt(no, lidz), atskata_teksts(False), ZILS, vizu="logo")]
-    runa.append(f"Luck runs out. Expected goals don't. {atskata_teksts()} Follow for weekly NHL stats.")
+    runa.append(f"{beigu_frase('speletaji')} {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "team": r["team"], "G": sk(r["G"]), "xG": sk(r["xG"]), "sog": sk(r["sog"]), "sp": sk(r["sp"])}  # noqa: E731
     return {
         "intro": {"tag": "NHL  ·  xG LUCK REPORT", "rindas": [("WHO'S", BALTS), ("RUNNING", BALTS), ("ON LUCK?", DZELTENS)],
@@ -539,7 +565,7 @@ def veids_komandas(m, a):
     verdikts = [kom_vk(laim.index[0], laim.iloc[0], True, fr[0]), kom_vk(nelaim.index[0], nelaim.iloc[0], False, fr[len(laim)]),
                 vk("THE LEAGUE", "PDO AVERAGE ≈ 100", [("SH%", f"{lg_sh:.1f}%"), ("SV%", f"{lg_sv:.1f}%")],
                    periods_txt(no, lidz), atskata_teksts(False), ZILS, vizu="logo")]
-    runa.append(f"PDO always comes back to one hundred. {atskata_teksts()} Follow for weekly NHL stats.")
+    runa.append(f"{beigu_frase('komandas')} {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {k_: sk(r[k_]) for k_ in ("PDO", "sh", "sv", "GD", "xGD", "GP")}   # noqa: E731
     return {
         "intro": {"tag": "NHL  ·  TEAM LUCK REPORT", "rindas": [("WHICH TEAMS", BALTS), ("ARE LIVING", BALTS), ("ON LUCK?", DZELTENS)],
@@ -613,7 +639,7 @@ def veids_vartsargi(m, a):
     verdikts = [va_vk(labie.index[0], labie.iloc[0], True, fr[0]), va_vk(sliktie.index[0], sliktie.iloc[0], False, fr[len(labie)]),
                 vk("THE LEAGUE", "GOALIES THIS PERIOD", [("SV%", svf(lg_sv_)), ("SHOTS", f"{int(g['SA'].sum()):,}".replace(",", " "))],
                    periods_txt(no, lidz), atskata_teksts(False), ZILS, vizu="logo")]
-    runa.append(f"Hot streaks cool, cold streaks thaw. {atskata_teksts()} Follow for weekly NHL stats.")
+    runa.append(f"{beigu_frase('vartsargi')} {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "kom": r["kom"], **{k_: sk(r[k_]) for k_ in ("GSAx", "GSAx_sp", "GA", "xGA", "SA", "sv", "GP")}}  # noqa: E731
     return {
         "intro": {"tag": "NHL  ·  GOALIE REPORT", "rindas": [("WHO'S", BALTS), ("STEALING", BALTS), ("GAMES?", DZELTENS)],
@@ -2974,6 +3000,31 @@ BALSS_ATRUMS = "+8%"           # parastais runas ātrums
 FRAZES_ATRUMS = "+0%"          # noslēguma frāzei (lēnāk, ar īsu pauzi pirms tās)
 
 
+_VIENI = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen",
+          "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+_DESMITI = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+_KARTAS_IZN = {"one": "first", "two": "second", "three": "third", "five": "fifth", "eight": "eighth", "nine": "ninth", "twelve": "twelfth"}
+
+
+def kartas_vardiem(n):
+    """7 → 'seventh', 23 → 'twenty-third', 100 → 'one hundredth' (balsij: edge-tts '7th' reizēm izrunā savādi)."""
+    if n < 20:
+        v = _VIENI[n]
+    elif n < 100:
+        v = _DESMITI[n // 10] + ("-" + _VIENI[n % 10] if n % 10 else "")
+    else:
+        v = _VIENI[n // 100] + " hundred" + (" " + (_VIENI[n % 100] if n % 100 < 20 else
+                                                   _DESMITI[n % 100 // 10] + ("-" + _VIENI[n % 10] if n % 10 else "")) if n % 100 else "")
+    ped = v.replace("-", " ").split()[-1]
+    if ped in _KARTAS_IZN:
+        jauns = _KARTAS_IZN[ped]
+    elif ped.endswith("y"):
+        jauns = ped[:-1] + "ieth"
+    else:
+        jauns = ped + "th"
+    return v[: len(v) - len(ped)] + jauns
+
+
 def balsij(txt):
     """Teksts balsij: pilni teikumi īso frāžu vietā, saīsinājumi un simboli – vārdos."""
     t = str(txt)
@@ -2991,6 +3042,7 @@ def balsij(txt):
     t = re.sub(r"(\d+):(\d+)", r"\1 to \2", t)
     t = re.sub(r"\s*→\s*", ", then ", t).replace("−", "minus ").replace(" @ ", " at ")
     t = re.sub(r"#(\d+)", r"number \1", t)
+    t = re.sub(r"\b(\d{1,3})(st|nd|rd|th)\b", lambda m: kartas_vardiem(int(m.group(1))), t, flags=re.I)
     t = re.sub(r"\b[Cc]an (he|they) make it (\d+)\?", r"Can \1 make it \2 in a row?", t)
     return re.sub(r"\s+", " ", t).strip()
 
