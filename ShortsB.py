@@ -779,7 +779,7 @@ def pievienot_aki(s, veids):
                          f" too few games since.")
         r[0] = (f"On {datums} we made a call. We got {ok} out of {kopa} right.{nesk_runa} Here's every one."
                 if rez else r[0])
-        r[-1] = r[-1].replace("Follow for weekly NHL stats.", "Follow for the next call. Remember:")
+        r[-1] = r[-1].replace("Follow for weekly NHL stats.", "Follow for the next call, and remember: we always check back.")
     elif veids == "tiesnesi":
         c0 = k[0]
         stingr = next((c for c in k if "STRICTEST" in str(c.get("saraksts_virs", ""))), None)
