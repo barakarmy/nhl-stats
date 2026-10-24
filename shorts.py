@@ -450,12 +450,12 @@ def veids_speletaji(m, a):
     fr = []
     for i, (_, r) in enumerate(laim.iterrows()):
         fr.append(F("sp_laim", ["maz"] if r["sog"] < 20 else []))
-        runa.append(f"{r['vards']} has {int(r['G'])} goals on just {r['xG']:.0f} expected. " + fr[-1])
+        runa.append(f"{r['vards']} has {int(r['G'])} goals on just {xgv(r['xG'])} expected. " + fr[-1])
     for i, (_, r) in enumerate(nelaim.iterrows()):
         g_ = int(r["G"])
         ctx = (["xg_aug"] if r["xG"] >= 3 else []) + (["maz"] if r["sog"] < 20 else [])
         fr.append(F("sp_nelaim", ctx))
-        runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {r['xG']:.0f} expected. " + fr[-1])
+        runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {xgv(r['xG'])} expected. " + fr[-1])
     lg_sh = mm["varti"].sum() / max(1, mm["uz_v"].sum()) * 100
 
     def sp_vk(pid, r, lucky, frase):
@@ -597,10 +597,10 @@ def veids_vartsargi(m, a):
     fr = []
     for _, r in labie.iterrows():
         fr.append(F("va_labs", va_ctx(r)))
-        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {r['xGA']:.0f} expected. " + fr[-1])
+        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {xgv(r['xGA'])} expected. " + fr[-1])
     for _, r in sliktie.iterrows():
         fr.append(F("va_slikts", va_ctx(r)))
-        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {r['xGA']:.0f} expected. " + fr[-1])
+        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {xgv(r['xGA'])} expected. " + fr[-1])
     lg_sv_ = (1 - g["GA"].sum() / max(1, g["SA"].sum())) * 100
     svf = lambda v: f".{round(v * 10):03d}"   # noqa: E731
 
@@ -674,13 +674,13 @@ def atskats(fails, m, a):
                 kartes.append({"nr": nr, "akc": NEITRALS if ok is None else (ZALS if ok else SARKANS),
                                "augsa": "WE SAID: COOLDOWN" if lucky else "WE SAID: DUE FOR GOALS",
                                "v1": v[0] if len(v) > 1 else "", "v2": v[-1], "badge": r["team"], "bkr": kkrasa(r["team"]),
-                               "info": f"On {dat(lidz0)}: {int(r['G'])} G on {r['xG']:.0f} xG",
+                               "info": f"On {dat(lidz0)}: {int(r['G'])} G on {xgv(r['xG'])} xG",
                                "bars": [("GOALS SINCE", G2, BALTS, "{:.0f}"), ("EXPECTED (xG) SINCE", xG2, ZILS, "{:.1f}")],
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{spelu(sp2)}  ·  {dat(no2)} – {dat(lidz2)}"})
                 tail = F("maz") if ok is None else F(("sp_laim" if lucky else "sp_nelaim") + ("_ok" if ok else "_ne"))
                 kartes[-1]["_frase"] = tail
-                runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was due'}. Since then: {G2} goals on {xG2:.0f} expected. {tail}")
+                runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was due'}. Since then: {G2} goals on {xgv(xG2)} expected. {tail}")
                 saraksts.append(f"{r['vards']} ({r['team']}): {int(r['G'])} G / {r['xG']:.1f} xG → {G2} G / {xG2:.1f} xG  {verd}")
                 if ok is not None:
                     vert_skaits += 1
@@ -1669,6 +1669,18 @@ def sezonas_txt(sez):
     return f"{s_[:4]}-{s_[6:8]}" if len(s_) == 8 else s_
 
 
+def xgv(x, uz=None):
+    """Sagaidāmie vārti tekstā/balsī: vesels skaitlis (2.4 → 2, 2.6 → 3), bet x.5 paliek (2.5) – citādi noapaļojums maldina.
+    uz=<īstais skaits> (video āķim): vienmēr vesels; x.5 noapaļo UZ īsto skaitu, lai starpība nekad netiek pārspīlēta
+    (7 vārti, 2.5 xG → "should have 3"; 1 vārti, 6.5 xG → "should have 6")."""
+    v = int(round(float(f"{float(x):.1f}") * 10))                     # tas pats, kas ekrānā ar .1f
+    if abs(v) % 10 == 5:
+        if uz is None:
+            return f"{v / 10:.1f}"
+        return f"{int(np.ceil(v / 10)) if float(uz) > v / 10 else int(np.floor(v / 10))}"
+    return f"{int(np.floor(v / 10 + 0.5))}"
+
+
 def _kartas(n):
     n = int(n)
     return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
@@ -2354,7 +2366,7 @@ def veids_fakts(m, a):
     kr = kkrasa(c["badge"]) if c.get("badge") else ZILS
     return {
         "intro": None, "kartes": kartes,
-        "outro": {"rindas": [("NHL FACT", BALTS), ("OF THE WEEK.", DZELTENS)],
+        "outro": {"rindas": [("THE NHL WEEK", BALTS), ("IN NUMBERS.", DZELTENS)],
                   "info": [f"Stats through {dat(lidz, True)}", f"Season {sezonas_txt(D['sezona'])}"]},
         "zimogs": f"STATS THROUGH {dat(lidz, True).upper()}", "runa": runa, "lidz": lidz,
         "periods": f"through {dat(lidz, True)} (fact date {dat(c['datums'], True)})",
@@ -2362,7 +2374,7 @@ def veids_fakts(m, a):
         "saraksts": [c["teksts"]] + [f"{x[0]}  {x[1]}  {x[2]}" for x in c["rindas"]] + [c["kopsavilkums"]],
         "apraksts": " ".join(x for x in c["runa"] if x),
         "nosaukums": f"fakts_{lidz}",
-        "thumb": {"tag": "NHL  ·  FACT OF THE WEEK", "hook": c.get("th_hook") or c["hook"][:2], "vards": c["vards"], "badge": c["badge"],
+        "thumb": {"tag": "NHL  ·  THE WEEK IN NUMBERS", "hook": c.get("th_hook") or c["hook"][:2], "vards": c["vards"], "badge": c["badge"],
                   "skaitlis": c["skaitlis"], "kr": DZELTENS if c["aktiva"] else ZALS, "apaksa": c["skaitlis_apaksa"], "datums": lidz},
         "fakts_atsl": {"atsl": c["atsl"], "garums": c["garums"], "teksts": c["teksts"]},
         "_kr": kr,
@@ -2772,7 +2784,7 @@ def rindas_ietilpinat(d, txt, veids, izm, max_w, max_r=3):
 def aina_fakts_hook(t, c):
     im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    pill(d, 0, 250, c.get("pill_hook", "NHL  ·  FACT OF THE WEEK"), fonts("semi", 40), DZELTENS, MELNS, center=True)
+    pill(d, 0, 250, c.get("pill_hook", "NHL  ·  STAT OF THE WEEK"), fonts("semi", 40), DZELTENS, MELNS, center=True)
     y = 420
     for i, r in enumerate(c["hook"]):
         k = ease((t - 0.1 * i) / 0.45)
