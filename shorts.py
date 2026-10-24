@@ -450,12 +450,12 @@ def veids_speletaji(m, a):
     fr = []
     for i, (_, r) in enumerate(laim.iterrows()):
         fr.append(F("sp_laim", ["maz"] if r["sog"] < 20 else []))
-        runa.append(f"{r['vards']} has {int(r['G'])} goals on just {r['xG']:.1f} expected. " + fr[-1])
+        runa.append(f"{r['vards']} has {int(r['G'])} goals on just {r['xG']:.0f} expected. " + fr[-1])
     for i, (_, r) in enumerate(nelaim.iterrows()):
         g_ = int(r["G"])
         ctx = (["xg_aug"] if r["xG"] >= 3 else []) + (["maz"] if r["sog"] < 20 else [])
         fr.append(F("sp_nelaim", ctx))
-        runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {r['xG']:.1f} expected. " + fr[-1])
+        runa.append(f"{r['vards']}: {g_} goal{'' if g_ == 1 else 's'}, but {r['xG']:.0f} expected. " + fr[-1])
     lg_sh = mm["varti"].sum() / max(1, mm["uz_v"].sum()) * 100
 
     def sp_vk(pid, r, lucky, frase):
@@ -597,10 +597,10 @@ def veids_vartsargi(m, a):
     fr = []
     for _, r in labie.iterrows():
         fr.append(F("va_labs", va_ctx(r)))
-        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. " + fr[-1])
+        runa.append(f"{r['vards']}: {r['GSAx']:.1f} goals saved above expected. {int(r['GA'])} allowed on {r['xGA']:.0f} expected. " + fr[-1])
     for _, r in sliktie.iterrows():
         fr.append(F("va_slikts", va_ctx(r)))
-        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {r['xGA']:.1f} expected. " + fr[-1])
+        runa.append(f"{r['vards']}: {abs(r['GSAx']):.1f} goals worse than expected. {int(r['GA'])} allowed on {r['xGA']:.0f} expected. " + fr[-1])
     lg_sv_ = (1 - g["GA"].sum() / max(1, g["SA"].sum())) * 100
     svf = lambda v: f".{round(v * 10):03d}"   # noqa: E731
 
@@ -674,13 +674,13 @@ def atskats(fails, m, a):
                 kartes.append({"nr": nr, "akc": NEITRALS if ok is None else (ZALS if ok else SARKANS),
                                "augsa": "WE SAID: COOLDOWN" if lucky else "WE SAID: DUE FOR GOALS",
                                "v1": v[0] if len(v) > 1 else "", "v2": v[-1], "badge": r["team"], "bkr": kkrasa(r["team"]),
-                               "info": f"On {dat(lidz0)}: {int(r['G'])} G on {r['xG']:.1f} xG",
+                               "info": f"On {dat(lidz0)}: {int(r['G'])} G on {r['xG']:.0f} xG",
                                "bars": [("GOALS SINCE", G2, BALTS, "{:.0f}"), ("EXPECTED (xG) SINCE", xG2, ZILS, "{:.1f}")],
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{spelu(sp2)}  ·  {dat(no2)} – {dat(lidz2)}"})
                 tail = F("maz") if ok is None else F(("sp_laim" if lucky else "sp_nelaim") + ("_ok" if ok else "_ne"))
                 kartes[-1]["_frase"] = tail
-                runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was due'}. Since then: {G2} goals on {xG2:.1f} expected. {tail}")
+                runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was due'}. Since then: {G2} goals on {xG2:.0f} expected. {tail}")
                 saraksts.append(f"{r['vards']} ({r['team']}): {int(r['G'])} G / {r['xG']:.1f} xG → {G2} G / {xG2:.1f} xG  {verd}")
                 if ok is not None:
                     vert_skaits += 1
@@ -1663,6 +1663,12 @@ DIENAS_PILNAS = {"MON": "Monday", "TUE": "Tuesday", "WED": "Wednesday", "THU": "
 FAKTU_VESTURE = "fakti_vesture.json"
 
 
+def sezonas_txt(sez):
+    """'20262027' → '2026-27'."""
+    s_ = str(sez)
+    return f"{s_[:4]}-{s_[6:8]}" if len(s_) == 8 else s_
+
+
 def _kartas(n):
     n = int(n)
     return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
@@ -1846,7 +1852,7 @@ def f_serijas(D):
 
 
 def f_komandu_serijas(D):
-    """C: komandu uzvaru un bezuzvaru sērijas (salīdzinājums ar vēsturi kopš 2023)."""
+    """C: komandu uzvaru un bezuzvaru sērijas (retums – no vēstures; ekrānā un balsī – salīdzinājums tikai šajā sezonā)."""
     out = []
 
     def serijas(sg, kom):
@@ -1866,11 +1872,13 @@ def f_komandu_serijas(D):
             hist.append((sez, kom, max_ser(v, True), max_ser(v, False)))
     sg = D["sg"]
     sez_max = {True: 0, False: 0}
+    sez_kom = {True: [], False: []}                  # katras komandas garākā sērija šajā sezonā
     akt = []
     for kom in sorted(set(sg["home_team"]) | set(sg["away_team"])):
         g, v = serijas(sg, kom)
-        sez_max[True] = max(sez_max[True], max_ser(v, True))
-        sez_max[False] = max(sez_max[False], max_ser(v, False))
+        for val in (True, False):
+            sez_kom[val].append(max_ser(v, val))
+            sez_max[val] = max(sez_max[val], sez_kom[val][-1])
         for val, min_n in ((True, 4), (False, 5)):
             n = 0
             for x in v[::-1]:
@@ -1896,8 +1904,9 @@ def f_komandu_serijas(D):
             galv = f"THE LONGEST {'WIN' if val else 'WINLESS'} STREAK IN THE NHL THIS SEASON"
         else:
             galv = f"Season high: {sez_max[val]} games"
-        otra = (f"Longest {nos} {'win' if val else 'winless'} streak since at least 2023" if h_kom and n > max(h_kom)
-                else f"Longer than {pct * 100:.0f}% of team streaks since 2023")
+        citas = sum(x >= n for x in sez_kom[val]) - 1
+        otra = (f"No other team has reached {n} this season" if citas <= 0
+                else f"{citas} other team{'s' if citas > 1 else ''} reached {n}+ this season")
         nak = nakama_spele(D, kom)
         out.append({
             "atsl": f"kom_{'uzv' if val else 'zaud'}:{kom}", "garums": n, "aktiva": True, "datums": g["datums"].max(),
@@ -1922,7 +1931,7 @@ def f_komandu_serijas(D):
 
 
 def f_lielas_speles(D):
-    """D: hat trick, 4+ vārti, 4+ / 5+ punkti vienā spēlē pēdējās 7 dienās (retums – no vēstures kopš 2023)."""
+    """D: hat trick, 4+ vārti, 4+ / 5+ punkti vienā spēlē pēdējās 7 dienās (retums – no vēstures; ekrānā – šī sezona)."""
     out = []
     no = (pd.Timestamp(D["lidz"]) - timedelta(days=6)).strftime("%Y-%m-%d")
     sp = D["sp"][(D["sp"]["datums"] >= no) & ((D["sp"]["goals"] >= 3) | (D["sp"]["points"] >= 4))]
@@ -1934,17 +1943,17 @@ def f_lielas_speles(D):
         pts = pd.concat([hv[["game_id", "scorer_id"]].rename(columns={"scorer_id": "p"}), asi]).groupby(["game_id", "p"]).size()
     else:
         sc = pts = pd.Series(dtype=int)
-    sez_g = D["sp"].groupby(["game_id", "playerId"])[["goals", "points"]].sum()
+    sez_g = D["sp"].groupby(["game_id", "playerId"]).agg(goals=("goals", "sum"), points=("points", "sum"), datums=("datums", "first"))
     for _, r in sp.iterrows():
         G, A, P = int(r["goals"]), int(r["assists"]), int(r["points"])
         if G >= 3:
             biez = (sc >= G).sum() / D["h_sez"]
-            sez_k = int((sez_g["goals"] >= G).sum())
+            sez_k = int(((sez_g["goals"] >= G) & (sez_g["datums"] <= r["datums"])).sum())
             nos = "HAT TRICK" if G == 3 else f"{G}-GOAL GAME"
             hook = ["HAT TRICK" if G == 3 else f"{G} GOALS", f"+ {A} ASSIST{'S' if A > 1 else ''}" if A else "IN ONE GAME"]
         else:
             biez = (pts >= P).sum() / D["h_sez"]
-            sez_k = int((sez_g["points"] >= P).sum())
+            sez_k = int(((sez_g["points"] >= P) & (sez_g["datums"] <= r["datums"])).sum())
             nos = f"{P}-POINT GAME"
             hook = [f"{P} POINTS", "IN ONE GAME"]
         vards, kom = str(r["vards"]), str(r["team"])
@@ -1966,7 +1975,7 @@ def f_lielas_speles(D):
             "saraksts_virs": "HOW IT HAPPENED", "rindas": rindas,
             "kopsavilkums": f"FINAL: {kom} {i.get('gf', '')}:{i.get('ga', '')} {i.get('o', '')}{i.get('beigas', '')}",
             "k_skaitlis": _kartas(max(sez_k, 1)),
-            "konteksts": [f"{nos} OF THE SEASON", f"About {biez:.0f} per season since 2023" if biez >= 1.5 else "Rare: about once a season since 2023"],
+            "konteksts": [f"{nos} OF THE SEASON", f"NHL total so far this season: {sez_k}"],
             "nakamais": None,
             "runa": [f"{vards}: {G} goal{'s' if G != 1 else ''} and {A} assist{'s' if A != 1 else ''} against the {kom_nos(i.get('o', ''))}.",
                      f"The {kom_nos(kom)} won {i.get('gf', '')} to {i.get('ga', '')}." if i.get("w") else
@@ -1985,6 +1994,9 @@ def f_vartsargi(D):
     vg = vg[(vg["datums"] >= no) & (vg["starter"].astype(str) == "True")].copy()
     h = D["h_vg"]
     h = h[h["starter"].astype(str) == "True"] if len(h) else h
+    sez_st = D["vg"][D["vg"]["starter"].astype(str) == "True"].copy()
+    for c_ in ("saves", "goalsAgainst"):
+        sez_st[c_] = pd.to_numeric(sez_st[c_], errors="coerce")
     for _, r in vg.iterrows():
         sv_, ga = int(r["saves"]), int(r["goalsAgainst"])
         sausa = ga == 0 and sv_ >= 20
@@ -1994,15 +2006,19 @@ def f_vartsargi(D):
             hs = h[h["goalsAgainst"] == 0] if len(h) else h
             pct = float(np.mean(hs["saves"] < sv_)) if len(hs) else 0.5
             retums = 0.35 + 0.5 * pct
-            sez_k = int(((D["vg"]["goalsAgainst"] == 0) & (D["vg"]["starter"].astype(str) == "True")).sum())
+            sez_s = sez_st[(sez_st["goalsAgainst"] == 0) & ((sez_st["datums"] < r["datums"]) | ((sez_st["datums"] == r["datums"]) & (sez_st["game_id"] <= r["game_id"])))]
+            sez_k = len(sez_s)
             hook = [f"{sv_} SAVES", "SHUTOUT"]
             galv = f"{_kartas(sez_k).upper()} SHUTOUT OF THE SEASON"
-            otra = f"More saves than {pct * 100:.0f}% of shutouts since 2023"
+            p_s = float(np.mean(sez_s["saves"] < sv_)) if sez_k >= 4 else None
+            otra = (f"More saves than {p_s * 100:.0f}% of shutouts this season" if p_s is not None
+                    else f"Shutouts this season: {sez_k}")
         else:
-            pct = float(np.mean(h["saves"] < sv_)) if len(h) else 0.9
-            retums = float(np.clip((pct - 0.95) * 20, 0.3, 1))
+            pct_h = float(np.mean(h["saves"] < sv_)) if len(h) else 0.9
+            retums = float(np.clip((pct_h - 0.95) * 20, 0.3, 1))
+            pct = float(np.mean(sez_st["saves"] < sv_)) if len(sez_st) else pct_h
             hook = [f"{sv_} SAVES", "IN ONE GAME"]
-            galv = f"MORE SAVES THAN {pct * 100:.1f}% OF STARTS SINCE 2023"
+            galv = f"MORE SAVES THAN {pct * 100:.1f}% OF STARTS THIS SEASON"
             otra = f"{r['saveShotsAgainst']} shots saved"
         vards, kom = str(r["vards"]), str(r["team"])
         i = D["info"].get((r["game_id"], kom), {})
@@ -2021,7 +2037,7 @@ def f_vartsargi(D):
             "runa": [f"{vards} stopped all {sv_} shots against the {kom_nos(i.get('o', ''))}." if sausa
                      else f"{vards} made {sv_} saves against the {kom_nos(i.get('o', ''))}.",
                      f"Final score: {i.get('gf', '')} to {i.get('ga', '')}.",
-                     (galv.capitalize().replace("nhl", "NHL") + ".") if sausa else f"That's more saves than {pct * 100:.1f} percent of starts since 2023.", ""],
+                     (galv.capitalize().replace("nhl", "NHL") + ".") if sausa else f"That's more saves than {pct * 100:.1f} percent of starts this season.", ""],
             "yt": f"{vards} stops all {sv_} shots 🥅" if sausa else f"{vards} makes {sv_} saves 🥅",
         })
     return out
@@ -2065,6 +2081,31 @@ def f_speles(D):
         x["d"] = x.groupby(["game_id", "komanda"])["s"].diff()
         h_atri = x["d"].dropna().tolist()
     nh = D["h_sez"]
+    # šī sezona (salīdzinājumi ekrānā un balsī)
+    s_def, s_per, s_atri, s_met = [], [], [], []
+    sv_g = D["va"].groupby("game_id")
+    for r in D["sg"].itertuples(index=False):
+        if r.game_id in sv_g.groups:
+            s_def.append((r.datums, deficits(sv_g.get_group(r.game_id), r.home_team, r.away_team, r.uzvaretajs)))
+        for k_ in ("home", "away"):
+            for p_ in (1, 2, 3):
+                s_per.append((r.datums, _n(getattr(r, f"{k_}_p{p_}"))))
+        try:
+            hm, am = int(r.home_sog_total), int(r.away_sog_total)
+            s_met.append((r.datums, (am - hm) if r.uzvaretajs == r.home_team else (hm - am)))
+        except (TypeError, ValueError):
+            pass
+    if len(D["va"]):
+        x = D["va"].copy()
+        x["s"] = x["laiks"].map(_sek) + (x["period"] - 1) * 1200
+        x = x.sort_values(["game_id", "s"])
+        x["d"] = x.groupby(["game_id", "komanda"])["s"].diff()
+        dd_ = dict(zip(D["sg"]["game_id"], D["sg"]["datums"]))
+        s_atri = [(dd_.get(g_), v_) for g_, v_ in x.dropna(subset=["d"]).groupby("game_id")["d"].min().items()]   # ātrākais pāris spēlē
+
+    def lidz_sim(sar, dat_, nosac):                  # cik reizes šajā sezonā līdz šai spēlei (ieskaitot)
+        return max(1, sum(1 for d0, v in sar if d0 is not None and d0 <= dat_ and nosac(v)))
+    n_sp = len(D["sg"])
     for r in sg.itertuples(index=False):
         va = D["va"][D["va"]["game_id"] == r.game_id]
         uzv, zaud = r.uzvaretajs, (r.away_team if r.uzvaretajs == r.home_team else r.home_team)
@@ -2084,13 +2125,12 @@ def f_speles(D):
                 "skaitlis": f"−{d_} → W", "skaitlis_apaksa": f"vs {kom_nos(zaud)}, {dat(r.datums)}",
                 "saraksts_virs": f"{r.home_team} vs {r.away_team} · GOAL BY GOAL", "rindas": rindas,
                 "kopsavilkums": f"FINAL: {uzv} {rez} {zaud}",
-                "k_skaitlis": f"{biez:.0f}×" if biez >= 1 else "<1×",
-                "konteksts": [f"{d_}+ GOAL COMEBACK WINS PER SEASON SINCE 2023", f"{sum(x >= d_ for x in h_def)} in {nh} seasons"],
+                "k_skaitlis": _kartas(lidz_sim(s_def, r.datums, lambda v: v >= d_)),
+                "konteksts": [f"{d_}+ GOAL COMEBACK WIN OF THE SEASON", f"League-wide: {n_sp} games played this season"],
                 "nakamais": None,
                 "runa": [f"The {kom_nos(uzv)} were down {d_} goals against the {kom_nos(zaud)}, and won.",
                          f"Final score: {i.get('gf')} to {i.get('ga')}.",
-                         f"Comebacks from {d_} down happen about {biez:.0f} times a season." if biez >= 1 else
-                         f"A {d_}-goal comeback happens less than once a season.", ""],
+                         f"That's the {_kartas(lidz_sim(s_def, r.datums, lambda v: v >= d_))} comeback from {d_} down this season.", ""],
                 "yt": f"Down {d_} goals… the {kom_nos(uzv)} came back and won 🤯",
             })
         # G – 4+ vārti vienā periodā
@@ -2109,11 +2149,12 @@ def f_speles(D):
                         "skaitlis": f"{g_} GOALS", "skaitlis_apaksa": f"{_kartas(p_)} period vs {kom_nos(io.get('o', ''))}",
                         "saraksts_virs": f"{_kartas(p_).upper()} PERIOD", "rindas": rindas,
                         "kopsavilkums": f"FINAL: {kom} {io.get('gf')}:{io.get('ga')}{io.get('beigas', '')} {io.get('o', '')}",
-                        "k_skaitlis": f"{biez:.0f}×", "konteksts": [f"{g_}+ GOAL PERIODS PER SEASON SINCE 2023", "(by one team)"],
+                        "k_skaitlis": _kartas(lidz_sim(s_per, r.datums, lambda v: v >= g_)),
+                        "konteksts": [f"{g_}+ GOAL PERIOD OF THE SEASON", f"By one team · {n_sp} games played"],
                         "nakamais": None,
                         "runa": [f"The {kom_nos(kom)} scored {g_} goals in the {_kartas(p_)} period against the {kom_nos(io.get('o', ''))}.",
                                  f"Final score: {io.get('gf')} to {io.get('ga')}.",
-                                 f"That happens about {biez:.0f} times a season.", ""],
+                                 f"That's the {_kartas(lidz_sim(s_per, r.datums, lambda v: v >= g_))} time this season.", ""],
                         "yt": f"{g_} goals in ONE period – the {kom_nos(kom)} exploded 🔥",
                     })
         # H – 2 vārti ≤ 15 s
@@ -2138,11 +2179,11 @@ def f_speles(D):
                 "skaitlis": f"{sek} SEC", "skaitlis_apaksa": f"vs {kom_nos(io.get('o', ''))}, {dat(r.datums)}",
                 "saraksts_virs": "THE TWO GOALS", "rindas": rindas,
                 "kopsavilkums": f"FINAL: {kom} {io.get('gf')}:{io.get('ga')}{io.get('beigas', '')} {io.get('o', '')}",
-                "k_skaitlis": f"{biez:.0f}×" if biez >= 1 else "<1×",
-                "konteksts": [f"TWO GOALS IN ≤ {sek} SECONDS – PER SEASON SINCE 2023", "(same team)"], "nakamais": None,
+                "k_skaitlis": _kartas(lidz_sim(s_atri, r.datums, lambda v: v <= sek)),
+                "konteksts": [f"TIME THIS SEASON: TWO GOALS IN ≤ {sek} SECONDS", f"Same team · {n_sp} games played"], "nakamais": None,
                 "runa": [f"The {kom_nos(kom)} scored twice in {sek} seconds against the {kom_nos(io.get('o', ''))}.",
                          f"Final score: {io.get('gf')} to {io.get('ga')}.",
-                         f"That happens about {biez:.0f} times a season." if biez >= 1 else "That happens less than once a season.", ""],
+                         f"That's the {_kartas(lidz_sim(s_atri, r.datums, lambda v: v <= sek))} time this season.", ""],
                 "yt": f"2 goals in {sek} seconds 😳 {kom_nos(kom)}",
             })
         # I – uzvara, esot pārspētiem metienos par 15+
@@ -2153,8 +2194,9 @@ def f_speles(D):
         u_met, z_met = (hm, am) if uzv == r.home_team else (am, hm)
         if z_met - u_met >= 15:
             starp = z_met - u_met
-            pct = float(np.mean([v < starp for v in h_met])) if h_met else 0.9
             biez = sum(v >= starp for v in h_met) / nh if h_met else 50
+            pct = float(np.mean([v < starp for _, v in s_met])) if s_met else 0.9
+            n_met = max(1, sum(v >= starp for _, v in s_met))
             rindas = []
             for p_ in (1, 2, 3):
                 hk, ak = getattr(r, f"home_sog_p{p_}"), getattr(r, f"away_sog_p{p_}")
@@ -2170,12 +2212,12 @@ def f_speles(D):
                 "skaitlis": f"{u_met} vs {z_met}", "skaitlis_apaksa": f"shots, but won {rez}",
                 "saraksts_virs": "SHOTS & GOALS BY PERIOD", "rindas": rindas,
                 "kopsavilkums": f"FINAL: {uzv} {rez} {zaud}",
-                "k_skaitlis": f"−{starp}", "konteksts": [f"BIGGER SHOT GAP THAN {pct * 100:.0f}% OF WINS SINCE 2023",
-                                                          f"Happens about {biez:.0f} times a season" if biez >= 1 else "Happens less than once a season"],
+                "k_skaitlis": f"−{starp}", "konteksts": [f"BIGGER SHOT GAP THAN {pct * 100:.0f}% OF WINS THIS SEASON",
+                                                          f"Wins outshot by {starp}+ this season: {n_met}"],
                 "nakamais": None,
                 "runa": [f"The {kom_nos(uzv)} were outshot {z_met} to {u_met}, and still beat the {kom_nos(zaud)}.",
                          f"Final score: {i.get('gf')} to {i.get('ga')}.",
-                         f"That's a bigger shot gap than {pct * 100:.0f} percent of wins since 2023.", ""],
+                         f"That's a bigger shot gap than {pct * 100:.0f} percent of wins this season.", ""],
                 "yt": f"Outshot {z_met}–{u_met}… and WON 🤯",
             })
     return out
@@ -2313,7 +2355,7 @@ def veids_fakts(m, a):
     return {
         "intro": None, "kartes": kartes,
         "outro": {"rindas": [("NHL FACT", BALTS), ("OF THE WEEK.", DZELTENS)],
-                  "info": [f"Stats through {dat(lidz, True)}", "History: our database since 2023-24"]},
+                  "info": [f"Stats through {dat(lidz, True)}", f"Season {sezonas_txt(D['sezona'])}"]},
         "zimogs": f"STATS THROUGH {dat(lidz, True).upper()}", "runa": runa, "lidz": lidz,
         "periods": f"through {dat(lidz, True)} (fact date {dat(c['datums'], True)})",
         "virsraksts": c["yt"],
@@ -2395,6 +2437,9 @@ def _ref_nakama_spele(refs, lidz_arg):
     return None
 
 
+REF_SARAKSTS = 8          # tiesnešu video sarakstu garums (8 rindas = pilns ekrāns; citi saraksti – 2 rindas īsāki)
+
+
 def veids_tiesnesi(m, a):
     import random
     t_all = _lasit("tiesnesi.csv")
@@ -2433,17 +2478,17 @@ def veids_tiesnesi(m, a):
         print(f"{men}: par maz tiesnešu ar ≥ {min_sp} spēlēm.")
         return None
     r["pg"] = r["pen"] / r["sp"]
-    strict = r.sort_values(["pg", "sp"], ascending=[False, False]).head(5)
-    lenient = r.sort_values(["pg", "sp"], ascending=[True, False]).head(3)
+    strict = r.sort_values(["pg", "sp"], ascending=[False, False]).head(REF_SARAKSTS)
+    lenient = r.sort_values(["pg", "sp"], ascending=[True, False]).head(REF_SARAKSTS - 2)
     top, low = strict.index[0], lenient.index[0]
     top_pg, low_pg = strict["pg"].iloc[0], lenient["pg"].iloc[0]
-    rind = lambda df: [(str(k), f"{int(x['sp'])} GP", f"{x['pg']:.1f}") for k, x in df.iterrows()]
+    rind = lambda df: [(str(k), f"{int(x['sp'])} GP", f"{x['pg']:.1f}") for k, x in df.iterrows()]          # noqa: E731
 
-    # vēsture (kopš 2023/24) salīdzinājumiem
-    ht = _lasit("tiesnesi.csv", True)
-    hg = _ref_speles(ht)[1] if len(ht) else pd.DataFrame()
-    h_majas = hg["pen_home"].sum() / max(1, hg["pen_total"].sum()) if len(hg) else 0.485
-    h_per = (hg[["pen_p1", "pen_p2", "pen_p3"]].sum() / max(1, hg["pen_total"].sum())).values if len(hg) else np.array([.31, .38, .31])
+    # salīdzinājumi – tikai šīs sezonas ietvaros (sezona sākas septembrī)
+    sez_sak = pd.Timestamp(year=men.year if men.month >= 9 else men.year - 1, month=9, day=1).strftime("%Y-%m-%d")
+    t_sez = t_all[(t_all["datums"] >= sez_sak) & (t_all["datums"] < no_)]
+    hg = _ref_speles(t_sez)[1] if len(t_sez) else pd.DataFrame()
+    sez_txt = f"{int(sez_sak[:4])}-{str(int(sez_sak[:4]) + 1)[2:]}"
 
     kopa = {"pill_hook": f"NHL  ·  MONTHLY REFEREE REPORT", "badge": "", "aktiva": False}
     kartes = [
@@ -2451,7 +2496,7 @@ def veids_tiesnesi(m, a):
         {"tips": "fakts_saraksts", "ilgums": 3.9, **kopa, "saraksts_virs": "STRICTEST · PENALTIES PER GAME", "pill_kr": SARKANS,
          "vards_w": 430, "vards_kr": BALTS, "rindas": rind(strict), "kopsavilkums": f"LEAGUE AVERAGE: {vid:.1f} PER GAME"},
         {"tips": "fakts_saraksts", "ilgums": 3.3, **kopa, "saraksts_virs": "MOST LENIENT · LET THEM PLAY", "pill_kr": ZALS,
-         "vards_w": 430, "vards_kr": BALTS, "rindas": rind(lenient), "kopsavilkums": f"MIN. {min_sp} GAMES IN {MEN}"},
+         "vards_w": 430, "vards_kr": BALTS, "rindas": rind(lenient), "kopsavilkums": f"LEAGUE AVERAGE: {vid:.1f} PER GAME"},
     ]
     runa = [f"{MEN.capitalize()} referee report. Who called the most penalties in the NHL this month?",
             f"The strictest: {top}, {top_pg:.1f} penalties per game. League average: {vid:.1f}.",
@@ -2472,7 +2517,7 @@ def veids_tiesnesi(m, a):
         kartes.append({"tips": "fakts_saraksts", "ilgums": 3.8, **kopa, "saraksts_virs": f"{uzv_txt} · GAME BY GAME",
                        "pill_kr": SARKANS, "vards_w": 240, "vards_kr": PELEKS, "nav_reitings": True,
                        "rindas": [(dat(x["datums"]), f"{x['away_team']} @ {x['home_team']}", f"{int(x['pen_total'])}")
-                                  for _, x in rt.tail(7).iterrows()],
+                                  for _, x in rt.tail(REF_SARAKSTS).iterrows()],
                        "kopsavilkums": f"{virs} OF {len(rt)} GAMES ABOVE AVERAGE"})
         vel_txt = (f"His busiest night was the wildest game of the month. More on that next."
                    if str(mx["game_id"]) == str(g.sort_values("pen_total", ascending=False).iloc[0]["game_id"]) else
@@ -2493,7 +2538,8 @@ def veids_tiesnesi(m, a):
             rez_txt = f"Final: {kom_nos(uzv)} won {max(hg_, ag_)}–{min(hg_, ag_)}" + (f" ({ws['spele_beidzas']})" if pap else "")
             rez_runa = f"The {kom_nos(uzv)} won {max(hg_, ag_)} to {min(hg_, ag_)}{pap}."
     kartes.append({"tips": "fakts_konteksts", "ilgums": 4.0, **kopa, "pill_k": "THE WILDEST GAME", "k_skaitlis": f"{int(w['pen_total'])}",
-                   "konteksts": ["PENALTIES IN ONE GAME", f"{kom_nos(A_)} @ {kom_nos(H_)} · {dat(w['datums'])}", f"Referees: {w['tiesnesi']}"]})
+                   "konteksts": ["PENALTIES IN ONE GAME", f"Game: {kom_nos(A_)} @ {kom_nos(H_)} · {dat(w['datums'])}",
+                                 f"Referees: {w['tiesnesi'].replace(' & ', ' · ')}"]})
     runa.append(f"The wildest game of the month: {int(w['pen_total'])} penalties, {kom_nos(A_)} at {kom_nos(H_)}. "
                 f"Referees: {w['tiesnesi'].replace(' & ', ' and ')}.")
     if ws is not None:
@@ -2511,7 +2557,7 @@ def veids_tiesnesi(m, a):
         runa.append(f"Period by period: the {['first', 'second', 'third', 'overtime'][ip_]}{'' if ip_ == 3 else ' period'} "
                     f"alone had {per_r[ip_][2]} penalties. {pim_a + pim_h} penalty minutes in total.")
         ppg_a, ppo_a, ppg_h, ppo_h = (_n(ws.get(k)) for k in ("away_ppg", "away_pp_opp", "home_ppg", "home_pp_opp"))
-        kont = ["POWER-PLAY GOALS", f"{A_} {ppg_a}/{ppo_a}  ·  {H_} {ppg_h}/{ppo_h} on the power play"]
+        kont = ["POWER-PLAY GOALS", f"Power play: {A_} {ppg_a}/{ppo_a} · {H_} {ppg_h}/{ppo_h}"]
         if rez_txt:
             kont.append(rez_txt)
         if len(pl_m):
@@ -2520,6 +2566,7 @@ def veids_tiesnesi(m, a):
             if len(px) and px["pim"].max() >= 4:
                 p0 = px.loc[px["pim"].idxmax()]
                 kont.append(f"Most PIM: {p0['vards']} ({p0['team']}) · {int(p0['pim'])} min")
+        kont = kont[:4]
         if ppg_a + ppg_h == 0:
             vr = "And yet: zero power-play goals. Nobody cashed in."
         else:
@@ -2545,10 +2592,8 @@ def veids_tiesnesi(m, a):
     kartes.append({"tips": "fakts_saraksts", "ilgums": 3.6, **kopa, "saraksts_virs": "WHEN DO THE WHISTLES COME?",
                    "pill_kr": ZILS, "vards_w": 330, "vards_kr": PELEKS, "nav_reitings": True,
                    "rindas": [(f"{p} PERIOD", f"{int(n_)} calls", f"{v * 100:.0f}%") for p, n_, v in zip(("1ST", "2ND", "3RD"), per_n, per)],
-                   "kopsavilkums": f"SINCE 2023: {h_per[0] * 100:.0f}% · {h_per[1] * 100:.0f}% · {h_per[2] * 100:.0f}%"})
-    dz_p = (per[ip] - h_per[ip]) * 100
-    runa.append(f"Across the league, the {['first', 'second', 'third'][ip]} period had the most whistles: {per[ip] * 100:.0f} percent of all penalties."
-                + (f" That's {'more' if dz_p > 0 else 'less'} than usual." if abs(dz_p) >= 3 else ""))
+                   "kopsavilkums": f"TOTAL: {int(per_n.sum())} CALLS IN {len(g)} GAMES"})
+    runa.append(f"Across the league, the {['first', 'second', 'third'][ip]} period had the most whistles: {per[ip] * 100:.0f} percent of all penalties.")
 
     # ---- papildainu kandidāti: (atslēga, interesantums, ainas dati, runa, teksts INFO)
     kand = []
@@ -2556,7 +2601,9 @@ def veids_tiesnesi(m, a):
     puse, sh = ("ROAD", 1 - maj) if maj < 0.5 else ("HOME", maj)
     kand.append(("majas", abs(maj - 0.5) / 0.05, {
         "pill_k": "HOME VS ROAD", "k_skaitlis": f"{sh * 100:.0f}%",
-        "konteksts": [f"OF ALL PENALTIES WENT TO THE {puse} TEAM", f"Since 2023: home teams {h_majas * 100:.0f}% · road teams {(1 - h_majas) * 100:.0f}%"]},
+        "konteksts": [f"OF ALL PENALTIES WENT TO THE {puse} TEAM",
+                      f"Home teams: {int(g['pen_home'].sum())} penalties · road teams: {int(g['pen_total'].sum() - g['pen_home'].sum())}",
+                      f"{len(g)} games in {MEN.capitalize()}"]},
         f"{puse.capitalize()} teams took {sh * 100:.0f} percent of all penalties this month.", f"majas: {puse} {sh * 100:.0f}%"))
     km = pd.concat([g[["home_team", "pen_home"]].set_axis(["kom", "pen"], axis=1), g[["away_team", "pen_away"]].set_axis(["kom", "pen"], axis=1)])
     kg = km.groupby("kom")["pen"].agg(["mean", "count"])
@@ -2567,13 +2614,13 @@ def veids_tiesnesi(m, a):
         kt, kc = kg.index[0], kg.index[-1]
         kand.append(("komanda", (kg["mean"].iloc[0] / k_vid - 1) / 0.35, {
             "tips2": "saraksts", "saraksts_virs": "MOST PENALIZED TEAMS", "pill_kr": SARKANS, "vards_w": 330, "vards_kr": BALTS,
-            "rindas": [(knos(k), f"{int(x['count'])} GP", f"{x['mean']:.1f}") for k, x in kg.head(3).iterrows()],
+            "rindas": [(knos(k), f"{int(x['count'])} GP", f"{x['mean']:.1f}") for k, x in kg.head(REF_SARAKSTS - 2).iterrows()],
             "kopsavilkums": f"TEAM AVERAGE: {k_vid:.1f} PER GAME"},
             f"The most penalized team this month: the {kom_nos(kt)}, {kg['mean'].iloc[0]:.1f} penalties per game.",
             f"komanda: {kt} {kg['mean'].iloc[0]:.1f}"))
         kand.append(("tirakie", (1 - kg["mean"].iloc[-1] / k_vid) / 0.35, {
             "tips2": "saraksts", "saraksts_virs": "MOST DISCIPLINED TEAMS", "pill_kr": ZALS, "vards_w": 330, "vards_kr": BALTS,
-            "rindas": [(knos(k), f"{int(x['count'])} GP", f"{x['mean']:.1f}") for k, x in kg.tail(3).iloc[::-1].iterrows()],
+            "rindas": [(knos(k), f"{int(x['count'])} GP", f"{x['mean']:.1f}") for k, x in kg.tail(REF_SARAKSTS - 2).iloc[::-1].iterrows()],
             "kopsavilkums": f"TEAM AVERAGE: {k_vid:.1f} PER GAME"},
             f"The most disciplined team: the {kom_nos(kc)}, only {kg['mean'].iloc[-1]:.1f} penalties per game.",
             f"tirakie: {kc} {kg['mean'].iloc[-1]:.1f}"))
@@ -2590,7 +2637,7 @@ def veids_tiesnesi(m, a):
             kt = pk.index[0]
             kand.append(("pp", (pk["pct"].iloc[0] / max(0.01, lg) - 1) / 0.6, {
                 "tips2": "saraksts", "saraksts_virs": "WHO MADE THEM PAY? · POWER PLAY", "pill_kr": DZELTENS, "vards_w": 330, "vards_kr": BALTS,
-                "rindas": [(knos(k), f"{int(x['g'])}/{int(x['o'])}", f"{x['pct'] * 100:.0f}%") for k, x in pk.head(3).iterrows()],
+                "rindas": [(knos(k), f"{int(x['g'])}/{int(x['o'])}", f"{x['pct'] * 100:.0f}%") for k, x in pk.head(REF_SARAKSTS - 2).iterrows()],
                 "kopsavilkums": f"LEAGUE POWER PLAY: {lg * 100:.0f}%"},
                 f"Who made them pay? The {kom_nos(kt)} scored on {pk['pct'].iloc[0] * 100:.0f} percent of their power plays.",
                 f"pp: {kt} {pk['pct'].iloc[0] * 100:.0f}%"))
@@ -2604,21 +2651,19 @@ def veids_tiesnesi(m, a):
             p0 = ps.iloc[0]
             kand.append(("speletajs", 0.6 + 0.15 * (p0["n"] - ps["n"].iloc[2]), {
                 "tips2": "saraksts", "saraksts_virs": "MOST PENALIZED PLAYERS", "pill_kr": SARKANS, "vards_w": 470, "vards_kr": BALTS,
-                "rindas": [(str(x["vards"]), f"{x['kom']} · {int(x['gp'])} GP", f"{int(x['n'])}") for _, x in ps.head(3).iterrows()],
+                "rindas": [(str(x["vards"]), f"{x['kom']} · {int(x['gp'])} GP", f"{int(x['n'])}") for _, x in ps.head(REF_SARAKSTS - 2).iterrows()],
                 "kopsavilkums": f"MINOR PENALTIES TAKEN IN {MEN}"},
                 f"The most penalized player: {p0['vards']}, {int(p0['n'])} minor penalties in {int(p0['gp'])} games.",
                 f"speletajs: {p0['vards']} {int(p0['n'])}"))
-    if len(hg):
-        hm = hg[pd.to_datetime(hg["datums"]).dt.month == men.month]
-        if len(hm) >= 50:
-            hv = hm["pen_total"].mean()
-            dz = (vid / hv - 1) * 100
-            kand.append(("tendence", abs(dz) / 12, {
-                "pill_k": f"{MEN} VS PAST SEASONS", "k_skaitlis": f"{'+' if dz >= 0 else '−'}{abs(dz):.0f}%",
-                "konteksts": [f"{'MORE' if dz >= 0 else 'FEWER'} PENALTIES THAN IN {MEN} 2023–2025",
-                              f"{vid:.1f} per game now vs {hv:.1f} before"]},
-                f"Overall, {abs(dz):.0f} percent {'more' if dz >= 0 else 'fewer'} penalties than in {MEN.capitalize()} of the last seasons.",
-                f"tendence: {dz:+.0f}%"))
+    if len(hg) >= 50:                                                  # šis mēnesis pret iepriekšējiem šīs sezonas mēnešiem
+        hv = hg["pen_total"].mean()
+        dz = (vid / hv - 1) * 100
+        kand.append(("tendence", abs(dz) / 12, {
+            "pill_k": f"{MEN} VS EARLIER THIS SEASON", "k_skaitlis": f"{'+' if dz >= 0 else '−'}{abs(dz):.0f}%",
+            "konteksts": [f"{'MORE' if dz >= 0 else 'FEWER'} PENALTIES THAN EARLIER THIS SEASON",
+                          f"{MEN.capitalize()}: {vid:.1f} per game · before: {hv:.1f}"]},
+            f"Overall, {abs(dz):.0f} percent {'more' if dz >= 0 else 'fewer'} penalties than earlier this season.",
+            f"tendence: {dz:+.0f}%"))
 
     # izvēle: 3 interesantākās (iepriekšējā mēnesī rādītās −0.5), vai --ref-ainas
     vest_p = os.path.join(a.mape, REF_VESTURE)
@@ -2668,8 +2713,8 @@ def veids_tiesnesi(m, a):
         birka_w = ("The power play decided it" if "decided it" in vr else
                    ("Nobody cashed in" if pp_tot == 0 else "Whistles everywhere"))
         verdikts.append(vk("THE WILDEST GAME", f"{A_} @ {H_}  ·  {dat(w['datums']).upper()}",
-                           [("PENALTIES", f"{int(w['pen_total'])}"), ("PP GOALS", f"{pp_tot}")],
-                           rez_txt or f"Referees: {w['tiesnesi']}", birka_w, DZELTENS, vizu="badge", badge=H_, bkr=kkrasa(H_)))
+                           [("PP GOALS", f"{pp_tot}/{ppo_a + ppo_h}"), ("PIM", f"{pim_a + pim_h}")],
+                           rez_txt or f"Referees: {w['tiesnesi']}", birka_w, DZELTENS, vizu="skaitlis", liels=f"{int(w['pen_total'])}"))
     if nak:
         verdikts.append(vk("NEXT UP", ref.upper(), [("GAME", f"{na} @ {nh}"), ("HIS AVERAGE", f"{pg_:.1f}")],
                            diena, f"Over or under {pg_:.1f}?", ZILS, vizu="badge",
@@ -2693,7 +2738,7 @@ def veids_tiesnesi(m, a):
                     + [f"League average: {vid:.1f} penalties per game",
                        f"Wildest game: {kom_nos(A_)} @ {kom_nos(H_)}, {dat(w['datums'])} – {int(w['pen_total'])} penalties"],
         "apraksts": " ".join(runa[:-1]),
-        "piezime": "Penalties = all penalties called in the game (both referees credited). Database since 2023-24.",
+        "piezime": f"Penalties = all penalties called in the game (both referees credited). Season {sez_txt}.",
         "tagi": "#NHL #hockey #NHLrefs #referees #NHLstats #Shorts",
         "nosaukums": f"tiesnesi_{men}",
         "thumb": {"tag": "NHL  ·  REFEREE REPORT", "hook": [MEN, "STRICTEST REF"], "vards": top, "badge": "",
