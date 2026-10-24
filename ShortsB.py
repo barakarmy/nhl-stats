@@ -819,6 +819,19 @@ def fakta_statistika(D, c):
     dal = rest.split(":")
     sg = D["sg"]
     try:
+        if veids == "liela_duo":                                      # divi komandas biedri – sezona blakus
+            rindas, kopa_p = [], 0
+            for pid_ in dal[0].split("-"):
+                x = D["sp"][D["sp"]["playerId"] == float(pid_)]
+                if x.empty:
+                    continue
+                GP, G, A = x["game_id"].nunique(), int(x["goals"].sum()), int(x["assists"].sum())
+                kopa_p += G + A
+                rindas.append((str(x["vards"].iloc[-1]).split(" ", 1)[-1], f"{GP} GP", f"{G}G {A}A"))
+            if len(rindas) < 2:
+                return None
+            return ("SEASON SO FAR", rindas, f"{kopa_p} POINTS COMBINED",
+                    "On the season: " + ", ".join(f"{r_[0]} has {r_[2].replace('G ', ' goals and ').replace('A', ' assists')}" for r_ in rindas) + ".")
         if veids in ("points_serija", "goals_serija", "liela"):
             pid = float(dal[0])
             x = D["sp"][D["sp"]["playerId"] == pid]
@@ -971,8 +984,33 @@ def _fakti_izvele(arg, kand):
             if x.isdigit() and 1 <= int(x) <= len(kand) and int(x) - 1 not in idx:
                 idx.append(int(x) - 1)
         idx = idx[:5]
-    izv = [kand[i] for i in idx if i < len(kand)]
-    return sorted(izv, key=lambda c: -c["vert"])
+    if arg.startswith("top"):                                         # topN: katra kategorija tikai vienreiz (ne divas sausās spēles)
+        izv, kat = [], set()
+        for solis in (1, 2, 3):        # 1) dažādas kategorijas  2) pārējie ne-ikdienišķie  3) jebkas
+            for c in kand:
+                if len(izv) >= len(idx) or c in izv:
+                    continue
+                k_ = _kategorija(c)
+                if solis == 1 and (k_ in kat or c.get("biezi")) or solis == 2 and c.get("biezi"):
+                    continue
+                kat.add(k_)
+                izv.append(c)
+    else:
+        izv = [kand[i] for i in idx if i < len(kand)]
+    izv = sorted(izv, key=lambda c: -c["vert"])
+    # vienas kategorijas fakti (ja izvēlēti ar numuriem) – lielākais skaitlis augstāk (29 atvairīti pirms 26)
+    for k_ in {_kategorija(c) for c in izv}:
+        poz = [i for i, c in enumerate(izv) if _kategorija(c) == k_]
+        if len(poz) > 1:
+            sak = sorted((izv[i] for i in poz), key=lambda c: -abs(float(c.get("garums") or 0)))
+            for i, c in zip(poz, sak):
+                izv[i] = c
+    return izv
+
+
+def _kategorija(c):
+    k_ = str(c["atsl"]).split(":")[0]
+    return {"liela_duo": "liela"}.get(k_, k_)
 
 
 def veids_fakti_b(m, a):
