@@ -722,17 +722,17 @@ def pievienot_aki(s, veids):
         if veids == "speletaji":
             G, xG = hero["bars"][0][1], hero["bars"][1][1]
             vv = "GOAL" if int(G) == 1 else "GOALS"
-            rindas = [(f"{int(G)} {vv}.", S.BALTS), (f"SHOULD HAVE {xG:.1f}.", S.DZELTENS)]
+            rindas = [(f"{int(G)} {vv}.", S.BALTS), (f"SHOULD HAVE {xG:.0f}.", S.DZELTENS)]
             sk_ = hero["liels"]
             ap = "goals above expected" if laim_varonis else "goals below expected"
-            runa0 = f"{int(G)} {vv.lower()}. He should have {xG:.1f}. Who is it?"
+            runa0 = f"{int(G)} {vv.lower()}. He should have {xG:.0f}. Who is it?"
             beigas = (f"Luck runs out. Expected goals don't. {S.atskata_teksts()} "
                       f"Follow, and remember: {int(G)} {vv.lower()}.")
         elif veids == "vartsargi":
             GA, xGA = hero["bars"][0][1], hero["bars"][1][1]
             gs = abs(_parsk(hero["liels"]) or 0)
             rindas = [("HE'S STEALING" if laim_varonis else "HE'S COSTING", S.BALTS), ("GAMES.", S.DZELTENS)]
-            sk_, ap = hero["liels"], f"{int(GA)} goals allowed on {xGA:.1f} expected"
+            sk_, ap = hero["liels"], f"{int(GA)} goals allowed on {xGA:.0f} expected"
             runa0 = (f"This goalie is stealing games: {gs:.1f} goals saved above expected. Who is it?" if laim_varonis
                      else f"This goalie is costing his team: {gs:.1f} goals worse than expected. Who is it?")
             beigas = (f"Hot streaks cool, cold streaks thaw. {S.atskata_teksts()} Follow, and remember: this goalie is "
@@ -794,7 +794,7 @@ def pievienot_aki(s, veids):
             c0["hook"] = ["THIS REF CALLS", f"+{pct}% MORE", "PENALTIES"]
             c0["v1"], c0["vards"] = f"{men} REFEREE REPORT", "WHO IS IT?"
             r[0] = f"One NHL referee calls {pct} percent more penalties than average. Who is it? {men.capitalize()} referee report."
-            r[-1] = r[-1].rstrip() + " Remember:"
+            r[-1] = r[-1].rstrip() + f" Remember the name: {stingr['rindas'][0][0]}."
     return s
 
 
@@ -1037,7 +1037,7 @@ def veids_fakti_b(m, a):
             streak = {"vards": str(sr.get("vards", "")).upper(), "garums": sr.get("garums", 0), "nakamais": sr["nakamais"],
                       "konteksts": (sr.get("konteksts") or [""])[0]}
         outro = {"rindas": [("WHICH ONE", S.BALTS), ("SURPRISED YOU?", S.DZELTENS)],
-                 "info": [f"Stats through {S.dat(lidz, True)}", "History: our database since 2023-24"],
+                 "info": [f"Stats through {S.dat(lidz, True)}", f"Season {S.sezonas_txt(D['sezona'])}"],
                  "follow": "FOLLOW FOR WEEKLY NHL FACTS", "komentars": f"COMMENT 1–{n}",
                  "komentars2": "Which fact surprised you most?", "fakti_tiles": tiles, "streak": streak}
         # beigās īsi – viss jau pateikts; sērija redzama ekrānā
@@ -1045,7 +1045,7 @@ def veids_fakti_b(m, a):
                     + " Follow, and remember:")
     else:
         outro = {"rindas": [("NHL FACT", S.BALTS), ("OF THE WEEK.", S.DZELTENS)],
-                 "info": [f"Stats through {S.dat(lidz, True)}", "History: our database since 2023-24"],
+                 "info": [f"Stats through {S.dat(lidz, True)}", f"Season {S.sezonas_txt(D['sezona'])}"],
                  "follow": "FOLLOW FOR WEEKLY NHL FACTS"}
         runa.append("Follow for weekly NHL facts, and remember:")
     FAKTI_PAPILDU["fakti"] = [{"atsl": c["atsl"], "garums": c["garums"], "teksts": c["teksts"]} for c in citi]
@@ -1056,7 +1056,7 @@ def veids_fakti_b(m, a):
         "virsraksts": hero["yt"] + (f" + {n - 1} more wild NHL facts" if n > 1 else ""),
         "saraksts": [f"#{i + 1}  {c['teksts']}" for i, c in enumerate(izv)],
         "apraksts": " ".join(x for x in hero["runa"] if x),
-        "piezime": "History: our database since 2023-24.",
+        "piezime": f"Comparisons: season {S.sezonas_txt(D['sezona'])} only.",
         "tagi": "#NHL #hockey #NHLstats #NHLfacts #Shorts",
         "nosaukums": f"fakti_{lidz}" if n > 1 else f"fakts_{lidz}",
         "thumb": {"tag": "NHL  ·  FACT OF THE WEEK" if n == 1 else f"NHL  ·  {n} FACTS OF THE WEEK",
@@ -1117,6 +1117,88 @@ def _ir_reitings(rindas):
     return all(a >= b for a, b in zip(v, v[1:])) or all(a <= b for a, b in zip(v, v[1:]))
 
 
+def _etikete(txt):
+    """'Referees: A · B' → ('REFEREES', 'A · B'); bez etiķetes → (None, txt)."""
+    a_, sep, b_ = str(txt).partition(":")
+    if sep and b_.strip() and 0 < len(a_) <= 22 and not re.search(r"\d", a_):
+        return a_.strip().upper(), b_.strip()
+    return None, str(txt)
+
+
+def info_karte(d, y, rindas, k, x0=90, x1=None, akc=None):
+    """Mūsdienīga informācijas kartīte: katra rinda – maza pelēka etiķete + balta vērtība (vai viens teksts); atgriež apakšu."""
+    x1 = x1 or S.W - 90
+    akc = akc or S.DZELTENS
+    rr = [_etikete(r) for r in rindas if str(r).strip()]
+    if not rr:
+        return y
+    rh = [104 if lab else 76 for lab, _ in rr]
+    h = sum(rh) + 24
+    d.rounded_rectangle([x0, y, x1, y + h], radius=26, fill=S.ar_alfa(KARTE_KR, 255 * k), outline=S.ar_alfa((52, 58, 84), 255 * k), width=2)
+    d.rounded_rectangle([x0, y + 18, x0 + 8, y + h - 18], radius=4, fill=S.ar_alfa(akc, 255 * k))
+    yy = y + 12
+    for i, ((lab, val), h_) in enumerate(zip(rr, rh)):
+        if lab:
+            d.text((x0 + 40, yy + 12), lab, font=S.fonts("semi", 28), fill=S.ar_alfa(akc, 230 * k))
+            fv = S.ietilpinat(d, val, "bold", 42, x1 - x0 - 80)
+            d.text((x0 + 40, yy + 46), val, font=fv, fill=S.ar_alfa(S.BALTS, 255 * k))
+        else:
+            fv = S.ietilpinat(d, val, "semi", 36, x1 - x0 - 80)
+            bb = d.textbbox((0, 0), val, font=fv)
+            d.text((x0 + 40, yy + (h_ - (bb[3] - bb[1])) / 2 - bb[1]), val, font=fv, fill=S.ar_alfa(S.BALTS, 255 * k))
+        if i < len(rr) - 1:
+            d.line([(x0 + 40, yy + h_), (x1 - 30, yy + h_)], fill=S.ar_alfa((255, 255, 255), 22 * k), width=2)
+        yy += h_
+    return y + h
+
+
+def kopsavilkuma_cipss(d, y, txt, k):
+    """Saraksta kopsavilkums – centrēts "čips": pelēka etiķete + dzeltena vērtība (vai viens teksts)."""
+    lab, val = _etikete(txt)
+    fl, fv = S.fonts("semi", 30), S.fonts("black", 44)
+    if lab:
+        val = val.upper()
+        wl, wv = d.textlength(lab, font=fl), d.textlength(val, font=fv)
+        w = wl + 24 + wv + 72
+    else:
+        fv = S.ietilpinat(d, txt, "black", 42, S.W - 220)
+        w = d.textlength(txt, font=fv) + 72
+    x0 = (S.W - w) / 2
+    h = 84
+    d.rounded_rectangle([x0, y, x0 + w, y + h], radius=h / 2, fill=S.ar_alfa((24, 32, 64), 255 * k), outline=S.ar_alfa(S.DZELTENS, 170 * k), width=3)
+    bb = d.textbbox((0, 0), "Ag", font=fv)
+    yt = y + (h - (bb[3] - bb[1])) / 2 - bb[1]
+    if lab:
+        bl = d.textbbox((0, 0), "AG", font=fl)
+        d.text((x0 + 36, y + (h - (bl[3] - bl[1])) / 2 - bl[1]), lab, font=fl, fill=S.ar_alfa(S.PELEKS, 255 * k))
+        d.text((x0 + 36 + wl + 24, yt), val, font=fv, fill=S.ar_alfa(S.DZELTENS, 255 * k))
+    else:
+        d.text((x0 + 36, yt), txt, font=fv, fill=S.ar_alfa(S.BALTS, 255 * k))
+
+
+def jautajuma_kaste(d, y0, jaut, kanals, k, pirma="COMMENT BELOW"):
+    """Beigu jautājums skatītājam: tumša kartīte ar dzeltenu rāmi, slīpa birka "YOUR TAKE", jautājums un divi čipi."""
+    x0, x1 = 90, S.W - 90
+    dy = (1 - k) * 80
+    y0 = y0 + dy
+    a = max(0.0, min(1.0, k))
+    d.rounded_rectangle([x0, y0, x1, y0 + 168], radius=30, fill=(12, 18, 36, int(255 * a)), outline=S.ar_alfa(S.DZELTENS, 255 * a), width=3)
+    _slips(d, x0 + 30, y0 - 24, 46, "YOUR TAKE", 26, a)
+    q = (jaut or "WHAT DO YOU THINK?").upper()
+    S.teksts_c(d, y0 + 30, q, S.ietilpinat(d, q, "black", 54, x1 - x0 - 80), S.ar_alfa(S.BALTS, 255 * a))
+    c1, c2 = pirma.upper(), (f"FOLLOW {kanals}" if kanals else "FOLLOW FOR MORE").upper()
+    fc = S.fonts("bold", 26)
+    w1, w2 = d.textlength(c1, font=fc) + 48, d.textlength(c2, font=fc) + 48
+    xs = (S.W - (w1 + 16 + w2)) / 2
+    yc = y0 + 104
+    d.rounded_rectangle([xs, yc, xs + w1, yc + 44], radius=22, fill=S.ar_alfa(S.DZELTENS, 255 * a))
+    d.rounded_rectangle([xs + w1 + 16, yc, xs + w1 + 16 + w2, yc + 44], radius=22, outline=S.ar_alfa(S.DZELTENS, 255 * a), width=2)
+    bb = d.textbbox((0, 0), "AG", font=fc)
+    ty = yc + (44 - (bb[3] - bb[1])) / 2 - bb[1]
+    d.text((xs + 24, ty), c1, font=fc, fill=S.ar_alfa(S.MELNS, 255 * a))
+    d.text((xs + w1 + 16 + 24, ty), c2, font=fc, fill=S.ar_alfa(S.DZELTENS, 255 * a))
+
+
 def aina_fakts_saraksts(t, c):
     """Saraksts atklājas no apakšas (#5 → #1); vērtības skaitās; #1 beigās izgaismojas."""
     im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
@@ -1150,16 +1232,29 @@ def aina_fakts_saraksts(t, c):
         if i < n - 1:
             d.line([(x0 + 40, y + rh - 6), (x1 - 40, y + rh - 6)], fill=S.ar_alfa((255, 255, 255), 25 * k), width=2)
     k2 = S.ease((t - 0.35 - solis * n) / 0.4)
-    if k2 > 0:
-        yk = y0 + 80 + rh * max(1, n)
-        S.teksts_c(d, yk, c["kopsavilkums"], S.ietilpinat(d, c["kopsavilkums"], "black", 64, S.W - 140), S.ar_alfa(S.BALTS, 255 * k2))
+    if k2 > 0 and c.get("kopsavilkums"):
+        kopsavilkuma_cipss(d, y0 + 76 + rh * max(1, n) + (1 - k2) * 20, c["kopsavilkums"], k2)
     return im
 
 
 def aina_fakts_konteksts(t, c):
-    c2 = dict(c)
-    c2["k_skaitlis"] = skaitit(c["k_skaitlis"], S.ease(t / 0.9))
-    im = _orig["fakts_konteksts"](t, c2)
+    """Liels skaitlis + virsraksts + paskaidrojumi informācijas kartītē (etiķete + vērtība)."""
+    im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    S.pill(d, 0, 250, c.get("pill_k", "HOW RARE IS IT?"), S.fonts("semi", 40), S.ZILS, S.MELNS, center=True)
+    k = S.ease(t / 0.5)
+    sk = skaitit(c["k_skaitlis"], S.ease(t / 0.9))
+    f = S.ietilpinat(d, c["k_skaitlis"], "black", int(300 * (0.8 + 0.2 * k)), S.W - 120)
+    S.teksts_c(d, 470, sk, f, S.ar_alfa(S.DZELTENS, 255 * k))
+    k2 = S.ease((t - 0.5) / 0.45)
+    f, rindas = S.rindas_ietilpinat(d, c["konteksts"][0], "black", 76, S.W - 140, 3)
+    y = 860
+    for r in rindas:
+        S.teksts_c(d, y, r, f, S.ar_alfa(S.BALTS, 255 * k2))
+        y += int(f.size * 1.2)
+    k3 = S.ease((t - 0.9) / 0.45)
+    if k3 > 0 and len(c["konteksts"]) > 1:
+        info_karte(d, y + 50 + (1 - k3) * 30, c["konteksts"][1:], k3)
     return im
 
 
@@ -1390,15 +1485,20 @@ def aina_verdikts(t, s, kanals):
                 bw = d.textlength(c["badge"], font=fb) + 26
                 d.rounded_rectangle([vx + 10, vy + 10, vx + 10 + bw, vy + 48], radius=19, fill=S.ar_alfa(bk, 255 * kc))
                 d.text((vx + 23, vy + 14), c["badge"], font=fb, fill=S.ar_alfa(S.uz_fona(bk), 255 * kc))
-        elif viz == "badge":
-            bk = tuple(c.get("bkr") or S.NEITRALS)
-            r_ = 86
-            cx, cy = vx + vw / 2, vy + vh / 2
-            d.ellipse([cx - r_, cy - r_, cx + r_, cy + r_], fill=S.ar_alfa(bk, 255 * kc), outline=S.ar_alfa(akc, 255 * kc), width=6)
-            fb = S.ietilpinat(d, c.get("badge", ""), "black", 64, 150)
-            bb = d.textbbox((0, 0), c.get("badge", ""), font=fb)
-            d.text((cx - (bb[2] - bb[0]) / 2 - bb[0], cy - (bb[3] - bb[1]) / 2 - bb[1]), c.get("badge", ""), font=fb,
-                   fill=S.ar_alfa(S.uz_fona(bk), 255 * kc))
+        elif viz == "badge":                                          # komandas kods + komandas krāsu josla
+            kom = str(c.get("badge", ""))
+            p_ = spilgta(tuple(c.get("bkr") or S.kkrasa(kom) or S.NEITRALS), 0.6)
+            s_ = SEKUNDARAS.get(kom, (230, 230, 235))
+            if sum(abs(a - b) for a, b in zip(p_, s_)) < 90:
+                s_ = (230, 230, 235)
+            cx = vx + vw / 2
+            fb = S.ietilpinat(d, kom, "black", 120, vw - 40)
+            bb = d.textbbox((0, 0), kom, font=fb)
+            ty = vy + vh / 2 - 22 - (bb[3] - bb[1]) / 2 - bb[1]
+            d.text((cx - (bb[2] - bb[0]) / 2 - bb[0], ty), kom, font=fb, fill=S.ar_alfa(S.BALTS, 255 * kc))
+            jb, jy = 170, vy + vh / 2 + (bb[3] - bb[1]) / 2 - 4
+            d.rounded_rectangle([cx - jb / 2, jy, cx + jb / 2, jy + 14], radius=7, fill=S.ar_alfa(s_, 255 * kc))
+            d.rounded_rectangle([cx - jb / 2, jy, cx + 10, jy + 14], radius=7, fill=S.ar_alfa(p_, 255 * kc))
         elif viz == "skaitlis":
             fb = S.ietilpinat(d, c.get("liels", ""), "black", 130, vw - 20)
             bb = d.textbbox((0, 0), c.get("liels", ""), font=fb)
@@ -1440,12 +1540,7 @@ def aina_verdikts(t, s, kanals):
         for i_, rinda in enumerate(cta[1:]):
             S.teksts_c(d, y0 + 96 + i_ * 48 + dy, rinda, S.ietilpinat(d, rinda, "semi", 36, x1 - x0 - 60), S.BALTS)
     elif kq > 0:
-        x0, y0, x1, y1 = 120, 1462, S.W - 120, 1602
-        dy = (1 - kq) * 80
-        d.rounded_rectangle([x0, y0 + dy, x1, y1 + dy], radius=34, fill=(245, 247, 250))
-        q = s.get("komentars") or "WHAT DO YOU THINK?"
-        S.teksts_c(d, y0 + 22 + dy, q, S.ietilpinat(d, q, "black", 50, x1 - x0 - 60), S.MELNS)
-        S.teksts_c(d, y0 + 88 + dy, f"Comment below  ·  follow {kanals}".strip(" ·"), S.fonts("semi", 32), (71, 85, 105))
+        jautajuma_kaste(d, 1462, s.get("komentars") or "WHAT DO YOU THINK?", kanals, kq)
     return im
 
 
@@ -1682,11 +1777,7 @@ def aina_fakti_beigas(t, s, kanals):
     # komentārs
     kq = ease_back((t - 0.9 - 0.22 * n - (0.4 if st else 0)) / 0.5)
     if kq > 0:
-        x0, y0, x1, y1 = 120, 1462, S.W - 120, 1602
-        dy = (1 - kq) * 80
-        d.rounded_rectangle([x0, y0 + dy, x1, y1 + dy], radius=34, fill=(245, 247, 250))
-        S.teksts_c(d, y0 + 22 + dy, s.get("komentars", "COMMENT BELOW"), S.fonts("black", 50), S.MELNS)
-        S.teksts_c(d, y0 + 88 + dy, f"Comment the number  ·  follow {kanals}".strip(" ·"), S.fonts("semi", 32), (71, 85, 105))
+        jautajuma_kaste(d, 1462, s.get("komentars", "WHICH ONE?"), kanals, kq, pirma="COMMENT THE NUMBER")
     return im
 
 
@@ -1705,11 +1796,7 @@ def aina_outro(t, s, kanals):
     if not s.get("cta") and t > 0.9:
         k = ease_back((t - 0.9) / 0.5)
         d = ImageDraw.Draw(im)
-        x0, y0, x1, y1 = 120, 1440, S.W - 120, 1600
-        dy = (1 - k) * 80
-        d.rounded_rectangle([x0, y0 + dy, x1, y1 + dy], radius=36, fill=(245, 247, 250))
-        S.teksts_c(d, y0 + 30 + dy, s.get("komentars", "COMMENT BELOW"), S.fonts("black", 54), S.MELNS)
-        S.teksts_c(d, y0 + 98 + dy, s.get("komentars2", "What should we cover next?"), S.fonts("semi", 36), (71, 85, 105))
+        jautajuma_kaste(d, 1450, s.get("komentars", "WHAT SHOULD WE COVER NEXT?"), kanals, k)
     return im
 
 
