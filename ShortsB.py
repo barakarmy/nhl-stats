@@ -726,7 +726,7 @@ def pievienot_aki(s, veids):
             sk_ = hero["liels"]
             ap = "goals above expected" if laim_varonis else "goals below expected"
             runa0 = f"{int(G)} {vv.lower()}. He should have {S.xgv(xG, uz=G)}. Who is it?"
-            beigas = (f"Luck runs out. Expected goals don't. {S.atskata_teksts()} "
+            beigas = (f"{S.beigu_frase('speletaji')} {S.atskata_teksts()} "
                       f"Follow, and remember: {int(G)} {vv.lower()}.")
         elif veids == "vartsargi":
             GA, xGA = hero["bars"][0][1], hero["bars"][1][1]
@@ -735,7 +735,7 @@ def pievienot_aki(s, veids):
             sk_, ap = hero["liels"], f"{int(GA)} goals allowed on {S.xgv(xGA, uz=GA)} expected"
             runa0 = (f"This goalie is stealing games: {gs:.1f} goals saved above expected. Who is it?" if laim_varonis
                      else f"This goalie is costing his team: {gs:.1f} goals worse than expected. Who is it?")
-            beigas = (f"Hot streaks cool, cold streaks thaw. {S.atskata_teksts()} Follow, and remember: this goalie is "
+            beigas = (f"{S.beigu_frase('vartsargi')} {S.atskata_teksts()} Follow, and remember: this goalie is "
                       + ("stealing games." if laim_varonis else "costing games."))
         else:
             import re as _re
@@ -751,7 +751,7 @@ def pievienot_aki(s, veids):
                 runa0 = (f"This team is {m_.group(1)} and {m_.group(2)}. But they're better than that. Who is it?" if m_
                          else "This team is better than its record. Who is it?")
                 beig_ = "this team is better than its record."
-            beigas = f"PDO always comes back to one hundred. {S.atskata_teksts()} Follow, and remember: {beig_}"
+            beigas = f"{S.beigu_frase('komandas')} {S.atskata_teksts()} Follow, and remember: {beig_}"
         vards = (hero.get("v2") or "").upper()
         s["intro"] = {"aki": True, "tag": tag, "rindas": rindas, "ilgums": 2.4,
                       "kartite": {"nr": "#1", "akc": hero["akc"], "badge": hero.get("badge"), "vards": vards,
