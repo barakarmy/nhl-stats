@@ -1032,15 +1032,18 @@ def veids_fakti_b(m, a):
     lidz = D["lidz"]
     kartes, runa = [], []
     # āķis
-    hook_runa = " ".join(hero["hook"]).lower().capitalize()
+    hook_runa = hero.get("aki_runa") or " ".join(hero["hook"]).lower().capitalize()
+    jaut = hero.get("aki_jaut", "Who is it?")
+    skaits_v = {2: "two", 3: "three", 4: "four", 5: "five"}.get(n, str(n))
     tag = "NHL  ·  THE WEEK IN NUMBERS"
     intro = {"aki": True, "tag": tag, "ilgums": 2.6,
              "rindas": [(r_, S.DZELTENS if i == len(hero["hook"]) - 1 else S.BALTS) for i, r_ in enumerate(hero["hook"])],
              "kartite": {"nr": "#1", "akc": S.DZELTENS, "badge": None, "vards": str(hero["vards"]).upper(),
-                         "skaitlis": str(hero.get("k_skaitlis") or hero.get("skaitlis")), "apaksa": hero.get("skaitlis_apaksa", "")},
-             "uzlime": "STAY FOR #1" if n > 1 else "WHO IS IT?"}
-    runa.append((f"The NHL week in numbers: {n} stats that stood out. Number one: {hook_runa}. Who is it?" if n > 1
-                 else f"{hook_runa}. Who is it?"))
+                         "skaitlis": str(hero.get("aki_skaitlis") or hero.get("k_skaitlis") or hero.get("skaitlis")),
+                         "apaksa": hero.get("aki_apaksa") or hero.get("skaitlis_apaksa", "")},
+             "uzlime": "STAY FOR #1" if n > 1 else jaut.upper()}
+    runa.append((f"The NHL week in numbers: {skaits_v} stats that stood out. Number one: {hook_runa}. {jaut}" if n > 1
+                 else f"{hook_runa}. {jaut}"))
     # #n → #2: viena aina katram
     for nr, c in zip(range(n, 1, -1), citi[::-1]):
         st = fakta_statistika(D, c)
