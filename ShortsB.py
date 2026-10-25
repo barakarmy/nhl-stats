@@ -125,6 +125,30 @@ def komandas_josla(d, x0, y0, x1, kom, h=22):
     d.rectangle([mid - h / 2, y0, mid, y0 + h], fill=p)
 
 
+def lidzsvarotas_rindas(d, txt, veids, izm, max_w, min_izm=30):
+    """Teksts vienā rindā (fontu samazinot līdz min_izm), citādi divās LĪDZSVAROTĀS rindās – dalot pie ", " / "·" / "–",
+    ja tas dod līdzīgu garumu, nevis atstājot otrajā rindā vienu vārdu ("…next / week")."""
+    f = S.fonts(veids, izm)
+    i_ = izm
+    while i_ > min_izm and S.platums(d, txt, S.fonts(veids, i_)) > max_w:
+        i_ -= 2
+    if S.platums(d, txt, S.fonts(veids, i_)) <= max_w:
+        return S.fonts(veids, i_), [txt]
+    vardi = str(txt).split(" ")
+    lab, lab_v = None, None
+    for j in range(1, len(vardi)):
+        a, b = " ".join(vardi[:j]), " ".join(vardi[j:])
+        v = max(S.platums(d, a, f), S.platums(d, b, f))
+        if a.endswith((",", "·", "–", ":")) or b.startswith(("·", "–")):
+            v *= 0.9                                                  # dalījums pie pieturzīmes – priekšroka
+        if lab_v is None or v < lab_v:
+            lab, lab_v = (a.rstrip(" ·–"), b.lstrip("·– ").strip()), v
+    while izm > min_izm and max(S.platums(d, x, f) for x in lab) > max_w:
+        izm -= 2
+        f = S.fonts(veids, izm)
+    return f, list(lab)
+
+
 def verdikts(d, t, t0, teksts, kr, apaksa, y, x0, x1):
     """Verdikts kā slīpa krāsaina josla (THE FINAL VERDICT stilā) + paskaidrojums zem tās (ietilpst kartītē)."""
     k = S.ease((t - t0) / 0.35)
@@ -144,7 +168,7 @@ def verdikts(d, t, t0, teksts, kr, apaksa, y, x0, x1):
     d.text((px + sl + 35 - bb[0], y + (h - (bb[3] - bb[1])) / 2 - bb[1]), teksts, font=f, fill=S.ar_alfa(S.uz_fona(kr), 255 * k))
     k2 = S.ease((t - t0 - 0.25) / 0.35)
     if k2 > 0 and apaksa:
-        fa, rr = S.rindas_ietilpinat(d, apaksa, "semi", 36, x1 - x0 - 100, 2)
+        fa, rr = lidzsvarotas_rindas(d, apaksa, "semi", 36, x1 - x0 - 100)
         yy = y + h + 20
         for r in rr:
             S.teksts_c(d, yy, r, fa, S.ar_alfa(S.BALTS, 225 * k2))
@@ -325,7 +349,7 @@ class VideoFons:
             pass
 
 
-VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "fakts", "tiesnesi", "atskats", "visi")
+VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "streameri", "fakts", "tiesnesi", "atskats", "visi")
 MEDIJU_VESTURE = "shorts_mediji.json"
 XG_VEIDI = ("speletaji", "komandas", "vartsargi")      # xG video – izmanto speletaji_ failus (ja nav savu komandas_ / vartsargi_)
 
@@ -355,6 +379,8 @@ def veida_atslegas():
     veids = _arg("--veids", "speletaji")
     if veids in XG_VEIDI and veids != "speletaji":                  # komandas / vartsargi → kā spēlētājiem
         return [veids, "speletaji", "visi"]
+    if veids == "streameri":                                          # streameri → tie paši faili kā fantasy
+        return [veids, "fantasy", "visi"]
     return [veids, "visi"]
 
 
@@ -1333,7 +1359,7 @@ def aina_karte(t, c):
     y_sk = yb + 190 * (max(1, len(c["bars"])) - 1) + 142 + 46
     f_sk = S.ietilpinat(d, c["liels"], "black", min(170, c.get("liels_izm", 200)), x1 - x0 - 100)
     bb = d.textbbox((0, 0), c["liels"], font=f_sk)
-    f_ap, rr_ap = S.rindas_ietilpinat(d, c["apaksa"], "semi", 40, x1 - x0 - 100, 2)
+    f_ap, rr_ap = lidzsvarotas_rindas(d, c["apaksa"], "semi", 40, x1 - x0 - 100, min_izm=32)
     y_ap = y_sk + bb[3] + 30
     y1 = max(1640, y_ap + len(rr_ap) * int(f_ap.size * 1.25) + 36)
     d.rounded_rectangle([x0, y0, x1, y1], radius=48, fill=KARTE_KR, outline=jaukt(prim, KARTE_KR, 0.6), width=3)
@@ -1637,16 +1663,16 @@ def aina_grafiks(t, c):
         return S.aina_grafiks(t, c)
     im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    S.pill(d, 0, 250, "NEXT WEEK'S SCHEDULE", S.fonts("semi", 40), S.ZILS, S.MELNS, center=True)
+    S.pill(d, 0, 250, c.get("pill", "NEXT WEEK'S SCHEDULE"), S.fonts("semi", 40), S.ZILS, S.MELNS, center=True)
     k0 = S.ease(t / 0.4)
     S.teksts_c(d, 350, c["nedela"], S.fonts("black", 88), S.ar_alfa(S.BALTS, 255 * k0))
-    S.teksts_c(d, 458, "EVERYONE ELSE PLAYS 3", S.fonts("semi", 30), S.ar_alfa(S.PELEKS, 255 * k0))
+    S.teksts_c(d, 458, c.get("apaksa_txt", "EVERYONE ELSE PLAYS 3"), S.fonts("semi", 30), S.ar_alfa(S.PELEKS, 255 * k0))
     dn = c["dienu_n"]
     viegla = [n_ <= VIEGLA_DIENA and n_ > 0 for n_ in dn]
     idx = c["dienas_idx"]
     grupas = [(g, kr, virs, birka) for g, kr, virs, birka in
-              ((c["cetri"], S.ZALS, "TARGET", "4 GAMES · TARGET THEIR PLAYERS"),
-               (c["divi"], S.SARKANS, "AVOID", "ONLY 2 GAMES · BENCH OR DROP")) if g]
+              ((c["cetri"], S.ZALS, c.get("virs1", "TARGET"), c.get("birka1", "4 GAMES · TARGET THEIR PLAYERS")),
+               (c["divi"], S.SARKANS, c.get("virs2", "AVOID"), c.get("birka2", "ONLY 2 GAMES · BENCH OR DROP"))) if g]
     X0, X1, Y = 70, S.W - 70, 520
     rindas_kopa = sum(len(g[0]) for g in grupas)
     rh = int(min(66, (1440 - Y - len(grupas) * 186) / max(1, rindas_kopa)))
