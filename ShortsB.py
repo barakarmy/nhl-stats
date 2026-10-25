@@ -589,13 +589,23 @@ def uzlime(im, txt, y, lenkis=-6, kr=S.DZELTENS):
     im.alpha_composite(tmp, (0, int(y)))
 
 
+_UZL = {}
+
+
+def _uzlime_mini():
+    """Tiesnešu āķa uzlīme – izvēlas vienreiz video (aina tiek zīmēta katram kadram)."""
+    if "mini" not in _UZL:
+        _UZL["mini"] = S.reta_frase(S.UZLIME_MINI)
+    return _UZL["mini"]
+
+
 def aina_fakts_hook(t, c):
     im = _orig["fakts_hook"](t, c)
     k = ease_back((t - 1.0) / 0.45)
     if k > 0.02 and not c.get("bez_uzlimes"):
         sc = max(0.05, k)
         st = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
-        uzlime(st, "GUESS BEFORE THE REVEAL", 1380)
+        uzlime(st, _uzlime_mini(), 1380)
         if sc < 0.999:
             w, h = int(S.W * sc), int(S.H * sc)
             st = st.resize((w, h), Image.BILINEAR)
@@ -725,7 +735,8 @@ def pievienot_aki(s, veids):
             rindas = [(f"{int(G)} {vv}.", S.BALTS), (f"SHOULD HAVE {S.xgv(xG, uz=G)}.", S.DZELTENS)]
             sk_ = hero["liels"]
             ap = "goals above expected" if laim_varonis else "goals below expected"
-            runa0 = f"{int(G)} {vv.lower()}. He should have {S.xgv(xG, uz=G)}. Who is it?"
+            runa0 = (S.reta_frase(S.AKIS_SP if laim_varonis else S.AKIS_SP_NE, veids="speletaji", n=2)
+                     .format(G=int(G), vv=vv.lower(), x=S.xgv(xG, uz=G)) + " " + S.reta_frase(S.KAS_TAS))
             beigas = (f"{S.beigu_frase('speletaji')} {S.atskata_teksts()} "
                       f"Follow, and remember: {int(G)} {vv.lower()}.")
         elif veids == "vartsargi":
@@ -733,8 +744,8 @@ def pievienot_aki(s, veids):
             gs = abs(_parsk(hero["liels"]) or 0)
             rindas = [("HE'S STEALING" if laim_varonis else "HE'S COSTING", S.BALTS), ("GAMES.", S.DZELTENS)]
             sk_, ap = hero["liels"], f"{int(GA)} goals allowed on {S.xgv(xGA, uz=GA)} expected"
-            runa0 = (f"This goalie is stealing games: {S.varti_v(gs, uz=0)} saved above expected. Who is it?" if laim_varonis
-                     else f"This goalie is costing his team: {S.varti_v(gs, uz=0)} worse than expected. Who is it?")
+            runa0 = (S.reta_frase(S.AKIS_VA_LABS if laim_varonis else S.AKIS_VA_SLIKTS, veids="vartsargi", n=2)
+                     .format(gs=S.varti_v(gs, uz=0)) + " " + S.reta_frase(S.KAS_TAS))
             beigas = (f"{S.beigu_frase('vartsargi')} {S.atskata_teksts()} Follow, and remember: this goalie is "
                       + ("stealing games." if laim_varonis else "costing games."))
         else:
@@ -744,19 +755,19 @@ def pievienot_aki(s, veids):
             rindas = ([(f"{rek}.", S.BALTS)] if rek else []) + [("AND IT'S LUCK." if laim_varonis else "AND IT'S BAD LUCK.", S.DZELTENS)]
             sk_, ap = hero["liels"], "PDO · league average ≈ 100"
             if laim_varonis:
-                runa0 = (f"This team is {m_.group(1)} and {m_.group(2)}. And it's mostly luck. Who is it?" if m_
-                         else "This team is winning on luck. Who is it?")
+                runa0 = (S.reta_frase(S.AKIS_KOM_LAIM, veids="komandas", n=2).format(w=m_.group(1), l=m_.group(2)) if m_
+                         else "This team is winning on luck.") + " " + S.reta_frase(S.KAS_TAS)
                 beig_ = "this team is winning on luck."
             else:
-                runa0 = (f"This team is {m_.group(1)} and {m_.group(2)}. But they're better than that. Who is it?" if m_
-                         else "This team is better than its record. Who is it?")
+                runa0 = (S.reta_frase(S.AKIS_KOM_NELAIM, veids="komandas", n=2).format(w=m_.group(1), l=m_.group(2)) if m_
+                         else "This team is better than its record.") + " " + S.reta_frase(S.KAS_TAS)
                 beig_ = "this team is better than its record."
             beigas = f"{S.beigu_frase('komandas')} {S.atskata_teksts()} Follow, and remember: {beig_}"
         vards = (hero.get("v2") or "").upper()
         s["intro"] = {"aki": True, "tag": tag, "rindas": rindas, "ilgums": 2.4,
                       "kartite": {"nr": "#1", "akc": hero["akc"], "badge": hero.get("badge"), "vards": vards,
                                   "skaitlis": sk_, "apaksa": ap},
-                      "uzlime": "STAY FOR #1"}
+                      "uzlime": S.reta_frase(S.UZLIME_NR1)}
         s["runa"] = [runa0] + r_k + [beigas]
     elif veids == "atskats":
         rez = ""
@@ -771,7 +782,7 @@ def pievienot_aki(s, veids):
                       "rindas": [(f"ON {datums.upper()}", S.BALTS), ("WE MADE A CALL.", S.DZELTENS)],
                       "skaitlis": f"{rez}", "skaitlis_kr": S.ZALS if trapi else S.SARKANS,
                       "skaitlis_apaksa": "calls that held up" + (f"  ·  {neskait} not counted (too few games)" if neskait else ""),
-                      "uzlime": "SEE EVERY CALL"}
+                      "uzlime": S.reta_frase(S.UZLIME_ATSKATS)}
         vardi = {1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five"}
         nesk_runa = ""
         if neskait:
@@ -792,8 +803,9 @@ def pievienot_aki(s, veids):
         if pct:
             men = c0["hook"][0]
             c0["hook"] = ["THIS REF CALLS", f"+{pct}% MORE", "PENALTIES"]
-            c0["v1"], c0["vards"] = f"{men} REFEREE REPORT", "WHO IS IT?"
-            r[0] = f"One NHL referee calls {pct} percent more penalties than average. Who is it? {men.capitalize()} referee report."
+            kas_ = S.reta_frase(S.KAS_TAS)
+            c0["v1"], c0["vards"] = f"{men} REFEREE REPORT", kas_.upper()
+            r[0] = f"One NHL referee calls {pct} percent more penalties than average. {kas_} {men.capitalize()} referee report."
             r[-1] = r[-1].rstrip() + f" Remember the name: {stingr['rindas'][0][0]}."
     return s
 
@@ -1033,7 +1045,8 @@ def veids_fakti_b(m, a):
     kartes, runa = [], []
     # āķis
     hook_runa = hero.get("aki_runa") or " ".join(hero["hook"]).lower().capitalize()
-    jaut = hero.get("aki_jaut", "Who is it?")
+    jaut = S.reta_frase(S.KAS_VINI if hero.get("aki_jaut") else S.KAS_TAS)
+    atcerei = hero.get("aki_runa") or " ".join(hero["hook"]).lower()
     skaits_v = {2: "two", 3: "three", 4: "four", 5: "five"}.get(n, str(n))
     tag = "NHL  ·  THE WEEK IN NUMBERS"
     intro = {"aki": True, "tag": tag, "ilgums": 2.6,
@@ -1041,7 +1054,7 @@ def veids_fakti_b(m, a):
              "kartite": {"nr": "#1", "akc": S.DZELTENS, "badge": None, "vards": str(hero["vards"]).upper(),
                          "skaitlis": str(hero.get("aki_skaitlis") or hero.get("k_skaitlis") or hero.get("skaitlis")),
                          "apaksa": hero.get("aki_apaksa") or hero.get("skaitlis_apaksa", "")},
-             "uzlime": "STAY FOR #1" if n > 1 else jaut.upper()}
+             "uzlime": S.reta_frase(S.UZLIME_NR1) if n > 1 else jaut.upper()}
     runa.append((f"The NHL week in numbers: {skaits_v} stats that stood out. Number one: {hook_runa}. {jaut}" if n > 1
                  else f"{hook_runa}. {jaut}"))
     # #n → #2: viena aina katram
@@ -1077,18 +1090,20 @@ def veids_fakti_b(m, a):
         if sr is not None:
             streak = {"vards": str(sr.get("vards", "")).upper(), "garums": sr.get("garums", 0), "nakamais": sr["nakamais"],
                       "konteksts": (sr.get("konteksts") or [""])[0]}
+        fb_ = S.reta_frase(S.FAKTI_BEIGAS, veids="fakts", n=4)
         outro = {"rindas": [("WHICH ONE", S.BALTS), ("SURPRISED YOU?", S.DZELTENS)],
                  "info": [f"Stats through {S.dat(lidz, True)}", f"Season {S.sezonas_txt(D['sezona'])}"],
                  "follow": "FOLLOW FOR THE WEEK IN NUMBERS", "komentars": f"COMMENT 1–{n}",
-                 "komentars2": "Which fact surprised you most?", "fakti_tiles": tiles, "streak": streak}
+                 "komentars2": "Which fact surprised you most?", "fakti_tiles": tiles, "streak": streak,
+                 "fakti_apaksa": fb_[0]}
         # beigās īsi – viss jau pateikts; sērija redzama ekrānā
-        runa.append("Which one surprised you? Comment the number." + (f" And watch the {sr.get('vards', '')} streak." if streak else "")
-                    + " Follow, and remember:")
+        runa.append(fb_[1] + (f" And watch the {sr.get('vards', '')} streak." if streak else "")
+                    + f" Follow, and remember: {atcerei}.")
     else:
         outro = {"rindas": [("THE NHL WEEK", S.BALTS), ("IN NUMBERS.", S.DZELTENS)],
                  "info": [f"Stats through {S.dat(lidz, True)}", f"Season {S.sezonas_txt(D['sezona'])}"],
                  "follow": "FOLLOW FOR THE WEEK IN NUMBERS"}
-        runa.append("Follow for the NHL week in numbers, and remember:")
+        runa.append(f"Follow for the NHL week in numbers, and remember: {atcerei}.")
     FAKTI_PAPILDU["fakti"] = [{"atsl": c["atsl"], "garums": c["garums"], "teksts": c["teksts"]} for c in citi]
     return {
         "intro": intro, "kartes": kartes, "outro": outro,
@@ -1505,7 +1520,8 @@ def aina_verdikts(t, s, kanals):
     bb = d.textbbox((0, 0), "THE FINAL VERDICT", font=f)
     d.text((x0 + sl + 30, y0 + (h_ - (bb[3] - bb[1])) / 2 - bb[1]), "THE FINAL VERDICT", font=f, fill=S.MELNS)
     k2 = S.ease((t - 0.25) / 0.4)
-    S.teksts_c(d, 364, "NUMBERS TELL A STORY. HERE'S WHAT IT MEANS.", S.fonts("semi", 34), S.ar_alfa((147, 197, 253), 255 * k2))
+    S.teksts_c(d, 364, s.get("verd_apaksa", "NUMBERS TELL A STORY. HERE'S WHAT IT MEANS."), S.fonts("semi", 34),
+               S.ar_alfa((147, 197, 253), 255 * k2))
 
     # 3 kartītes
     kartites = s["verdikts"][:3]
@@ -1732,7 +1748,7 @@ def aina_fakti_beigas(t, s, kanals):
             d.polygon([(xx + 22, y0 + 18), (xx + 34, y0 + 18), (xx + 12, y0 + h_ - 18), (xx, y0 + h_ - 18)],
                       fill=S.ar_alfa(S.DZELTENS, 200 * k))
     d.text((x0 + sl + 30 - bb[0], y0 + (h_ - (bb[3] - bb[1])) / 2 - bb[1]), txt, font=f, fill=S.MELNS)
-    S.teksts_c(d, 364, "WHICH ONE SURPRISED YOU MOST?", S.fonts("semi", 36),
+    S.teksts_c(d, 364, s.get("fakti_apaksa", "WHICH ONE SURPRISED YOU MOST?"), S.fonts("semi", 36),
                S.ar_alfa((147, 197, 253), 255 * S.ease((t - 0.25) / 0.4)))
 
     flizes = s["fakti_tiles"]
@@ -1888,6 +1904,8 @@ def renderet(s, izvade, kanals="", balss=None):
     import shutil, tempfile
     if not shutil.which("ffmpeg"):
         raise SystemExit("Nav ffmpeg (Windows: winget install ffmpeg, tad jauns terminālis).")
+    if s["outro"].get("verdikts") and "verd_apaksa" not in s["outro"]:
+        s["outro"]["verd_apaksa"] = S.reta_frase(S.VERDIKTA_APAKSA)
     ainas = ([("intro", None, s["intro"].get("ilgums", 3.2))] if s.get("intro") else []) + [("karte", c, c.get("ilgums", 3.6)) for c in s["kartes"]] \
         + [("outro", s["outro"] if _jauna_beigu_aina(s["outro"]) else None,
             VERDIKTS_ILGUMS if _jauna_beigu_aina(s["outro"]) else (4.5 if s["outro"].get("cta") else 3.6))]
