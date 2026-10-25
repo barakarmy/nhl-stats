@@ -319,6 +319,15 @@ BEIGU_FRAZES = {
 }
 
 
+# streameru video (trešdiena): ievads un grafika teikums
+STREAM_IEVADS = ["{N} fantasy hockey streamers for the rest of the week, all {rost}.",
+                 "Need games before Sunday? {N} streamers, all {rost}.",
+                 "{N} quick adds for the rest of the week, all {rost}."]
+STREAM_GRAFIKS = ["First, the schedule. {k} {teams} {plays} {g} games before Sunday.",
+                  "The schedule first: {k} {teams} still {has} {g} games this week.",
+                  "Here's who plays the most: {k} {teams} with {g} games before Sunday."]
+GRAFIKA_BIRKAS = ["Ride the schedule", "Chase the games", "Volume wins the week", "Games are points"]
+
 # fantasy video beigas (krāsu skaidrojums + follow) – neatkārto pēdējos 5 fantasy video (katrs variants ~reizi 6 nedēļās)
 FANTASY_BEIGAS = [
     "Green matchups are the weakest defenses by expected goals against. Follow for weekly fantasy hockey tips.",
@@ -475,7 +484,7 @@ FRAZES = {
     "f_add": _fr(("Worth a pickup.", "analytical"), ("Get ahead of the rush.", "cheeky"),
                  ("Add before the schedule turns.", "dramatic", "=sched4"), ("Grab him before your league does.", "cheeky"),
                  ("The underlying numbers back it up.", "analytical"), ("This is a smart add.", "analytical")),
-    "f_stream": _fr(("Good short-term play.", "analytical"), ("Ride the schedule.", "cheeky", "sched4"),
+    "f_stream": _fr(("Good short-term play.", "analytical"), ("Ride the schedule.", "cheeky", "=sched"),
                     ("A matchup play.", "analytical"), ("Stream him this week.", "analytical"),
                     ("Use him, then move on.", "cheeky"), ("Four games make him useful.", "analytical", "=sched4")),
     "f_bench": _fr(("Sit him for now.", "analytical"), ("Better options this week.", "analytical"),
@@ -506,6 +515,8 @@ JAUTAJUMI = {
                   "WHO STARTS IN THE PLAYOFFS?", "HOT HAND OR FLUKE?"],
     "atskats": ["DID WE GET THIS ONE RIGHT?", "WHICH CALL SURPRISED YOU?", "WHO SHOULD WE FLAG NEXT?",
                 "WHICH CALL WOULD YOU MAKE?", "GOOD MODEL OR GOOD LUCK?"],
+    "streameri": ["WHO ARE YOU STREAMING?", "WHO'S YOUR WEEKEND ADD?", "STREAM OR STAND PAT?", "WHO DID WE MISS?",
+                  "WHICH ONE ARE YOU ADDING?"],
     "fantasy": ["WHO ARE YOU ADDING?", "WHO'S YOUR SLEEPER PICK?", "ADD OR PASS?", "WHO ARE YOU DROPPING?",
                 "WHO DID WE MISS?"],
 }
@@ -1249,8 +1260,16 @@ def veids_fantasy(m, a):
     for k in ("P", "SOG", "ixG", "PPP"):
         g[k + "_gp"] = g[k] / g["GP"]
     # nākamās nedēļas grafiks
-    start = nakama_nedela(a, lidz)
-    beigas = start + timedelta(days=6)
+    stream = a.veids == "streameri"            # nedēļas vidus: spēlētāji atlikušajām šīs nedēļas dienām (līdz svētdienai)
+    if stream:
+        start = (pd.Timestamp(a.lidz) + timedelta(days=1) if a.lidz else pd.Timestamp.now().normalize())
+        beigas = start + timedelta(days=6 - start.weekday())
+        a.drop = 0
+    else:
+        start = nakama_nedela(a, lidz)
+        beigas = start + timedelta(days=6)
+    pirmdiena = start - timedelta(days=start.weekday())              # kalendāra kolonnas vienmēr P–Sv
+    NAK_LAB = "THIS WEEK" if stream else "NEXT WEEK"
     kal = pd.read_csv(os.path.join(BASE, "sezonas", "nhl_kalendars.csv"), encoding="utf-8-sig")
     kal = kal[(kal["datums"] >= start.strftime("%Y-%m-%d")) & (kal["datums"] <= beigas.strftime("%Y-%m-%d"))]
     # nedēļas daļa, kas jau aizvadīta (piem. --nedela pagātnē), – no sezonas/speles.csv
@@ -1273,6 +1292,9 @@ def veids_fantasy(m, a):
     xga = (kt["xGA"] / kt["GP"]).sort_values(ascending=False)
     vajas, stipras = set(xga.index[:10]), set(xga.index[-10:])
     g["sp_nak"] = g["team"].map(lambda k: len(grafiks.get(k, [])))
+    _sp_d = kal.groupby("datums").size()
+    vieglas = {d_ for d_, n_ in _sp_d.items() if n_ <= 7}             # vieglās dienas (≤ 7 NHL spēles) – dienas līgās vērtīgākas
+    g["viegl"] = g["team"].map(lambda k: sum(x[0] in vieglas for x in grafiks.get(k, [])))
     g["vajie"] = g["team"].map(lambda k: sum(o in vajas for _, _, o, _ in grafiks.get(k, [])))
     g = g[g["sp_nak"] >= 1]
     g["stipras"] = g["team"].map(lambda k: sum(o in stipras for _, _, o, _ in grafiks.get(k, [])))
@@ -1321,6 +1343,7 @@ def veids_fantasy(m, a):
         return None
     # pretinieki: katra spēle pret vāju aizsardzību +0.15, pret stipru −0.15 (spēļu skaits joprojām svarīgākais – 0.40 par spēli)
     brivi["score"] = (brivi["forma"] + 0.40 * (brivi["sp_nak"] - 3.5) + 0.15 * brivi["vajie"] - 0.15 * brivi["stipras"]
+                      + (0.15 * brivi["viegl"] if stream else 0)
                       + 0.10 * z(brivi["delta7"].fillna(0)))
     def ar_limitu(df, kol, n):
         """Top n pēc kol, bet ne vairāk kā 1 aizsargs (fantasy līgās vairāk vajag uzbrucējus) un 1 spēlētājs no komandas."""
@@ -1404,8 +1427,8 @@ def veids_fantasy(m, a):
                        ("ixG/60", f"{r['ixG60']:.2f}", f"HD {r['iHD60']:.1f}"),
                        ("TOI / GP", _mmss(r["TOI"]), toi_sub),
                        ("PP PTS", f"{int(r['PPP'])}", ""),
-                       ("NEXT WEEK", f"{int(r['sp_nak'])} GP", pretinieku_txt(r))],
-            "pretinieki": pretinieki, "liels": veids,
+                       (NAK_LAB, f"{int(r['sp_nak'])} GP", pretinieku_txt(r))],
+            "pretinieki": pretinieki, "liels": veids, "grafika_virs": "REST OF WEEK" if stream else "NEXT WEEK",
             "apaksa": iemesls(r) if veids in ("ADD", "STREAM") else iemesls_drop(r)}
 
     def grafika_runa(r):
@@ -1421,30 +1444,47 @@ def veids_fantasy(m, a):
         return ""
 
     kartes = []
-    cetri = sorted([k for k, v in grafiks.items() if len(v) >= 4])
-    divi = sorted([k for k, v in grafiks.items() if len(v) <= 2])
+    maxg = max((len(v) for v in grafiks.values()), default=0)
+    if stream:
+        cetri = sorted([k for k, v in grafiks.items() if len(v) == maxg])
+        divi = sorted([k for k, v in grafiks.items() if len(v) <= max(0, maxg - 2)])
+    else:
+        cetri = sorted([k for k, v in grafiks.items() if len(v) >= 4])
+        divi = sorted([k for k, v in grafiks.items() if len(v) <= 2])
     sp_dienā = kal.groupby("datums").size()
-    dienu_n = [int(sp_dienā.get((start + timedelta(days=j)).strftime("%Y-%m-%d"), 0)) for j in range(7)]
-    dienas_idx = {k: sorted({(pd.Timestamp(x[0]) - start).days for x in v}) for k, v in grafiks.items()}
+    dienu_n = [int(sp_dienā.get((pirmdiena + timedelta(days=j)).strftime("%Y-%m-%d"), 0)) for j in range(7)]
+    dienas_idx = {k: sorted({(pd.Timestamp(x[0]) - pirmdiena).days for x in v}) for k, v in grafiks.items()}
     kartes.append({"tips": "grafiks", "cetri": cetri, "divi": divi,
                    "nedela": f"{dat(start).upper()} – {dat(beigas).upper()}",
+                   **({"pill": "REST OF THE WEEK", "apaksa_txt": f"MOST GAMES BEFORE SUNDAY: {maxg}",
+                       "birka1": f"{maxg} GAMES · STREAM THEIR PLAYERS", "birka2": f"ONLY {max(0, maxg - 2)} GAME{'' if maxg - 2 == 1 else 'S'} · SKIP",
+                       "virs1": "TARGET", "virs2": "AVOID"} if stream else {}),
                    "dienu_n": dienu_n, "dienas_idx": dienas_idx})
     n_drop = len(drop)
     n_add = len(izv)
     vardiem = {1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five"}
-    runa = [f"{vardiem.get(n_add, n_add)} fantasy hockey pickup{'' if n_add == 1 else 's'} for next week, all {rost_txt}" + (f", plus {n_drop} player{'' if n_drop == 1 else 's'} to drop or bench." if n_drop else "."),
-            f"First, the schedule. {len(cetri)} teams play four games next week" + (f", {len(divi)} play only two." if divi else ".")]
+    if stream:
+        k_ = len(cetri)
+        runa = [reta_frase(STREAM_IEVADS, veids="streameri", n=2).format(N=vardiem.get(n_add, n_add), rost=rost_txt),
+                reta_frase(STREAM_GRAFIKS, veids="streameri", n=2).format(
+                    k=k_, teams="team" if k_ == 1 else "teams", plays="plays" if k_ == 1 else "play",
+                    has="has" if k_ == 1 else "have", g=maxg)]
+    else:
+        runa = [f"{vardiem.get(n_add, n_add)} fantasy hockey pickup{'' if n_add == 1 else 's'} for next week, all {rost_txt}" + (f", plus {n_drop} player{'' if n_drop == 1 else 's'} to drop or bench." if n_drop else "."),
+                f"First, the schedule. {len(cetri)} teams play four games next week" + (f", {len(divi)} play only two." if divi else ".")]
     add_veids = {}
     F = Frazes()
     fr_add, fr_drop = [], []
     for nr, (pid, r) in enumerate(izv.iterrows(), 1):
-        veids = "STREAM" if r["forma"] < 0.4 and r["sp_nak"] >= 4 else "ADD"
+        veids = "STREAM" if stream else "ADD"            # sestdienas video – ADD; STREAM – tikai trešdienas streameru video
         add_veids[pid] = veids
         kartes.append(karte(nr, r, veids))
         ros = "" if not np.isfinite(r["rostered"]) else f" Rostered in only {r['rostered']:.0f} percent of leagues."
-        fr_add.append(F("f_stream" if veids == "STREAM" else "f_add", ["sched4"] if r["sp_nak"] >= 4 else []))
+        fr_add.append(F("f_stream" if veids == "STREAM" else "f_add",
+                        (["sched4"] if r["sp_nak"] >= 4 else []) + (["sched"] if r["sp_nak"] >= max(3, maxg) else [])))
         runa.append(f"{r['vards']}, {kom_nos(r['team'])}. {int(r['P'])} points in his last {int(r['GP'])} games, "
-                    f"{r['SOG_gp']:.1f} shots a game, and {int(r['sp_nak'])} games next week.{grafika_runa(r)}{ros} " + fr_add[-1])
+                    f"{r['SOG_gp']:.1f} shots a game, and {int(r['sp_nak'])} game{'' if r['sp_nak'] == 1 else 's'} "
+                    f"{'left this week' if stream else 'next week'}.{grafika_runa(r)}{ros} " + fr_add[-1])
     for nr, (pid, r) in enumerate(drop.iterrows(), 1):
         veids = drop_veids[pid]
         kartes.append(karte(nr, r, veids))
@@ -1457,7 +1497,7 @@ def veids_fantasy(m, a):
     def fa_vk(pid, r, virs, frase, kr):
         ros_ = f"rostered {r['rostered']:.0f}%  ·  " if np.isfinite(r["rostered"]) else ""
         return vk(virs, f"{r['vards']}  ·  {r['team']}",
-                  [("PTS / GP", f"{r['P'] / max(1, r['GP']):.2f}"), ("NEXT WEEK", f"{int(r['sp_nak'])} GP")],
+                  [("PTS / GP", f"{r['P'] / max(1, r['GP']):.2f}"), (NAK_LAB, f"{int(r['sp_nak'])} GP")],
                   f"{ros_}{r['SOG_gp']:.1f} shots a game", frase, kr, vizu="rink", badge=str(r["team"]),
                   bkr=kkrasa(r["team"]), punkti=ripas_punkti(mm[mm["metejs"] == pid]))
     verdikts = [fa_vk(izv.index[0], izv.iloc[0], f"THE TOP {add_veids[izv.index[0]]}", fr_add[0], ZALS)]
@@ -1465,11 +1505,18 @@ def veids_fantasy(m, a):
         verdikts.append(fa_vk(drop.index[0], drop.iloc[0], f"THE {drop_veids[drop.index[0]]}", fr_drop[0], SARKANS))
     elif n_add > 1:
         verdikts.append(fa_vk(izv.index[1], izv.iloc[1], f"ALSO {add_veids[izv.index[1]]}", fr_add[1], ZALS))
-    verdikts.append(vk("THE SCHEDULE", f"WEEK OF {dat(start).upper()} – {dat(beigas).upper()}",
-                       [("4-GAME TEAMS", f"{len(cetri)}"), ("2-GAME TEAMS", f"{len(divi)}")],
-                       ("4 games: " + " · ".join(cetri[:9])) if cetri else "No team plays four games",
-                       "Ride the schedule", DZELTENS, vizu="skaitlis", liels=f"{len(cetri)}×4"))
-    runa.append(reta_frase(FANTASY_BEIGAS, a.mape, "fantasy"))
+    if stream:
+        verdikts.append(vk("THE SCHEDULE", f"{dat(start).upper()} – {dat(beigas).upper()}",
+                           [(f"{maxg}-GAME TEAMS", f"{len(cetri)}"), ("LIGHT DAYS", f"{len(vieglas)}")],
+                           f"{maxg} games: " + " · ".join(cetri[:9]), reta_frase(GRAFIKA_BIRKAS, veids="streameri", n=1),
+                           DZELTENS, vizu="skaitlis",
+                           liels=f"{len(cetri)}×{maxg}"))
+    else:
+        verdikts.append(vk("THE SCHEDULE", f"WEEK OF {dat(start).upper()} – {dat(beigas).upper()}",
+                           [("4-GAME TEAMS", f"{len(cetri)}"), ("2-GAME TEAMS", f"{len(divi)}")],
+                           ("4 games: " + " · ".join(cetri[:9])) if cetri else "No team plays four games",
+                           reta_frase(GRAFIKA_BIRKAS, veids="fantasy", n=1), DZELTENS, vizu="skaitlis", liels=f"{len(cetri)}×4"))
+    runa.append(reta_frase(FANTASY_BEIGAS, a.mape, a.veids))
     zimogs = f"STATS THROUGH {dat(lidz_ts, True).upper()}" + (f"  ·  ESPN ROSTERED % {dat(e_dat).upper()}" if e is not None else "")
     # pagājušās nedēļas un sezonas rezultāts (no fantasy atskatiem)
     rezultats_txt = ""
@@ -1478,15 +1525,17 @@ def veids_fantasy(m, a):
         pd_ = rez[-1]
         H, T = sum(x["trapijumi"] for x in rez), sum(x["kopa"] for x in rez)
         rezultats_txt = f"Last week: {pd_['trapijumi']}/{pd_['kopa']}  ·  Season: {H}/{T} ({H / max(T, 1) * 100:.0f}%)"
-        runa[0] += f" Last week our picks went {pd_['trapijumi']} for {pd_['kopa']}."
-    legenda = [("ADD  →  keep him", ZALS, MELNS), ("STREAM  →  ride the schedule", DZELTENS, MELNS)]
+        if not stream:
+            runa[0] += f" Last week our picks went {pd_['trapijumi']} for {pd_['kopa']}."
+    legenda = ([("STREAM  →  use him, then move on", DZELTENS, MELNS)] if stream else
+               [("ADD  →  pick him up", ZALS, MELNS)])
     if n_drop:
         legenda.append(("DROP / BENCH  →  cut or sit", SARKANS, BALTS))
     saraksts = [f"ADD {r['vards']} ({r['team']}): {int(r['P'])} P in {int(r['GP'])} GP, {r['SOG60']:.1f} Shots/60, "
                 f"{r['ixG60']:.2f} ixG/60, {_mmss(r['TOI'])} TOI/GP, {int(r['sp_nak'])} games next week"
                 + ("" if not np.isfinite(r["rostered"]) else f", {r['rostered']:.1f}% rostered") for _, r in izv.iterrows()]
     saraksts += [f"{drop_veids[pid_]} {r['vards']} ({r['team']}): {r['rostered']:.0f}% rostered – {iemesls_drop(r)}" for pid_, r in drop.iterrows()]
-    return {
+    rez_ = {
         "intro": {"tag": "NHL  ·  FANTASY WAIVER WIRE", "rindas": [(f"{n_add} PICKUP{'' if n_add == 1 else 'S'}", BALTS), (f"+ {n_drop} DROP{'' if n_drop == 1 else 'S'}" if n_drop else "FOR NEXT", BALTS),
                                                                   ("NEXT WEEK" if n_drop else "WEEK", DZELTENS)],
                   "apaksa": [f"Week of {dat(start)} – {dat(beigas, True)}", "Pickups " + rost_txt] + ([rezultats_txt] if rezultats_txt else []),
@@ -1494,7 +1543,7 @@ def veids_fantasy(m, a):
         "kartes": kartes,
         "outro": {"rindas": [("GRAB THEM", BALTS), ("BEFORE THEY'RE GONE.", DZELTENS)],
                   "info": ["Rostered % from ESPN  ·  stats from NHL", "Green = soft matchup (high xG against)"],
-                  "komentars": jautajums("fantasy"), "verdikts": verdikts},
+                  "komentars": jautajums("streameri" if stream else "fantasy"), "verdikts": verdikts},
         "zimogs": zimogs, "runa": runa, "lidz": lidz, "periods": f"{dat(no)} – {dat(lidz, True)}; week of {dat(start)} – {dat(beigas, True)}",
         "thumb": {"tag": "NHL  ·  FANTASY WAIVER WIRE", "hook": [f"{n_add} PICKUP{'' if n_add == 1 else 'S'}", f"+ {n_drop} DROP{'' if n_drop == 1 else 'S'}" if n_drop else "NEXT WEEK"],
                   "vards": str(izv.iloc[0]["vards"]).split(" ")[-1], "badge": str(izv.iloc[0]["team"]),
@@ -1519,9 +1568,26 @@ def veids_fantasy(m, a):
                                               "rostered": sk(r_["rostered"])} for p_, r_ in drop.iterrows()}},
         "atskats_datumi": (beigas + timedelta(days=1), beigas + timedelta(days=2), "otrdiena pēc fantasy nedēļas"),
     }
+    if stream:                                                        # nedēļas vidus "streameri" – citi teksti, bez atskata
+        d1 = f"{DIENAS_EN[start.weekday()].title()} {dat(start)}"
+        rez_["intro"].update({"tag": "NHL  ·  FANTASY STREAMERS",
+                              "rindas": [(f"{n_add} STREAMER{'' if n_add == 1 else 'S'}", BALTS), ("FOR THE", BALTS), ("REST OF THE WEEK", DZELTENS)],
+                              "apaksa": [f"{d1} – Sun {dat(beigas, True)}", "Pickups " + rost_txt]})
+        rez_["outro"]["rindas"] = [("STREAM THEM", BALTS), ("BEFORE SUNDAY.", DZELTENS)]
+        rez_["thumb"].update({"tag": "NHL  ·  FANTASY STREAMERS", "hook": [f"{n_add} STREAMERS", "REST OF THE WEEK"],
+                              "nedela": f"{dat(start).upper()} – {dat(beigas).upper()}"})
+        rez_["virsraksts"] = (f"{n_add} fantasy hockey streamers for the rest of the week – {izv.iloc[0]['vards']} has "
+                              f"{int(izv.iloc[0]['sp_nak'])} games left 🏒")
+        rez_["apraksts"] = f"Fantasy hockey streamers for {dat(start)} – {dat(beigas, True)}: most games, light days, soft defenses."
+        rez_["nosaukums"] = f"streameri_{start:%Y-%m-%d}"
+        rez_["periods"] = f"{dat(no)} – {dat(lidz, True)}; games {dat(start)} – {dat(beigas, True)}"
+        rez_.pop("momentuzn", None)
+        rez_.pop("atskats_datumi", None)
+    return rez_
 
 
 VEIDI["fantasy"] = veids_fantasy
+VEIDI["streameri"] = veids_fantasy          # nedēļas vidū: atlikušās šīs nedēļas dienas
 
 
 def aina_grafiks(t, c):
@@ -3513,11 +3579,11 @@ def main():
         print("Nepietiek datu (samazini --min-metieni, palielini --dienas vai pagaidi vēl dažas spēles).")
         return 1
     kontakts = a.kontakts or a.kanals
-    ar_cta = not a.bez_cta and (a.veids == "fantasy" and not a.atskats or a.cta)
+    ar_cta = not a.bez_cta and (a.veids in ("fantasy", "streameri") and not a.atskats or a.cta)
     if ar_cta:
         kam = f"DM {kontakts}" if kontakts else "Message me"
         s["outro"]["cta"] = ("WANT THE FULL FANTASY SHEET?", "Google Sheets · updated daily", f"{kam} for access & pricing")
-        s["runa"][-1] += " " + reta_frase(FANTASY_CTA, veids="fantasy", n=2)
+        s["runa"][-1] += " " + reta_frase(FANTASY_CTA, veids=a.veids, n=2)
 
     # katrai ģenerācijai sava mape: video/<šodienas datums>_<veids>/ (ja jau ir – _2, _3 ...)
     tagad = pd.Timestamp.now()
