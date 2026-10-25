@@ -353,9 +353,10 @@ def reta_frase(saraksts, mape=None, veids=None, n=5):
         bija = {x for v in vest[-n:] for x in v.get("frazes", [])}
     except Exception:                                                 # noqa: BLE001
         pass
-    der = [x for x in saraksts if x not in bija and x not in Frazes.jaunas] or saraksts
+    atsl = lambda x: x if isinstance(x, str) else repr(x)          # noqa: E731  (pāri – vēsturē kā teksts)
+    der = [x for x in saraksts if atsl(x) not in bija and atsl(x) not in Frazes.jaunas] or saraksts
     x = random.choice(der)
-    Frazes.jaunas.append(x if isinstance(x, str) else repr(x))
+    Frazes.jaunas.append(atsl(x))
     return x
 
 
@@ -1403,7 +1404,7 @@ def veids_fantasy(m, a):
         if r["poz"] != "D" and r["ixG_gp"] <= g.loc[g["grupa"] == "F", "ixG_gp"].quantile(0.3):
             dalas.append(f"only {r['ixG_gp']:.2f} xG per game")
         if r["sp_nak"] <= 2:
-            dalas.append(f"only {int(r['sp_nak'])} games next week")
+            dalas.append(f"only {int(r['sp_nak'])} game{'' if r['sp_nak'] == 1 else 's'} {'left this week' if stream else 'next week'}")
         elif r["stipras"] >= 2:
             dalas.append(f"{int(r['stipras'])} tough matchups next week")
         t_ = ", ".join(dalas[:2]) or "cold form and a tough week ahead"
@@ -3572,6 +3573,15 @@ def main():
         print(f"Nav faila {a.atskats}")
         return 1
     m = ielasit(a.lidz)
+    if not a.lidz:                                                    # vai dati svaigi? (aizmirsts git pull)
+        try:
+            ped_ = pd.Timestamp(m["datums"].max())
+            vecums = (pd.Timestamp.now().normalize() - ped_).days
+            if vecums >= 3:
+                print(f"BRĪDINĀJUMS: jaunākā spēle datos ir {dat(ped_, True)} ({vecums} dienas atpakaļ). "
+                      "Vai izdarīji git pull? (Pārtraukumā – piem., All-Star – tas ir normāli.)")
+        except Exception:                                             # noqa: BLE001
+            pass
     fv_p = os.path.join(a.mape, FRAZU_VESTURE)                       # frāzes no pēdējiem 3 video – neatkārtot
     try:
         fv = json.load(open(fv_p, encoding="utf-8")) if os.path.exists(fv_p) else []
