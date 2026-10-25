@@ -911,7 +911,8 @@ def atskats(fails, m, a):
     rez = f"{ok_skaits}/{vert_skaits}"
 
     def ats_vk(c_, virs):
-        fl = [(str(b[0]), b[3].format(b[1]) if np.isfinite(b[1]) else "n/a") for b in c_.get("bars", [])[:2]]
+        fl = [(str(b[0]), b[3].format(b[1] + (b[4] if len(b) > 4 else 0)) if np.isfinite(b[1]) else "n/a")   # PDO: +100 (josla rāda novirzi)
+              for b in c_.get("bars", [])[:2]]
         return vk(virs, f"{c_.get('v1', '')} {c_.get('v2', '')}".strip().upper(), fl, c_.get("info", ""), c_.get("_frase", ""),
                   c_["akc"], vizu="badge", badge=c_.get("badge", ""), bkr=c_.get("bkr"))
     labakie = [c_ for c_ in kartes if c_["akc"] == ZALS]
@@ -980,9 +981,13 @@ def teksts_c(d, y, txt, f, krasa=BALTS):
     d.text(((W - platums(d, txt, f)) / 2, y), txt, font=f, fill=krasa)
 
 
+IETILP_MIN = 16           # zemākais fonta izmērs, līdz kuram teksts tiek samazināts (lai NEKAD neiziet ārpus kartītes)
+
+
 def ietilpinat(d, txt, veids, izm, max_w):
-    while izm > 30 and platums(d, txt, fonts(veids, izm)) > max_w:
-        izm -= 4
+    """Lielākais fonts ≤ izm, ar kuru teksts ietilpst max_w (līdz 30 px – soļi pa 4, zemāk – pa 2, līdz IETILP_MIN)."""
+    while izm > IETILP_MIN and platums(d, txt, fonts(veids, izm)) > max_w:
+        izm -= 4 if izm > 30 else 2
     return fonts(veids, izm)
 
 
@@ -3107,10 +3112,10 @@ def rindas_ietilpinat(d, txt, veids, izm, max_w, max_r=3):
             else:
                 rindas.append(cur)
                 cur = v
-        rindas.append(cur)
-        if len(rindas) <= max_r or izm <= 30:
+        rindas = [r for r in rindas if r] or [""]
+        if (len(rindas) <= max_r and all(platums(d, r, f) <= max_w for r in rindas)) or izm <= IETILP_MIN:
             return f, rindas
-        izm -= 4
+        izm -= 4 if izm > 30 else 2
 
 
 def aina_fakts_hook(t, c):
