@@ -1526,14 +1526,22 @@ def _slips(d, x0, y0, h, teksts, fonts_, k, fill=None, txt=None, max_w=None):
     return w
 
 
+def virsraksta_fonts(d, txt, sl, izm=74):
+    """Lielā slīpā virsraksta fonts: josla + "//" svītras abās pusēs (~104 px katrā) ietilpst ekrānā ar 24 px malu
+    (dažos datoros fonts ir platāks – tad virsraksts tiek samazināts, nevis iziet ārpus ekrāna)."""
+    while izm > 40 and d.textlength(txt, font=S.fonts("black", izm)) + 2 * sl + 60 + 2 * 104 > S.W - 48:
+        izm -= 2
+    return S.fonts("black", izm)
+
+
 def aina_verdikts(t, s, kanals):
     im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     # virsraksts – slīpa dzeltena josla ar "THE FINAL VERDICT"
     k = S.ease(t / 0.35)
-    f = S.fonts("black", 74)
-    tw = d.textlength("THE FINAL VERDICT", font=f)
     h_, sl = 112, 40
+    f = virsraksta_fonts(d, "THE FINAL VERDICT", sl)
+    tw = d.textlength("THE FINAL VERDICT", font=f)
     w_ = tw + 2 * sl + 60
     x0 = (S.W - w_) / 2 - (1 - k) * 700
     y0 = 226
@@ -1764,10 +1772,10 @@ def aina_fakti_beigas(t, s, kanals):
     d = ImageDraw.Draw(im)
     # virsraksts
     k = S.ease(t / 0.35)
-    f = S.fonts("black", 74)
     txt = "YOUR PICK"
-    bb = d.textbbox((0, 0), txt, font=f)
     h_, sl = 112, 40
+    f = virsraksta_fonts(d, txt, sl)
+    bb = d.textbbox((0, 0), txt, font=f)
     w_ = (bb[2] - bb[0]) + 2 * sl + 60
     x0 = (S.W - w_) / 2 - (1 - k) * 700
     y0 = 226
