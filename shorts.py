@@ -301,16 +301,91 @@ BEIGU_FRAZES = {
     "speletaji": ["Luck runs out. Expected goals don't.",
                   "Shooting luck fades. Good chances don't.",
                   "Hot sticks cool off. The chances tell you who's for real.",
-                  "Finishing streaks come and go. Shot quality stays."],
+                  "Finishing streaks come and go. Shot quality stays.",
+                  "Goals are loud. Expected goals are honest.",
+                  "The scoreboard lies for a while. Never for long."],
     "komandas": ["PDO always comes back to one hundred.",
                  "Over a full season, PDO drifts back to one hundred.",
                  "Bounces even out. They always do.",
-                 "Luck evens out over a season. The process stays."],
+                 "Luck evens out over a season. The process stays.",
+                 "Hot shooting and hot goaltending never last forever.",
+                 "Bounces are borrowed. Eventually, they get paid back."],
     "vartsargi": ["Goalies run hot and cold. The numbers show which one is real.",
                   "Save percentage swings. Expected goals tell the real story.",
                   "A hot goalie can steal a month. Can he keep it up?",
-                  "Every goalie streak ends. The only question is when."],
+                  "Every goalie streak ends. The only question is when.",
+                  "Goaltending is voodoo. The numbers help a little.",
+                  "One hot month doesn't make a wall. Three might."],
 }
+
+
+# fantasy video beigas (krāsu skaidrojums + follow) – neatkārto pēdējos 5 fantasy video (katrs variants ~reizi 6 nedēļās)
+FANTASY_BEIGAS = [
+    "Green matchups are the weakest defenses by expected goals against. Follow for weekly fantasy hockey tips.",
+    "Green means a soft defense, red means a tough one. Follow for weekly fantasy hockey tips.",
+    "The greener the schedule, the better the week. Follow for fantasy pickups every week.",
+    "Check the colors: green games are the easiest matchups. Follow for next week's pickups.",
+    "Soft defenses in green, tough ones in red. Plan your lineup around them. Follow for weekly fantasy tips.",
+    "Schedule wins fantasy weeks, and green games are where the points are. Follow for weekly fantasy hockey tips.",
+]
+
+
+AKT_MAPE = {"mape": None}                 # main() ieliek a.mape – lai reta_frase() zina, kur ir vēsture
+
+
+def reta_frase(saraksts, mape=None, veids=None, n=5):
+    """Nejaušs variants, kas nav bijis pēdējos n video (veids=None – jebkura veida; citādi tikai šī veida video).
+    Vēsture: video\\frazes_vesture.json. Izmantotais tiek pierakstīts vēsturē."""
+    import random
+    bija = set()
+    try:
+        with open(os.path.join(mape or AKT_MAPE["mape"], FRAZU_VESTURE), encoding="utf-8") as f:
+            vest = [v for v in json.load(f) if veids is None or v.get("veids") == veids]
+        bija = {x for v in vest[-n:] for x in v.get("frazes", [])}
+    except Exception:                                                 # noqa: BLE001
+        pass
+    der = [x for x in saraksts if x not in bija and x not in Frazes.jaunas] or saraksts
+    x = random.choice(der)
+    Frazes.jaunas.append(x if isinstance(x, str) else repr(x))
+    return x
+
+
+# ---- teksti, kas citādi skanētu katrā video vienādi (izvēle ar reta_frase – ilgāka vēsture)
+KAS_TAS = ["Who is it?", "Can you guess who?", "Any idea who?", "Who do you think it is?", "Take a guess.", "Who could it be?"]
+KAS_VINI = ["Who are they?", "Can you guess who?", "Any idea who?", "Take a guess."]
+VERDIKTA_APAKSA = ["NUMBERS TELL A STORY. HERE'S WHAT IT MEANS.", "HERE'S THE BOTTOM LINE.", "WHAT THE NUMBERS ARE SAYING.",
+                   "THE SHORT VERSION.", "STRIP OUT THE NOISE. HERE'S WHAT'S LEFT.", "IF YOU REMEMBER ONE THING…"]
+UZLIME_NR1 = ["STAY FOR #1", "#1 WILL SURPRISE YOU", "WAIT FOR #1", "DON'T SKIP #1"]
+UZLIME_MINI = ["GUESS BEFORE THE REVEAL", "MAKE YOUR GUESS", "WHO'S YOUR PICK?", "REVEAL COMING UP"]
+UZLIME_ATSKATS = ["SEE EVERY CALL", "HITS AND MISSES", "EVERY CALL, NO EDITS", "THE FULL SCORECARD"]
+FAKTI_BEIGAS = [("WHICH ONE SURPRISED YOU MOST?", "Which one surprised you? Comment the number."),
+                ("WHICH STAT WINS THE WEEK?", "Which stat wins the week? Comment the number."),
+                ("PICK ONE. COMMENT THE NUMBER.", "Pick your favorite and drop the number in the comments."),
+                ("WHICH ONE DIDN'T YOU SEE COMING?", "Which one didn't you see coming? Comment the number."),
+                ("VOTE WITH A NUMBER.", "Vote for the best one with a number in the comments.")]
+FANTASY_CTA = ["Want the full fantasy sheet, updated every day? Message me for access and pricing.",
+               "The full fantasy sheet updates every day. Message me if you want access.",
+               "Want every player, every day, in one sheet? Message me for access and pricing."]
+# āķa balss (ShortsB): {G} {vv} {x} – spēlētāji; {gs} – vārtsargi; {w} {l} – komandas
+AKIS_SP = ["{G} {vv}. He should have {x}.", "{G} {vv}, but only {x} expected.", "{G} {vv}. The chances say {x}."]
+AKIS_SP_NE = ["{G} {vv}. He should have {x}.", "{G} {vv} on {x} expected.", "The chances say {x}. He has {G}."]
+AKIS_VA_LABS = ["This goalie is stealing games: {gs} saved above expected.", "{gs} saved above expected. This goalie is stealing games.",
+                "One goalie has saved {gs} more than expected."]
+AKIS_VA_SLIKTS = ["This goalie is costing his team: {gs} worse than expected.", "{gs} worse than expected. This goalie is costing games.",
+                  "One goalie has allowed {gs} more than expected."]
+AKIS_KOM_LAIM = ["This team is {w} and {l}. And it's mostly luck.", "{w} wins, {l} losses. And a lot of it is luck.",
+                 "This team is {w} and {l}, and the numbers say it won't last."]
+AKIS_KOM_NELAIM = ["This team is {w} and {l}. But they're better than that.", "{w} and {l}, but the numbers say they deserve more.",
+                   "This team's record is lying. They're better than {w} and {l}."]
+# tiesnešu ainu ievadi (mēneša video – neatkārto pēdējos 2 tiesnešu video)
+REF_GAME_BY_GAME = ["Game by game: {n} of his {m} games went over the league average.",
+                    "Look at his nights: {n} of {m} games went over the league average.",
+                    "It wasn't one wild night. {n} of his {m} games went over the league average."]
+REF_PERIODI = ["Period by period: the {per} alone had {k} penalties.", "Break it down: the {per} alone had {k} penalties.",
+               "The {per} alone had {k} penalties."]
+REF_LIGA = ["Across the league, the {per} period had the most whistles: {pct} percent of all penalties.",
+            "League-wide, the {per} period is when the whistles come: {pct} percent of all penalties.",
+            "And when do refs call the most? The {per} period: {pct} percent of all penalties."]
 
 
 def beigu_frase(veids):
@@ -330,7 +405,8 @@ def _fr(*rindas):
 
 _ATS_OK = _fr(("Called it.", "accountability"), ("Right on cue.", "cheeky"), ("The numbers held up.", "analytical"))
 _ATS_NE = _fr(("Not this time.", "accountability"), ("The model missed.", "accountability"), ("The story changed.", "dramatic"))
-_ATS_MAZ = _fr(("Too early to tell.", "analytical"), ("Small sample.", "analytical"), ("Check back later.", "accountability"))
+_ATS_MAZ = _fr(("Too early to tell.", "analytical"), ("Small sample.", "analytical"), ("Check back later.", "accountability"),
+               ("Not enough games to judge.", "analytical"), ("The jury is still out.", "dramatic"))
 
 FRAZES = {
     # ---- xG video: spēlētāji (maz = < 20 metieni; xg_aug = 3+ xG – stiprs process)
@@ -375,43 +451,63 @@ FRAZES = {
     # ---- xG atskats: pēc rezultāta (vispārīgās + konkrētās situācijas frāzes)
     "maz": _ATS_MAZ,
     "kom_maz": _ATS_MAZ,
-    "sp_laim_ok": _ATS_OK + _fr(("Back to earth.", "cheeky")),
+    "sp_laim_ok": _ATS_OK + _fr(("Back to earth.", "cheeky"), ("The regression showed up.", "analytical"),
+                                ("The heater cooled off.", "cheeky")),
     "sp_laim_ne": _ATS_NE + _fr(("Still hot.", "dramatic"), ("The heater continues.", "cheeky"),
                                 ("Regression can wait.", "cheeky")),
-    "sp_nelaim_ok": _ATS_OK + _fr(("The goals came.", "dramatic")),
+    "sp_nelaim_ok": _ATS_OK + _fr(("The goals came.", "dramatic"), ("The dam finally broke.", "dramatic"),
+                                  ("The finishing caught up.", "analytical")),
     "sp_nelaim_ne": _ATS_NE + _fr(("Still snakebitten.", "cheeky"), ("The chances are there.", "analytical"),
                                   ("No payoff yet.", "analytical")),
-    "kom_laim_ok": _ATS_OK + _fr(("The bounces evened out.", "cheeky")),
+    "kom_laim_ok": _ATS_OK + _fr(("The bounces evened out.", "cheeky"), ("The luck ran out.", "dramatic"),
+                                 ("Reality checked in.", "cheeky")),
     "kom_laim_ne": _ATS_NE + _fr(("Still riding the bounces.", "cheeky"), ("The luck held.", "dramatic")),
-    "kom_nelaim_ok": _ATS_OK + _fr(("The results caught up.", "analytical")),
+    "kom_nelaim_ok": _ATS_OK + _fr(("The results caught up.", "analytical"), ("The bounces finally came.", "cheeky"),
+                                   ("The turnaround is here.", "dramatic")),
     "kom_nelaim_ne": _ATS_NE + _fr(("Still waiting on the bounces.", "cheeky"), ("No turnaround yet.", "analytical")),
-    "va_labs_ok": _ATS_OK + _fr(("Back to earth.", "cheeky")),
+    "va_labs_ok": _ATS_OK + _fr(("Back to earth.", "cheeky"), ("The wall cracked.", "dramatic"),
+                                ("The hot streak cooled.", "analytical")),
     "va_labs_ne": _ATS_NE + _fr(("Still stealing games.", "dramatic"), ("The wall is still standing.", "cheeky")),
-    "va_slikts_ok": _ATS_OK + _fr(("Found his game.", "dramatic")),
+    "va_slikts_ok": _ATS_OK + _fr(("Found his game.", "dramatic"), ("The saves came back.", "analytical"),
+                                  ("The slump is over.", "dramatic")),
     "va_slikts_ne": _ATS_NE + _fr(("Still searching for saves.", "analytical"), ("No bounce back yet.", "analytical")),
     # ---- fantasy (īsi – rīcība, ne filozofija; sched4 = 4 spēles nākamnedēļ)
     "f_add": _fr(("Worth a pickup.", "analytical"), ("Get ahead of the rush.", "cheeky"),
-                 ("Add before the schedule turns.", "dramatic", "=sched4")),
+                 ("Add before the schedule turns.", "dramatic", "=sched4"), ("Grab him before your league does.", "cheeky"),
+                 ("The underlying numbers back it up.", "analytical"), ("This is a smart add.", "analytical")),
     "f_stream": _fr(("Good short-term play.", "analytical"), ("Ride the schedule.", "cheeky", "sched4"),
-                    ("A matchup play.", "analytical")),
+                    ("A matchup play.", "analytical"), ("Stream him this week.", "analytical"),
+                    ("Use him, then move on.", "cheeky"), ("Four games make him useful.", "analytical", "=sched4")),
     "f_bench": _fr(("Sit him for now.", "analytical"), ("Better options this week.", "analytical"),
-                   ("Wait for a better spot.", "cheeky")),
+                   ("Wait for a better spot.", "cheeky"), ("Keep him, but not in your lineup.", "analytical"),
+                   ("This is a week to bench him.", "analytical")),
     "f_drop": _fr(("Time to move on?", "dramatic"), ("The roster spot matters.", "analytical"),
-                  ("There may be better options.", "analytical")),
+                  ("There may be better options.", "analytical"), ("The leash is getting short.", "cheeky"),
+                  ("Your bench spot deserves better.", "cheeky")),
     # ---- fantasy atskats
-    "fa_hit": _fr(("Pickup paid off.", "analytical"), ("Good read.", "cheeky"), ("That worked.", "accountability")),
+    "fa_hit": _fr(("Pickup paid off.", "analytical"), ("Good read.", "cheeky"), ("That worked.", "accountability"),
+                  ("He delivered.", "dramatic"), ("Exactly what we hoped for.", "accountability")),
     "fa_miss": _fr(("This one missed.", "accountability"), ("Not the result we wanted.", "accountability"),
-                   ("Back to the waiver wire.", "cheeky")),
-    "fa_good": _fr(("The process was right.", "analytical"), ("Good call. Good result.", "accountability")),
-    "fa_bad": _fr(("We got this wrong.", "accountability"), ("The numbers didn't deliver.", "analytical")),
+                   ("Back to the waiver wire.", "cheeky"), ("He didn't deliver.", "accountability"),
+                   ("A quiet week for him.", "analytical")),
+    "fa_good": _fr(("The process was right.", "analytical"), ("Good call. Good result.", "accountability"),
+                   ("A winning week for the list.", "analytical"), ("The numbers came through.", "analytical")),
+    "fa_bad": _fr(("We got this wrong.", "accountability"), ("The numbers didn't deliver.", "analytical"),
+                  ("A tough week for the list.", "accountability"), ("We'll own this one.", "accountability")),
 }
 
 # beigu kadra jautājums skatītājam (komentāru lodziņā) – pēc video veida
 JAUTAJUMI = {
-    "speletaji": ["BUY LOW OR STAY AWAY?", "SELL HIGH OR RIDE IT?", "WILL THIS HOLD FOR A MONTH?", "WHO'S THE REAL DEAL?"],
-    "komandas": ["CONTENDER OR MIRAGE?", "WILL THE BOUNCES LAST?", "WHICH TEAM TURNS IT AROUND?", "REAL OR LUCKY?"],
-    "vartsargi": ["REAL OR REGRESSION?", "SLUMP OR WARNING SIGN?", "WHO'S THE BEST GOALIE RIGHT NOW?", "WILL THE WALL HOLD?"],
-    "atskats": ["DID WE GET THIS ONE RIGHT?", "WHICH CALL SURPRISED YOU?", "WHO SHOULD WE FLAG NEXT?"],
+    "speletaji": ["BUY LOW OR STAY AWAY?", "SELL HIGH OR RIDE IT?", "WILL THIS HOLD FOR A MONTH?", "WHO'S THE REAL DEAL?",
+                  "WHO BREAKS OUT NEXT?", "LUCK OR SKILL?"],
+    "komandas": ["CONTENDER OR MIRAGE?", "WILL THE BOUNCES LAST?", "WHICH TEAM TURNS IT AROUND?", "REAL OR LUCKY?",
+                 "WHO MAKES THE PLAYOFFS?", "WHICH TEAM IS FOR REAL?"],
+    "vartsargi": ["REAL OR REGRESSION?", "SLUMP OR WARNING SIGN?", "WHO'S THE BEST GOALIE RIGHT NOW?", "WILL THE WALL HOLD?",
+                  "WHO STARTS IN THE PLAYOFFS?", "HOT HAND OR FLUKE?"],
+    "atskats": ["DID WE GET THIS ONE RIGHT?", "WHICH CALL SURPRISED YOU?", "WHO SHOULD WE FLAG NEXT?",
+                "WHICH CALL WOULD YOU MAKE?", "GOOD MODEL OR GOOD LUCK?"],
+    "fantasy": ["WHO ARE YOU ADDING?", "WHO'S YOUR SLEEPER PICK?", "ADD OR PASS?", "WHO ARE YOU DROPPING?",
+                "WHO DID WE MISS?"],
 }
 
 
@@ -1373,7 +1469,7 @@ def veids_fantasy(m, a):
                        [("4-GAME TEAMS", f"{len(cetri)}"), ("2-GAME TEAMS", f"{len(divi)}")],
                        ("4 games: " + " · ".join(cetri[:9])) if cetri else "No team plays four games",
                        "Ride the schedule", DZELTENS, vizu="skaitlis", liels=f"{len(cetri)}×4"))
-    runa.append("Green matchups are the weakest defenses by expected goals against. Follow for weekly fantasy hockey tips.")
+    runa.append(reta_frase(FANTASY_BEIGAS, a.mape, "fantasy"))
     zimogs = f"STATS THROUGH {dat(lidz_ts, True).upper()}" + (f"  ·  ESPN ROSTERED % {dat(e_dat).upper()}" if e is not None else "")
     # pagājušās nedēļas un sezonas rezultāts (no fantasy atskatiem)
     rezultats_txt = ""
@@ -1398,7 +1494,7 @@ def veids_fantasy(m, a):
         "kartes": kartes,
         "outro": {"rindas": [("GRAB THEM", BALTS), ("BEFORE THEY'RE GONE.", DZELTENS)],
                   "info": ["Rostered % from ESPN  ·  stats from NHL", "Green = soft matchup (high xG against)"],
-                  "komentars": "WHO ARE YOU ADDING?", "verdikts": verdikts},
+                  "komentars": jautajums("fantasy"), "verdikts": verdikts},
         "zimogs": zimogs, "runa": runa, "lidz": lidz, "periods": f"{dat(no)} – {dat(lidz, True)}; week of {dat(start)} – {dat(beigas, True)}",
         "thumb": {"tag": "NHL  ·  FANTASY WAIVER WIRE", "hook": [f"{n_add} PICKUP{'' if n_add == 1 else 'S'}", f"+ {n_drop} DROP{'' if n_drop == 1 else 'S'}" if n_drop else "NEXT WEEK"],
                   "vards": str(izv.iloc[0]["vards"]).split(" ")[-1], "badge": str(izv.iloc[0]["team"]),
@@ -2558,6 +2654,16 @@ def _n(x):
 
 
 # beigu teksti (nejauši; iepriekšējā mēneša variants neatkārtojas). {top} {TOPS} {NEXT} {Next} {low}
+# maigākais tiesnesis: (saraksta josla, balss teikums, verdikta birka)
+REF_MAIGS = [
+    ("LET THEM PLAY", "Let them play.", "Let them play"),
+    ("WHISTLE IN THE POCKET", "The whistle stays in his pocket.", "Whistle in the pocket"),
+    ("FEWER WHISTLES", "Fewer whistles, more hockey.", "Fewer whistles, more hockey"),
+    ("PLAY ON", "He lets the game flow.", "Play on"),
+    ("NO CHEAP CALLS", "No cheap calls on his watch.", "No cheap calls"),
+    ("KEEPS IT MOVING", "He keeps the game moving.", "Keeps it moving"),
+]
+
 REF_OUTRO = [
     {"id": "fair", "r": ("STRICT REFS:", "FAIR OR TOO MUCH?"), "k": "FAIR OR TOO MUCH?", "k2": "Tell us in the comments",
      "v": "Strict refs: fair, or too much? Tell us in the comments."},
@@ -2652,16 +2758,17 @@ def veids_tiesnesi(m, a):
     sez_txt = f"{int(sez_sak[:4])}-{str(int(sez_sak[:4]) + 1)[2:]}"
 
     kopa = {"pill_hook": f"NHL  ·  MONTHLY REFEREE REPORT", "badge": "", "aktiva": False}
+    maigs = random.choice(REF_MAIGS)         # (josla, balss teikums, verdikta birka) – viens variants visam video
     kartes = [
         {"tips": "fakts_hook", "ilgums": 3.4, **kopa, "hook": [MEN, "REFEREE REPORT"], "v1": "WHO CALLED THE MOST", "vards": "PENALTIES?"},
         {"tips": "fakts_saraksts", "ilgums": 3.9, **kopa, "saraksts_virs": "STRICTEST · PENALTIES PER GAME", "pill_kr": SARKANS,
          "vards_w": 430, "vards_kr": BALTS, "rindas": rind(strict), "kopsavilkums": f"LEAGUE AVERAGE: {vid:.1f} PER GAME"},
-        {"tips": "fakts_saraksts", "ilgums": 3.3, **kopa, "saraksts_virs": "MOST LENIENT · LET THEM PLAY", "pill_kr": ZALS,
+        {"tips": "fakts_saraksts", "ilgums": 3.3, **kopa, "saraksts_virs": f"MOST LENIENT · {maigs[0]}", "pill_kr": ZALS,
          "vards_w": 430, "vards_kr": BALTS, "rindas": rind(lenient), "kopsavilkums": f"LEAGUE AVERAGE: {vid:.1f} PER GAME"},
     ]
     runa = [f"{MEN.capitalize()} referee report. Who called the most penalties in the NHL this month?",
             f"The strictest: {top}, {top_pg:.1f} penalties per game. League average: {vid:.1f}.",
-            f"The most lenient: {low}, only {low_pg:.1f} per game. Let them play."]
+            f"The most lenient: {low}, only {low_pg:.1f} per game. {maigs[1]}"]
 
     # ---- 1) stingrākais pret vidējo
     pct = (top_pg / vid - 1) * 100
@@ -2683,7 +2790,7 @@ def veids_tiesnesi(m, a):
         vel_txt = (f"His busiest night was the wildest game of the month. More on that next."
                    if str(mx["game_id"]) == str(g.sort_values("pen_total", ascending=False).iloc[0]["game_id"]) else
                    f"His busiest night: {int(mx['pen_total'])} penalties, {kom_nos(mx['away_team'])} at {kom_nos(mx['home_team'])}.")
-        runa.append(f"Game by game: {virs} of his {len(rt)} games went over the league average. " + vel_txt)
+        runa.append(reta_frase(REF_GAME_BY_GAME, veids="tiesnesi", n=2).format(n=virs, m=len(rt)) + " " + vel_txt)
 
     # ---- 3) trakākā spēle + padziļināti (periodi, vairākums, rezultāts)
     w = g.sort_values("pen_total", ascending=False).iloc[0]
@@ -2715,8 +2822,9 @@ def veids_tiesnesi(m, a):
         kartes.append({"tips": "fakts_saraksts", "ilgums": 3.8, **kopa, "saraksts_virs": "THE WILDEST GAME · PERIOD BY PERIOD",
                        "pill_kr": ZILS, "vards_w": 300, "vards_kr": PELEKS, "nav_reitings": True, "rindas": per_r,
                        "kopsavilkums": f"PIM: {A_} {pim_a}  ·  {H_} {pim_h}"})
-        runa.append(f"Period by period: the {['first', 'second', 'third', 'overtime'][ip_]}{'' if ip_ == 3 else ' period'} "
-                    f"alone had {per_r[ip_][2]} penalties. {pim_a + pim_h} penalty minutes in total.")
+        runa.append(reta_frase(REF_PERIODI, veids="tiesnesi", n=2).format(
+            per=["first", "second", "third", "overtime"][ip_] + ("" if ip_ == 3 else " period"), k=per_r[ip_][2])
+            + f" {pim_a + pim_h} penalty minutes in total.")
         ppg_a, ppo_a, ppg_h, ppo_h = (_n(ws.get(k)) for k in ("away_ppg", "away_pp_opp", "home_ppg", "home_pp_opp"))
         kont = ["POWER-PLAY GOALS", f"Power play: {A_} {ppg_a}/{ppo_a} · {H_} {ppg_h}/{ppo_h}"]
         if rez_txt:
@@ -2754,7 +2862,7 @@ def veids_tiesnesi(m, a):
                    "pill_kr": ZILS, "vards_w": 330, "vards_kr": PELEKS, "nav_reitings": True,
                    "rindas": [(f"{p} PERIOD", f"{int(n_)} calls", f"{v * 100:.0f}%") for p, n_, v in zip(("1ST", "2ND", "3RD"), per_n, per)],
                    "kopsavilkums": f"TOTAL: {int(per_n.sum())} CALLS IN {len(g)} GAMES"})
-    runa.append(f"Across the league, the {['first', 'second', 'third'][ip]} period had the most whistles: {per[ip] * 100:.0f} percent of all penalties.")
+    runa.append(reta_frase(REF_LIGA, veids="tiesnesi", n=2).format(per=["first", "second", "third"][ip], pct=f"{per[ip] * 100:.0f}"))
 
     # ---- papildainu kandidāti: (atslēga, interesantums, ainas dati, runa, teksts INFO)
     kand = []
@@ -2867,12 +2975,14 @@ def veids_tiesnesi(m, a):
 
     # THE FINAL VERDICT
     verdikts = [vk("THE STRICTEST", top.upper(), [("PEN / GAME", f"{top_pg:.1f}"), ("GAMES", f"{int(strict['sp'].iloc[0])}")],
-                   f"league average {vid:.1f}", random.choice(["Expect the whistle", "No free passes", "The box stays busy"]),
+                   f"league average {vid:.1f}", random.choice(["Expect the whistle", "No free passes", "The box stays busy", "Keep your stick down",
+                                                    "Power plays incoming", "Discipline wins tonight"]),
                    SARKANS, vizu="skaitlis", liels=f"+{pct:.0f}%")]
     if ws is not None:
         pp_tot = ppg_a + ppg_h
         birka_w = ("The power play decided it" if "decided it" in vr else
-                   ("Nobody cashed in" if pp_tot == 0 else "Whistles everywhere"))
+                   ("Nobody cashed in" if pp_tot == 0 else
+                    random.choice(["Whistles everywhere", "A parade to the box", "Special teams night", "Nobody kept it clean"])))
         verdikts.append(vk("THE WILDEST GAME", f"{A_} @ {H_}  ·  {dat(w['datums']).upper()}",
                            [("PP GOALS", f"{pp_tot}/{ppo_a + ppo_h}"), ("PIM", f"{pim_a + pim_h}")],
                            rez_txt or f"Referees: {w['tiesnesi']}", birka_w, DZELTENS, vizu="skaitlis", liels=f"{int(w['pen_total'])}"))
@@ -2882,7 +2992,7 @@ def veids_tiesnesi(m, a):
                            badge=nh, bkr=kkrasa(nh)))
     else:
         verdikts.append(vk("THE MOST LENIENT", low.upper(), [("PEN / GAME", f"{low_pg:.1f}"), ("GAMES", f"{int(lenient['sp'].iloc[0])}")],
-                           f"league average {vid:.1f}", "Let them play", ZALS, vizu="skaitlis", liels=f"{low_pg:.1f}"))
+                           f"league average {vid:.1f}", maigs[2], ZALS, vizu="skaitlis", liels=f"{low_pg:.1f}"))
 
     per_txt = f"{MEN.capitalize()} {men.year}" + ("" if pilns else f" (through {dat(beigas, True)})")
     zim = f"{MEN} {men.year}" + ("" if pilns else f" · THROUGH {dat(beigas).upper()}")
@@ -3390,6 +3500,7 @@ def main():
     except Exception:                                                 # noqa: BLE001
         fv = []
     Frazes.vesture = {x for v in fv[-3:] for x in v.get("frazes", [])}
+    AKT_MAPE["mape"] = a.mape
     Frazes.jaunas = []
     if a.atskats:
         s = atskats(a.atskats, m, a)
@@ -3406,7 +3517,7 @@ def main():
     if ar_cta:
         kam = f"DM {kontakts}" if kontakts else "Message me"
         s["outro"]["cta"] = ("WANT THE FULL FANTASY SHEET?", "Google Sheets · updated daily", f"{kam} for access & pricing")
-        s["runa"][-1] += " Want the full fantasy sheet, updated every day? Message me for access and pricing."
+        s["runa"][-1] += " " + reta_frase(FANTASY_CTA, veids="fantasy", n=2)
 
     # katrai ģenerācijai sava mape: video/<šodienas datums>_<veids>/ (ja jau ir – _2, _3 ...)
     tagad = pd.Timestamp.now()
