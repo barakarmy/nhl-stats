@@ -1265,6 +1265,11 @@ def veids_fantasy(m, a):
         start = (pd.Timestamp(a.lidz) + timedelta(days=1) if a.lidz else pd.Timestamp.now().normalize())
         beigas = start + timedelta(days=6 - start.weekday())
         a.drop = 0
+        if (beigas - start).days + 1 < 3:                              # pk/s/sv – nedēļa jau gandrīz beigusies
+            print(f"STREAMERI: līdz svētdienai palikušas tikai {(beigas - start).days + 1} dienas ({dat(start)} – {dat(beigas)}) – "
+                  "streameru video ir paredzēts nedēļas vidum (pirmdiena–ceturtdiena, ieteicams trešdien).\n"
+                  "  Nākamajai nedēļai:  python ShortsB.py --veids fantasy")
+            return None
     else:
         start = nakama_nedela(a, lidz)
         beigas = start + timedelta(days=6)
@@ -1508,14 +1513,16 @@ def veids_fantasy(m, a):
     if stream:
         verdikts.append(vk("THE SCHEDULE", f"{dat(start).upper()} – {dat(beigas).upper()}",
                            [(f"{maxg}-GAME TEAMS", f"{len(cetri)}"), ("LIGHT DAYS", f"{len(vieglas)}")],
-                           f"{maxg} games: " + " · ".join(cetri[:9]), reta_frase(GRAFIKA_BIRKAS, veids="streameri", n=1),
+                           f"{maxg} game{'' if maxg == 1 else 's'}: " + " · ".join(cetri[:6]) + (f" +{len(cetri) - 6}" if len(cetri) > 6 else ""),
+                           reta_frase([x for x in GRAFIKA_BIRKAS if x + "." not in fr_add] or GRAFIKA_BIRKAS, veids="streameri", n=1),
                            DZELTENS, vizu="skaitlis",
                            liels=f"{len(cetri)}×{maxg}"))
     else:
         verdikts.append(vk("THE SCHEDULE", f"WEEK OF {dat(start).upper()} – {dat(beigas).upper()}",
                            [("4-GAME TEAMS", f"{len(cetri)}"), ("2-GAME TEAMS", f"{len(divi)}")],
-                           ("4 games: " + " · ".join(cetri[:9])) if cetri else "No team plays four games",
-                           reta_frase(GRAFIKA_BIRKAS, veids="fantasy", n=1), DZELTENS, vizu="skaitlis", liels=f"{len(cetri)}×4"))
+                           ("4 games: " + " · ".join(cetri[:6]) + (f" +{len(cetri) - 6}" if len(cetri) > 6 else "")) if cetri
+                           else "No team plays four games",
+                           reta_frase([x for x in GRAFIKA_BIRKAS if x + "." not in fr_add] or GRAFIKA_BIRKAS, veids="fantasy", n=1), DZELTENS, vizu="skaitlis", liels=f"{len(cetri)}×4"))
     runa.append(reta_frase(FANTASY_BEIGAS, a.mape, a.veids))
     zimogs = f"STATS THROUGH {dat(lidz_ts, True).upper()}" + (f"  ·  ESPN ROSTERED % {dat(e_dat).upper()}" if e is not None else "")
     # pagājušās nedēļas un sezonas rezultāts (no fantasy atskatiem)
