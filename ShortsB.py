@@ -1608,8 +1608,11 @@ def aina_verdikts(t, s, kanals):
             d.text((tx + 16, y + 112), str(lab), font=S.ietilpinat(d, str(lab), "semi", 22, tw_ - 28), fill=S.ar_alfa(S.PELEKS, 255 * kc))
             fvv = S.ietilpinat(d, str(val), "black", 48, tw_ - 28)
             d.text((tx + 16, y + 138), str(val), font=fvv, fill=S.ar_alfa(S.BALTS if j else akc, 255 * kc))
-        d.text((rx, y + 206), c.get("sal", ""), font=S.ietilpinat(d, c.get("sal", ""), "reg", 26, rw),
-               fill=S.ar_alfa(S.PELEKS, 255 * kc))
+        sal_ = c.get("sal", "")
+        iz_s = 26
+        while iz_s > 18 and S.platums(d, sal_, S.fonts("reg", iz_s)) > rw:     # ietilpināt kartītē (var būt < 30 px)
+            iz_s -= 1
+        d.text((rx, y + 206), sal_, font=S.fonts("reg", iz_s), fill=S.ar_alfa(S.PELEKS, 255 * kc))
         if c.get("birka"):
             kb = S.ease((t - 0.75 - 0.45 * i) / 0.3)
             if kb > 0:
