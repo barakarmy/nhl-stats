@@ -3127,6 +3127,7 @@ def rindas_ietilpinat(d, txt, veids, izm, max_w, max_r=3):
             else:
                 rindas.append(cur)
                 cur = v
+        rindas.append(cur)                                   # pēdējā rinda (bez šīs pazuda "IT 12?", "NHL")
         rindas = [r for r in rindas if r] or [""]
         if (len(rindas) <= max_r and all(platums(d, r, f) <= max_w for r in rindas)) or izm <= IETILP_MIN:
             return f, rindas
