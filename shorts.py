@@ -92,12 +92,22 @@ def kom_nos(kom):
     return KOMANDAS.get(str(kom), ("", str(kom)))[1]
 
 
-FONTU_MAPES = ["/usr/share/fonts/opentype/inter", "C:/Windows/Fonts", "/Library/Fonts", "/System/Library/Fonts/Supplemental",
-               "/usr/share/fonts/truetype/dejavu"]
-FONTI = {"black": ["Inter-Black.otf", "ariblk.ttf", "Arial Black.ttf", "DejaVuSans-Bold.ttf"],
-         "bold": ["Inter-ExtraBold.otf", "Inter-Bold.otf", "arialbd.ttf", "Arial Bold.ttf", "DejaVuSans-Bold.ttf"],
-         "semi": ["Inter-SemiBold.otf", "seguisb.ttf", "arialbd.ttf", "Arial Bold.ttf", "DejaVuSans-Bold.ttf"],
-         "reg": ["Inter-Medium.otf", "Inter-Regular.otf", "arial.ttf", "Arial.ttf", "DejaVuSans.ttf"]}
+# fonti: vispirms mape shorts_fonti\ blakus skriptam (Inter .otf – nav jāinstalē), tad sistēmas mapes
+FONTU_MAPES = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "shorts_fonti"),
+               "/usr/share/fonts/opentype/inter", "C:/Windows/Fonts",
+               os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts"),   # "Install" tikai sev
+               "/Library/Fonts", "/System/Library/Fonts/Supplemental", "/usr/share/fonts/truetype/dejavu"]
+
+
+def _inter(v):
+    """Inter faila nosaukumi: .otf (rsms.me), .ttf, Google Fonts statiskie (Inter_18pt-Black.ttf u.c.)."""
+    return [f"Inter-{v}.otf", f"Inter-{v}.ttf", f"Inter_18pt-{v}.ttf", f"Inter_24pt-{v}.ttf", f"Inter_28pt-{v}.ttf"]
+
+
+FONTI = {"black": _inter("Black") + ["ariblk.ttf", "Arial Black.ttf", "DejaVuSans-Bold.ttf"],
+         "bold": _inter("ExtraBold") + _inter("Bold") + ["arialbd.ttf", "Arial Bold.ttf", "DejaVuSans-Bold.ttf"],
+         "semi": _inter("SemiBold") + ["seguisb.ttf", "arialbd.ttf", "Arial Bold.ttf", "DejaVuSans-Bold.ttf"],
+         "reg": _inter("Medium") + _inter("Regular") + ["arial.ttf", "Arial.ttf", "DejaVuSans.ttf"]}
 _fcache = {}
 
 
