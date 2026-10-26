@@ -78,8 +78,8 @@ ZONA_MERS = 0.82                  # (bija 0.85 – kartītes apakša bija gandr�
 ZONA_ENKURS = 250                 # šī y paliek vietā (augšējā slīpā josla)
 ZONA_CENTRS = 900                 # ap šo y notiek lēnā tuvināšana (satura vidus)
 TUVINAJUMS = 0.02                 # katra aina lēni (gludi, subpikseļos) pietuvinās par 2 % (āķis – 4 %); 0 = izslēgt
-SUBT_Y = 1490                     # subtitru rindas augša (josla ~1475–1570, x 80–900); kartītes beidzas ≤ ~1435
-SUBT_X0, SUBT_X1 = 80, 900
+SUBT_Y = 1490                     # subtitru rindas augša (josla ~1475–1570, centrēta); kartītes beidzas ≤ ~1435
+SUBT_X0, SUBT_X1 = 150, 930          # centrēts ap x=540 (ekrāna vidus); labā mala < YouTube pogām (~985)
 SUBT_IZM = 64
 SUBT_MAX_VARDI, SUBT_MAX_ZIMES = 4, 24
 SUBT_ATTEIKT = {"P-D-O": "PDO"}   # balsij rakstītais → kā rādīt subtitros
