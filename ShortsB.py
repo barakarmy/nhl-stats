@@ -74,11 +74,11 @@ OPC = {"fons": True, "muzika": True, "sfx": True, "logo": True, "subtitri": True
 
 # ---- YouTube Shorts drošā zona: saturs 85 % lielumā (augšējā josla y≈250 paliek vietā) – nekas nepaliek zem
 #      YouTube pogām (labajā malā) un nosaukuma (apakšā); apakšā – subtitru josla
-ZONA_MERS = 0.85
+ZONA_MERS = 0.82                  # (bija 0.85 – kartītes apakša bija gandrīz pie subtitriem)
 ZONA_ENKURS = 250                 # šī y paliek vietā (augšējā slīpā josla)
-ZONA_CENTRS = 845                 # ap šo y notiek lēnā tuvināšana (satura vidus)
-TUVINAJUMS = 0.025                # katra aina lēni pietuvinās par 2,5 % (āķis – 4 %)
-SUBT_Y = 1478                     # subtitru rindas augša (josla 1460–1585, x 80–900)
+ZONA_CENTRS = 900                 # ap šo y notiek lēnā tuvināšana (satura vidus)
+TUVINAJUMS = 0.02                 # katra aina lēni (gludi, subpikseļos) pietuvinās par 2 % (āķis – 4 %); 0 = izslēgt
+SUBT_Y = 1490                     # subtitru rindas augša (josla ~1475–1570, x 80–900); kartītes beidzas ≤ ~1435
 SUBT_X0, SUBT_X1 = 80, 900
 SUBT_IZM = 64
 SUBT_MAX_VARDI, SUBT_MAX_ZIMES = 4, 24
@@ -432,7 +432,9 @@ def izveleties_mediju(mape, paplasinajumi, tips):
 
 
 def izveleties_fonu():
-    return izveleties_mediju(MAPE_FONS, VIDEO_PAPL, "fons") if OPC["fons"] else None
+    if not OPC["fons"]:
+        return None
+    return _izvelets("fons", MAPE_FONS) or izveleties_mediju(MAPE_FONS, VIDEO_PAPL, "fons")
 
 
 # ---------------------------------------------------------------- audio: skaņu efekti un mūzika
@@ -567,8 +569,24 @@ def sfx_celins(ainas, kopa, fails):
     return fails
 
 
+IZVELETS = {"muzika": None, "fons": None}   # --muzika / --fons: konkrēts fails (testam), bez kārtas maiņas
+
+
+def _izvelets(tips, mape):
+    f = IZVELETS.get(tips)
+    if not f:
+        return None
+    for c in (f, os.path.join(mape, f)):
+        if os.path.isfile(c):
+            return c
+    print(f"{tips.upper()}: fails '{f}' nav atrasts (ne {mape}\\, ne kā pilns ceļš) – izmantoju parasto izvēli.")
+    return None
+
+
 def izveleties_muziku():
-    return izveleties_mediju(MAPE_MUZIKA, AUDIO_PAPL, "muzika") if OPC["muzika"] else None
+    if not OPC["muzika"]:
+        return None
+    return _izvelets("muzika", MAPE_MUZIKA) or izveleties_mediju(MAPE_MUZIKA, AUDIO_PAPL, "muzika")
 
 
 def miksets(video_tmp, izvade, balss, ainas, kopa, tmp):
@@ -1234,7 +1252,7 @@ def aina_intro(t, s):
             txt = "HOT HAND OR LUCKY?"
         else:
             txt = "WHO'S LUCKY? WHO'S DUE?"
-        uzlime(im, txt, 1580, 5, S.ZILS)
+        uzlime(im, txt, 1500, 5, S.ZILS)            # zonā beidzas ~1415 – virs subtitriem (1490)
     return im
 
 
@@ -1996,12 +2014,17 @@ def _zona(sl, zm=0.0):
     if m == 1.0 and not zm:
         return sl
     a_ = ZONA_ENKURS - ZONA_ENKURS * m
-    z = m * (1 + zm)
-    offy = ZONA_CENTRS - (ZONA_CENTRS - a_) * (1 + zm)
-    w_, h_ = max(1, round(S.W * z)), max(1, round(S.H * z))
-    small = sl.resize((w_, h_), Image.BILINEAR)
-    out = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
-    out.paste(small, (round((S.W - w_) / 2), round(offy)))
+    # 1) nemainīgs samazinājums (ar antialiasing, izmērs katrā kadrā vienāds);
+    # 2) tuvināšana ar subpikseļu affine (float mērogs/nobīde) – agrāk resize uz veselu izmēru + paste veselos
+    #    pikseļos katrā kadrā lēca par 1 px, un kartīte izskatījās "drebam".
+    w_, h_ = round(S.W * m), round(S.H * m)
+    small = sl.resize((w_, h_), Image.BILINEAR) if m != 1.0 else sl
+    k = 1 + zm
+    x0, y0 = (S.W - w_) / 2, a_                                       # small novietojums bez tuvināšanas
+    cx, cy = S.W / 2, ZONA_CENTRS
+    # izvades (X, Y) → small koordinātas: ((X - cx) / k + cx - x0, (Y - cy) / k + cy - y0)
+    out = small.transform((S.W, S.H), Image.AFFINE, (1 / k, 0, cx - cx / k - x0, 0, 1 / k, cy - cy / k - y0),
+                          resample=Image.BILINEAR)
     return out
 
 
@@ -2240,6 +2263,12 @@ def ieslegt():
         return s_
     S.atskats = atskats_ar_aki
     S.VEIDI["fakts"] = veids_fakti_b
+    for arg, k in (("--muzika", "muzika"), ("--fons", "fons")):     # konkrēts fails testam:  --muzika dziesma.mp3
+        if arg in sys.argv:
+            i_ = sys.argv.index(arg)
+            if i_ + 1 < len(sys.argv):
+                IZVELETS[k] = sys.argv[i_ + 1]
+                del sys.argv[i_:i_ + 2]
     if "--tests" in sys.argv:                                         # testa režīms – atsevišķa mape video_test\\
         sys.argv.remove("--tests")
         testa_mape()
