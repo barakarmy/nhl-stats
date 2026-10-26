@@ -3338,6 +3338,10 @@ def _frazu_balsij():
     return sorted(v, key=len, reverse=True)
 
 
+VARDU_LAIKI = {}     # audio fails → [(sākums s, beigas s, vārds)] no edge-tts
+VARDI_AINAS = []     # ierunat(): katrai ainai vārdu laiki (relatīvi pret ainas audio sākumu) – subtitriem
+
+
 def ierunat(teksti, balss, mape):
     try:
         import edge_tts
@@ -3349,7 +3353,38 @@ def ierunat(teksti, balss, mape):
         return None
 
     async def viens(txt, fails, atrums):
-        await edge_tts.Communicate(txt, balss, rate=atrums).save(fails)
+        """Audio + katra vārda laiks (WordBoundary) subtitriem. edge-tts 7.x – boundary jānorāda, vecākām – pēc noklusējuma."""
+        try:
+            c = edge_tts.Communicate(txt, balss, rate=atrums, boundary="WordBoundary")
+        except TypeError:
+            c = edge_tts.Communicate(txt, balss, rate=atrums)
+        vardi = []
+        with open(fails, "wb") as fh:
+            async for ch in c.stream():
+                if ch.get("type") == "audio":
+                    fh.write(ch["data"])
+                elif ch.get("type") == "WordBoundary":
+                    vardi.append((ch["offset"] / 1e7, (ch["offset"] + ch["duration"]) / 1e7, str(ch.get("text", ""))))
+        VARDU_LAIKI[fails] = vardi
+
+    def ilgums(f):
+        d_ = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f],
+                            capture_output=True, text=True).stdout.strip()
+        return float(d_ or 0)
+
+    def laiki(f, txt, dur):
+        """Vārdu laiki no edge-tts; ja nav – vienmērīgi pa vārdu garumu (rezerve)."""
+        v = VARDU_LAIKI.get(f) or []
+        if v:
+            return v
+        vardi = str(txt).split()
+        sv = [len(x) + 2 for x in vardi]
+        kopa_, t_, out_ = sum(sv) or 1, 0.05, []
+        for x, w in zip(vardi, sv):
+            d_ = (max(0.1, dur - 0.1)) * w / kopa_
+            out_.append((t_, t_ + d_, x))
+            t_ += d_
+        return out_
 
     def tirs(txt):
         """Rezerves teksts: tikai ASCII burti, cipari un pamata pieturzīmes (ja Microsoft balss kādu simbolu neņem pretī)."""
@@ -3377,6 +3412,7 @@ def ierunat(teksti, balss, mape):
 
     frazes = _frazu_balsij()
     out = []
+    VARDI_AINAS.clear()
     for i, txt in enumerate(teksti):
         tb = balsij(txt)
         f = os.path.join(mape, f"a{i}.mp3")
@@ -3390,7 +3426,11 @@ def ierunat(teksti, balss, mape):
         if beigu:
             f1, f2, fw = os.path.join(mape, f"a{i}_1.mp3"), os.path.join(mape, f"a{i}_2.mp3"), os.path.join(mape, f"a{i}.wav")
             kluda = sint(tb[:-len(beigu)].strip(), f1, BALSS_ATRUMS) or sint(beigu, f2, FRAZES_ATRUMS)
+            vl_ = None
             if not kluda:
+                d1 = ilgums(f1)
+                vl_ = laiki(f1, tb[:-len(beigu)].strip(), d1) + [(a + d1 + 0.22, b + d1 + 0.22, x)
+                                                                 for a, b, x in laiki(f2, beigu, ilgums(f2))]
                 r_ = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", f1, "-i", f2, "-filter_complex",
                                      "[1:a]adelay=220|220[b];[0:a][b]concat=n=2:v=0:a=1[o]", "-map", "[o]", fw],
                                     capture_output=True)
@@ -3400,13 +3440,14 @@ def ierunat(teksti, balss, mape):
                     beigu = None                                      # neizdevās salikt → viss teksts vienā gabalā
         if not beigu:
             kluda = sint(tb, f, BALSS_ATRUMS)
+            vl_ = None
         if kluda:
             print(f"BALSS neizdevās ainai {i + 1}: {kluda}\n  teksts: {tb!r}\n  – video bez skaņas "
                   f"(pamegini vēlreiz pēc brīža vai ar citu balsi, piem. --balss en-US-GuyNeural)")
             return None
-        dur = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f],
-                             capture_output=True, text=True).stdout.strip()
-        out.append((f, float(dur or 0)))
+        dur = ilgums(f)
+        out.append((f, dur))
+        VARDI_AINAS.append(vl_ if vl_ is not None else laiki(f, tb, dur))
     return out
 
 
