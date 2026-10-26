@@ -1559,7 +1559,7 @@ def veids_fantasy(m, a):
     if n_drop:
         legenda.append(("DROP / BENCH  →  cut or sit", SARKANS, BALTS))
     saraksts = [f"ADD {r['vards']} ({r['team']}): {int(r['P'])} P in {int(r['GP'])} GP, {r['SOG60']:.1f} Shots/60, "
-                f"{r['ixG60']:.2f} ixG/60, {_mmss(r['TOI'])} TOI/GP, {int(r['sp_nak'])} games next week"
+                f"{r['ixG60']:.2f} ixG/60, {_mmss(r['TOI'])} TOI/GP, {int(r['sp_nak'])} games {'left this week' if stream else 'next week'}"
                 + ("" if not np.isfinite(r["rostered"]) else f", {r['rostered']:.1f}% rostered") for _, r in izv.iterrows()]
     saraksts += [f"{drop_veids[pid_]} {r['vards']} ({r['team']}): {r['rostered']:.0f}% rostered – {iemesls_drop(r)}" for pid_, r in drop.iterrows()]
     rez_ = {
@@ -1900,7 +1900,8 @@ def atskats_fantasy(j, m, a):
         "zimogs": f"WEEK OF {dat(no).upper()} – {dat(lidz).upper()}  ·  RESULTS", "runa": runa, "lidz": lidz,
         "periods": f"week of {dat(no)} – {dat(lidz, True)}",
         "virsraksts": f"Our fantasy hockey picks went {trap}/{kopa} last week – full results 🏒",
-        "saraksts": saraksts + [f"Typical waiver player: {med_add:.0f} pts; typical rostered player: {med_drop:.0f} pts",
+        "saraksts": saraksts + [f"Typical waiver player: {med_add:.0f} pt{'' if round(med_add) == 1 else 's'}; "
+                               f"typical rostered player: {med_drop:.0f} pt{'' if round(med_drop) == 1 else 's'}",
                                 f"Season record: {H}/{T}"],
         "apraksts": f"Fantasy hockey recap for the week of {dat(no)} – {dat(lidz, True)}: how our pickups and drops performed.",
         "nosaukums": f"xg_atskats_fantasy_{no}",
@@ -3528,6 +3529,19 @@ def renderet(s, izvade, kanals="", balss=None):
     return kopa, bool(audio)
 
 
+YT_MAX = 100                       # YouTube nosaukuma limits (zīmes)
+
+
+def yt_virsraksts(v):
+    """Virsraksts + " #NHL #Shorts", bet ≤ 100 zīmes: vispirms atmet #Shorts, tad #NHL, tad saīsina pie vārda."""
+    v = str(v).strip()
+    for beigas in (" #NHL #Shorts", " #NHL", ""):
+        if len(v) + len(beigas) <= YT_MAX:
+            return v + beigas
+    v = v[:YT_MAX - 1].rsplit(" ", 1)[0].rstrip(" –,:+")
+    return v + "…"
+
+
 def cta_apraksts(kontakts):
     kam = f"DM {kontakts}" if kontakts else "Send me a message"
     return ("\n📊 WANT THE FULL FANTASY SHEET?\n"
@@ -3688,7 +3702,7 @@ def main():
     if s.get("csv") is not None:
         s["csv"].to_csv(os.path.join(mape, "fantasy_kandidati.csv"), index=False, encoding="utf-8-sig")
     with open(izv[:-4] + ".txt", "w", encoding="utf-8") as f:
-        f.write(f"VIRSRAKSTS:\n{s['virsraksts']} #NHL #Shorts\n\nAPRAKSTS:\n{s['apraksts']}\nData: {s['periods']}\n"
+        f.write(f"VIRSRAKSTS:\n{yt_virsraksts(s['virsraksts'])}\n\nAPRAKSTS:\n{s['apraksts']}\nData: {s['periods']}\n"
                 + "\n".join(s["saraksts"])
                 + "\n" + s.get("piezime", "xG from our own model (unblocked shots, empty-net goals excluded).") + "\n"
                 + (cta_apraksts(kontakts) if ar_cta else "")
