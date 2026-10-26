@@ -1278,8 +1278,11 @@ def veids_fakti_b(m, a):
         "intro": intro, "kartes": kartes, "outro": outro,
         "zimogs": f"STATS THROUGH {S.dat(lidz, True).upper()}", "runa": runa, "lidz": lidz,
         "periods": f"through {S.dat(lidz, True)}",
-        "virsraksts": hero["yt"] + (f" + {n - 1} more NHL stats that stood out this week" if n > 1 else ""),
-        "saraksts": [f"#{i + 1}  {c['teksts']}" for i, c in enumerate(izv)],
+        "virsraksts": hero["yt"] + next((x for x in ((f" + {n - 1} more NHL stats that stood out this week",
+                                                       f" + {n - 1} more stats of the week", f" + {n - 1} more")
+                                                      if n > 1 else ("",))
+                                         if len(hero["yt"] + x) <= S.YT_MAX - 13), ""),
+        "saraksts": [f"#{i + 1}  " + re.sub(r"[^\w)!?.'’%]+$", "", c["yt"]) for i, c in enumerate(izv)],   # angliski (teksts – LV)
         "apraksts": " ".join(x for x in hero["runa"] if x),
         "piezime": f"Comparisons: season {S.sezonas_txt(D['sezona'])} only.",
         "tagi": "#NHL #hockey #NHLstats #WeekInNumbers #Shorts",
