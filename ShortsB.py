@@ -70,7 +70,20 @@ FONA_ATRUMS_MIN = 0.08          # "auto" ne lēnāk par ~12×
 SR = 44100
 VIDEO_PAPL = (".mp4", ".mov", ".m4v", ".webm", ".mkv")
 AUDIO_PAPL = (".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac")
-OPC = {"fons": True, "muzika": True, "sfx": True, "logo": True}
+OPC = {"fons": True, "muzika": True, "sfx": True, "logo": True, "subtitri": True, "zona": True}
+
+# ---- YouTube Shorts drošā zona: saturs 85 % lielumā (augšējā josla y≈250 paliek vietā) – nekas nepaliek zem
+#      YouTube pogām (labajā malā) un nosaukuma (apakšā); apakšā – subtitru josla
+ZONA_MERS = 0.85
+ZONA_ENKURS = 250                 # šī y paliek vietā (augšējā slīpā josla)
+ZONA_CENTRS = 845                 # ap šo y notiek lēnā tuvināšana (satura vidus)
+TUVINAJUMS = 0.025                # katra aina lēni pietuvinās par 2,5 % (āķis – 4 %)
+SUBT_Y = 1478                     # subtitru rindas augša (josla 1460–1585, x 80–900)
+SUBT_X0, SUBT_X1 = 80, 900
+SUBT_IZM = 64
+SUBT_MAX_VARDI, SUBT_MAX_ZIMES = 4, 24
+SUBT_ATTEIKT = {"P-D-O": "PDO"}   # balsij rakstītais → kā rādīt subtitros
+CILPA = 0.45                      # pēdējās sekundes daļa: beigu kadrs pāriet atpakaļ uz āķi (Shorts atkārtojas cilpā)
 KANALS_NOKL = "@IceMathHockey"            # rokturis, ja --kanals nav norādīts
 LOGO_FAILS = os.path.join(S.BASE, "shorts_logo.png")           # ikona ūdenszīmei (caurspīdīgs PNG)
 WORDMARK_FAILS = os.path.join(S.BASE, "shorts_wordmark.png")   # logo ar nosaukumu beigu kadram
@@ -601,7 +614,29 @@ def miksets(video_tmp, izvade, balss, ainas, kopa, tmp):
                     "-map", "0:v", "-map", "[aout]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", f"{kopa:.2f}",
                     izvade], check=True)
     dalas = (["balss"] if balss else []) + (["efekti"] if sfx else []) + ([f"mūzika: {os.path.basename(muz)}"] if muz else [])
-    print("AUDIO: " + " + ".join(dalas))
+    lufs = skalums_normalizet(izvade, tmp)
+    print("AUDIO: " + " + ".join(dalas) + (f"  ·  skaļums {lufs}" if lufs else ""))
+
+
+def skalums_normalizet(izvade, tmp, mērķis=-14.0):
+    """Skaļums kā YouTube (≈ −14 LUFS, pīķi ≤ −1,5 dB): izmēra, tad pastiprina un ierobežo pīķus."""
+    import json as _json
+    try:
+        r = subprocess.run(["ffmpeg", "-hide_banner", "-i", izvade, "-af",
+                            f"loudnorm=I={mērķis}:TP=-1.5:LRA=11:print_format=json", "-f", "null", "-"],
+                           capture_output=True, text=True)
+        js = _json.loads(r.stderr[r.stderr.rindex("{"):r.stderr.rindex("}") + 1])
+        # pastiprinājums līdz mērķim + limiteris pīķiem (skaņu efekti – sitiens, swoosh – citādi neļautu pacelt skaļumu)
+        gain = max(-20.0, min(20.0, mērķis - float(js["input_i"])))
+        filtrs = f"volume={gain:.2f}dB,alimiter=limit=0.75:attack=2:release=60:level=false,aresample=48000"
+        jauns = os.path.join(tmp, "norm.mp4")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", izvade, "-c:v", "copy", "-af", filtrs, "-c:a", "aac",
+                        "-b:a", "192k", "-movflags", "+faststart", jauns], check=True)
+        os.replace(jauns, izvade)
+        return f"{float(js['input_i']):.1f} → {mērķis:.0f} LUFS"
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"AUDIO: skaļuma normalizācija izlaista ({type(ex).__name__})")
+        return None
 
 
 # ---------------------------------------------------------------- ainas
@@ -653,6 +688,21 @@ def _izpludinats_teksts(txt, f, kr, blur=24):
     return im.filter(ImageFilter.GaussianBlur(blur))
 
 
+def _uzskaitit(txt, t, ilgums=0.6):
+    """Āķa skaitlis "uzskaitās" pirmajā 0,6 s (0 → 12, +0.0 → +6.0, 0/6 → 4/6); teksti ar burtiem (PDO 106.9) – nemainās."""
+    txt = str(txt)
+    if t >= ilgums or not re.fullmatch(r"[+\-−]?\d+(?:\.\d+)?%?|\d+/\d+", txt.strip()):
+        return txt
+    return skaitit(txt, S.ease(t / ilgums))
+
+
+def _pulss(t):
+    """Neliels "pulss" (līdz +6 %) tieši pēc uzskaitīšanas."""
+    import math as _m
+    k = (t - 0.6) / 0.3
+    return 1 + 0.06 * _m.sin(_m.pi * k) if 0 < k < 1 else 1.0
+
+
 def aina_aki(t, s):
     """Pirmais kadrs uzreiz pilns: skaitlis/apgalvojums + noslēpumaina #1 kartīte ar izpludinātu vārdu."""
     im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
@@ -673,19 +723,21 @@ def aina_aki(t, s):
         vards = _izpludinats_teksts(kt["vards"], S.ietilpinat(d, kt["vards"], "black", 110, x1 - x0 - 100), S.BALTS)
         im.alpha_composite(vards, (int((S.W - vards.width) / 2), int(y0 + 165)))
         f_sk = S.ietilpinat(d, kt["skaitlis"], "black", 150, x1 - x0 - 80)
-        S.teksts_c(d, y0 + 320, kt["skaitlis"], f_sk, kt["akc"])
+        f_sk = S.fonts("black", int(f_sk.size * _pulss(t)))
+        S.teksts_c(d, y0 + 320 + 75 - f_sk.size // 2, _uzskaitit(kt["skaitlis"], t), f_sk, kt["akc"])
         if kt.get("apaksa"):
             S.teksts_c(d, y1 - 66, kt["apaksa"], S.ietilpinat(d, kt["apaksa"], "semi", 38, x1 - x0 - 80), S.PELEKS)
         y_st = y1 + 60
     else:
         sk_ = s.get("skaitlis", "")
         f_sk = S.ietilpinat(d, sk_, "black", 260, S.W - 120)
-        S.teksts_c(d, y + 40, sk_, f_sk, s.get("skaitlis_kr", S.DZELTENS))
+        f_p = S.fonts("black", int(f_sk.size * _pulss(t)))
+        S.teksts_c(d, y + 40 + (f_sk.size - f_p.size) // 2, _uzskaitit(sk_, t), f_p, s.get("skaitlis_kr", S.DZELTENS))
         y_st = y + 40 + int(f_sk.size * 1.15)
         if s.get("skaitlis_apaksa"):
             S.teksts_c(d, y_st, s["skaitlis_apaksa"], S.ietilpinat(d, s["skaitlis_apaksa"], "semi", 48, S.W - 140), S.PELEKS)
             y_st += 110
-    if t > 0.5:                                                       # uzlīme "palieciet līdz beigām"
+    if t > 0.5 and s.get("uzlime") is not False:                     # uzlīme "palieciet līdz beigām"
         kb = ease_back((t - 0.5) / 0.4)
         st = Image.new("RGBA", (S.W, 240), (0, 0, 0, 0))
         uzlime(st, s.get("uzlime", "STAY FOR #1"), 20, -5, S.DZELTENS)
@@ -1912,7 +1964,8 @@ def thumbnail_kadrs(aina, s, fona_fails, atr, fn_map):
     if veids == "intro":
         i_ = dict(s["intro"])
         if i_.get("aki"):
-            sl = aina_aki(0.4, i_)                                    # līdz 0.5 s – vēl bez "STAY FOR #1" uzlīmes
+            i_["uzlime"] = False                                      # sīktēlā – bez uzlīmes
+            sl = aina_aki(3.0, i_)
         else:
             sl = _orig["intro"](3.0, i_)
     else:
@@ -1937,6 +1990,78 @@ def zimet_thumbnail_b(th, fails):
         _orig["thumbnail"](th, fails)
 
 
+def _zona(sl, zm=0.0):
+    """Ainas slānis → drošajā zonā (ZONA_MERS, josla y=ZONA_ENKURS paliek vietā) + lēna tuvināšana zm ap satura vidu."""
+    m = ZONA_MERS if OPC["zona"] else 1.0
+    if m == 1.0 and not zm:
+        return sl
+    a_ = ZONA_ENKURS - ZONA_ENKURS * m
+    z = m * (1 + zm)
+    offy = ZONA_CENTRS - (ZONA_CENTRS - a_) * (1 + zm)
+    w_, h_ = max(1, round(S.W * z)), max(1, round(S.H * z))
+    small = sl.resize((w_, h_), Image.BILINEAR)
+    out = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    out.paste(small, (round((S.W - w_) / 2), round(offy)))
+    return out
+
+
+def _subt_gabali(vardi):
+    """[(sākums, beigas, vārds)] (video laikā) → subtitru gabali. Vispirms teikumos (pieturzīme vai pauze > 0,25 s),
+    tad katru teikumu – vienmērīgos gabalos pa ≤ SUBT_MAX_VARDI (5 → 3+2, 9 → 3+3+3), lai beigās nepaliek viens vārds.
+    → [(rādīt_no, rādīt_līdz, [(sākums, beigas, vārds)])]"""
+    import math as _m
+    teikumi, cur = [], []
+    for a, b, x in vardi:
+        x = SUBT_ATTEIKT.get(x, x).strip()
+        if not x:
+            continue
+        if cur and (cur[-1][2][-1:] in ".?!:" or a - cur[-1][1] > 0.25):
+            teikumi.append(cur)
+            cur = []
+        cur.append((a, b, x))
+    if cur:
+        teikumi.append(cur)
+    gabali = []
+    for t_ in teikumi:
+        k = max(1, _m.ceil(len(t_) / SUBT_MAX_VARDI))
+        while k < len(t_) and any(len(" ".join(w[2] for w in t_[round(i_ * len(t_) / k):round((i_ + 1) * len(t_) / k)])) > SUBT_MAX_ZIMES + 6
+                                  for i_ in range(k)):
+            k += 1                                                    # par garu (gari vārdi) – vairāk gabalu
+        for i_ in range(k):
+            g = t_[round(i_ * len(t_) / k):round((i_ + 1) * len(t_) / k)]
+            if g:
+                gabali.append(g)
+    out = []
+    for j_, g in enumerate(gabali):
+        beigas = g[-1][1] + 0.35
+        if j_ + 1 < len(gabali):
+            beigas = min(beigas + 0.5, gabali[j_ + 1][0][0])
+        out.append((g[0][0] - 0.05, beigas, g))
+    return out
+
+
+def zimet_subtitrus(kadrs, gabali, T):
+    """Subtitri drošajā joslā: balti ar tumšu kontūru, pašreizējais vārds – dzeltens."""
+    g = next((x for x in gabali if x[0] <= T < x[1]), None)
+    if g is None:
+        return
+    vardi = [w[2] for w in g[2]]
+    akt = max([i for i, w in enumerate(g[2]) if w[0] <= T] or [0])
+    d = ImageDraw.Draw(kadrs)
+    teksts = " ".join(vardi)
+    izm = SUBT_IZM
+    while izm > 36 and d.textlength(teksts, font=S.fonts("black", izm)) > SUBT_X1 - SUBT_X0:
+        izm -= 2
+    f = S.fonts("black", izm)
+    atst = d.textlength(" ", font=f)
+    platumi = [d.textlength(v, font=f) for v in vardi]
+    x = SUBT_X0 + (SUBT_X1 - SUBT_X0 - (sum(platumi) + atst * (len(vardi) - 1))) / 2
+    for i, (v, w) in enumerate(zip(vardi, platumi)):
+        d.text((x, SUBT_Y + (SUBT_IZM - izm) / 2), v, font=f, fill=S.DZELTENS if i == akt else S.BALTS,
+               stroke_width=max(4, izm // 9), stroke_fill=(8, 10, 22))
+        x += w + atst
+
+
 def renderet(s, izvade, kanals="", balss=None):
     import shutil, tempfile
     if not shutil.which("ffmpeg"):
@@ -1955,6 +2080,13 @@ def renderet(s, izvade, kanals="", balss=None):
             print("BALSS: audio faili tukši vai nepilnīgi – video bez skaņas.")
         audio = None
     kopa = sum(a[2] for a in ainas)
+    subt = []
+    if audio and OPC["subtitri"] and len(S.VARDI_AINAS) == len(ainas):
+        sak_, vv_ = 0.0, []
+        for (_, _, ilg_), vl in zip(ainas, S.VARDI_AINAS):
+            vv_ += [(sak_ + 0.15 + a, sak_ + 0.15 + b, x) for a, b, x in vl]   # balss sākas 0,15 s pēc ainas (miksets)
+            sak_ += ilg_
+        subt = _subt_gabali(vv_)
     fona_fails = izveleties_fonu()
     atr = fona_atrums(fona_fails, kopa) if fona_fails else None
     fons = VideoFons(fona_fails, atr) if fona_fails else Fons()
@@ -1973,6 +2105,15 @@ def renderet(s, izvade, kanals="", balss=None):
     fn_map = {"fantasy": aina_fantasy, "grafiks": aina_grafiks, "fakts_hook": aina_fakts_hook,
               "fakts_saraksts": aina_fakts_saraksts, "fakts_konteksts": aina_fakts_konteksts,
               "fakts_nakamais": S.aina_fakts_nakamais, "fakts_mini": aina_fakts_mini}
+    # cilpai: āķa (1. ainas) sākuma kadrs – beigās video pāriet atpakaļ uz to
+    v0, c0, _ = ainas[0]
+    if v0 == "intro":
+        cilpa_sl = aina_intro(0.0 if s["intro"].get("aki") else 1.1, s["intro"])
+    elif v0 == "karte":
+        cilpa_sl = fn_map.get(c0.get("tips"), aina_karte)(1.1, c0)
+    else:
+        cilpa_sl = None
+    cilpa_sl = _zona(cilpa_sl) if cilpa_sl is not None else None
     t0 = 0.0
     for nr, (veids, c, ilg) in enumerate(ainas):
         for fr in range(int(round(ilg * S.FPS))):
@@ -2008,6 +2149,9 @@ def renderet(s, izvade, kanals="", balss=None):
                 alfa, dy = 1 - k, -k * 120
             else:
                 alfa, dy = 1, 0
+            sl = _zona(sl, (0.04 if nr == 0 else TUVINAJUMS) * S.ease(t / ilg))     # drošā zona + lēna tuvināšana
+            if veids == "outro" and cilpa_sl is not None and t > ilg - CILPA:      # cilpa: atpakaļ uz āķi
+                sl = Image.blend(sl, cilpa_sl, S.ease((t - (ilg - CILPA)) / CILPA))
             kadrs = fons.kadrs(t0 + t)
             if alfa < 1:
                 sl.putalpha(sl.getchannel("A").point(lambda v: int(v * alfa)))
@@ -2034,6 +2178,8 @@ def renderet(s, izvade, kanals="", balss=None):
                 if ripa is not None:                                  # ripa virsū
                     l2 = ripa if a_r >= 1 else _ar_alfu(ripa, a_r)
                     kadrs.paste(l2, (LOGO_MALA, LOGO_MALA), l2)
+            if subt:
+                zimet_subtitrus(kadrs, subt, t0 + t)
             p.stdin.write(kadrs.tobytes())
         t0 += ilg
     p.stdin.close()
@@ -2099,7 +2245,8 @@ def ieslegt():
         testa_mape()
     if "--kanals" not in sys.argv:
         sys.argv += ["--kanals", KANALS_NOKL]
-    for arg, k in (("--bez-fona-video", "fons"), ("--bez-muzikas", "muzika"), ("--bez-sfx", "sfx"), ("--bez-logo", "logo")):
+    for arg, k in (("--bez-fona-video", "fons"), ("--bez-muzikas", "muzika"), ("--bez-sfx", "sfx"), ("--bez-logo", "logo"),
+                   ("--bez-subtitriem", "subtitri"), ("--pilns-ekrans", "zona")):
         if arg in sys.argv:
             OPC[k] = False
             sys.argv.remove(arg)
