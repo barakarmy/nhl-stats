@@ -58,7 +58,7 @@ VIOLETS = (139, 92, 246)
 MAPE_FONS = os.path.join(S.BASE, "shorts_fons")
 MAPE_MUZIKA = os.path.join(S.BASE, "shorts_muzika")
 MAPE_SFX = os.path.join(S.BASE, "shorts_sfx")
-MUZIKAS_SKALUMS = 0.15          # fona mūzika (0–1); kamēr runā balss, automātiski vēl klusāk
+MUZIKAS_SKALUMS = 0.10          # fona mūzika (0–1; bija 0.15); kamēr runā balss, automātiski vēl klusāk
 SFX_SKALUMS = 0.55              # skaņu efekti
 FONA_TUMSUMS = 0.55             # cik stipri fona video aptumšots (0 = neaptumšots, 1 = melns)
 FONA_MELNBALTS = True           # fona video melnbalts (False = krāsains)
@@ -362,7 +362,8 @@ class VideoFons:
             pass
 
 
-VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "streameri", "fakts", "tiesnesi", "atskats", "visi")
+VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "streameri", "fakts", "tiesnesi", "atskats", "visi",
+                  "xg", "fakti")
 MEDIJU_VESTURE = "shorts_mediji.json"
 XG_VEIDI = ("speletaji", "komandas", "vartsargi")      # xG video – izmanto speletaji_ failus (ja nav savu komandas_ / vartsargi_)
 
@@ -583,10 +584,82 @@ def _izvelets(tips, mape):
     return None
 
 
+# ---- MŪZIKA: faila sākums → video grupa. Katrai grupai parastajam video un atskatam – SAVA nejaušā kārta.
+#      xg_       xG spēlētāji / komandas / vārtsargi + to atskati
+#      fantasy_  fantasy, fantasy atskats, streameri
+#      fakti_    The Week in Numbers
+#      tiesnesi_ tiesnešu pārskats
+#      visi_ (vai bez priedēkļa) – rezerve, ja grupai nav neviena faila
+MUZIKAS_GRUPA = {"speletaji": "xg", "komandas": "xg", "vartsargi": "xg", "fantasy": "fantasy", "streameri": "fantasy",
+                 "fakts": "fakti", "tiesnesi": "tiesnesi"}
+MUZIKAS_VECIE = {"xg": ("speletaji", "komandas", "vartsargi"), "fakti": ("fakts",)}   # vecie nosaukumi – arī der
+
+
+def _video_veids():
+    """(veids, vai_atskats) – atskatam veids no atskata .json."""
+    ats = _arg("--atskats")
+    if not ats:
+        return _arg("--veids", "speletaji"), False
+    try:
+        import json
+        js = ats
+        if os.path.isdir(ats):
+            js = os.path.join(ats, sorted(f for f in os.listdir(ats) if f.endswith(".json"))[0])
+        return json.load(open(js, encoding="utf-8")).get("veids", "speletaji"), True
+    except Exception:                                                 # noqa: BLE001
+        return "speletaji", True
+
+
 def izveleties_muziku():
+    """Dziesma pēc "maisa" principa: katrā kārtā katra dziesma tiek izmantota vienreiz, nejaušā secībā
+    (piem. xg_4, xg_8, xg_1, xg_12 ...). Kad visas izmantotas – jauna kārta (bez tās pašas dziesmas pēc kārtas).
+    Kārtas: parastais video un atskats atsevišķi, streameri atsevišķi no fantasy (bet tie paši fantasy_ faili).
+    Failu skaits – no mapes katru reizi (jaunu dziesmu vienkārši ieliec mapē). Nejaušība ir noteikta no vēstures,
+    tāpēc --tests izvēlas tieši to pašu dziesmu, ko īstais video. Vēsture: video\\shorts_mediji.json."""
     if not OPC["muzika"]:
         return None
-    return _izvelets("muzika", MAPE_MUZIKA) or izveleties_mediju(MAPE_MUZIKA, AUDIO_PAPL, "muzika")
+    f_ = _izvelets("muzika", MAPE_MUZIKA)
+    if f_:
+        return f_
+    if not os.path.isdir(MAPE_MUZIKA):
+        return None
+    veids, ats = _video_veids()
+    grupa = MUZIKAS_GRUPA.get(veids, "visi")
+    visi = sorted(f for f in os.listdir(MAPE_MUZIKA) if f.lower().endswith(AUDIO_PAPL))
+    faili = []
+    for pr in (grupa,) + MUZIKAS_VECIE.get(grupa, ()):
+        faili += [f for f in visi if f.lower().startswith(pr + "_") and f not in faili]
+    if not faili:
+        faili = [f for f in visi if f.lower().startswith("visi_") or not f.lower().startswith(VEIDI_PREFIKSI)]
+    if not faili:
+        return None
+    import json, random
+    vm = _arg("--mape", os.path.join(S.BASE, "video"))
+    vp = os.path.join(vm, MEDIJU_VESTURE)
+    try:
+        vest = json.load(open(vp, encoding="utf-8")) if os.path.exists(vp) else {}
+    except Exception:                                                 # noqa: BLE001
+        vest = {}
+    k = f"muzika_karta:{veids if veids == 'streameri' else grupa}{'_atskats' if ats else ''}"
+    ped = vest.get("muzika_pedeja")                                   # pēdējā dziesma jebkurā video
+    izm = [f for f in (vest.get(k) or []) if f in faili] if isinstance(vest.get(k), list) else []
+    pieej = [f for f in faili if f not in izm]
+    if not pieej:                                                     # kārta beigusies – jauna
+        izm, pieej = [], [f for f in faili if f != (vest.get(k + ":pedeja"))] or faili
+        vest[k + ":nr"] = int(vest.get(k + ":nr", 1)) + 1                # jaunai kārtai – cita secība
+    labak = [f for f in pieej if f != ped] or pieej                   # ne tā pati, kas tikko citā video
+    rng = random.Random(f"{k}|{vest.get(k + ':nr', 1)}|{'|'.join(izm)}|{'|'.join(faili)}")
+    izv = rng.choice(labak)
+    vest[k] = izm + [izv]
+    vest[k + ":pedeja"] = izv
+    vest["muzika_pedeja"] = izv
+    try:
+        os.makedirs(vm, exist_ok=True)
+        json.dump(vest, open(vp, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    except Exception:                                                 # noqa: BLE001
+        pass
+    print(f"MŪZIKA: {izv}  (kārta {k.split(':')[1]}: {len(vest[k])}/{len(faili)})")
+    return os.path.join(MAPE_MUZIKA, izv)
 
 
 def miksets(video_tmp, izvade, balss, ainas, kopa, tmp):
