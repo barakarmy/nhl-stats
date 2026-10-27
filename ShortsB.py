@@ -1314,10 +1314,114 @@ def pierakstit_papildu_faktus(mape_video):
     json.dump(vest, open(p_, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
+# ---- fantasy / streameru ievada leģenda (ADD / STREAM / DROP) – moderns izskats
+LEGENDA_STILS = "A"               # "A" kartītes rindā · "B" panelis ar ikonām · "C" slīpas birkas · "" = vecās ovālās
+_LEG_IZST = {"DROP / BENCH": "DROP"}                                   # A/B: īsāks virsraksts kartītē
+_LEG_APR = {"DROP / BENCH": "cut or bench him", "STREAM": "use him, then move on"}
+_LEG_IKONA = {"ADD": "plus", "STREAM": "loop", "DROP": "minus", "DROP / BENCH": "minus", "BENCH": "minus"}
+
+
+def _ikona(d, veids, cx, cy, r, kr):
+    w = max(4, int(r * 0.32))
+    if veids in ("plus", "minus"):
+        d.rounded_rectangle([cx - r, cy - w / 2, cx + r, cy + w / 2], radius=w / 2, fill=kr)
+        if veids == "plus":
+            d.rounded_rectangle([cx - w / 2, cy - r, cx + w / 2, cy + r], radius=w / 2, fill=kr)
+    else:                                                             # "loop" – aplis ar bultu (izmanto un lai iet)
+        d.arc([cx - r, cy - r, cx + r, cy + r], 40, 330, fill=kr, width=w)
+        ax, ay = cx + r * 0.77, cy - r * 0.64
+        d.polygon([(ax - r * 0.55, ay - r * 0.1), (ax + r * 0.25, ay - r * 0.55), (ax + r * 0.2, ay + r * 0.35)], fill=kr)
+
+
+def _leg_dalit(legenda):
+    out = []
+    for txt, bg, fg in legenda:
+        lab, _, apr = str(txt).partition("→")
+        out.append((lab.strip(), apr.strip(), tuple(bg[:3]), tuple(fg[:3])))
+    return out
+
+
+def zimet_legendu(im, t, legenda, stils=None):
+    stils = LEGENDA_STILS if stils is None else stils
+    L = _leg_dalit(legenda)
+    if not L:
+        return
+    d = ImageDraw.Draw(im)
+    W = S.W
+    k = S.ease((t - 0.6) / 0.4)
+    if k <= 0:
+        return
+    A = lambda kr, a=1.0: tuple(kr[:3]) + (int(255 * k * a),)
+    TUMSA = (15, 23, 42)
+    if stils == "A":                                                  # kartītes rindā
+        n = len(L)
+        cw, gap, ch = (304 if n == 3 else 340), 22, 200
+        x = (W - (n * cw + (n - 1) * gap)) / 2
+        for i, (lab, apr, kr, _) in enumerate(L):
+            ki = S.ease((t - 0.6 - 0.12 * i) / 0.4)
+            if ki <= 0:
+                continue
+            y0 = 1270 + (1 - ki) * 40
+            a = lambda kr_, m=1.0: tuple(kr_[:3]) + (int(255 * ki * m),)
+            d.rounded_rectangle([x, y0, x + cw, y0 + ch], radius=26, fill=a(TUMSA, 0.92), outline=a(kr, 0.9), width=3)
+            d.rounded_rectangle([x + 22, y0 + 26, x + 76, y0 + 80], radius=14, fill=a(kr))
+            _ikona(d, _LEG_IKONA.get(lab, "plus"), x + 49, y0 + 53, 15, a(TUMSA))
+            lab_ = _LEG_IZST.get(lab, lab)
+            fl = S.ietilpinat(d, lab_, "black", 50, cw - 110)
+            d.text((x + 92, y0 + 53), lab_, font=fl, fill=a(kr), anchor="lm")
+            fa, rr = S.rindas_ietilpinat(d, _LEG_APR.get(lab, apr), "semi", 38, cw - 44, 2)
+            for j, r_ in enumerate(rr):
+                d.text((x + 22, y0 + 100 + j * 44), r_, font=fa, fill=a(S.BALTS, 0.92))
+            x += cw + gap
+    elif stils == "B":                                                # panelis ar ikonām
+        rh, pw = 80, 760
+        x0, y0 = (W - pw) / 2, 1236 + (1 - k) * 30
+        h = len(L) * rh + 30
+        d.rounded_rectangle([x0, y0, x0 + pw, y0 + h], radius=30, fill=A(TUMSA, 0.88), outline=A((255, 255, 255), 0.12), width=2)
+        y = y0 + 15
+        for i, (lab, apr, kr, _) in enumerate(L):
+            if i:
+                d.line([x0 + 30, y, x0 + pw - 30, y], fill=A((255, 255, 255), 0.08), width=2)
+            cy = y + rh / 2
+            d.ellipse([x0 + 34, cy - 30, x0 + 94, cy + 30], fill=A(kr))
+            _ikona(d, _LEG_IKONA.get(lab, "plus"), x0 + 64, cy, 15, A(TUMSA))
+            fl = S.fonts("black", 46)
+            lw = max(d.textlength(_LEG_IZST.get(l_[0], l_[0]), font=fl) for l_ in L)
+            d.text((x0 + 118, cy), _LEG_IZST.get(lab, lab), font=fl, fill=A(kr), anchor="lm")
+            xa = x0 + 118 + lw + 34
+            apr_ = _LEG_APR.get(lab, apr)
+            fa = S.ietilpinat(d, apr_, "semi", 42, x0 + pw - 34 - xa)
+            d.text((xa, cy), apr_, font=fa, fill=A(S.BALTS, 0.92), anchor="lm")
+            y += rh
+    else:                                                             # "C" – slīpas birkas (kā augšējā josla)
+        y = 1256
+        for i, (lab, apr, kr, fg) in enumerate(L):
+            ki = S.ease((t - 0.6 - 0.12 * i) / 0.4)
+            if ki <= 0:
+                y += 82
+                continue
+            a = lambda kr_, m=1.0: tuple(kr_[:3]) + (int(255 * ki * m),)
+            fl, fa = S.fonts("black", 44), S.fonts("semi", 40)
+            wl, wa = d.textlength(lab, font=fl), d.textlength(apr, font=fa)
+            sl, h = 22, 68
+            tw = wl + 2 * sl + 40 + 26 + wa + 40
+            x0 = (W - tw) / 2 + (1 - ki) * -60
+            d.polygon([(x0 + sl, y), (x0 + wl + 2 * sl + 40, y), (x0 + wl + sl + 40, y + h), (x0, y + h)], fill=a(kr))
+            d.text((x0 + sl + 20, y + h / 2), lab, font=fl, fill=a(fg), anchor="lm")
+            xa = x0 + wl + 2 * sl + 40 + 4
+            d.polygon([(xa, y), (xa + 26 + wa + 40, y), (xa + wa + 40, y + h), (xa - sl, y + h)], fill=a(TUMSA, 0.9))
+            d.text((xa + 14, y + h / 2), apr, font=fa, fill=a(S.BALTS), anchor="lm")
+            y += 82
+
+
 def aina_intro(t, s):
     if s.get("aki"):
         return aina_aki(t, s)
-    im = _orig["intro"](t, s)
+    leg = s.get("legenda") or []
+    jauna = LEGENDA_STILS and any(_leg_dalit([x])[0][0] in _LEG_IKONA for x in leg)
+    im = _orig["intro"](t, dict(s, legenda=[]) if jauna else s)
+    if jauna:
+        zimet_legendu(im, t, leg)
     if t > 1.0:
         tag = str(s.get("tag", "")).upper()
         if "FOLLOW" in tag or "RECAP" in tag:
