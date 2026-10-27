@@ -804,10 +804,11 @@ def aina_aki(t, s):
         f = S.ietilpinat(d, rinda, "black", 140, S.W - 100)
         S.teksts_c(d, y, rinda, f, kr)
         y += int(f.size * 1.12)
+    ar_leg = bool(s.get("legenda")) and s.get("uzlime") is not False and bool(LEGENDA_STILS)
     if s.get("kartite"):
         kt = s["kartite"]
         x0, x1, y0 = 120, S.W - 120, max(y + 40, 760)
-        y1 = y0 + 560
+        y1 = y0 + (470 if ar_leg else 560)                            # ar leģendu – kompaktāka kartīte
         d.rounded_rectangle([x0, y0, x1, y1], radius=44, fill=KARTE_KR, outline=jaukt(kt["akc"], KARTE_KR, 0.55), width=3)
         nr = kt.get("nr", "#1")                                       # bez komandas krāsām/zīmītes – neko neizpaužam
         S.teksts_c(d, y0 + 26, nr, S.fonts("black", 120), kt["akc"])
@@ -815,10 +816,10 @@ def aina_aki(t, s):
         im.alpha_composite(vards, (int((S.W - vards.width) / 2), int(y0 + 165)))
         f_sk = S.ietilpinat(d, kt["skaitlis"], "black", 150, x1 - x0 - 80)
         f_sk = S.fonts("black", int(f_sk.size * _pulss(t)))
-        S.teksts_c(d, y0 + 320 + 75 - f_sk.size // 2, _uzskaitit(kt["skaitlis"], t), f_sk, kt["akc"])
+        S.teksts_c(d, y0 + (312 if ar_leg else 395) - f_sk.size // 2, _uzskaitit(kt["skaitlis"], t), f_sk, kt["akc"])
         if kt.get("apaksa"):
             S.teksts_c(d, y1 - 66, kt["apaksa"], S.ietilpinat(d, kt["apaksa"], "semi", 38, x1 - x0 - 80), S.PELEKS)
-        y_st = y1 + 60
+        y_st = y1 + (30 if ar_leg else 60)
     else:
         sk_ = s.get("skaitlis", "")
         f_sk = S.ietilpinat(d, sk_, "black", 260, S.W - 120)
@@ -836,6 +837,8 @@ def aina_aki(t, s):
             sc = max(0.05, kb)
             st = st.resize((int(S.W * sc), int(240 * sc)), Image.BILINEAR)
         im.alpha_composite(st, (int((S.W - st.width) / 2), int(min(y_st, 1460))))
+    if ar_leg:                                                        # xG: leģendas kartītes zem uzlīmes (vākā – nē)
+        zimet_legendu(im, t + 0.3, s["legenda"], y=min(y_st, 1460) + 200)
     return im
 
 
@@ -933,7 +936,7 @@ def pievienot_aki(s, veids):
                 beig_ = "this team is better than its record."
             beigas = f"{S.beigu_frase('komandas')} {S.atskata_teksts()} Follow, and remember: {beig_}"
         vards = (hero.get("v2") or "").upper()
-        s["intro"] = {"aki": True, "tag": tag, "rindas": rindas, "ilgums": 2.4,
+        s["intro"] = {"aki": True, "tag": tag, "rindas": rindas, "ilgums": 2.4, "legenda": s["intro"].get("legenda"),
                       "kartite": {"nr": "#1", "akc": hero["akc"], "badge": hero.get("badge"), "vards": vards,
                                   "skaitlis": sk_, "apaksa": ap},
                       "uzlime": S.reta_frase(S.UZLIME_NR1)}
@@ -947,7 +950,7 @@ def pievienot_aki(s, veids):
         datums = s["intro"]["apaksa"][0].replace("Our list from ", "")
         trapi = ok.isdigit() and kopa.isdigit() and int(kopa) and int(ok) / int(kopa) >= 0.5
         neskait = sum(1 for c_ in k if c_.get("akc") == S.NEITRALS)
-        s["intro"] = {"aki": True, "tag": s["intro"]["tag"], "ilgums": 2.4,
+        s["intro"] = {"aki": True, "tag": s["intro"]["tag"], "ilgums": 2.4, "legenda": s["intro"].get("legenda"),
                       "rindas": [(f"ON {datums.upper()}", S.BALTS), ("WE MADE A CALL.", S.DZELTENS)],
                       "skaitlis": f"{rez}", "skaitlis_kr": S.ZALS if trapi else S.SARKANS,
                       "skaitlis_apaksa": "calls that held up" + (f"  ·  {neskait} not counted (too few games)" if neskait else ""),
@@ -1318,11 +1321,26 @@ def pierakstit_papildu_faktus(mape_video):
 LEGENDA_STILS = "A"               # "A" kartītes rindā · "B" panelis ar ikonām · "C" slīpas birkas · "" = vecās ovālās
 _LEG_IZST = {"DROP / BENCH": "DROP"}                                   # A/B: īsāks virsraksts kartītē
 _LEG_APR = {"DROP / BENCH": "cut or bench him", "STREAM": "use him, then move on"}
-_LEG_IKONA = {"ADD": "plus", "STREAM": "loop", "DROP": "minus", "DROP / BENCH": "minus", "BENCH": "minus"}
+_LEG_IKONA = {"ADD": "plus", "STREAM": "loop", "DROP": "minus", "DROP / BENCH": "minus", "BENCH": "minus",
+              "GOOD CALL": "check", "BAD CALL": "cross",                 # fantasy atskats
+              "LUCKY": "down", "UNLUCKY": "up", "HIGH PDO": "down", "LOW PDO": "up",   # xG (āķa ekrānā)
+              "STEALING": "plus", "COSTING": "minus", "CALLED IT": "check", "MISSED": "cross"}
 
 
 def _ikona(d, veids, cx, cy, r, kr):
     w = max(4, int(r * 0.32))
+    if veids in ("up", "down"):                                       # bulta augšup / lejup
+        sg = -1 if veids == "up" else 1
+        d.rounded_rectangle([cx - w / 2, cy - r * 0.75, cx + w / 2, cy + r * 0.75], radius=w / 2, fill=kr)
+        d.polygon([(cx - r * 0.8, cy + sg * r * 0.15), (cx + r * 0.8, cy + sg * r * 0.15), (cx, cy + sg * r * 1.0)], fill=kr)
+        return
+    if veids == "check":
+        d.line([(cx - r * 0.85, cy + r * 0.05), (cx - r * 0.25, cy + r * 0.65), (cx + r * 0.9, cy - r * 0.6)], fill=kr, width=w, joint="curve")
+        return
+    if veids == "cross":
+        d.line([(cx - r * 0.7, cy - r * 0.7), (cx + r * 0.7, cy + r * 0.7)], fill=kr, width=w)
+        d.line([(cx - r * 0.7, cy + r * 0.7), (cx + r * 0.7, cy - r * 0.7)], fill=kr, width=w)
+        return
     if veids in ("plus", "minus"):
         d.rounded_rectangle([cx - r, cy - w / 2, cx + r, cy + w / 2], radius=w / 2, fill=kr)
         if veids == "plus":
@@ -1336,12 +1354,12 @@ def _ikona(d, veids, cx, cy, r, kr):
 def _leg_dalit(legenda):
     out = []
     for txt, bg, fg in legenda:
-        lab, _, apr = str(txt).partition("→")
+        lab, _, apr = str(txt).partition("→") if "→" in str(txt) else str(txt).partition("=")
         out.append((lab.strip(), apr.strip(), tuple(bg[:3]), tuple(fg[:3])))
     return out
 
 
-def zimet_legendu(im, t, legenda, stils=None):
+def zimet_legendu(im, t, legenda, stils=None, y=None):
     stils = LEGENDA_STILS if stils is None else stils
     L = _leg_dalit(legenda)
     if not L:
@@ -1361,7 +1379,7 @@ def zimet_legendu(im, t, legenda, stils=None):
             ki = S.ease((t - 0.6 - 0.12 * i) / 0.4)
             if ki <= 0:
                 continue
-            y0 = 1270 + (1 - ki) * 40
+            y0 = (1270 if y is None else y) + (1 - ki) * 40
             a = lambda kr_, m=1.0: tuple(kr_[:3]) + (int(255 * ki * m),)
             d.rounded_rectangle([x, y0, x + cw, y0 + ch], radius=26, fill=a(TUMSA, 0.92), outline=a(kr, 0.9), width=3)
             d.rounded_rectangle([x + 22, y0 + 26, x + 76, y0 + 80], radius=14, fill=a(kr))
@@ -1375,7 +1393,7 @@ def zimet_legendu(im, t, legenda, stils=None):
             x += cw + gap
     elif stils == "B":                                                # panelis ar ikonām
         rh, pw = 80, 760
-        x0, y0 = (W - pw) / 2, 1236 + (1 - k) * 30
+        x0, y0 = (W - pw) / 2, (1236 if y is None else y) + (1 - k) * 30
         h = len(L) * rh + 30
         d.rounded_rectangle([x0, y0, x0 + pw, y0 + h], radius=30, fill=A(TUMSA, 0.88), outline=A((255, 255, 255), 0.12), width=2)
         y = y0 + 15
@@ -1394,7 +1412,7 @@ def zimet_legendu(im, t, legenda, stils=None):
             d.text((xa, cy), apr_, font=fa, fill=A(S.BALTS, 0.92), anchor="lm")
             y += rh
     else:                                                             # "C" – slīpas birkas (kā augšējā josla)
-        y = 1256
+        y = 1256 if y is None else y
         for i, (lab, apr, kr, fg) in enumerate(L):
             ki = S.ease((t - 0.6 - 0.12 * i) / 0.4)
             if ki <= 0:
