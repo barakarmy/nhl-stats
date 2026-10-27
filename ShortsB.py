@@ -936,7 +936,7 @@ def pievienot_aki(s, veids):
                 beig_ = "this team is better than its record."
             beigas = f"{S.beigu_frase('komandas')} {S.atskata_teksts()} Follow, and remember: {beig_}"
         vards = (hero.get("v2") or "").upper()
-        s["intro"] = {"aki": True, "tag": tag, "rindas": rindas, "ilgums": 2.4, "legenda": s["intro"].get("legenda"),
+        s["intro"] = {"aki": True, "tag": tag, "rindas": rindas, "ilgums": 2.4,       # xG āķī leģendas nav
                       "kartite": {"nr": "#1", "akc": hero["akc"], "badge": hero.get("badge"), "vards": vards,
                                   "skaitlis": sk_, "apaksa": ap},
                       "uzlime": S.reta_frase(S.UZLIME_NR1)}
@@ -1905,7 +1905,8 @@ def aina_verdikts(t, s, kanals):
         for i_, rinda in enumerate(cta[1:]):
             S.teksts_c(d, y0 + 96 + i_ * 48 + dy, rinda, S.ietilpinat(d, rinda, "semi", 36, x1 - x0 - 60), S.BALTS)
     elif kq > 0:
-        jautajuma_kaste(d, 1462, s.get("komentars") or "WHAT DO YOU THINK?", kanals, kq)
+        jautajuma_kaste(d, min(1462, Y0 + len(kartites) * (KH + GAP) + 42),   # mazāk kartīšu – jautājums tuvāk
+                        s.get("komentars") or "WHAT DO YOU THINK?", kanals, kq)
     return im
 
 
