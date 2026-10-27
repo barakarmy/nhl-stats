@@ -619,7 +619,7 @@ def veids_speletaji(m, a):
     return {
         "intro": {"tag": "NHL  ·  xG LUCK REPORT", "rindas": [("WHO'S", BALTS), ("RUNNING", BALTS), ("ON LUCK?", DZELTENS)],
                   "apaksa": ["Goals vs expected goals (xG)", periods_txt(no, lidz)],
-                  "legenda": [("LUCKY  →  cooldown", ZALS, MELNS), ("UNLUCKY  →  due for goals", SARKANS, BALTS)]},
+                  "legenda": [("LUCKY  →  a cooldown is coming", ZALS, MELNS), ("UNLUCKY  →  due for goals", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [("LUCK RUNS OUT.", BALTS), ("xG DOESN'T.", DZELTENS)],
                   "info": [f"Own xG model · {len(mm):,} unblocked shots".replace(",", " "), atskata_teksts(False)],
@@ -765,7 +765,7 @@ def veids_vartsargi(m, a):
     return {
         "intro": {"tag": "NHL  ·  GOALIE REPORT", "rindas": [("WHO'S", BALTS), ("STEALING", BALTS), ("GAMES?", DZELTENS)],
                   "apaksa": ["Goals saved above expected (GSAx)", periods_txt(no, lidz)],
-                  "legenda": [("+  saves more than expected", ZALS, MELNS), ("−  lets in more than expected", SARKANS, BALTS)]},
+                  "legenda": [("STEALING  →  saves more than expected", ZALS, MELNS), ("COSTING  →  lets in more than expected", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [("SAVE % LIES.", BALTS), ("GSAx DOESN'T.", DZELTENS)],
                   "info": ["GSAx = expected goals against − goals allowed", atskata_teksts(False)],
@@ -953,7 +953,7 @@ def atskats(fails, m, a):
     return {
         "intro": {"tag": tag, "rindas": rindas,
                   "apaksa": [f"Our list from {dat(lidz0, True)}", f"Results: {dat(no2)} – {dat(lidz2, True)}"],
-                  "legenda": [("GREEN  =  prediction held", ZALS, MELNS), ("RED  =  prediction missed", SARKANS, BALTS)]},
+                  "legenda": [("CALLED IT  →  the prediction held", ZALS, MELNS), ("MISSED  →  it didn't happen", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [(f"WENT {rez}.", BALTS), ("NO HIDING MISSES.", DZELTENS)],
                   "info": [outro_info, f"{dat(no2)} – {dat(lidz2, True)}"],
@@ -1882,16 +1882,23 @@ def atskats_fantasy(j, m, a):
     verdikts = [vk("THE SCORE", "LAST WEEK'S CALLS", [("LAST WEEK", f"{trap}/{kopa}"), ("SEASON", f"{H}/{T}")],
                    (f"{vien} even (not counted)  ·  " if vien else "") + f"season {H / max(T, 1) * 100:.0f}%",
                    "No hiding misses", kr_rez, vizu="skaitlis", liels=f"{trap}/{kopa}")]
-    hit_ = [c_ for c_ in kartes if c_["akc"] == ZALS]
-    miss_ = [c_ for c_ in kartes if c_["akc"] == SARKANS]
-    if hit_:
-        verdikts.append(far_vk(max(hit_, key=lambda c_: c_["_pts"] - c_["_med"]), "THE BEST CALL"))
-    if miss_:
-        verdikts.append(far_vk(min(miss_, key=lambda c_: c_["_pts"] - c_["_med"]), "THE MISS"))
+    starp = lambda c_: c_["_pts"] - c_["_med"]
+    hit_ = sorted([c_ for c_ in kartes if c_["akc"] == ZALS], key=starp, reverse=True)       # labākais pirmais
+    miss_ = sorted([c_ for c_ in kartes if c_["akc"] == SARKANS], key=starp)                  # sliktākais pirmais
+    if hit_ and miss_:
+        verdikts += [far_vk(hit_[0], "THE BEST CALL"), far_vk(miss_[0], "THE MISS")]
+    elif hit_:                                                        # visi trāpīti – 2. vieta: tuvākais "gandrīz garām"
+        verdikts.append(far_vk(hit_[0], "THE BEST CALL"))
+        if len(hit_) > 1:
+            verdikts.append(far_vk(hit_[-1], "THE CLOSEST CALL"))
+    elif miss_:                                                       # neviens netrāpīja – 2. vieta: tuvākais trāpījumam
+        verdikts.append(far_vk(miss_[0], "THE MISS"))
+        if len(miss_) > 1:
+            verdikts.append(far_vk(miss_[-1], "THE NEAR MISS"))
     return {
         "intro": {"tag": "NHL  ·  FANTASY RECAP", "rindas": [("HOW DID", BALTS), ("WE DO?", DZELTENS)],
                   "apaksa": [f"Our picks for {dat(no)} – {dat(lidz, True)}", "vs a typical player in the same pool"],
-                  "legenda": [("GREEN  =  better than typical", ZALS, MELNS), ("RED  =  worse than typical", SARKANS, BALTS)]},
+                  "legenda": [("GOOD CALL  →  we got it right", ZALS, MELNS), ("BAD CALL  →  we missed", SARKANS, BALTS)]},
         "kartes": kartes,
         "outro": {"rindas": [(f"LAST WEEK: {trap}/{kopa}", BALTS), (f"SEASON: {H}/{T} ({H / max(T, 1) * 100:.0f}%)", DZELTENS)],
                   "info": ([f"{trap} right · {kopa - trap} wrong · {vien} even (not counted)"] if vien else [f"{trap} right · {kopa - trap} wrong"])
