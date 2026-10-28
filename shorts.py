@@ -387,9 +387,16 @@ FAKTI_BEIGAS = [("WHICH ONE SURPRISED YOU MOST?", "Which one surprised you? Comm
                 ("PICK ONE. COMMENT THE NUMBER.", "Pick your favorite and drop the number in the comments."),
                 ("WHICH ONE DIDN'T YOU SEE COMING?", "Which one didn't you see coming? Comment the number."),
                 ("VOTE WITH A NUMBER.", "Vote for the best one with a number in the comments.")]
-FANTASY_CTA = ["Want the full fantasy sheet, updated every day? Message me for access and pricing.",
-               "The full fantasy sheet updates every day. Message me if you want access.",
-               "Want every player, every day, in one sheet? Message me for access and pricing."]
+# Google Sheets piedāvājums fantasy / streameru video. YouTube NAV privāto ziņu, un saites Shorts aprakstā / komentāros
+# nav klikšķināmas – tāpēc: bez saites → "Comment SHEET"; ar saiti (Etsy) → "Link in the channel" (kanāla header saite).
+SHEET_SAITE = ""                  # piem. "https://www.etsy.com/listing/..." – kad būs Etsy sludinājums
+FANTASY_CTA = ["Want the full fantasy sheet, updated every day? Comment SHEET below.",
+               "The full fantasy sheet updates every day. Comment SHEET if you want it.",
+               "Want every player, every day, in one sheet? Comment SHEET below."]
+FANTASY_CTA_SAITE = ["Want the full fantasy sheet, updated every day? The link is in the channel.",
+                     "The full fantasy sheet updates every day. Find the link in the channel.",
+                     "Want every player, every day, in one sheet? The link is in the channel."]
+YT_NOKL_TAGI = {"#nhl", "#hockey", "#fantasyhockey", "#nhlstats"}   # jau ir YouTube Upload defaults – .txt tos nedublē
 # āķa balss (ShortsB): {G} {vv} {x} – spēlētāji; {gs} – vārtsargi; {w} {l} – komandas
 AKIS_SP = ["{G} {vv}. He should have {x}.", "{G} {vv}, but only {x} expected.", "{G} {vv}. The chances say {x}."]
 AKIS_SP_NE = ["{G} {vv}. He should have {x}.", "{G} {vv} on {x} expected.", "The chances say {x}. He has {G}."]
@@ -3553,18 +3560,24 @@ def yt_virsraksts(v):
     return v + "…"
 
 
-def cta_apraksts(kontakts):
-    kam = f"DM {kontakts}" if kontakts else "Send me a message"
-    return ("\n📊 WANT THE FULL FANTASY SHEET?\n"
+def _cta_kur(kontakts=""):
+    if SHEET_SAITE:
+        return f"Get it here: {SHEET_SAITE}  (or tap the link in the channel)"
+    if kontakts and "@" in kontakts and "." in kontakts.split("@")[-1]:
+        return f"Comment \"SHEET\" below or email {kontakts} for access & pricing."
+    return "Comment \"SHEET\" below and we'll reply with access & pricing."
+
+
+def cta_apraksts(kontakts=""):
+    return ("📊 WANT THE FULL FANTASY SHEET?\n"
             "Google Sheets planner with every skater's form, shots, xG, ice time, power-play points, next week's schedule "
-            "and ESPN rostered % – updated automatically every day.\n"
-            f"{kam} or comment \"SHEET\" below for access & pricing.\n\n")
+            "and ESPN rostered % – updated automatically every day.\n" + _cta_kur(kontakts) + "\n")
 
 
-def cta_komentars(kontakts):
-    kam = f"DM {kontakts}" if kontakts else "send me a message"
-    return (f"📊 Want the full fantasy hockey sheet (Google Sheets, updated daily)? Comment \"SHEET\" or {kam} "
-            "for access & pricing!")
+def cta_komentars(kontakts=""):
+    if SHEET_SAITE:
+        return f"📊 Want the full fantasy hockey sheet (Google Sheets, updated daily)? The link is in the channel 👆"
+    return "📊 Want the full fantasy hockey sheet (Google Sheets, updated daily)? Comment \"SHEET\" and we'll reply!"
 
 
 def gaidosie_atskati(mape):
@@ -3684,12 +3697,12 @@ def main():
     if s is None:
         print("Nepietiek datu (samazini --min-metieni, palielini --dienas vai pagaidi vēl dažas spēles).")
         return 1
-    kontakts = a.kontakts or a.kanals
+    kontakts = a.kontakts
     ar_cta = not a.bez_cta and (a.veids in ("fantasy", "streameri") and not a.atskats or a.cta)
     if ar_cta:
-        kam = f"DM {kontakts}" if kontakts else "Message me"
-        s["outro"]["cta"] = ("WANT THE FULL FANTASY SHEET?", "Google Sheets · updated daily", f"{kam} for access & pricing")
-        s["runa"][-1] += " " + reta_frase(FANTASY_CTA, veids=a.veids, n=2)
+        s["outro"]["cta"] = ("WANT THE FULL FANTASY SHEET?", "Google Sheets · updated daily",
+                             "Link in the channel" if SHEET_SAITE else "Comment \"SHEET\" below")
+        s["runa"][-1] += " " + reta_frase(FANTASY_CTA_SAITE if SHEET_SAITE else FANTASY_CTA, veids=a.veids, n=2)
 
     # katrai ģenerācijai sava mape: video/<šodienas datums>_<veids>/ (ja jau ir – _2, _3 ...)
     tagad = pd.Timestamp.now()
@@ -3713,13 +3726,20 @@ def main():
     if s.get("csv") is not None:
         s["csv"].to_csv(os.path.join(mape, "fantasy_kandidati.csv"), index=False, encoding="utf-8-sig")
     with open(izv[:-4] + ".txt", "w", encoding="utf-8") as f:
-        f.write(f"VIRSRAKSTS:\n{yt_virsraksts(s['virsraksts'])}\n\nAPRAKSTS:\n{s['apraksts']}\nData: {s['periods']}\n"
+        tagi = " ".join(t_ for t_ in s.get("tagi", "#NHL #hockey #NHLstats #xG #fantasyhockey #Shorts").split()
+                        if t_.lower() not in YT_NOKL_TAGI | {"#shorts"})
+        f.write("===== VIRSRAKSTS → YouTube \"Title\" =====\n"
+                f"{yt_virsraksts(s['virsraksts'])}\n\n"
+                "===== APRAKSTS → \"Description\" (kopē visu bloku; kanāla teksts un #NHL #hockey #fantasyhockey #nhlstats "
+                "pievienojas paši no Upload defaults) =====\n"
+                f"{s['apraksts']}\nData: {s['periods']}\n"
                 + "\n".join(s["saraksts"])
                 + "\n" + s.get("piezime", "xG from our own model (unblocked shots, empty-net goals excluded).") + "\n"
-                + (cta_apraksts(kontakts) if ar_cta else "")
-                + s.get("tagi", "#NHL #hockey #NHLstats #xG #fantasyhockey #Shorts") + "\n\n"
-                + (f"PIESPRAUŽAMAIS KOMENTĀRS:\n{cta_komentars(kontakts)}\n\n" if ar_cta else "")
-                + "RUNAS TEKSTS (pa ainām):\n"
+                + ("\n" + cta_apraksts(kontakts) if ar_cta else "")
+                + (f"\n{tagi}\n" if tagi else "") + "\n"
+                + ("===== KOMENTĀRS → pēc publicēšanas ieraksti zem video → ⋮ → Pin (NAV aprakstā) =====\n"
+                   f"{cta_komentars(kontakts)}\n\n" if ar_cta else "")
+                + "===== RUNAS TEKSTS – tikai tev, nekopē =====\n"
                 + "\n".join(f"{i}. {t}" for i, t in enumerate(s["runa"])) + "\n")
     json_fails = None
     if "momentuzn" in s:
