@@ -1444,8 +1444,14 @@ def aina_intro(t, s):
         tag = str(s.get("tag", "")).upper()
         if "FOLLOW" in tag or "RECAP" in tag:
             txt = "DID WE GET IT RIGHT?"
+        elif "STREAMER" in tag:                                     # secība #1 → #3, tāpēc ne "WHO'S #1?"
+            if "streameri" not in _UZL:                                # izvēlas vienreiz video
+                _UZL["streameri"] = S.reta_frase(S.UZLIME_STREAMERI)
+            txt = _UZL["streameri"]
         elif "FANTASY" in tag:
-            txt = "WHO'S #1? WATCH TILL THE END"
+            if "fantasy" not in _UZL:
+                _UZL["fantasy"] = S.reta_frase(S.UZLIME_FANTASY)
+            txt = _UZL["fantasy"]
         elif "GOALIE" in tag:
             txt = "HOT HAND OR LUCKY?"
         else:
