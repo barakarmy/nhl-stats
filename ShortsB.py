@@ -58,7 +58,9 @@ VIOLETS = (139, 92, 246)
 MAPE_FONS = os.path.join(S.BASE, "shorts_fons")
 MAPE_MUZIKA = os.path.join(S.BASE, "shorts_muzika")
 MAPE_SFX = os.path.join(S.BASE, "shorts_sfx")
-MUZIKAS_SKALUMS = 0.10          # fona mūzika (0–1; bija 0.15); kamēr runā balss, automātiski vēl klusāk
+MUZIKAS_SKALUMS = 0.10          # rezerve: ja skaļumu neizdodas izmērīt (0–1)
+MUZIKA_ZEM_BALSS_DB = 24        # fona mūzika par tik dB (LUFS) klusāka nekā balss (izvēlēts pēc parauga; lielāks = klusāka);
+                                # kamēr runā balss – automātiski vēl klusāka. Strādā vienādi jebkurai dziesmai.
 SFX_SKALUMS = 0.55              # skaņu efekti
 FONA_TUMSUMS = 0.55             # cik stipri fona video aptumšots (0 = neaptumšots, 1 = melns)
 FONA_MELNBALTS = True           # fona video melnbalts (False = krāsains)
@@ -662,6 +664,36 @@ def izveleties_muziku():
     return os.path.join(MAPE_MUZIKA, izv)
 
 
+def _lufs(faili, max_s=None):
+    """Integrētais skaļums (LUFS) vienam vai vairākiem failiem pēc kārtas; None, ja neizdodas."""
+    import json as _json
+    try:
+        ievades = []
+        for f_ in faili:
+            ievades += (["-t", f"{max_s:.0f}"] if max_s else []) + ["-i", f_]
+        n = len(faili)
+        filtrs = ("".join(f"[{i}:a]" for i in range(n)) + f"concat=n={n}:v=0:a=1," if n > 1 else "") \
+            + "loudnorm=print_format=json"
+        r = subprocess.run(["ffmpeg", "-hide_banner", *ievades, "-filter_complex" if n > 1 else "-af", filtrs,
+                            "-f", "null", "-"], capture_output=True, text=True)
+        v = float(_json.loads(r.stderr[r.stderr.rindex("{"):r.stderr.rindex("}") + 1])["input_i"])
+        return v if v > -70 else None
+    except Exception:                                                 # noqa: BLE001
+        return None
+
+
+def muzikas_skalums(muz, balss):
+    """Mūzikas pastiprinājums (dB), lai tā būtu MUZIKA_ZEM_BALSS_DB zem balss – neatkarīgi no tā, cik skaļi
+    dziesma ierakstīta. Rezerve – MUZIKAS_SKALUMS."""
+    import math
+    l_m = _lufs([muz], 90)
+    l_b = _lufs([f for f, _ in balss]) if balss else -20.0
+    if l_m is None or l_b is None:
+        return 20 * math.log10(MUZIKAS_SKALUMS), None
+    g = max(-45.0, min(0.0, (l_b - MUZIKA_ZEM_BALSS_DB) - l_m))
+    return g, f"mūzika {l_m:.0f} LUFS → {l_m + g:.0f} (balss {l_b:.0f}, {MUZIKA_ZEM_BALSS_DB} dB zem)"
+
+
 def miksets(video_tmp, izvade, balss, ainas, kopa, tmp):
     """Balss + skaņu efekti + fona mūzika (mūzika automātiski klusāka, kamēr runā balss)."""
     sfx = sfx_celins(ainas, kopa, os.path.join(tmp, "sfx.wav")) if OPC["sfx"] else None
@@ -689,8 +721,9 @@ def miksets(video_tmp, izvade, balss, ainas, kopa, tmp):
     if muz:
         ievades += ["-stream_loop", "-1", "-i", muz]
         beigas = max(0.0, kopa - 1.8)
+        g_muz, muz_info = muzikas_skalums(muz, balss)
         filtri.append(f"[{idx}:a]atrim=0:{kopa:.2f},asetpts=PTS-STARTPTS,aformat=channel_layouts=stereo,"
-                      f"volume={MUZIKAS_SKALUMS},afade=t=in:d=0.8,afade=t=out:st={beigas:.2f}:d=1.8[muz0]")
+                      f"volume={g_muz:.1f}dB,afade=t=in:d=0.8,afade=t=out:st={beigas:.2f}:d=1.8[muz0]")
         if balss:
             filtri.append("[balss]asplit=2[balss1][balss2]")
             filtri.append("[muz0][balss2]sidechaincompress=threshold=0.02:ratio=5:attack=15:release=350[muz]")
@@ -707,6 +740,8 @@ def miksets(video_tmp, izvade, balss, ainas, kopa, tmp):
     dalas = (["balss"] if balss else []) + (["efekti"] if sfx else []) + ([f"mūzika: {os.path.basename(muz)}"] if muz else [])
     lufs = skalums_normalizet(izvade, tmp)
     print("AUDIO: " + " + ".join(dalas) + (f"  ·  skaļums {lufs}" if lufs else ""))
+    if muz and muz_info:
+        print("       " + muz_info)
 
 
 def skalums_normalizet(izvade, tmp, mērķis=-14.0):
