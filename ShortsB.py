@@ -59,7 +59,7 @@ MAPE_FONS = os.path.join(S.BASE, "shorts_fons")
 MAPE_MUZIKA = os.path.join(S.BASE, "shorts_muzika")
 MAPE_SFX = os.path.join(S.BASE, "shorts_sfx")
 MUZIKAS_SKALUMS = 0.10          # rezerve: ja skaļumu neizdodas izmērīt (0–1)
-MUZIKA_ZEM_BALSS_DB = 20        # fona mūzika par tik dB (LUFS) klusāka nekā balss (izvēlēts pēc parauga; lielāks = klusāka);
+MUZIKA_ZEM_BALSS_DB = 20        # fona mūzika par tik dB (LUFS) klusāka nekā balss (lietotāja izvēle 28.10.; lielāks = klusāka);
                                 # kamēr runā balss – automātiski vēl klusāka. Strādā vienādi jebkurai dziesmai.
 SFX_SKALUMS = 0.55              # skaņu efekti
 FONA_TUMSUMS = 0.55             # cik stipri fona video aptumšots (0 = neaptumšots, 1 = melns)
@@ -391,12 +391,15 @@ def veida_atslegas():
         a_ = [f"atskats_{veids}"] if veids else []
         if veids in XG_VEIDI and veids != "speletaji":
             a_.append("atskats_speletaji")
-        return a_ + ["atskats", "visi"]
+        grupa = MUZIKAS_GRUPA.get(veids)                              # tad – parastā grupa (xg_ / fantasy_)
+        return a_ + ["atskats"] + ([grupa] if grupa else []) + ["visi"]
     veids = _arg("--veids", "speletaji")
-    if veids in XG_VEIDI and veids != "speletaji":                  # komandas / vartsargi → kā spēlētājiem
-        return [veids, "speletaji", "visi"]
+    if veids in XG_VEIDI:                                             # komandas / vartsargi → kā spēlētājiem, tad xg_
+        return ([veids] if veids != "speletaji" else []) + ["speletaji", "xg", "visi"]
     if veids == "streameri":                                          # streameri → tie paši faili kā fantasy
         return [veids, "fantasy", "visi"]
+    if veids == "fakts":                                              # fakti_ (kā mūzikai) vai vecais fakts_
+        return ["fakti", "fakts", "visi"]
     return [veids, "visi"]
 
 
@@ -437,7 +440,11 @@ def izveleties_mediju(mape, paplasinajumi, tips):
 def izveleties_fonu():
     if not OPC["fons"]:
         return None
-    return _izvelets("fons", MAPE_FONS) or izveleties_mediju(MAPE_FONS, VIDEO_PAPL, "fons")
+    f_ = _izvelets("fons", MAPE_FONS) or izveleties_mediju(MAPE_FONS, VIDEO_PAPL, "fons")
+    if not f_:
+        print(f"FONS: nav neviena fona video šim veidam (shorts_fons\\ meklēju: "
+              + ", ".join(x + "_*" for x in veida_atslegas()) + ") – fons būs tumšs")
+    return f_
 
 
 # ---------------------------------------------------------------- audio: skaņu efekti un mūzika
