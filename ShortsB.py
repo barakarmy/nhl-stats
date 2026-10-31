@@ -59,7 +59,7 @@ MAPE_FONS = os.path.join(S.BASE, "shorts_fons")
 MAPE_MUZIKA = os.path.join(S.BASE, "shorts_muzika")
 MAPE_SFX = os.path.join(S.BASE, "shorts_sfx")
 MUZIKAS_SKALUMS = 0.10          # rezerve: ja skaļumu neizdodas izmērīt (0–1)
-MUZIKA_ZEM_BALSS_DB = 20        # fona mūzika par tik dB (LUFS) klusāka nekā balss (lietotāja izvēle 28.10.; lielāks = klusāka);
+MUZIKA_ZEM_BALSS_DB = 18        # fona mūzika par tik dB (LUFS) klusāka nekā balss (lietotāja izvēle 28.10.; lielāks = klusāka);
                                 # kamēr runā balss – automātiski vēl klusāka. Strādā vienādi jebkurai dziesmai.
 SFX_SKALUMS = 0.55              # skaņu efekti
 FONA_TUMSUMS = 0.55             # cik stipri fona video aptumšots (0 = neaptumšots, 1 = melns)
