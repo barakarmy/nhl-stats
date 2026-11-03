@@ -2645,6 +2645,49 @@ def _nv_gaisma(dn, box, t, atr=410, kr=(255, 225, 225), garums=16):
         dn.ellipse([px - rr, py - rr, px + rr, py + rr], fill=kr + (int(255 * (1 - j / garums)),))
 
 
+def _nv_perim_garums(box, r=36, ins=2.5):
+    x0, y0, x1, y1 = box[0] + ins, box[1] + ins, box[2] - ins, box[3] - ins
+    r = max(1.0, min(r - ins, (x1 - x0) / 2, (y1 - y0) / 2))
+    return 2 * (x1 - x0 - 2 * r) + 2 * (y1 - y0 - 2 * r) + 2 * math.pi * r
+
+
+def _nv_gaisas_kr(kr):
+    """Komandas krāsa gaismiņai: tumšas (melna, tumši zila) → gaiši pelēka, citas – mazliet gaišākas."""
+    kr = tuple(kr[:3])
+    if 0.299 * kr[0] + 0.587 * kr[1] + 0.114 * kr[2] < 70:
+        return (230, 232, 240)
+    return tuple(int(x + (255 - x) * 0.25) for x in kr)
+
+
+def _nv_komeeta(dn, box, s_, kr, virz, al=1.0, garums=16):
+    """Viena gaismiņa ar asti (virz = +1 pulksteņrādītāja virzienā, −1 pretēji)."""
+    px, py = _nv_perim(*box, s_)
+    for rr, a_ in ((34, 25), (24, 45), (16, 70)):
+        dn.ellipse([px - rr, py - rr, px + rr, py + rr], fill=kr + (int(a_ * al),))
+    for j in range(garums):
+        qx, qy = _nv_perim(*box, s_ - virz * j * 9)
+        rr = 9 - j * 0.45
+        dn.ellipse([qx - rr, qy - rr, qx + rr, qy + rr], fill=kr + (int(255 * (1 - j / garums) * al),))
+    dn.ellipse([px - 5, py - 5, px + 5, py + 5], fill=(255, 255, 255, int(235 * al)))
+
+
+def _nv_divas_gaismas(dn, box, u, c, prim, sek):
+    """Divas gaismiņas komandas krāsās skrien pa rāmi pretējos virzienos visu kartītes laiku un satiekas nejaušās
+    vietās (bez papildu efektiem – tikai pabrauc viena otrai garām). Katrai kartītei cits ātrums un vieta (sēkla –
+    spēlētājs + datums), bet viena tikšanās vienmēr ir tieši zīmoga brīdī (vieta – nejauša)."""
+    if "_gs" not in c:
+        import zlib
+        rnd = random.Random(zlib.crc32(f"{c.get('v1', '')} {c.get('v2', '')} {c.get('_datums', '')}".encode()))
+        va, vb = 1 / rnd.uniform(6.0, 8.5), 1 / rnd.uniform(6.0, 8.5)   # apļi sekundē (viens aplis 6–8,5 s)
+        c["_gs"] = (rnd.random(), va, vb)
+    m, va, vb = c["_gs"]
+    tz = _nv_zimoga_laiks(c) + 0.24                                     # zīmogs "nolaižas"
+    P = _nv_perim_garums(box)
+    al = min(1.0, (u - 0.9) / 0.3)
+    _nv_komeeta(dn, box, (m + va * (u - tz)) * P, _nv_gaisas_kr(prim), 1, al)
+    _nv_komeeta(dn, box, (m - vb * (u - tz)) * P, _nv_gaisas_kr(sek), -1, al)   # satiekoties – vienkārši pabrauc garām
+
+
 _NV_DAL = [(random.Random(i).uniform(60, 1020), random.Random(i + 99).uniform(0, 1), random.Random(i + 7).uniform(0.6, 1.4),
             random.Random(i + 3).choice([S.DZELTENS, S.ZILS, (255, 255, 255)])) for i in range(40)]
 
@@ -3104,7 +3147,7 @@ def aina_fantasy_jauna(t, c):
         d.rounded_rectangle(box, radius=36, fill=(10, 14, 32, int(240 * kw)))
         d.rounded_rectangle(box, radius=36, outline=prim + (int(230 * kw),), width=5)
         if u > 0.9:
-            _nv_gaisma(dn, box, u)
+            _nv_divas_gaismas(dn, box, u, c, prim, sek)
     X0, X1, GAP = 100, 980, 20
     CW = (X1 - X0 - GAP) / 2
 
