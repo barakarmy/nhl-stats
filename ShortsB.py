@@ -2580,6 +2580,24 @@ def _nv_timg(txt, f, fill, stroke=0, sfill=None):
     return _NV_KESA[k]
 
 
+def _nv_burts(ch, f, fill):
+    """Viens burts vārda "krišanas" animācijai – uz kopējas bāzes līnijas, lai Ä (ar punktiem), apostrofs, J u.c.
+    nebūtu nobīdīti (agrāk katrs burts tika centrēts pēc sava augstuma). → (attēls, nobīde no LIELO burtu vidus
+    līdz attēla centram)."""
+    k = ("burts", ch, f.path, f.size, fill)
+    if k not in _NV_KESA:
+        if len(_NV_KESA) > 400:
+            _NV_KESA.clear()
+        asc, desc = f.getmetrics()
+        p = 14
+        w, h = int(math.ceil(f.getlength(ch))) + 2 * p, asc + desc + 2 * p
+        im = Image.new("RGBA", (max(1, w), h), (0, 0, 0, 0))
+        ImageDraw.Draw(im).text((p, p + asc), ch, font=f, fill=fill, anchor="ls")
+        hb = f.getbbox("H", anchor="ls")
+        _NV_KESA[k] = (im, h / 2 - (p + asc + (hb[1] + hb[3]) / 2))
+    return _NV_KESA[k]
+
+
 def _nv_put(layer, im, cx, cy, sc=1.0, a=1.0, rot=0.0, anchor="c"):
     if a <= 0.01 or sc <= 0.01:
         return
@@ -2659,16 +2677,16 @@ def _nv_gaisas_kr(kr):
     return tuple(int(x + (255 - x) * 0.25) for x in kr)
 
 
-def _nv_komeeta(dn, box, s_, kr, virz, al=1.0, garums=16):
-    """Viena gaismiņa ar asti (virz = +1 pulksteņrādītāja virzienā, −1 pretēji)."""
+def _nv_komeeta(dn, box, s_, kr, virz, al=1.0, garums=22):
+    """Viena maza, maiga gaismiņa ar plānu asti (virz = +1 pulksteņrādītāja virzienā, −1 pretēji)."""
     px, py = _nv_perim(*box, s_)
-    for rr, a_ in ((34, 25), (24, 45), (16, 70)):
+    for rr, a_ in ((20, 16), (13, 32)):                                # neliels oreols
         dn.ellipse([px - rr, py - rr, px + rr, py + rr], fill=kr + (int(a_ * al),))
     for j in range(garums):
-        qx, qy = _nv_perim(*box, s_ - virz * j * 9)
-        rr = 9 - j * 0.45
-        dn.ellipse([qx - rr, qy - rr, qx + rr, qy + rr], fill=kr + (int(255 * (1 - j / garums) * al),))
-    dn.ellipse([px - 5, py - 5, px + 5, py + 5], fill=(255, 255, 255, int(235 * al)))
+        qx, qy = _nv_perim(*box, s_ - virz * j * 6)
+        rr = 5.5 - j * 4.5 / garums
+        dn.ellipse([qx - rr, qy - rr, qx + rr, qy + rr], fill=kr + (int(210 * (1 - j / garums) ** 1.5 * al),))
+    dn.ellipse([px - 3, py - 3, px + 3, py + 3], fill=(255, 255, 255, int(210 * al)))
 
 
 def _nv_divas_gaismas(dn, box, u, c, prim, sek):
@@ -2678,12 +2696,12 @@ def _nv_divas_gaismas(dn, box, u, c, prim, sek):
     if "_gs" not in c:
         import zlib
         rnd = random.Random(zlib.crc32(f"{c.get('v1', '')} {c.get('v2', '')} {c.get('_datums', '')}".encode()))
-        va, vb = 1 / rnd.uniform(6.0, 8.5), 1 / rnd.uniform(6.0, 8.5)   # apļi sekundē (viens aplis 6–8,5 s)
+        va, vb = 1 / rnd.uniform(14.0, 18.0), 1 / rnd.uniform(14.0, 18.0)   # apļi sekundē (viens aplis 14–18 s – mierīgi)
         c["_gs"] = (rnd.random(), va, vb)
     m, va, vb = c["_gs"]
     tz = _nv_zimoga_laiks(c) + 0.24                                     # zīmogs "nolaižas"
     P = _nv_perim_garums(box)
-    al = min(1.0, (u - 0.9) / 0.3)
+    al = 0.85 * min(1.0, (u - 0.9) / 0.6)
     _nv_komeeta(dn, box, (m + va * (u - tz)) * P, _nv_gaisas_kr(prim), 1, al)
     _nv_komeeta(dn, box, (m - vb * (u - tz)) * P, _nv_gaisas_kr(sek), -1, al)   # satiekoties – vienkārši pabrauc garām
 
@@ -3108,9 +3126,9 @@ def aina_fantasy_jauna(t, c):
     x = 96
     for i, ch in enumerate(vards):
         kk = (u - 0.12 - i * 0.045) / 0.3
-        im = _nv_timg(ch, fn, WH)
+        im, dy_ = _nv_burts(ch, fn, WH)                               # visi burti uz vienas bāzes līnijas (Ä, ', J)
         if kk > 0:
-            _nv_put(L, im, x + im.width / 2, 540 - (1 - eb(min(1, kk), 2.2)) * 140, 1, min(1, kk * 3))
+            _nv_put(L, im, x + fn.getlength(ch) / 2, 540 + dy_ - (1 - eb(min(1, kk), 2.2)) * 140, 1, min(1, kk * 3))
         x += fn.getlength(ch)
     kp = eo((u - 0.3) / 0.45)
     if kp > 0:
