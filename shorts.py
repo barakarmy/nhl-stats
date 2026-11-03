@@ -631,6 +631,8 @@ def veids_speletaji(m, a):
                 vk("THE MODEL", "OWN xG MODEL", [("SHOTS", f"{len(mm):,}".replace(",", " ")), ("LEAGUE SH%", f"{lg_sh:.1f}%")],
                    periods_txt(no, lidz), atskata_teksts(False), ZILS, vizu="logo")]
     runa.append(f"{beigu_frase('speletaji')} {atskata_teksts()} Follow for weekly NHL stats.")
+    for c_, f_ in zip(kartes, fr):                                    # zīmogs krīt, kad balss sāk šo frāzi
+        c_["_zim_frase"] = f_
     rinda = lambda r: {"vards": r["vards"], "team": r["team"], "G": sk(r["G"]), "xG": sk(r["xG"]), "sog": sk(r["sog"]), "sp": sk(r["sp"])}  # noqa: E731
     return {
         "xg_karte": xg_karte,
@@ -706,6 +708,8 @@ def veids_komandas(m, a):
                 vk("THE LEAGUE", "PDO AVERAGE ≈ 100", [("SH%", f"{lg_sh:.1f}%"), ("SV%", f"{lg_sv:.1f}%")],
                    periods_txt(no, lidz), atskata_teksts(False), ZILS, vizu="logo")]
     runa.append(f"{beigu_frase('komandas')} {atskata_teksts()} Follow for weekly NHL stats.")
+    for c_, f_ in zip(kartes, fr):                                    # zīmogs krīt, kad balss sāk šo frāzi
+        c_["_zim_frase"] = f_
     rinda = lambda r: {k_: sk(r[k_]) for k_ in ("PDO", "sh", "sv", "GD", "xGD", "GP")}   # noqa: E731
     return {
         "xg_karte": xg_karte,
@@ -783,6 +787,8 @@ def veids_vartsargi(m, a):
                 vk("THE LEAGUE", "GOALIES THIS PERIOD", [("SV%", svf(lg_sv_)), ("SHOTS", f"{int(g['SA'].sum()):,}".replace(",", " "))],
                    periods_txt(no, lidz), atskata_teksts(False), ZILS, vizu="logo")]
     runa.append(f"{beigu_frase('vartsargi')} {atskata_teksts()} Follow for weekly NHL stats.")
+    for c_, f_ in zip(kartes, fr):                                    # zīmogs krīt, kad balss sāk šo frāzi
+        c_["_zim_frase"] = f_
     rinda = lambda r: {"vards": r["vards"], "kom": r["kom"], **{k_: sk(r[k_]) for k_ in ("GSAx", "GSAx_sp", "GA", "xGA", "SA", "sv", "GP")}}  # noqa: E731
     return {
         "xg_karte": xg_karte,
@@ -1255,7 +1261,7 @@ def atskats(fails, m, a):
                                "apaksa": f"{spelu(sp2)}  ·  {dat(no2)} – {dat(lidz2)}"})
                 tail = F("maz") if ok is None else F(("sp_laim" if lucky else "sp_nelaim") + ("_ok" if ok else "_ne"),
                                                      {"COOLED OFF": ["atdzisa"], "GOALS CAME": ["varti"]}.get(verd, []))
-                kartes[-1]["_frase"] = tail
+                kartes[-1]["_frase"] = kartes[-1]["_zim_frase"] = tail
                 runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was unlucky'}. Since then: {G2} goal{'' if G2 == 1 else 's'} on {xgv(xG2)} expected. {tail}")
                 saraksts.append(f"{r['vards']} ({r['team']}): {int(r['G'])} G / {r['xG']:.1f} xG → {G2} G / {xG2:.1f} xG  {verd}")
                 if ok is not None:
@@ -1294,7 +1300,7 @@ def atskats(fails, m, a):
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{gd_txt}{dat(no2)} – {dat(lidz2)}"})
                 tail = F("kom_maz") if ok is None else F(("kom_laim" if lucky else "kom_nelaim") + ("_ok" if ok else "_ne"))
-                kartes[-1]["_frase"] = tail
+                kartes[-1]["_frase"] = kartes[-1]["_zim_frase"] = tail
                 p2_txt = "n/a" if not np.isfinite(p2) else f"{p2:.1f}"
                 runa_k.append(f"The {nos}: PDO was {r['PDO']:.1f}. Since then: {p2_txt}. {tail}")
                 saraksts.append(f"{pils} {nos}: PDO {r['PDO']:.1f} → {p2_txt}  {verd}")
@@ -1332,7 +1338,7 @@ def atskats(fails, m, a):
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{sv_txt}{spelu(gp2)}  ·  {dat(no2)} – {dat(lidz2)}"})
                 tail = F("maz") if ok is None else F(("va_labs" if labs else "va_slikts") + ("_ok" if ok else "_ne"))
-                kartes[-1]["_frase"] = tail
+                kartes[-1]["_frase"] = kartes[-1]["_zim_frase"] = tail
                 r2_txt = "n/a" if not np.isfinite(r2) else f"{r2:+.2f}"
                 r2_runa = r2_txt.replace("+", "plus ").replace("-", "minus ")
                 stav = "was red hot" if labs else "was ice cold"
@@ -2017,6 +2023,7 @@ def veids_fantasy(m, a):
         runa.append(f"{r['vards']}, {kom_nos(r['team'])}. {int(r['P'])} points in his last {int(r['GP'])} games, "
                     f"{r['SOG_gp']:.1f} shots a game, and {int(r['sp_nak'])} game{'' if r['sp_nak'] == 1 else 's'} "
                     f"{'left this week' if stream else 'next week'}.{grafika_runa(r)}{ros} " + fr_add[-1])
+        kartes[-1]["_zim_frase"] = fr_add[-1]                         # zīmogs krīt, kad balss sāk šo frāzi
     for nr, (pid, r) in enumerate(drop.iterrows(), 1):
         veids = drop_veids[pid]
         kartes.append(karte(nr, r, veids))
@@ -2025,6 +2032,7 @@ def veids_fantasy(m, a):
         ie_ = iemesls_drop(r)
         runa.append(f"{sakums}{r['vards']}, {kom_nos(r['team'])}. Rostered in {r['rostered']:.0f} percent of leagues, but "
                     f"{ie_[0].lower() + ie_[1:]}.{'' if 'tough' in ie_ else grafika_runa(r)} " + fr_drop[-1])
+        kartes[-1]["_zim_frase"] = fr_drop[-1]
 
     def fa_vk(pid, r, virs, frase, kr):
         ros_ = f"rostered {r['rostered']:.0f}%  ·  " if np.isfinite(r["rostered"]) else ""
@@ -2398,6 +2406,7 @@ def atskats_fantasy(j, m, a):
                      "GOOD CALL": F("fa_good"), "BAD CALL": F("fa_bad"), "EVEN": "Even."}[verd]
             kartes[-1]["_frase"] = frase if verd != "DIDN'T PLAY" else "He didn't play."
             kartes[-1]["_pts"], kartes[-1]["_med"] = P, med
+            kartes[-1]["_zim_frase"] = frase
             kartes[-1]["_a"] = {"pid": pid, "grupa": grupa, "G": G, "A": A, "P": P, "SOG": SOG, "PPP": PPP, "GP": GP,
                                 "med": med, "verd": verd, "rost0": r.get("rostered"), "poz": r.get("poz", ""),
                                 "spel": [(pd.Timestamp(g_.datums).weekday(), info.get((g_.game_id, g_.team), ("vs", "?")), int(g_.points),
@@ -3211,12 +3220,14 @@ def f_speles(D):
                 "skaitlis": f"{u_met} vs {z_met}", "skaitlis_apaksa": f"shots, but won {rez}",
                 "saraksts_virs": "SHOTS & GOALS BY PERIOD", "rindas": rindas,
                 "kopsavilkums": f"FINAL: {uzv} {rez} {zaud}",
-                "k_skaitlis": f"−{starp}", "konteksts": [f"BIGGER SHOT GAP THAN {pct * 100:.0f}% OF WINS THIS SEASON",
+                "k_skaitlis": f"−{starp}", "konteksts": ["THE BIGGEST SHOT GAP IN ANY WIN THIS SEASON" if pct >= 0.995 else
+                                                          f"BIGGER SHOT GAP THAN {pct * 100:.0f}% OF WINS THIS SEASON",
                                                           f"Wins outshot by {starp}+ this season: {n_met}"],
                 "nakamais": None,
                 "runa": [f"The {kom_nos(uzv)} were outshot {z_met} to {u_met}, and still beat the {kom_nos(zaud)}.",
                          f"Final score: {i.get('gf')} to {i.get('ga')}.",
-                         f"That's a bigger shot gap than {pct * 100:.0f} percent of wins this season.", ""],
+                         ("The biggest shot gap in any win this season." if pct >= 0.995 else
+                          f"That's a bigger shot gap than {pct * 100:.0f} percent of wins this season."), ""],
                 "yt": f"Outshot {z_met}–{u_met}… and WON 🤯",
             })
     return out
