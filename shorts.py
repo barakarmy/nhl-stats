@@ -484,12 +484,12 @@ FRAZES = {
     "maz": _ATS_MAZ,
     "kom_maz": _ATS_MAZ,
     "sp_laim_ok": _ATS_OK + _fr(("Back to earth.", "cheeky"), ("The regression showed up.", "analytical", "=atdzisa"),
-                                ("The heater cooled off.", "cheeky", "=atdzisa"), ("Right back to normal.", "analytical"),
-                                ("Exactly what the chances said.", "analytical")),
+                                ("The heater cooled off.", "cheeky", "=atdzisa"), ("Right back to normal.", "analytical", "=normal"),
+                                ("Exactly what the chances said.", "analytical", "=normal")),
     "sp_laim_ne": _ATS_NE + _fr(("Still hot.", "dramatic"), ("The heater continues.", "cheeky"),
                                 ("Regression can wait.", "cheeky")),
     "sp_nelaim_ok": _ATS_OK + _fr(("The goals came.", "dramatic", "=varti"), ("The dam finally broke.", "dramatic", "=varti"),
-                                  ("The finishing caught up.", "analytical"), ("Right back to normal.", "analytical"),
+                                  ("The finishing caught up.", "analytical"), ("Right back to normal.", "analytical", "=normal"),
                                   ("Back on track.", "cheeky")),
     "sp_nelaim_ne": _ATS_NE + _fr(("Still snakebitten.", "cheeky"), ("The chances are there.", "analytical"),
                                   ("No payoff yet.", "analytical")),
@@ -1129,58 +1129,76 @@ def xg_viz_komandas(kartes, ids, mm, t, lg_sh, lg_sv, n_laim, bil):
 
 
 def xg_atskats_viz(kartes, veids, j, pec, t, bil, lidz0, no2, lidz2):
-    """xG atskata kartītes jaunajā izskatā: kas notika pēc mūsu video (since) pret to, kas bija (before)."""
+    """xG atskata kartītes jaunajā izskatā: kas notika pēc mūsu video. Katrs skaitlis – vienreiz; pēdējā rinda – "uz spēli"
+    BEFORE → SINCE ar pusceļa līniju (HIT, ja SINCE ir aiz tās – tuvāk normai par pusi)."""
     rindas = [(g_, k_, r_) for g_ in ("laim", "nelaim") for k_, r_ in j["momentuzn"][g_].items()]
     svf = lambda v: f".{round(v * 10):03d}"                             # noqa: E731
+    pp = lambda v, n=2: minus(f"{v:+.{n}f}")                           # noqa: E731
     for c, (grupa, key, r) in zip(kartes, rindas):
         if veids == "speletaji":
             sub = pec[pec["metejs"] == float(key)]
-            pg = sub.groupby("game_id").agg(datums=("datums", "first"), G=("varti", "sum"), xG=("xg", "sum")).sort_values("datums")
+            pg = sub.groupby("game_id").agg(datums=("datums", "first"), G=("varti", "sum"), xG=("xg", "sum"),
+                                            sog=("uz_v", "sum")).sort_values("datums")
             G2, xG2, sog2, sp2 = int(sub["varti"].sum()), float(sub["xg"].sum()), int(sub["uz_v"].sum()), int(sub["game_id"].nunique())
-            d1, d2 = float(r["G"]) - float(r["xG"]), G2 - xG2
+            sp1 = max(1, int(r.get("sp") or 1))
+            d1pg, d2 = (float(r["G"]) - float(r["xG"])) / sp1, G2 - xG2
+            d2pg = d2 / max(1, sp2)
+            sh2 = G2 / sog2 * 100 if sog2 else 0.0
+            sh1 = float(r["G"]) / float(r["sog"]) * 100 if float(r.get("sog") or 0) else 0.0
+            lg = pec["varti"].sum() / max(1, pec["uz_v"].sum()) * 100
             last = pg.tail(7)
             spec = [
                 ("pair", {"tips": "skaitlis", "lab": "GOALS SINCE", "val": str(G2), "sub": f"{sp2} GP", "bars": [int(x) for x in last["G"]], "bars_lab": "BY GAME"},
-                         {"tips": "skaitlis", "lab": "xG SINCE", "val": f"{xG2:.1f}", "sub": f"{sog2} shots on goal"}),
-                ("pair", {"tips": "skaitlis", "lab": "BEFORE  ·  GOALS − xG", "val": minus(f"{d1:+.1f}"), "sub": f"{int(r['G'])} G on {float(r['xG']):.1f} xG"},
-                         {"tips": "skaitlis", "lab": "SINCE  ·  GOALS − xG", "val": minus(f"{d2:+.1f}"), "sub": f"{G2} G on {xG2:.1f} xG", "val_kr": c["akc"]}),
+                         {"tips": "skaitlis", "lab": "SHOTS ON GOAL SINCE", "val": str(sog2), "sub": f"{sog2 / max(1, sp2):.1f} per game",
+                          "bars": [int(x) for x in last["sog"]], "bars_lab": "BY GAME"}),
+                ("pair", {"tips": "ripa", "lab": "SHOT MAP SINCE", "punkti": ripas_punkti(sub, 80), "varti_kr": DZELTENS,
+                          "txt": [f"{len(sub)} shots", f"{G2} goal{'' if G2 == 1 else 's'}"]},
+                         {"tips": "skaitlis", "lab": "SHOOTING % SINCE", "val": f"{sh2:.0f}%", "sub": f"before {sh1:.0f}% · league {lg:.0f}%"}),
                 ("full", {"tips": "joslas", "lab": "SINCE OUR CALL  ·  GOALS VS EXPECTED",
                           "rind": [("GOALS", G2, f"{G2}", "prim"), ("EXPECTED", xG2, f"{xG2:.1f}", "pel")], "chip": (minus(f"{d2:+.1f}"), c["akc"])}),
                 ("full", {"tips": "speles", "lab": f"GAME BY GAME SINCE  ·  {dat(no2).upper()} – {dat(lidz2).upper()}",
                           "speles": [{"aug": _dd(x.datums), "vid": f"{int(x.G)}G", "apa": f"{x.xG:.1f} xG", "kr": ZALS if x.G > 0 else None}
                                      for x in last.itertuples(index=False)]}),
-                ("full", {"tips": "joslas", "lab": "GOALS − xG  ·  BEFORE → SINCE", "diverg": True,
-                          "rind": [("BEFORE", d1, minus(f"{d1:+.1f}"), "pel"), ("SINCE", d2, minus(f"{d2:+.1f}"), c["akc"])]})]
+                ("full", {"tips": "joslas", "lab": "GOALS − xG PER GAME  ·  LINE = HALFWAY TO NORMAL", "diverg": True, "robeza": 0.5 * d1pg,
+                          "rind": [("BEFORE", d1pg, pp(d1pg), "pel"), ("SINCE", d2pg, pp(d2pg), c["akc"])]})]
             kart = {"liels": f"{G2} G", "maz": f"{xG2:.1f} xG SINCE"}
             poz = f"{sp2} GP"
         elif veids == "vartsargi":
             sub = pec[pec["vartsargs"] == float(key)]
-            pg = sub.groupby("game_id").agg(datums=("datums", "first"), GA=("varti", "sum"), xGA=("xg", "sum")).sort_values("datums")
+            pg = sub.groupby("game_id").agg(datums=("datums", "first"), GA=("varti", "sum"), xGA=("xg", "sum"),
+                                            SA=("uz_v", "sum")).sort_values("datums")
             pg["gs"] = pg["xGA"] - pg["GA"]
             GA2, xGA2, SA2, gp2 = int(sub["varti"].sum()), float(sub["xg"].sum()), int(sub["uz_v"].sum()), int(sub["game_id"].nunique())
             sv2 = (1 - GA2 / SA2) * 100 if SA2 else 0.0
+            x_ = pec[pec["vartsargs"].notna()]
+            lg = (1 - x_["varti"].sum() / max(1, x_["uz_v"].sum())) * 100
             r1, r2 = float(r["GSAx_sp"]), ((xGA2 - GA2) / gp2 if gp2 else 0.0)
             last = pg.tail(7)
             spec = [
                 ("pair", {"tips": "skaitlis", "lab": "ALLOWED SINCE", "val": str(GA2), "sub": f"{gp2} GP", "bars": [int(x) for x in last["GA"]], "bars_lab": "BY GAME"},
-                         {"tips": "skaitlis", "lab": "SAVE % SINCE", "val": svf(sv2) if SA2 else "—", "sub": f"{SA2} shots faced"}),
-                ("pair", {"tips": "skaitlis", "lab": "BEFORE  ·  GSAx / GAME", "val": minus(f"{r1:+.2f}"), "sub": f"{int(r['GP'])} GP"},
-                         {"tips": "skaitlis", "lab": "SINCE  ·  GSAx / GAME", "val": minus(f"{r2:+.2f}"), "sub": f"{gp2} GP", "val_kr": c["akc"]}),
+                         {"tips": "skaitlis", "lab": "SHOTS FACED SINCE", "val": str(SA2), "sub": f"{SA2 / max(1, gp2):.0f} per game",
+                          "bars": [int(x) for x in last["SA"]], "bars_lab": "BY GAME"}),
+                ("pair", {"tips": "ripa", "lab": "GOALS AGAINST SINCE", "punkti": ripas_punkti(sub, 80), "varti_kr": SARKANS,
+                          "txt": [f"{len(sub)} shots", f"{GA2} goal{'' if GA2 == 1 else 's'}"]},
+                         {"tips": "skaitlis", "lab": "SAVE % SINCE", "val": svf(sv2) if SA2 else "—",
+                          "sub": f"before {svf(float(r['sv']))} · league {svf(lg)}"}),
                 ("full", {"tips": "joslas", "lab": "SINCE OUR CALL  ·  ALLOWED VS EXPECTED",
                           "rind": [("ALLOWED", GA2, f"{GA2}", "prim"), ("EXPECTED", xGA2, f"{xGA2:.1f}", "pel")],
                           "chip": (minus(f"{xGA2 - GA2:+.1f}"), c["akc"])}),
                 ("full", {"tips": "speles", "lab": "GAME BY GAME SINCE  ·  SAVED ABOVE EXPECTED",
                           "speles": [{"aug": _dd(x.datums), "vid": minus(f"{x.gs:+.1f}"), "apa": f"{int(x.GA)} GA", "kr": ZALS if x.gs >= 0 else SARKANS}
                                      for x in last.itertuples(index=False)]}),
-                ("full", {"tips": "joslas", "lab": "GSAx PER GAME  ·  BEFORE → SINCE", "diverg": True,
-                          "rind": [("BEFORE", r1, minus(f"{r1:+.2f}"), "pel"), ("SINCE", r2, minus(f"{r2:+.2f}"), c["akc"])]})]
-            kart = {"liels": minus(f"{r2:+.2f}"), "maz": "GSAx / GP SINCE"}
+                ("full", {"tips": "joslas", "lab": "GSAx PER GAME  ·  LINE = HALFWAY TO NORMAL", "diverg": True, "robeza": 0.5 * r1,
+                          "rind": [("BEFORE", r1, pp(r1), "pel"), ("SINCE", r2, pp(r2), c["akc"])]})]
+            kart = {"liels": pp(r2), "maz": "GSAx / GP SINCE"}
             poz = "G"
         else:
             kom = key
             x = t.loc[kom] if kom in t.index else None
+            p1 = float(r["PDO"])
             p2 = float(x["PDO"]) if x is not None and np.isfinite(x["PDO"]) else float("nan")
             GD2, xGD2 = (float(x["GD"]), float(x["xGD"])) if x is not None else (0.0, 0.0)
+            GF2, GA2 = (int(x["GF"]), int(x["GA"])) if x is not None else (0, 0)
             w, l_, o, _ = bil.get(kom, (0, 0, 0, 0)) if bil else (0, 0, 0, 0)
             f_ = pec[pec["komanda"] == kom].groupby("game_id").agg(datums=("datums", "first"), GF=("varti", "sum"), xGF=("xg", "sum"))
             a_ = pec[pec["pretinieks"] == kom].groupby("game_id").agg(GA=("varti", "sum"), xGA=("xg", "sum"))
@@ -1188,19 +1206,23 @@ def xg_atskats_viz(kartes, veids, j, pec, t, bil, lidz0, no2, lidz2):
             pg = pg[pg["datums"] != 0].sort_values("datums")
             last = pg.tail(7)
             p2t = f"{p2:.1f}" if np.isfinite(p2) else "—"
+            lg_sh = t["GF"].sum() / max(1, t["SF"].sum()) * 100
+            lg_sv = (1 - t["GA"].sum() / max(1, t["SA"].sum())) * 100
+            sh2 = float(x["sh"]) if x is not None and np.isfinite(x["sh"]) else 0.0
+            sv2 = float(x["sv"]) if x is not None and np.isfinite(x["sv"]) else 0.0
             spec = [
-                ("pair", {"tips": "skaitlis", "lab": "PDO SINCE", "val": p2t, "sub": "league average 100", "val_kr": c["akc"],
-                          "gauge": {"frac": min(1.0, max(0.0, ((p2 if np.isfinite(p2) else 100) - 94) / 12)), "mark": 0.5, "txt": "scale 94–106"}},
-                         {"tips": "skaitlis", "lab": "RECORD SINCE", "val": f"{w}-{l_}-{o}", "sub": f"{dat(no2)} – {dat(lidz2)}"}),
-                ("pair", {"tips": "skaitlis", "lab": "BEFORE  ·  PDO", "val": f"{float(r['PDO']):.1f}", "sub": f"on {dat(lidz0)}"},
-                         {"tips": "skaitlis", "lab": "SINCE  ·  PDO", "val": p2t, "sub": f"{int(x['GP']) if x is not None else 0} GP", "val_kr": c["akc"]}),
+                ("pair", {"tips": "skaitlis", "lab": "RECORD SINCE", "val": f"{w}-{l_}-{o}", "sub": f"{dat(no2)} – {dat(lidz2)}"},
+                         {"tips": "skaitlis", "lab": "GOALS SINCE", "val": f"{GF2}–{GA2}", "sub": f"for – against  ·  {int(x['GP']) if x is not None else 0} GP"}),
+                ("pair", {"tips": "skaitlis", "lab": "SHOOTING % SINCE", "val": f"{sh2:.1f}%", "sub": f"before {float(r['sh']):.1f}% · league {lg_sh:.1f}%"},
+                         {"tips": "skaitlis", "lab": "SAVE % SINCE", "val": svf(sv2), "sub": f"before {svf(float(r['sv']))} · league {svf(lg_sv)}"}),
                 ("full", {"tips": "joslas", "lab": "SINCE OUR CALL  ·  GOAL DIFF VS EXPECTED", "diverg": True,
                           "rind": [("GOAL DIFF", GD2, minus(f"{GD2:+.0f}"), "prim"), ("EXPECTED", xGD2, minus(f"{xGD2:+.1f}"), "pel")]}),
                 ("full", {"tips": "speles", "lab": "GAME BY GAME SINCE  ·  GOAL DIFF",
                           "speles": [{"aug": _dd(y.datums), "vid": minus(f"{int(y.GF - y.GA):+d}"), "apa": minus(f"{y.xGF - y.xGA:+.1f} xGD"),
                                       "kr": ZALS if y.GF > y.GA else (SARKANS if y.GF < y.GA else None)} for y in last.itertuples(index=False)]}),
-                ("full", {"tips": "joslas", "lab": "PDO VS AVERAGE (100)  ·  BEFORE → SINCE", "diverg": True,
-                          "rind": [("BEFORE", float(r["PDO"]) - 100, f"{float(r['PDO']):.1f}", "pel"),
+                ("full", {"tips": "joslas", "lab": "PDO VS AVERAGE (100)  ·  LINE = HALFWAY TO NORMAL", "diverg": True,
+                          "robeza": 0.5 * (p1 - 100),
+                          "rind": [("BEFORE", p1 - 100, f"{p1:.1f}", "pel"),
                                    ("SINCE", (p2 - 100) if np.isfinite(p2) else 0.0, p2t, c["akc"])]})]
             kart = {"liels": p2t, "maz": "PDO SINCE"}
             poz = f"{w}-{l_}-{o}"
@@ -1244,13 +1266,18 @@ def atskats(fails, m, a):
                 G2, xG2, sp2 = (0, 0.0, 0) if x is None else (int(x["G"]), float(x["xG"]), int(x["sp"]))
                 if sp2 < 2:
                     ok, verd = None, (neitr if sp2 == 0 else "TOO FEW GAMES")
-                elif lucky:
-                    ok = (G2 - xG2) <= 0.5
-                    # vārti ≈ xG → "atgriezās normā" (nav "atdzisa"); krietni zem xG → "atdzisa"
-                    verd = ("COOLED OFF" if G2 - xG2 < -0.5 else "BACK TO NORMAL") if ok else "STILL HOT"
                 else:
-                    ok = (G2 - xG2) >= -0.5 or G2 >= 2
-                    verd = ("GOALS CAME" if G2 - xG2 > 0.5 or G2 >= 2 else "BACK TO NORMAL") if ok else "STILL WAITING"
+                    # PUSCEĻA NOTEIKUMS (kā vārtsargiem): vārti − xG UZ SPĒLI pēc video vismaz uz pusi tuvāk nullei nekā pirms
+                    d1pg = (float(r["G"]) - float(r["xG"])) / max(1, int(r.get("sp") or 1))
+                    d2, d2pg = G2 - xG2, (G2 - xG2) / sp2
+                    if lucky:
+                        ok = d2pg <= 0.5 * d1pg if d1pg > 0 else d2pg <= 0.05
+                        verd = (("COOLED OFF" if d2 < -0.5 else ("BACK TO NORMAL" if d2 <= 0.5 else "COOLING OFF"))
+                                if ok else "STILL HOT")
+                    else:
+                        ok = d2pg >= 0.5 * d1pg if d1pg < 0 else d2pg >= -0.05
+                        verd = (("GOALS CAME" if d2 > 0.5 else ("BACK TO NORMAL" if d2 >= -0.5 else "TURNING AROUND"))
+                                if ok else "STILL WAITING")
                 v = str(r["vards"]).split(" ", 1)
                 kartes.append({"nr": nr, "akc": NEITRALS if ok is None else (ZALS if ok else SARKANS),
                                "augsa": "WE SAID: COOLDOWN" if lucky else "WE SAID: DUE FOR GOALS",
@@ -1260,9 +1287,16 @@ def atskats(fails, m, a):
                                "liels": verd, "liels_izm": 120,
                                "apaksa": f"{spelu(sp2)}  ·  {dat(no2)} – {dat(lidz2)}"})
                 tail = F("maz") if ok is None else F(("sp_laim" if lucky else "sp_nelaim") + ("_ok" if ok else "_ne"),
-                                                     {"COOLED OFF": ["atdzisa"], "GOALS CAME": ["varti"]}.get(verd, []))
+                                                     {"COOLED OFF": ["atdzisa"], "GOALS CAME": ["varti"],
+                                                      "BACK TO NORMAL": ["normal"]}.get(verd, []))
                 kartes[-1]["_frase"] = kartes[-1]["_zim_frase"] = tail
-                runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was unlucky'}. Since then: {G2} goal{'' if G2 == 1 else 's'} on {xgv(xG2)} expected. {tail}")
+                pusc = ""                                             # paskaidro pusceļa noteikumu, kad kopsummas maldina
+                if ok is not None and sp2 >= 2:
+                    if verd in ("COOLING OFF", "TURNING AROUND"):
+                        pusc = " Per game, that's more than halfway back to normal."
+                    elif not ok and abs(d2pg) < abs(d1pg):
+                        pusc = " Per game, not even halfway back to normal."
+                runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was unlucky'}. Since then: {G2} goal{'' if G2 == 1 else 's'} on {xgv(xG2)} expected.{pusc} {tail}")
                 saraksts.append(f"{r['vards']} ({r['team']}): {int(r['G'])} G / {r['xG']:.1f} xG → {G2} G / {xG2:.1f} xG  {verd}")
                 if ok is not None:
                     vert_skaits += 1
@@ -1281,7 +1315,8 @@ def atskats(fails, m, a):
                     ok, verd, p2 = None, "NOT ENOUGH GAMES", np.nan
                 else:
                     p2 = float(x["PDO"])
-                    ok = p2 <= r["PDO"] - 2 if lucky else p2 >= r["PDO"] + 2
+                    # PUSCEĻA NOTEIKUMS: PDO novirze no 100 pēc video vismaz uz pusi mazāka nekā pirms (PDO jau ir "uz spēli")
+                    ok = (p2 - 100) <= 0.5 * (float(r["PDO"]) - 100) if lucky else (p2 - 100) >= 0.5 * (float(r["PDO"]) - 100)
                     verd = ("PDO DROPPED" if ok else "STILL LUCKY") if lucky else ("PDO ROSE" if ok else "STILL UNLUCKY")
                 pils, nos, kr = KOMANDAS.get(kom, ("", kom, NEITRALS))
                 w, l_, o, _ = bil.get(kom, (0, 0, 0, 0))
