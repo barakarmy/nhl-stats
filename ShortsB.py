@@ -907,6 +907,7 @@ def pievienot_aki(s, veids):
     if not s or not s.get("kartes"):
         return s
     k, r = s["kartes"], s["runa"]
+    s["_intro_runa"], s["_intro_vecais"] = r[0], dict(s.get("intro") or {})   # jaunajam izskatam (kāršu ainai)
     if veids in ("speletaji", "komandas", "vartsargi"):
         n = len(k) // 2
         laim_k, nelaim_k = k[:n], k[n:]
@@ -2525,13 +2526,13 @@ def ieslegt():
     S.renderet = renderet
     for v_ in ("speletaji", "komandas", "vartsargi", "tiesnesi"):
         orig_v = S.VEIDI[v_]
-        S.VEIDI[v_] = (lambda f_, vv: (lambda m, a: pievienot_aki(f_(m, a), vv)))(orig_v, v_)
+        S.VEIDI[v_] = (lambda f_, vv: (lambda m, a: xg_jauns(pievienot_aki(f_(m, a), vv), vv)))(orig_v, v_)
     orig_ats = S.atskats
 
     def atskats_ar_aki(fails, m, a):
         s_ = orig_ats(fails, m, a)
         if s_ and "FOLLOW-UP" in str(s_.get("intro", {}).get("tag", "")):
-            s_ = pievienot_aki(s_, "atskats")
+            s_ = xg_atskats_jauns(pievienot_aki(s_, "atskats"))
         if s_ and "RECAP" in str(s_.get("intro", {}).get("tag", "")):     # fantasy atskats – jaunais izskats (ShortsBT)
             s_ = fantasy_atskats_jauns(s_)
         return s_
@@ -2781,6 +2782,97 @@ def fantasy_aki(s):
     return s
 
 
+XG_VIRSR = {"speletaji": [("WHO'S", S.BALTS), ("RUNNING", S.BALTS), ("ON LUCK?", S.DZELTENS)],
+            "vartsargi": [("WHO'S", S.BALTS), ("STEALING", S.BALTS), ("GAMES?", S.DZELTENS)],
+            "komandas": [("WHO'S", S.BALTS), ("LIVING", S.BALTS), ("ON LUCK?", S.DZELTENS)]}
+XG_TV = {"speletaji": ("NHL · xG", "LUCK REPORT"), "vartsargi": ("NHL · GOALIES", "GSAx REPORT"), "komandas": ("NHL · TEAMS", "PDO REPORT")}
+XG_APAKSA = {"speletaji": "GOALS VS EXPECTED GOALS (xG)", "vartsargi": "GOALS SAVED ABOVE EXPECTED (GSAx)",
+             "komandas": "PDO = SHOOTING % + SAVE %  ·  AVERAGE 100"}
+
+
+def _xg_periods(s):
+    m_ = re.findall(r"([A-Z][a-z]{2}) (\d+)", str(s.get("periods", "")))
+    if len(m_) >= 2:
+        a_, b_ = m_[0], m_[-1]
+        return f"{a_[0]} {a_[1]} – {b_[1]}".upper() if a_[0] == b_[0] else f"{a_[0]} {a_[1]} – {b_[0]} {b_[1]}".upper()
+    return ""
+
+
+def xg_jauns(s, veids):
+    """xG video (spēlētāji / vārtsargi / komandas) jaunajā izskatā: āķis → kārtis → kartītes → THE FINAL VERDICT.
+    Kartītes secība – kā līdz šim (otra grupa #3 → #1, tad varoņa grupa #3 → #1)."""
+    if not s or not JAUNS_FANTASY or veids not in XG_VIRSR or not s.get("kartes"):
+        return s
+    try:
+        kar = s["kartes"]
+        if not all(c.get("viz") and c["viz"].get("spec") for c in kar) or len(s["runa"]) != len(kar) + 2:
+            return s
+        hero = kar[-1]
+        per = _xg_periods(s)
+        kr_rad = [tuple(c["akc"]) for c in kar]
+        lab_, liels_ = XG_TV[veids]
+        tv = {"lab": lab_, "liels": liels_, "kr": kr_rad, "labaja": per}
+        ha = dict(hero["viz"]["aki"])
+        ha.update({"vards": str(hero.get("v2", "")).upper(), "kom": hero.get("badge"), "tag": s["intro"].get("tag", ""), "kart_txt": "#1"})
+        orig = sorted(kar, key=lambda c: (0 if c["viz"]["grupa"] == "laim" else 1, c.get("nr", 0)))
+        kartis = [{"kom": str(c.get("badge", "")), "poz": c["viz"].get("poz", ""), "akc": tuple(c["akc"]),
+                   "liels": c["viz"]["kart"]["liels"], "maz": c["viz"]["kart"]["maz"], "lab": c["viz"]["zimogs"]} for c in orig]
+        k2 = {"tips": "fantasy_kartis", "ilgums": 6.0, "tag": s["intro"].get("tag", ""), "_tv": tv, "virsr": XG_VIRSR[veids],
+              "apaksa": "  ·  ".join(x for x in (per, XG_APAKSA[veids]) if x), "kartis": kartis,
+              "n_pick": sum(1 for c in orig if c["viz"]["grupa"] == "laim"), "rek": None}
+        jaunas = [k2]
+        for i, c in enumerate(kar):
+            c = dict(c)
+            c["tips"], c["liels"] = "fantasy", c["viz"]["zimogs"]
+            c["_tablo"] = {"lab": c["viz"]["tablo_lab"], "liels": f"#{c.get('nr', '')}", "kr": kr_rad, "idx": i}
+            c["_datums"] = c["viz"].get("tablo_txt", "")
+            jaunas.append(c)
+        s["intro"] = {"aki": True, "fantasy_aki": ha, "tag": ha["tag"], "ilgums": 2.6, "_tv": tv}
+        s["runa"] = [s["runa"][0], s.get("_intro_runa", "")] + s["runa"][1:]
+        s["kartes"] = jaunas
+        s["_bez_zimoga"] = True
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"  (xG jaunais izskats: {type(ex).__name__}: {ex} – vecais)")
+    return s
+
+
+def xg_atskats_jauns(s):
+    """xG atskats jaunajā izskatā: rezultāts ("2/3" + ✓/✗) → kārtis "DID xG CALL IT?" → visas kartītes → THE FINAL VERDICT."""
+    if not s or not JAUNS_FANTASY or not s.get("aki_f"):
+        return s
+    try:
+        kar = s["kartes"]
+        if not all(c.get("viz") and c["viz"].get("spec") for c in kar) or len(s["runa"]) != len(kar) + 2:
+            return s
+        kr_rad = [tuple(c["akc"]) for c in kar]
+        tag = str(s["aki_f"].get("tag", ""))
+        liels_ = "GOALIES" if "GOALIE" in tag else ("TEAMS" if "TEAM" in tag else "xG")
+        tv = {"lab": "NHL · FOLLOW-UP", "liels": liels_, "kr": kr_rad, "labaja": kar[0]["viz"].get("tablo_txt", "")}
+        kartis = [{"kom": str(c.get("badge", "")), "poz": c["viz"].get("poz", ""), "akc": tuple(c["akc"]),
+                   "aizm": S.ZALS if c["viz"]["grupa"] == "laim" else S.SARKANS,
+                   "liels": c["viz"]["kart"]["liels"], "maz": c["viz"]["kart"]["maz"], "lab": c["viz"]["zimogs"]} for c in kar]
+        vecais = s.get("_intro_vecais") or {}
+        ap = vecais.get("apaksa") or []
+        k2 = {"tips": "fantasy_kartis", "ilgums": 6.0, "tag": tag, "_tv": tv,
+              "virsr": [("DID", S.BALTS), ("xG", S.BALTS), ("CALL IT?", S.DZELTENS)],
+              "apaksa": "  ·  ".join(str(x).upper() for x in ap[:2]), "kartis": kartis,
+              "n_pick": sum(1 for c in kar if c["viz"]["grupa"] == "laim"), "rek": None}
+        jaunas = [k2]
+        for i, c in enumerate(kar):
+            c = dict(c)
+            c["tips"], c["liels"] = "fantasy", c["viz"]["zimogs"]
+            c["_tablo"] = {"lab": c["viz"]["tablo_lab"], "liels": f"#{c.get('nr', '')}", "kr": kr_rad, "idx": i}
+            c["_datums"] = c["viz"].get("tablo_txt", "")
+            jaunas.append(c)
+        s["intro"] = {"aki": True, "fantasy_aki": s["aki_f"], "tag": tag, "ilgums": 2.6, "_tv": tv}
+        s["runa"] = [s["aki_runa"], s.get("_intro_runa", s["runa"][0])] + s["runa"][1:]
+        s["kartes"] = jaunas
+        s["_bez_zimoga"] = True
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"  (xG atskata jaunais izskats: {type(ex).__name__}: {ex} – vecais)")
+    return s
+
+
 def fantasy_atskats_jauns(s):
     """Fantasy atskats jaunajā izskatā: nedēļas rezultāts ("1/4" + ✓/✗) → kārtis "LAST WEEK'S CALLS" → visas ieteiktās
     kartītes (WE SAID ADD #1 …) → THE FINAL VERDICT. Balss: rezultāts, ievads, katrs spēlētājs, beigas."""
@@ -2884,9 +2976,11 @@ def aina_aki_fantasy(t, s):
         nm = Image.new("RGBA", (640, 130), (0, 0, 0, 0))
         ImageDraw.Draw(nm).text((320, 65), a_["vards"], font=S.ietilpinat(d, a_["vards"], "black", 100, 600), fill=S.BALTS, anchor="mm")
         _nv_put(L, nm.filter(ImageFilter.GaussianBlur(18)), 540, 1415, 1, S.ease(min(1, k)))
-        if t > 1.15:
-            _nv_put(N, _nv_timg("?", S.fonts("black", 150), S.DZELTENS), 540 + 18 * math.sin(t * 5.5), 1410 - 22 * abs(math.sin(t * 4.2)),
-                    1 + 0.1 * math.sin(t * 9), S.ease((t - 1.15) / 0.2), 10 * math.sin(t * 5.5))
+        if t > 1.15:                                                  # "?" lēni šūpojas kā svārsts (iekārts augšā), pamazām rimstas
+            tau = t - 1.15
+            th = 11 * math.exp(-0.18 * tau) * math.sin(2 * math.pi * tau / 2.0)          # leņķis grādos, periods 2 s
+            _nv_put(N, _nv_timg("?", S.fonts("black", 150), S.DZELTENS), 540 + 2.2 * th, 1410 - 0.06 * th * th,
+                    1, S.ease(tau / 0.25), th)
     L.alpha_composite(_nv_glow(N, 20, 1.4))
     return L
 
@@ -3272,6 +3366,175 @@ def _nv_flizes_atskats(dc, N, u, c, v, prim, ta, gk, t_at, flize, stabini, X0, X
                 dc.text((p_[0], y1 - 8), dl, font=F("semi", 20), fill=(Y if i == 0 else LAB) + (int(255 * a),), anchor="mb")
 
 
+def _nv_flizes_spec(dc, N, u, c, v, prim, ta, gk, t_at, stabini, X0, X1, CW, GAP):
+    """Vispārīgs flīžu zīmētājs (xG video un atskati): v["spec"] = 5 rindas – ("pair", flīze, flīze) vai ("full", flīze).
+    Flīzes: skaitlis (+ stabiņi pa spēlēm / mērierīce), ripa (metienu karte), joslas (salīdzinājums, arī ap nulli),
+    speles (spēle pa spēlei), rost (ESPN rostered tendence), teksts."""
+    F, WH, LAB, SL, Y, G = S.fonts, S.BALTS, _NV_LAB, _NV_SL, S.DZELTENS, S.ZALS
+    RINDAS = [(685, 865), (880, 1060), (1075, 1235), (1250, 1425), (1440, 1600)]
+
+    def eo(x):
+        return S.ease(min(1.0, max(0.0, x)))
+
+    def kr_(k):
+        return prim if k == "prim" else (SL if k in ("pel", None) else tuple(k))
+
+    def pamats(x0, y0, x1, y1, a, lab):
+        dc.rounded_rectangle([x0, y0, x1, y1], radius=24, fill=_NV_TILE + (int(255 * a),))
+        dc.text((x0 + 22, y0 + 16), lab, font=S.ietilpinat(dc, lab, "semi", 28, x1 - x0 - 44), fill=LAB + (int(255 * a),))
+
+    def skaitlis(f, x0, y0, x1, y1, a):
+        pamats(x0, y0, x1, y1, a, f["lab"])
+        val = str(f.get("val", ""))
+        vk_ = tuple(f["val_kr"]) if f.get("val_kr") else WH
+        maxw = (x1 - x0) * (0.45 if (f.get("bars") or f.get("gauge")) else 0.85)
+        dc.text((x0 + 22, y0 + 52), val, font=S.ietilpinat(dc, val, "black", 64, maxw), fill=vk_ + (int(255 * a),))
+        if f.get("sub"):
+            dc.text((x0 + 22, y1 - 46), f["sub"], font=S.ietilpinat(dc, f["sub"], "semi", 28, (x1 - x0) * (0.5 if f.get("gauge") else 0.9)),
+                    fill=LAB + (int(255 * a),))
+        T1 = t_at(y0 + 110)
+        if f.get("bars"):
+            stabini(x1, y1, f["bars"][-(5 if x1 - x0 < 600 else 9):], a, T1, f.get("bars_lab"))   # mazā flīzē ≤ 5 (nepārklāj skaitli)
+        g = f.get("gauge")
+        if g:
+            cx, cy, r = x1 - 105, y1 - 50, 80
+            dc.arc([cx - r, cy - r, cx + r, cy + r], 180, 360, fill=SL + (int(200 * a),), width=14)
+            pc = float(g["frac"]) * eo(gk(T1, 0.7))
+            if pc > 0.005:
+                dc.arc([cx - r, cy - r, cx + r, cy + r], 180, 180 + 180 * pc, fill=Y + (int(255 * a),), width=14)
+            if g.get("mark") is not None:                              # līgas vidējais – balta svītriņa
+                am = math.radians(180 + 180 * float(g["mark"]))
+                dc.line([(cx + (r - 14) * math.cos(am), cy + (r - 14) * math.sin(am)), (cx + (r + 12) * math.cos(am), cy + (r + 12) * math.sin(am))],
+                        fill=WH + (int(255 * a),), width=4)
+            ang = math.radians(180 + 180 * pc)
+            dc.line([(cx, cy), (cx + (r - 24) * math.cos(ang), cy + (r - 24) * math.sin(ang))], fill=WH + (int(255 * a),), width=5)
+            dc.ellipse([cx - 8, cy - 8, cx + 8, cy + 8], fill=WH + (int(255 * a),))
+            dc.text((cx, cy + 24), g.get("txt", ""), font=F("semi", 20), fill=LAB + (int(255 * a),), anchor="mm")
+
+    def ripa(f, x0, y0, x1, y1, a):
+        h = y1 - y0 - 30
+        w = h * 1.18
+        dc.rounded_rectangle([x0, y0, x1, y1], radius=24, fill=_NV_TILE + (int(255 * a),))
+        dc.text((x0 + 22, y0 + 16), f["lab"], font=S.ietilpinat(dc, f["lab"], "semi", 28, x1 - x0 - w - 60), fill=LAB + (int(255 * a),))
+        k = eo(gk(t_at(y0 + 100), 0.6))
+        pk = f.get("punkti") or []
+        n = int(len(pk) * k)
+        _mini_laukums(dc, x1 - 18 - w, y0 + 15, w, h, pk[:n], tuple(f.get("varti_kr") or Y), a)
+        for i, tx in enumerate(f.get("txt", [])):
+            dc.text((x0 + 22, y0 + 66 + i * 40), tx, font=F("black" if i == 0 else "semi", 34 if i == 0 else 28),
+                    fill=(WH if i == 0 else tuple(f.get("varti_kr") or Y)) + (int(255 * a),))
+
+    def joslas(f, x0, y0, x1, y1, a):
+        pamats(x0, y0, x1, y1, a, f["lab"])
+        T1 = t_at(y0 + 100)
+        rind = f["rind"]
+        bx0, bw_ = x0 + 250, 480
+        if f.get("diverg"):
+            m_ = max(0.5, max(abs(float(r_[1])) for r_ in rind)) * 1.15
+            cx_ = bx0 + bw_ / 2
+            dc.line([(cx_, y0 + 56), (cx_, y1 - 12)], fill=(255, 255, 255, int(70 * a)), width=2)
+        else:
+            skala = max(4.0, math.ceil(max(float(r_[1]) for r_ in rind)) + 1)
+        for jj, (lab, val, txt, kr) in enumerate(rind):
+            yy = y0 + 62 + jj * 48
+            kk = eo(gk(T1 + jj * 0.25, 0.45))
+            dc.text((x0 + 22, yy + 18), lab, font=F("semi", 28), fill=(203, 213, 225, int(255 * a)), anchor="lm")
+            dc.rounded_rectangle([bx0, yy, bx0 + bw_, yy + 36], radius=18, fill=(255, 255, 255, int(18 * a)))
+            if kk <= 0:
+                continue
+            val = float(val)
+            if f.get("diverg"):
+                L_ = bw_ / 2 * min(1.0, abs(val) / m_) * kk
+                if val >= 0:
+                    xa, xb = cx_, cx_ + max(14, L_)
+                    dc.rounded_rectangle([xa, yy, xb, yy + 36], radius=18, fill=kr_(kr) + (int(255 * a),))
+                    dc.text((xb + 12, yy + 18), txt, font=F("black", 32), fill=WH + (int(255 * a),), anchor="lm")
+                else:
+                    xa, xb = cx_ - max(14, L_), cx_
+                    dc.rounded_rectangle([xa, yy, xb, yy + 36], radius=18, fill=kr_(kr) + (int(255 * a),))
+                    dc.text((xa - 12, yy + 18), txt, font=F("black", 32), fill=WH + (int(255 * a),), anchor="rm")
+            else:
+                bx1 = bx0 + bw_ * max(0.0, val) / skala * kk
+                dc.rounded_rectangle([bx0, yy, max(bx0 + 36, bx1), yy + 36], radius=18, fill=kr_(kr) + (int(255 * a),))
+                dc.text((max(bx0 + 36, bx1) + 14, yy + 18), txt, font=F("black", 32), fill=WH + (int(255 * a),), anchor="lm")
+        ch_ = f.get("chip")
+        kc = (u - T1 - 0.75) / 0.3
+        if ch_ and kc > 0:
+            krc = tuple(ch_[1])
+            ch = Image.new("RGBA", (160, 50), (0, 0, 0, 0)); dch = ImageDraw.Draw(ch)
+            dch.rounded_rectangle([0, 0, 159, 49], radius=25, fill=krc)
+            dch.text((80, 25), ch_[0], font=S.ietilpinat(dch, ch_[0], "black", 34, 140), fill=S.MELNS if krc in (S.ZALS, S.DZELTENS) else WH, anchor="mm")
+            _nv_put(N, ch, x1 - 100, y0 + 30, 1 + 0.6 * (1 - ease_back(min(1, kc))), min(1, kc * 3))
+
+    def speles(f, x0, y0, x1, y1, a):
+        pamats(x0, y0, x1, y1, a, f["lab"])
+        T1 = t_at(y0 + 90)
+        sp = f.get("speles") or []
+        n = max(1, len(sp))
+        gap = 10
+        bw = min(112, (x1 - x0 - 44 - gap * (n - 1)) / n)
+        xs0 = x0 + 22
+        for i, dd in enumerate(sp):
+            kk = ease_back(gk(T1 + i * 0.06, 0.3))
+            if kk <= 0:
+                continue
+            xx = xs0 + i * (bw + gap); hh = 104 * kk; yb = y1 - 16
+            fill = (tuple(dd["kr"]) + (230,)) if dd.get("kr") else (_NV_SL + (200,))
+            dc.rounded_rectangle([xx, yb - hh, xx + bw, yb], radius=16, fill=fill)
+            if kk > 0.7:
+                dc.text((xx + bw / 2, yb - hh + 20), dd.get("aug", ""), font=S.ietilpinat(dc, dd.get("aug", ""), "black", 20, bw - 8), fill=WH, anchor="mm")
+                dc.text((xx + bw / 2, yb - hh + 54), dd.get("vid", ""), font=S.ietilpinat(dc, dd.get("vid", ""), "black", 34, bw - 8), fill=WH, anchor="mm")
+                dc.text((xx + bw / 2, yb - 16), dd.get("apa", ""), font=S.ietilpinat(dc, dd.get("apa", ""), "semi", 20, bw - 8), fill=WH, anchor="mm")
+
+    def rost(f, x0, y0, x1, y1, a):
+        rv = f.get("rost_vest") or []
+        pamats(x0, y0, x1, y1, a, "ROSTERED ON ESPN" + (f" · LAST {len(rv)} DAYS" if len(rv) >= 2 else ""))
+        T1 = t_at(y0 + 80)
+        g_ = gk(T1, 0.9)
+        r0 = rv[0][1] if len(rv) >= 2 else f["rost"]
+        vv = r0 + (f["rost"] - r0) * eo(g_)
+        dc.text((x0 + 22, y0 + 52), f"{vv:.1f}%", font=F("black", 60), fill=WH + (int(255 * a),))
+        kc = (u - T1 - 0.9) / 0.3
+        if f.get("tip") and kc > 0:
+            dc.text((x0 + 22, y1 - 12), f["tip"], font=F("black", 26), fill=Y + (int(255 * a * eo(kc)),), anchor="lb")
+        if len(rv) >= 2:
+            px0, px1, py0, py1 = x1 - 400, x1 - 34, y0 + 58, y1 - 40
+            lo_, hi_ = min(x_ for _, x_ in rv) - 0.15, max(x_ for _, x_ in rv) + 0.1
+            pts = [(px0 + i * (px1 - px0) / (len(rv) - 1), py1 - (py1 - py0) * (x_ - lo_) / (hi_ - lo_)) for i, (_, x_) in enumerate(rv)]
+            n = g_ * (len(pts) - 1); seg = [pts[0]]
+            for i in range(1, len(pts)):
+                if n >= i:
+                    seg.append(pts[i])
+                elif n > i - 1:
+                    f_ = n - (i - 1)
+                    seg.append((pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f_, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f_))
+            if len(seg) > 1:
+                dc.line(seg, fill=Y + (int(255 * a),), width=5, joint="curve")
+            for i, (p_, (dl, _)) in enumerate(zip(pts, rv)):
+                if n >= i - 0.01:
+                    dc.ellipse([p_[0] - 8, p_[1] - 8, p_[0] + 8, p_[1] + 8], fill=WH + (int(255 * a),))
+                dc.text((p_[0], y1 - 8), dl, font=F("semi", 20), fill=LAB + (int(255 * a),), anchor="mb")
+
+    def teksts(f, x0, y0, x1, y1, a):
+        pamats(x0, y0, x1, y1, a, f.get("lab", ""))
+        val = str(f.get("val", ""))
+        dc.text((x0 + 22, y0 + 54), val, font=S.ietilpinat(dc, val, "black", 54, x1 - x0 - 44), fill=Y + (int(255 * a),))
+        if f.get("sub"):
+            dc.text((x0 + 22, y1 - 40), f["sub"], font=S.ietilpinat(dc, f["sub"], "semi", 28, x1 - x0 - 44), fill=LAB + (int(255 * a),))
+
+    zim = {"skaitlis": skaitlis, "ripa": ripa, "joslas": joslas, "speles": speles, "rost": rost, "teksts": teksts}
+    for (y0, y1), rinda in zip(RINDAS, v.get("spec") or []):
+        a = ta(y0)
+        if a <= 0 or not rinda:
+            continue
+        if rinda[0] == "pair":
+            for (x0, x1), f in zip(((X0, X0 + CW), (X0 + CW + GAP, X1)), rinda[1:3]):
+                if f:
+                    zim.get(f.get("tips"), teksts)(f, x0, y0, x1, y1, a)
+        elif rinda[1]:
+            zim.get(rinda[1].get("tips"), teksts)(rinda[1], X0, y0, X1, y1, a)
+
+
 def aina_fantasy_jauna(t, c):
     v = c["viz"]
     u = t
@@ -3367,10 +3630,13 @@ def aina_fantasy_jauna(t, c):
                 dc.rounded_rectangle([bx + i * (bw + gap), base - hh, bx + i * (bw + gap) + bw, base], radius=8,
                                      fill=(Y if p == mxv and p > 0 else SL) + (int(255 * a),))
                 if kk > 0.8:
-                    dc.text((bx + i * (bw + gap) + bw / 2, base - hh - 16), str(p), font=F("black", 24), fill=WH + (int(255 * a),), anchor="mm")
+                    dc.text((bx + i * (bw + gap) + bw / 2, base - hh - 16), str(p) if float(p).is_integer() else f"{p:.1f}",
+                            font=F("black", 24), fill=WH + (int(255 * a),), anchor="mm")
         dc.text((x1 - 22, y1 - 14), lab_ or f"LAST {len(vert)} GP", font=F("semi", 20), fill=LAB + (int(255 * a),), anchor="rb")
 
-    if not v.get("atskats"):                                        # fantasy / streameri (ieteikums)
+    if v.get("spec"):                                                 # xG video / xG atskats – vispārīgās flīzes
+        _nv_flizes_spec(dc, N, u, c, v, prim, ta, gk, t_at, stabini, X0, X1, CW, GAP)
+    elif not v.get("atskats"):                                        # fantasy / streameri (ieteikums)
         # 1) PTS
         x0, y0, x1, y1 = X0, 685, X0 + CW, 865; a = ta(y0)
         if a > 0:
