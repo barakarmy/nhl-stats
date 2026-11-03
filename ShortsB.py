@@ -3642,11 +3642,14 @@ def _nv_flizes_spec(dc, N, u, c, v, prim, ta, gk, t_at, stabini, X0, X1, CW, GAP
         rind = f["rind"]
         bx0, bw_ = x0 + 250, 480
         if f.get("diverg"):
-            m_ = max(0.5, max(abs(float(r_[1])) for r_ in rind)) * 1.15
+            mm_ = max(abs(float(r_[1])) for r_ in rind)
+            m_ = (max(0.5, mm_) if mm_ >= 1 else max(0.05, mm_)) * 1.15
             cx_ = bx0 + bw_ / 2
             dc.line([(cx_, y0 + 56), (cx_, y1 - 12)], fill=(255, 255, 255, int(70 * a)), width=2)
+            xr = cx_ + bw_ / 2 * max(-1.0, min(1.0, float(f["robeza"]) / m_)) if f.get("robeza") is not None else None
         else:
             skala = max(4.0, math.ceil(max(float(r_[1]) for r_ in rind)) + 1)
+        uzraksti = []                                                  # vērtības – virs pusceļa līnijas (nepārsvītrotas)
         for jj, (lab, val, txt, kr) in enumerate(rind):
             yy = y0 + 62 + jj * 48
             kk = eo(gk(T1 + jj * 0.25, 0.45))
@@ -3660,15 +3663,24 @@ def _nv_flizes_spec(dc, N, u, c, v, prim, ta, gk, t_at, stabini, X0, X1, CW, GAP
                 if val >= 0:
                     xa, xb = cx_, cx_ + max(14, L_)
                     dc.rounded_rectangle([xa, yy, xb, yy + 36], radius=18, fill=kr_(kr) + (int(255 * a),))
-                    dc.text((xb + 12, yy + 18), txt, font=F("black", 32), fill=WH + (int(255 * a),), anchor="lm")
+                    uzraksti.append(((xb + 12, yy + 18), txt, "lm"))
                 else:
                     xa, xb = cx_ - max(14, L_), cx_
                     dc.rounded_rectangle([xa, yy, xb, yy + 36], radius=18, fill=kr_(kr) + (int(255 * a),))
-                    dc.text((xa - 12, yy + 18), txt, font=F("black", 32), fill=WH + (int(255 * a),), anchor="rm")
+                    uzraksti.append(((xa - 12, yy + 18), txt, "rm"))
             else:
                 bx1 = bx0 + bw_ * max(0.0, val) / skala * kk
                 dc.rounded_rectangle([bx0, yy, max(bx0 + 36, bx1), yy + 36], radius=18, fill=kr_(kr) + (int(255 * a),))
-                dc.text((max(bx0 + 36, bx1) + 14, yy + 18), txt, font=F("black", 32), fill=WH + (int(255 * a),), anchor="lm")
+                uzraksti.append(((max(bx0 + 36, bx1) + 14, yy + 18), txt, "lm"))
+        if f.get("diverg") and xr is not None and gk(T1 + 0.4, 0.4) > 0:   # pusceļa līnija – virs joslām (raustīta, dzeltena)
+            ar_ = int(255 * a * eo(gk(T1 + 0.4, 0.4)))
+            yy_ = y0 + 54
+            while yy_ < y1 - 8:
+                dc.line([(xr, yy_), (xr, min(yy_ + 10, y1 - 8))], fill=S.MELNS + (ar_,), width=8)
+                dc.line([(xr, yy_), (xr, min(yy_ + 10, y1 - 8))], fill=Y + (ar_,), width=4)
+                yy_ += 16
+        for (px_, py_), txt, anc in uzraksti:
+            dc.text((px_, py_), txt, font=F("black", 32), fill=WH + (int(255 * a),), anchor=anc, stroke_width=4, stroke_fill=_NV_TILE + (int(255 * a),))
         ch_ = f.get("chip")
         kc = (u - T1 - 0.75) / 0.3
         if ch_ and kc > 0:
