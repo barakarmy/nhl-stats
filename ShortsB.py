@@ -539,6 +539,18 @@ def sfx_notikumi(ainas):
             ev.append((t0 + 1.0, "tick", 0.9))
         elif tips in ("intro", "fantasy_intro"):
             ev.append((t0 + 1.0, "tick", 0.9))
+        elif tips == "fakts_tablo":                                  # kartīte ielido (tick), nolaižas tablo (boom)
+            ev.append((t0 + 0.15, "tick", 0.8))
+            ev.append((t0 + max(0.8, ilg - 0.8 + 0.4), "boom", 0.45))
+        elif tips == "fakts_ripa":                                   # tick katrai ripai
+            n_ = len(c["ripa"]["punkti"]); dt_ = min(0.5, max(0.1, (ilg - 2.6) / max(1, n_)))
+            ev += [(t0 + 0.9 + i * dt_ + 0.35, "tick", 0.55) for i in range(min(n_, 40))]
+        elif tips == "fakts_hist":
+            nb = len(c["hist"]["bins"])
+            ev += [(t0 + 0.9 + i * 0.14, "tick", 0.5) for i in range(nb)]
+            ev.append((t0 + 0.9 + nb * 0.14 + 1.0, "boom", 0.7))
+        elif tips == "fakts_nak_j":
+            ev.append((t0 + 1.3, "boom", 0.6))
         elif tips == "xg_karte":                                     # līgas karte: tick katram izceltajam
             ev += [(t0 + 1.95 + 0.22 * j, "tick", 0.7) for j in range(len(c.get("izcelti", [])))]
         elif tips == "fantasy_kartis":                                # kārtis: izdala → katra apgriežas (tick) → čips
@@ -1071,7 +1083,9 @@ def fakta_statistika(D, c):
             if len(rindas) < 2:
                 return None
             return ("SEASON SO FAR", rindas, f"{kopa_p} POINTS COMBINED",
-                    "On the season: " + ", ".join(f"{r_[0]} has {r_[2].replace('G ', ' goals and ').replace('A', ' assists')}" for r_ in rindas) + ".")
+                    "On the season: " + ", ".join(f"{r_[0]} has " + re.sub(r"\b1 (goal|assist)s\b", r"1 \1",
+                                                                       r_[2].replace("G ", " goals and ").replace("A", " assists"))
+                                                  for r_ in rindas) + ".")
         if veids in ("points_serija", "goals_serija", "liela"):
             pid = float(dal[0])
             x = D["sp"][D["sp"]["playerId"] == pid]
@@ -1286,11 +1300,13 @@ def veids_fakti_b(m, a):
     runa.append((f"The NHL week in numbers: {skaits_v} stats that stood out. Number one: {hook_runa}. {jaut}" if n > 1
                  else f"{hook_runa}. {jaut}"))
     # #n → #2: viena aina katram
+    mini_runa = []
     for nr, c in zip(range(n, 1, -1), citi[::-1]):
         st = fakta_statistika(D, c)
         kartes.append({"tips": "fakts_mini", "ilgums": 5.0, **c, "nr": nr,
                        "stat_rindas": [r_ for r_ in (st[1] if st else c["rindas"]) if r_[0]][:3]})
         runa.append(f"Number {nr}. {c['runa'][0]} {c['runa'][2]}".replace("  ", " "))
+        mini_runa.append(runa[-1])
     # #1 – pilnais stāsts
     st = fakta_statistika(D, hero)
     kopa = {"pill_hook": "#1  ·  STAT OF THE WEEK" if n > 1 else "NHL  ·  STAT OF THE WEEK", "bez_uzlimes": True}
@@ -1333,7 +1349,8 @@ def veids_fakti_b(m, a):
                  "follow": "FOLLOW FOR THE WEEK IN NUMBERS"}
         runa.append(f"Follow for the NHL week in numbers, and remember: {atcerei}.")
     FAKTI_PAPILDU["fakti"] = [{"atsl": c["atsl"], "garums": c["garums"], "teksts": c["teksts"]} for c in citi]
-    return {
+    st_hero = fakta_statistika(D, hero)
+    return fakti_jauns({
         "intro": intro, "kartes": kartes, "outro": outro,
         "zimogs": f"STATS THROUGH {S.dat(lidz, True).upper()}", "runa": runa, "lidz": lidz,
         "periods": f"through {S.dat(lidz, True)}",
@@ -1352,7 +1369,7 @@ def veids_fakti_b(m, a):
                   "apaksa": hero["skaitlis_apaksa"], "datums": lidz},
         "fakts_atsl": {"atsl": hero["atsl"], "garums": hero["garums"],
                        "teksts": hero["teksts"] + (f"  (+ {n - 1} citi: " + "; ".join(c["teksts"] for c in citi) + ")" if citi else "")},
-    }
+    }, D, m, izv, st_hero, mini_runa)
 
 
 def pierakstit_papildu_faktus(mape_video):
@@ -2410,7 +2427,9 @@ def renderet(s, izvade, kanals="", balss=None):
     fn_map = {"fantasy": aina_fantasy, "grafiks": aina_grafiks, "fakts_hook": aina_fakts_hook,
               "fakts_saraksts": aina_fakts_saraksts, "fakts_konteksts": aina_fakts_konteksts,
               "fakts_nakamais": S.aina_fakts_nakamais, "fakts_mini": aina_fakts_mini,
-              "fantasy_intro": lambda t_, c_: aina_intro(t_, c_["intro"]), "fantasy_kartis": aina_kartis, "xg_karte": aina_xg_karte}
+              "fantasy_intro": lambda t_, c_: aina_intro(t_, c_["intro"]), "fantasy_kartis": aina_kartis, "xg_karte": aina_xg_karte,
+              "fakts_tablo": aina_fakts_tablo, "fakts_ripa": aina_fakts_ripa, "fakts_hist": aina_fakts_hist,
+              "fakts_nak_j": aina_fakts_nak_j}
     # cilpai: āķa (1. ainas) sākuma kadrs – beigās video pāriet atpakaļ uz to
     v0, c0, _ = ainas[0]
     if v0 == "intro":
@@ -2447,15 +2466,16 @@ def renderet(s, izvade, kanals="", balss=None):
                 if t > ilg - 0.22:
                     k = S.ease((t - (ilg - 0.22)) / 0.22)
                     alfa, dy = 1 - k, -k * 120
-            elif t < 0.4:
+            elif t < 0.4 and not (isinstance(c, dict) and c.get("_bez_ieejas")):
                 k = ease_back(t / 0.4)
                 alfa, dy = min(1, t / 0.2), (1 - k) * 260
-            elif t > ilg - 0.22 and veids != "outro":
+            elif t > ilg - 0.22 and veids != "outro" and not (isinstance(c, dict) and c.get("_bez_izejas")):
                 k = S.ease((t - (ilg - 0.22)) / 0.22)
                 alfa, dy = 1 - k, -k * 120
             else:
                 alfa, dy = 1, 0
-            sl = _zona(sl, (0.04 if nr == 0 else TUVINAJUMS) * S.ease(t / ilg))     # drošā zona + lēna tuvināšana
+            zm_ = 0.0 if (isinstance(c, dict) and c.get("_bez_tuv")) else (0.04 if nr == 0 else TUVINAJUMS)   # TOP N tablo – bez lēcieniem
+            sl = _zona(sl, zm_ * S.ease(t / ilg))                     # drošā zona + lēna tuvināšana
             if veids == "outro" and cilpa_sl is not None and t > ilg - CILPA:      # cilpa: atpakaļ uz āķi
                 sl = Image.blend(sl, cilpa_sl, S.ease((t - (ilg - CILPA)) / CILPA))
             kadrs = fons.kadrs(t0 + t)
@@ -3942,6 +3962,752 @@ def aina_fantasy_jauna(t, c):
         _nv_zibsnis(L, u, tz + 0.24)
         L = _nv_kratit(L, u, tz + 0.24)
     return L
+
+
+# ================================================================ FAKTU VIDEO – JAUNAIS IZSKATS (ShortsBT)
+# Āķis (jaunais stils) → TOP N tablo: fakti #N → #2 ielido kā lielas kartītes un "nolaižas" tablo rindā, #1 pulsē līdz
+# beigām → #1 atklājas → "katrs vārts uz ripas" (īstās metienu vietas) + sezonas skaitļi → "HOW RARE IS IT?" histogramma
+# (visas sezonas sērijas / spēles) → NEXT UP. Ja kādam fakta veidam datu nav – tā vietā vecā aina (saraksts / konteksts).
+
+def _fj_tablo(L, N, t, c, anim=True):
+    tv = c.get("_tv") or {}
+    _nv_tablo_zim(L, N, t, S.ZILS, tv.get("lab", "NHL · THE WEEK"), tv.get("liels", "IN NUMBERS"), tv.get("kr") or [],
+                  c.get("_tv_idx", len(tv.get("kr") or []) - 1), tv.get("labaja", ""), anim)
+
+
+def _fj_virsr(L, t, dalas, y, izm=120, staticks=False):
+    d = ImageDraw.Draw(L)
+    f = S.ietilpinat(d, "  ".join(x for x, _ in dalas), "black", izm, 940)
+    plat = [d.textlength(x, font=f) for x, _ in dalas]
+    spr = d.textlength("  ", font=f)
+    x = 540 - (sum(plat) + spr * (len(dalas) - 1)) / 2
+    for i, ((txt, kr), w_) in enumerate(zip(dalas, plat)):
+        k = 1.0 if staticks else (t - 0.05 - i * 0.15) / 0.3
+        if k > 0:
+            _nv_put(L, _nv_timg(txt, f, tuple(kr)), x + w_ / 2, y, 1 + 0.6 * (1 - ease_back(min(1.0, k), 2.0)), min(1.0, k * 2.5))
+        x += w_ + spr
+
+
+def _fj_ripa(d, cx, cy, r, kom, a=255):
+    """Komandas apzīmējums: balts kods + divkrāsu pasvītra 60/40 ar "/" (kā spēlētāja vārdam). Aizņem ≤ 2,2r × 2r
+    (tikpat, cik agrākais aplis), centrs (cx, cy). Tumšas komandu krāsas – gaišākas (_nv_gaisas_kr), lai redzamas."""
+    kom = str(kom or "")[:3]
+    if not kom or a <= 0 or r < 4:
+        return
+    prim, sek = kom_krasas(kom)
+    f = S.ietilpinat(d, kom, "black", max(10, int(r * 0.95)), 2.2 * r)
+    tw = d.textlength(kom, font=f)
+    d.text((cx, cy - r * 0.12), kom, font=f, fill=S.BALTS + (int(a),), anchor="mm")
+    y, h = cy + r * 0.52, max(3.0, r * 0.16)
+    x0, x1 = cx - tw / 2, cx + tw / 2
+    xs = x0 + (x1 - x0) * 0.6
+    d.polygon([(x0, y), (xs + h * 0.5, y), (xs - h * 0.5, y + h), (x0, y + h)], fill=_nv_gaisas_kr(prim) + (int(a),))
+    d.polygon([(xs + h * 1.2, y), (x1, y), (x1, y + h), (xs + h * 0.2, y + h)], fill=_nv_gaisas_kr(sek) + (int(a),))
+
+
+def _fj_karte(f_, kr):
+    """Lielā fakta kartīte (760×440): #nr, komandas aplis, galvenais skaitlis, apraksts, vārds."""
+    F = S.fonts
+    cw, ch = 760, 440
+    im = Image.new("RGBA", (cw, ch), (0, 0, 0, 0)); di = ImageDraw.Draw(im)
+    di.rounded_rectangle([0, 0, cw - 1, ch - 1], radius=36, fill=(12, 18, 40, 245), outline=tuple(kr) + (255,), width=6)
+    di.text((40, 40), f"#{f_['nr']}", font=F("black", 64), fill=tuple(kr))
+    if f_.get("badge"):
+        _fj_ripa(di, cw - 90, 80, 52, f_["badge"])
+    h = list(f_.get("hook") or [""])
+    di.text((cw / 2, 205), h[0], font=S.ietilpinat(di, h[0], "black", 110, cw - 80), fill=S.BALTS, anchor="mm")
+    if len(h) > 1:
+        r_ = " ".join(h[1:])
+        di.text((cw / 2, 290), r_, font=S.ietilpinat(di, r_, "black", 46, cw - 80), fill=S.DZELTENS, anchor="mm")
+    v = str(f_.get("vards_pilns") or "").upper()
+    di.text((cw / 2, 375), v, font=S.ietilpinat(di, v, "semi", 40, cw - 80), fill=_NV_LAB, anchor="mm")
+    return im
+
+
+def _fj_karte_plus(f_, kr):
+    """Paplašinātā kartīte (#N → #2, kamēr runā balss): augšā – parastā kartīte, zem tās spēle pa spēlei / "kā tas notika"
+    flīzes, sezonas skaitļi un vieta konteksta joslai. → (attēls bez rāmja, konteksta joslas y, augstums)."""
+    F = S.fonts
+    pl = f_["plus"]
+    cw = 760
+    rind = [r_ for r_ in (pl.get("rindas") or []) if any(str(x).strip() for x in r_)]
+    vis = rind[-8:]
+    n = len(vis)
+    rindu = 1 if n <= 4 else 2
+    per = n if rindu == 1 else math.ceil(n / 2)
+    TH, GAP = 112, 12
+    y = 452
+    st = pl.get("stats") or []
+    H = y + (36 + rindu * (TH + GAP) if n else 0) + (36 + 104 + GAP if st else 0) + (86 if pl.get("kont") else 0) + 24
+    im = Image.new("RGBA", (cw, H), (0, 0, 0, 0)); di = ImageDraw.Draw(im)
+    di.rounded_rectangle([0, 0, cw - 1, H - 1], radius=36, fill=(12, 18, 40, 245))
+    bazes = _fj_karte(f_, kr)
+    im.alpha_composite(bazes)
+    di.rounded_rectangle([3, 3, cw - 4, 440], radius=33, outline=(12, 18, 40, 255), width=6)   # bāzes rāmi nosedz
+    di.line([(40, 446), (cw - 40, 446)], fill=(255, 255, 255, 30), width=2)
+    if n:
+        virs = str(pl.get("virs") or "").upper() + (f"  ·  LAST {n} OF {len(rind)}" if len(rind) > n else "")
+        di.text((40, y + 4), virs, font=S.ietilpinat(di, virs, "semi", 26, cw - 80), fill=_NV_LAB)
+        y += 36
+        tw = (cw - 80 - GAP * (per - 1)) / per
+        for i, r_ in enumerate(vis):
+            row, col = divmod(i, per)
+            x = 40 + col * (tw + GAP); yy = y + row * (TH + GAP)
+            a_, b_, c_ = (list(r_) + ["", "", ""])[:3]
+            di.rounded_rectangle([x, yy, x + tw, yy + TH], radius=18, fill=_NV_TILE + (255,))
+            di.text((x + tw / 2, yy + 22), str(a_).upper(), font=S.ietilpinat(di, str(a_).upper(), "black", 24, tw - 14), fill=S.BALTS, anchor="mm")
+            if str(b_).strip():
+                di.text((x + tw / 2, yy + 52), str(b_).upper(), font=S.ietilpinat(di, str(b_).upper(), "semi", 22, tw - 14), fill=_NV_LAB, anchor="mm")
+            cc_ = str(c_).upper().strip()
+            kr_c = S.ZALS if re.match(r"^W\b", cc_) else (S.SARKANS if re.match(r"^(L|OTL)\b", cc_) else S.DZELTENS)   # W / L spēlēm
+            di.text((x + tw / 2, yy + 86), cc_, font=S.ietilpinat(di, cc_, "black", 30, tw - 14), fill=kr_c, anchor="mm")
+        y += rindu * (TH + GAP)
+    if st:
+        di.text((40, y + 4), "SEASON SO FAR", font=F("semi", 26), fill=_NV_LAB)
+        y += 36
+        tw = (cw - 80 - GAP * (len(st) - 1)) / len(st)
+        for i, (lab_, _, val) in enumerate(st):
+            x = 40 + i * (tw + GAP)
+            di.rounded_rectangle([x, y, x + tw, y + 104], radius=18, fill=_NV_TILE + (255,))
+            di.text((x + tw / 2, y + 42), str(val), font=S.ietilpinat(di, str(val), "black", 48, tw - 16), fill=S.BALTS, anchor="mm")
+            di.text((x + tw / 2, y + 84), str(lab_).upper(), font=S.ietilpinat(di, str(lab_).upper(), "semi", 22, tw - 16), fill=_NV_LAB, anchor="mm")
+        y += 104 + GAP
+    return im, y + 8, H
+
+
+def aina_fakts_tablo(t, c):
+    """TOP N tablo: rindas #1…#N, pašreizējais fakts ielido kā liela kartīte un beigās nolaižas savā rindā."""
+    F = S.fonts
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
+    _nv_dalinas(L, t)
+    _fj_tablo(L, N, t, c, anim=c.get("pirmais", False))
+    fakti, nr, n = c["fakti"], c["nr"], len(c["fakti"])
+    _fj_virsr(L, t, c["virsr"], 400, 120, staticks=not c.get("pirmais"))
+    ilg = c.get("_ilg", c.get("ilgums", 4.0))
+    t_dock = ilg - 0.8
+    bez_tablo = c.get("bez_tablo") or n < 2
+    docked = set(c.get("docked") or [])
+    f_ = next(x for x in fakti if x["nr"] == nr)
+    plus = bool(f_.get("plus")) and not bez_tablo and nr != 1
+    k_exp = 0.0
+    if plus:                                                          # izvēršas, kamēr runā balss; pirms nolaišanās – sakļaujas
+        k_exp = S.ease(min(1.0, max(0.0, (t - 0.8) / 0.6))) * (1 - S.ease(min(1.0, max(0.0, (t - (t_dock - 0.55)) / 0.45))))
+    L0, d0 = L, d
+    if plus:
+        L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+        N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
+    if not bez_tablo:
+        kp = 1.0 if not c.get("pirmais") else S.ease(min(1.0, max(0.0, (t - 0.3) / 0.4)))
+        y0, y1 = 1010, 1010 + n * 76 + 40
+        if kp > 0:
+            yb = y0 + (y1 - y0) * kp
+            d.rounded_rectangle([90, y0, 990, yb], radius=36, fill=(10, 14, 32, 235))
+            dn.rounded_rectangle([90, y0, 990, yb], radius=36, outline=S.ZILS + (220,), width=4)
+        if kp >= 1:
+            for rw in fakti:                                          # (ne f_ – tas ir pašreizējais fakts)
+                y = y0 + 20 + (rw["nr"] - 1) * 76
+                atv = rw["nr"] in docked or (rw["nr"] == nr and t >= t_dock + 0.45)
+                kr = tuple(rw["kr"])
+                d.rounded_rectangle([110, y, 970, y + 64], radius=18, fill=(255, 255, 255, 26 if atv else 14))
+                d.text((140, y + 32), f"#{rw['nr']}", font=F("black", 40), fill=(kr if atv else _NV_LAB), anchor="lm")
+                if atv:
+                    ka = 1.0 if rw["nr"] in docked else min(1.0, (t - t_dock - 0.45) / 0.25)
+                    if rw.get("badge"):
+                        _fj_ripa(d, 250, y + 32, 24, rw["badge"], int(255 * ka))
+                    vv = str(rw.get("vards") or "").upper()
+                    d.text((290, y + 32), vv, font=S.ietilpinat(d, vv, "black", 34, 330), fill=S.BALTS + (int(255 * ka),), anchor="lm")
+                    ds_ = " ".join(rw.get("hook") or [])
+                    d.text((950, y + 32), ds_, font=S.ietilpinat(d, ds_, "semi", 26, 300), fill=_NV_LAB + (int(255 * ka),), anchor="rm")
+                elif rw["nr"] == 1:
+                    p = 0.5 + 0.5 * math.sin(t * 5)
+                    dn.rounded_rectangle([110, y, 970, y + 64], radius=18, outline=S.DZELTENS + (int(120 + 120 * p),), width=3)
+                    d.text((540, y + 32), "?  ?  ?", font=F("black", 40), fill=S.DZELTENS, anchor="mm")
+                else:
+                    d.text((540, y + 32), "LOCKED", font=F("semi", 28), fill=_NV_LAB + (120,), anchor="mm")
+    if plus:                                                          # tablo slānis – pritumšināts, kamēr kartīte izvērsta
+        fb = 1 - 0.85 * k_exp
+        for lay in (L, N):
+            if fb < 1:
+                lay.putalpha(lay.getchannel("A").point(lambda v: int(v * fb)))
+        L0.alpha_composite(_nv_glow(N, 12, 1.2)); L0.alpha_composite(L)
+        L, d, N, dn = L0, d0, Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)), None
+        dn = ImageDraw.Draw(N)
+    # lielā kartīte
+    if "_kesa" not in c:
+        c["_kesa"] = _fj_karte(f_, f_["kr"])
+    im = c["_kesa"]
+    k = t - 0.1
+    if plus and k_exp > 0.001:                                        # izvērstā kartīte (atritinās uz leju)
+        if "_kesa_p" not in c:
+            c["_kesa_p"] = _fj_karte_plus(f_, f_["kr"])
+        imp, y_k, H = c["_kesa_p"]
+        hv = int(440 + (H - 440) * k_exp)
+        cr = imp.crop((0, 0, 760, hv))
+        from PIL import ImageChops
+        m_ = Image.new("L", cr.size, 0); ImageDraw.Draw(m_).rounded_rectangle([0, 0, 759, hv - 1], radius=36, fill=255)
+        cr.putalpha(ImageChops.multiply(cr.getchannel("A"), m_))
+        L.alpha_composite(cr, (160, 510))
+        kr_ = tuple(f_["kr"])
+        dn.rounded_rectangle([160, 510, 919, 510 + hv - 1], radius=36, outline=kr_ + (255,), width=6)
+        # konteksta josla – kad balss to saka
+        kont = (f_.get("plus") or {}).get("kont")
+        if kont and k_exp > 0.95:
+            vardi = c.get("_vardi") or []
+            n_pre = len(str((f_.get("plus") or {}).get("runa_pre", "")).split())
+            t_k = vardi[n_pre][0] if 0 < n_pre < len(vardi) else 0.5 * ilg
+            kk = (t - t_k) / 0.3
+            if kk > 0:
+                ch = Image.new("RGBA", (680, 70), (0, 0, 0, 0)); dch = ImageDraw.Draw(ch)
+                dch.rounded_rectangle([0, 0, 679, 69], radius=22, fill=S.DZELTENS)
+                dch.text((340, 35), str(kont).upper(), font=S.ietilpinat(dch, str(kont).upper(), "black", 32, 640), fill=S.MELNS, anchor="mm")
+                _nv_put(L, ch, 540, 510 + y_k + 35, 1 + 0.35 * (1 - ease_back(min(1.0, kk))), min(1.0, kk * 2.5))
+    elif k > 0:
+        if k < 0.32:
+            sc, a, cy = 1.4 - 0.4 * ease_back(min(1.0, k / 0.32)), min(1.0, k / 0.15), 730
+        elif bez_tablo or t < t_dock:
+            sc, a, cy = 1.0, 1.0, 730
+        else:
+            q = S.ease(min(1.0, (t - t_dock) / 0.45))
+            sy = 1010 + 20 + (nr - 1) * 76 + 32
+            sc, a, cy = 1 - 0.85 * q, 1 - q, 730 + (sy - 730) * q
+        if a > 0.01:
+            _nv_put(L, im, 540, cy, sc, a)
+    L.alpha_composite(_nv_glow(N, 12, 1.2))
+    return L
+
+
+def _fj_laukums(d, x0, y0, w, h):
+    """Uzbrukuma zona (no zilās līnijas līdz galam); → (X, Y) koordinātu funkcijas."""
+    X = lambda v: x0 + (v - 25) / 75 * w                              # noqa: E731
+    Yf = lambda v: y0 + (v + 42.5) / 85 * h                          # noqa: E731
+    d.rounded_rectangle([x0, y0, x0 + w, y0 + h], radius=int(h * 0.3), fill=(14, 22, 48, 255), outline=(148, 163, 184, 160), width=4)
+    d.line([(X(25) + 3, y0 + 4), (X(25) + 3, y0 + h - 4)], fill=S.ZILS + (200,), width=8)
+    d.line([(X(89), y0 + 14), (X(89), y0 + h - 14)], fill=S.SARKANS + (180,), width=4)
+    d.pieslice([X(89) - h * 0.1, Yf(0) - h * 0.1, X(89) + h * 0.1, Yf(0) + h * 0.1], 90, 270, fill=S.ZILS + (90,))
+    for yc in (-22, 22):
+        r_ = h * 0.18
+        d.ellipse([X(69) - r_, Yf(yc) - r_, X(69) + r_, Yf(yc) + r_], outline=S.SARKANS + (130,), width=3)
+        d.ellipse([X(69) - 6, Yf(yc) - 6, X(69) + 6, Yf(yc) + 6], fill=S.SARKANS + (160,))
+    d.rectangle([X(89), Yf(-3), X(92), Yf(3)], outline=S.BALTS + (200,), width=3)
+    return X, Yf
+
+
+_FJ_KR = {"G": S.DZELTENS, "A": S.ZILS, "GA": S.SARKANS, "S": (203, 213, 225)}
+
+
+def aina_fakts_ripa(t, c):
+    """Katrs sērijas / spēles vārts (vai atvairītais metiens) uz ripas: ripa pa vienai lido vārtos, skaitītājs aug."""
+    F = S.fonts
+    R = c["ripa"]
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
+    _nv_dalinas(L, t)
+    _fj_tablo(L, N, t, c)
+    _fj_virsr(L, t, R["virsr"], 390, 100)
+    a0 = S.ease(min(1.0, max(0.0, (t - 0.4) / 0.3)))
+    if R.get("apaksa") and a0 > 0:
+        S.teksts_c(d, 470, R["apaksa"], S.ietilpinat(d, R["apaksa"], "semi", 34, 900), _NV_LAB + (int(255 * a0),))
+    x0, y0, w, h = 90, 540, 900, 700
+    k0 = S.ease(min(1.0, max(0.0, (t - 0.3) / 0.4)))
+    if k0 <= 0:
+        return L
+    Lr = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    X, Yf = _fj_laukums(ImageDraw.Draw(Lr), x0, y0, w, h)
+    if k0 < 1:
+        Lr.putalpha(Lr.getchannel("A").point(lambda v: int(v * k0)))
+    L.alpha_composite(Lr)
+    pk = R["punkti"]
+    ilg = c.get("_ilg", c.get("ilgums", 5.5))
+    T0 = 0.9
+    DT = min(0.5, max(0.1, (ilg - 2.6) / max(1, len(pk))))
+    tx, ty = X(89), Yf(0)
+    nv, ped = 0, None
+    for i, p_ in enumerate(pk):
+        k = (t - T0 - i * DT) / 0.35
+        if k <= 0:
+            continue
+        kr = _FJ_KR.get(p_["k"], S.DZELTENS)
+        sx, sy = X(p_["x"]), Yf(p_["y"])
+        glaba = p_["k"] == "S"
+        q = S.ease(min(1.0, k)) * (0.86 if glaba else 1.0)
+        d.ellipse([sx - 11, sy - 11, sx + 11, sy + 11], fill=kr + (255,), outline=S.MELNS + (255,), width=3)
+        if k < 1:
+            for j in range(9):
+                qq = max(0.0, q - j * 0.04)
+                qx, qy = sx + (tx - sx) * qq, sy + (ty - sy) * qq
+                rr = 7 - j * 0.6
+                dn.ellipse([qx - rr, qy - rr, qx + rr, qy + rr], fill=S.BALTS + (int(220 * (1 - j / 9)),))
+        else:
+            d.line([(sx, sy), (sx + (tx - sx) * q, sy + (ty - sy) * q)], fill=kr + (60,), width=3)
+            nv += 1 if p_["k"] in R.get("skaita", ("G", "A", "GA", "S")) else 0
+            ped = p_
+        kf = (t - T0 - i * DT - 0.35) / 0.3
+        if 0 < kf < 1:
+            rr = 18 + 50 * kf
+            if glaba:                                                 # atvairīts – balts "vairogs"
+                ex, ey = sx + (tx - sx) * 0.86, sy + (ty - sy) * 0.86
+                dn.arc([ex - rr, ey - rr, ex + rr, ey + rr], 120, 240, fill=S.BALTS + (int(255 * (1 - kf)),), width=6)
+            else:
+                dn.ellipse([tx - rr, ty - rr, tx + rr, ty + rr], outline=kr + (int(255 * (1 - kf)),), width=6)
+    if ped and ped.get("lab"):
+        d.rounded_rectangle([x0 + 30, y0 + h - 86, x0 + 520, y0 + h - 22], radius=22, fill=(0, 0, 0, 160))
+        d.text((x0 + 50, y0 + h - 54), ped["lab"], font=S.ietilpinat(d, ped["lab"], "black", 34, 450), fill=S.BALTS, anchor="lm")
+    if R.get("legenda"):                                               # leģenda – augšmalas vidū (stūri ir noapaļoti)
+        fl_ = F("black", 26)
+        plat_ = sum(d.textlength(lab_, font=fl_) + 34 for lab_, _ in R["legenda"]) + 26 * (len(R["legenda"]) - 1)
+        xx = 540 - plat_ / 2
+        for lab_, k_ in R["legenda"]:
+            d.ellipse([xx, y0 + 26, xx + 20, y0 + 46], fill=_FJ_KR[k_])
+            d.text((xx + 30, y0 + 36), lab_, font=fl_, fill=S.BALTS, anchor="lm")
+            xx += d.textlength(lab_, font=fl_) + 34 + 26
+    beigas_ = t > T0 + len(pk) * DT + 0.4
+    if beigas_ and R.get("kopa"):                                      # beigās – īstais kopskaits (arī bez metiena vietas)
+        nv = int(R["kopa"])
+    d.text((300, 1320), str(nv), font=F("black", 130), fill=_FJ_KR.get(R.get("kr_sk", "G"), S.DZELTENS), anchor="mm")
+    if beigas_ and R.get("piezime"):
+        d.text((400, 1392), R["piezime"], font=S.ietilpinat(d, R["piezime"], "semi", 24, 580), fill=_NV_LAB, anchor="lm")
+    d.text((400, 1300), R["skaititajs"], font=S.ietilpinat(d, R["skaititajs"], "black", 48, 560), fill=S.BALTS, anchor="lm")   # (kopa)
+    if R.get("skaititajs2"):
+        d.text((400, 1352), R["skaititajs2"], font=S.ietilpinat(d, R["skaititajs2"], "semi", 32, 560), fill=_NV_LAB, anchor="lm")
+    st = R.get("stats") or []
+    ks = (t - T0 - len(pk) * DT - 0.2) / 0.4
+    if st and ks > 0:
+        S.teksts_c(d, 1430, R.get("stats_virs", "SEASON SO FAR"), F("semi", 28), _NV_LAB + (int(255 * min(1, ks)),))
+        n_ = len(st)
+        tw_ = (900 - (n_ - 1) * 16) / n_
+        for j, (lab_, val) in enumerate(st):
+            kk = ease_back(min(1.0, max(0.0, ks - j * 0.12)))
+            if kk <= 0:
+                continue
+            xx = 90 + j * (tw_ + 16)
+            d.rounded_rectangle([xx, 1460, xx + tw_, 1590], radius=22, fill=_NV_TILE + (int(255 * min(1, kk)),))
+            d.text((xx + tw_ / 2, 1505), str(val), font=S.ietilpinat(d, str(val), "black", 56, tw_ - 20), fill=S.BALTS, anchor="mm")
+            d.text((xx + tw_ / 2, 1562), str(lab_).upper(), font=S.ietilpinat(d, str(lab_).upper(), "semi", 24, tw_ - 20), fill=_NV_LAB, anchor="mm")
+    L.alpha_composite(_nv_glow(N, 10, 1.3))
+    return L
+
+
+def aina_fakts_hist(t, c):
+    """HOW RARE IS IT? – visas sezonas sērijas / spēles kā stabiņi, varoņa stabiņš dzeltens, beigās zīmogs."""
+    F = S.fonts
+    H = c["hist"]
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
+    _nv_dalinas(L, t)
+    _fj_tablo(L, N, t, c)
+    _fj_virsr(L, t, [("HOW", S.BALTS), ("RARE", S.BALTS), ("IS IT?", S.DZELTENS)], 390, 120)
+    a0 = S.ease(min(1.0, max(0.0, (t - 0.4) / 0.3)))
+    S.teksts_c(d, 480, H["apaksa"], S.ietilpinat(d, H["apaksa"], "semi", 34, 900), _NV_LAB + (int(255 * a0),))
+    kp = S.ease(min(1.0, max(0.0, (t - 0.5) / 0.4)))
+    if kp > 0:
+        yb = 560 + (1330 - 560) * kp
+        d.rounded_rectangle([80, 560, 1000, yb], radius=36, fill=(10, 14, 32, 235))
+        dn.rounded_rectangle([80, 560, 1000, yb], radius=36, outline=S.ZILS + (220,), width=4)
+    if kp >= 1:
+        bins = H["bins"]
+        PX0, PX1, PY1, HMAX = 140, 940, 1210, 500
+        nb = len(bins)
+        gap = 20
+        bw = (PX1 - PX0 - gap * (nb - 1)) / nb
+        mx = max(math.log10(cn + 1) for _, cn in bins) or 1
+        for i, (lab, cn) in enumerate(bins):
+            k = S.ease(min(1.0, max(0.0, (t - 0.9 - i * 0.14) / 0.5)))
+            hh = HMAX * math.log10(cn + 1) / mx * k
+            x = PX0 + i * (bw + gap)
+            hero = i == H["hero"]
+            kr = S.DZELTENS if hero else (90, 104, 130)
+            (dn if hero else d).rounded_rectangle([x, PY1 - max(hh, 6), x + bw, PY1], radius=14, fill=kr + (255,))
+            if k > 0.6:
+                tx_ = f"{cn:,}".replace(",", " ")
+                d.text((x + bw / 2, PY1 - hh - 28), tx_, font=S.ietilpinat(d, tx_, "black", 38, bw + 10), fill=(S.DZELTENS if hero else S.BALTS), anchor="mm")
+            d.text((x + bw / 2, PY1 + 32), str(lab), font=S.ietilpinat(d, str(lab), "black", 36, bw + 14), fill=(S.DZELTENS if hero else _NV_LAB), anchor="mm")
+        d.text((540, PY1 + 80), H["x_lab"], font=S.ietilpinat(d, H["x_lab"], "semi", 28, 860), fill=_NV_LAB, anchor="mm")
+        ka = (t - 0.9 - nb * 0.14 - 0.4) / 0.4
+        if ka > 0 and H.get("hero_lab"):
+            i = H["hero"]
+            x = PX0 + i * (bw + gap) + bw / 2
+            cn = bins[i][1]
+            y = PY1 - HMAX * math.log10(cn + 1) / mx - 104 - 12 * abs(math.sin(t * 4))
+            d.polygon([(x - 16, y + 36), (x + 16, y + 36), (x, y + 60)], fill=S.DZELTENS)
+            anc = "rm" if x > 760 else ("lm" if x < 320 else "mm")
+            d.text((x + (16 if anc == "rm" else (-16 if anc == "lm" else 0)), y + 10), H["hero_lab"], font=F("black", 34),
+                   fill=S.DZELTENS, anchor=anc)
+        kb = (t - 0.9 - nb * 0.14 - 1.0) / 0.35
+        if kb > 0:
+            ch = Image.new("RGBA", (880, 150), (0, 0, 0, 0)); dc = ImageDraw.Draw(ch)
+            dc.rounded_rectangle([0, 0, 879, 149], radius=40, fill=S.DZELTENS)
+            dc.text((440, 52), H["z1"], font=S.ietilpinat(dc, H["z1"], "black", 64, 820), fill=S.MELNS, anchor="mm")
+            dc.text((440, 112), H["z2"], font=S.ietilpinat(dc, H["z2"], "black", 34, 820), fill=S.MELNS, anchor="mm")
+            _nv_put(L, ch, 540, 1440, 1 + 0.4 * (1 - ease_back(min(1.0, kb))), min(1.0, kb * 2), -3)
+    L.alpha_composite(_nv_glow(N, 14, 1.3))
+    return L
+
+
+def aina_fakts_nak_j(t, c):
+    """NEXT UP – nākamā spēle aktīvai sērijai (bez aicinājuma komentēt)."""
+    F = S.fonts
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
+    _nv_dalinas(L, t)
+    _fj_tablo(L, N, t, c)
+    _fj_virsr(L, t, [("NEXT", S.BALTS), ("UP", S.DZELTENS)], 400, 130)
+    nk = list(c.get("nakamais") or ["", "", ""])
+    kp = S.ease(min(1.0, max(0.0, (t - 0.35) / 0.4)))
+    if kp > 0:
+        yb = 560 + (1060 - 560) * kp
+        d.rounded_rectangle([90, 560, 990, yb], radius=36, fill=(10, 14, 32, 235))
+        dn.rounded_rectangle([90, 560, 990, yb], radius=36, outline=S.DZELTENS + (220,), width=4)
+    if kp >= 1:
+        k = min(1.0, (t - 0.75) / 0.3)
+        if k > 0:
+            if c.get("badge"):
+                _fj_ripa(d, 240, 800, int(100 * ease_back(k)), c["badge"])      # ≤ 350 px – atstarpe līdz tekstam (400)
+            d.text((400, 740), str(nk[0]).upper(), font=S.ietilpinat(d, str(nk[0]).upper(), "black", 76, 560), fill=S.BALTS + (int(255 * k),), anchor="lm")
+            d.text((400, 840), str(nk[1]).upper(), font=S.ietilpinat(d, str(nk[1]).upper(), "black", 56, 560), fill=_NV_LAB + (int(255 * k),), anchor="lm")
+            if c.get("serija"):
+                d.text((400, 920), c["serija"], font=S.ietilpinat(d, c["serija"], "semi", 34, 560), fill=S.DZELTENS + (int(255 * k),), anchor="lm")
+    kq = (t - 1.3) / 0.35
+    if kq > 0 and len(nk) > 2 and nk[2]:
+        sc = 1 + 0.04 * math.sin(t * 4) if kq >= 1 else 1 + 0.5 * (1 - ease_back(min(1.0, kq)))
+        _nv_put(N, _nv_timg(str(nk[2]).upper(), S.ietilpinat(d, str(nk[2]).upper(), "black", 84, 900), S.DZELTENS), 540, 1200, sc, min(1.0, kq * 2))
+    L.alpha_composite(_nv_glow(N, 12, 1.3))
+    return L
+
+
+# ---------------------------------------------------------------- dati (ripa / histogramma) pēc fakta veida
+def _fj_spelu_lab(D, gid, kom):
+    i = (D.get("info") or {}).get((gid, kom), {})
+    o = i.get("o", "")
+    return o
+
+
+def fakts_ripa_dati(D, m, c):
+    """→ {"punkti": [{x, y, k, lab}], "virsr", "apaksa", "skaititajs", ...} vai None (tad vecā saraksta aina)."""
+    np, pd = S.np, S.pd
+    veids, _, rest = str(c.get("atsl", "")).partition(":")
+    dal = rest.split(":")
+    sp, sg, va = D["sp"], D["sg"], D["va"]
+
+    def koord(rows, k, lab_fn):
+        out = []
+        for r in rows.itertuples(index=False):
+            x, y = float(r.x) if r.x == r.x else None, float(r.y) if r.y == r.y else None
+            if x is None or y is None:
+                continue
+            sgn = -1 if x < 0 else 1
+            out.append({"x": min(99.0, max(26.0, x * sgn)), "y": max(-41.0, min(41.0, y * sgn)), "k": k, "lab": lab_fn(r), "_s": (r.datums, r.sek)})
+        return out
+
+    def dat_lab(r):
+        return f"{S.dat(r.datums).upper()}  ·  vs {r.pretinieks}"
+
+    def per_lab(r):
+        p_ = int(r.period)
+        mm_, ss_ = divmod(int(r.sek) - (p_ - 1) * 1200, 60)
+        return f"{'OT' if p_ > 3 else 'P' + str(p_)}  ·  {mm_}:{ss_:02d}"
+
+    def piespeles(pids, gids, lab_fn):
+        """Piespēles: va (vārtu tabula) → tie paši vārti metienu tabulā (spēle, komanda, laiks ±3 s)."""
+        out = []
+        v = va[va["game_id"].isin(gids)].copy()
+        v = v[(pd.to_numeric(v["assist1_id"], errors="coerce").isin(pids)) | (pd.to_numeric(v["assist2_id"], errors="coerce").isin(pids))]
+        v = v[~pd.to_numeric(v["scorer_id"], errors="coerce").isin(pids)]
+        g_ = m[(m["game_id"].isin(gids)) & (m["varti"] == 1)]
+        for r in v.itertuples(index=False):
+            s_ = (int(r.period) - 1) * 1200 + S._sek(r.laiks)
+            x = g_[(g_["game_id"] == r.game_id) & (g_["komanda"] == r.komanda) & ((g_["sek"] - s_).abs() <= 3)]
+            if len(x):
+                out += koord(x.head(1), "A", lab_fn)
+        return out
+
+    if veids in ("goals_serija", "points_serija"):
+        pid = float(dal[0])
+        x = sp[(sp["playerId"] == pid) & (sp["datums"] <= str(c.get("datums")))].sort_values("datums").tail(int(c.get("garums", 0)))
+        gids = list(x["game_id"])
+        p = koord(m[(m["game_id"].isin(gids)) & (m["metejs"] == pid) & (m["varti"] == 1)], "G", dat_lab)
+        if veids == "points_serija":
+            p += piespeles([pid], gids, dat_lab)
+        G_, A_ = int(pd.to_numeric(x["goals"], errors="coerce").fillna(0).sum()), int(pd.to_numeric(x["assists"], errors="coerce").fillna(0).sum())
+        kopa = G_ + A_ if veids == "points_serija" else G_
+        sk_ = (f"POINTS  ·  {len(gids)} GAMES" if veids == "points_serija" else f"GOALS  ·  {len(gids)} GAMES")
+        rez = {"kopa": kopa, "virsr": [("EVERY", S.BALTS), ("GOAL", S.BALTS), ("OF THE", S.BALTS), ("STREAK", S.DZELTENS)],
+               "apaksa": f"{str(c.get('v1') or '')} {c.get('vards')}".strip().upper() + "  ·  WHERE THEY CAME FROM",
+               "skaititajs": sk_, "skaititajs2": (_fj_ga(G_, A_) if veids == "points_serija" else ""),
+               "legenda": ([("GOAL", "G"), ("ASSIST", "A")] if veids == "points_serija" else None)}
+    elif veids in ("liela", "liela_duo"):
+        pids = [float(x_) for x_ in dal[0].split("-")]
+        gid = int(dal[1])
+        p = koord(m[(m["game_id"] == gid) & (m["metejs"].isin(pids)) & (m["varti"] == 1)], "G", per_lab)
+        p += piespeles(pids, [gid], per_lab)
+        x_ = sp[(sp["playerId"].isin(pids)) & (sp["game_id"] == gid)]
+        G_, A_ = int(pd.to_numeric(x_["goals"], errors="coerce").fillna(0).sum()), int(pd.to_numeric(x_["assists"], errors="coerce").fillna(0).sum())
+        rez = {"kopa": G_ + A_, "virsr": [("EVERY", S.BALTS), ("POINT", S.BALTS), ("OF THE", S.BALTS), ("NIGHT", S.DZELTENS)],
+               "apaksa": "GOALS AND ASSISTS  ·  WHERE THEY CAME FROM",
+               "skaititajs": "POINTS", "skaititajs2": _fj_ga(G_, A_),
+               "legenda": [("GOAL", "G"), ("ASSIST", "A")] if A_ else None}
+    elif veids == "vartsargs":
+        pid, gid = float(dal[0]), int(dal[1])
+        x = m[(m["game_id"] == gid) & (m["vartsargs"] == pid) & (m["uz_v"] == 1)]
+        p = koord(x[x["varti"] == 0], "S", per_lab) + koord(x[x["varti"] == 1], "GA", per_lab)
+        rez = {"kopa": int(c.get("garums", 0)) or None, "virsr": [("EVERY", S.BALTS), ("SAVE", S.DZELTENS)], "apaksa": "SHOTS ON GOAL HE FACED",
+               "skaititajs": "SAVES", "kr_sk": "S", "skaita": ("S",)}
+    elif veids in ("periods", "comeback", "atri"):
+        gid = int(dal[0])
+        kom = dal[1] if veids == "periods" else c.get("badge")
+        x = m[(m["game_id"] == gid) & (m["komanda"] == kom) & (m["varti"] == 1)]
+        if veids == "periods":
+            x = x[x["period"] == int(dal[2])]
+        if veids == "atri":
+            x = x.sort_values("sek")
+            dd = x["sek"].diff()
+            if dd.notna().any():
+                j = int(np.nanargmin(dd.to_numpy()))
+                x = x.iloc[max(0, j - 1):j + 1]
+        p = koord(x, "G", per_lab)
+        rez = {"kopa": (int(c.get("garums", 0)) if veids == "periods" else (2 if veids == "atri" else None)),
+               "virsr": [("EVERY", S.BALTS), ("GOAL", S.DZELTENS)], "apaksa": f"{S.kom_nos(kom).upper()}  ·  WHERE THEY CAME FROM",
+               "skaititajs": "GOALS"}
+    elif veids == "metieni":
+        gid, kom = int(dal[0]), c.get("badge")
+        x = m[(m["game_id"] == gid) & (m["pretinieks"] == kom) & (m["uz_v"] == 1)]
+        p = koord(x[x["varti"] == 0], "S", per_lab) + koord(x[x["varti"] == 1], "GA", per_lab)
+        rez = {"virsr": [("EVERY", S.BALTS), ("SHOT", S.BALTS), ("THEY", S.BALTS), ("SURVIVED", S.DZELTENS)],
+               "apaksa": "SHOTS ON GOAL AGAINST THEM", "skaititajs": "SHOTS FACED", "kr_sk": "S"}
+    elif veids in ("kom_uzv", "kom_zaud"):
+        kom = dal[0]
+        g = sg[((sg["home_team"] == kom) | (sg["away_team"] == kom)) & (sg["datums"] <= str(c.get("datums")))].sort_values("datums")
+        gids = list(g["game_id"].tail(int(c.get("garums", 0))))
+        if veids == "kom_uzv":
+            p = koord(m[(m["game_id"].isin(gids)) & (m["komanda"] == kom) & (m["varti"] == 1)], "G", dat_lab)
+            gg = g[g["game_id"].isin(gids)]
+            rez = {"kopa": int(sum(r_.home_total if r_.home_team == kom else r_.away_total for r_ in gg.itertuples(index=False))), "virsr": [("EVERY", S.BALTS), ("GOAL", S.BALTS), ("OF THE", S.BALTS), ("STREAK", S.DZELTENS)],
+                   "apaksa": f"{S.kom_nos(kom).upper()}  ·  GOALS IN THE WINS", "skaititajs": f"GOALS  ·  {len(gids)} WINS"}
+        else:
+            x = m[(m["game_id"].isin(gids)) & (m["pretinieks"] == kom) & (m["varti"] == 1)]
+            p = koord(x, "GA", lambda r: f"{S.dat(r.datums).upper()}  ·  by {r.komanda}")
+            gg = g[g["game_id"].isin(gids)]
+            rez = {"kopa": int(sum(r_.away_total if r_.home_team == kom else r_.home_total for r_ in gg.itertuples(index=False))), "virsr": [("EVERY", S.BALTS), ("GOAL", S.BALTS), ("AGAINST", S.SARKANS)],
+                   "apaksa": f"{S.kom_nos(kom).upper()}  ·  {len(gids)} GAMES WITHOUT A WIN", "skaititajs": f"GOALS AGAINST  ·  {len(gids)} GAMES",
+                   "kr_sk": "GA"}
+    else:
+        return None
+    if not p:
+        return None
+    p.sort(key=lambda q: q.pop("_s"))
+    rez["punkti"] = p[:60]
+    kopa = rez.get("kopa")
+    if kopa and kopa > len(rez["punkti"]):                            # tukši vārti / bez metiena vietas – nav uz ripas
+        d_ = kopa - len(rez["punkti"])
+        rez["piezime"] = f"{d_} not shown (empty net / no shot location)"
+    return rez
+
+
+def _fj_ga(G_, A_):
+    return f"{G_} goal{'' if G_ == 1 else 's'}  ·  {A_} assist{'' if A_ == 1 else 's'}"
+
+
+def _fj_serijas(vert):
+    """Sēriju garumi no bool virknes."""
+    out, r = [], 0
+    for v in vert:
+        if v:
+            r += 1
+        else:
+            if r:
+                out.append(r)
+            r = 0
+    if r:
+        out.append(r)
+    return out
+
+
+def _fj_bins_garumi(garumi, L):
+    """Sēriju garumi → stabiņi (≤ 8): 1, 2, 3 … ; vidējie apvienoti, varoņa garums atsevišķi, garāki – "L+1+"."""
+    import collections
+    cnt = collections.Counter(garumi)
+    mx = max(cnt) if cnt else L
+    vals = list(range(1, max(mx, L) + 1))
+    if len(vals) <= 8:
+        bins = [(str(v), cnt.get(v, 0)) for v in vals]
+        return bins, L - 1
+    bins = [(str(v), cnt.get(v, 0)) for v in range(1, 5)]
+    if L - 1 >= 5:
+        bins.append((f"5–{L - 1}" if L - 1 > 5 else "5", sum(cnt.get(v, 0) for v in range(5, L))))
+    hero = len(bins)
+    bins.append((str(L), cnt.get(L, 0)))
+    gar = sum(c_ for v, c_ in cnt.items() if v > L)
+    if gar:
+        bins.append((f"{L + 1}+", gar))
+    return bins, hero
+
+
+def _fj_proc(k, n):
+    p = k / max(1, n) * 100
+    return f"{p:.1f}%" if p < 1 else f"{p:.0f}%"
+
+
+def fakts_hist_dati(D, c):
+    """→ {"bins", "hero", "x_lab", "apaksa", "z1", "z2", "hero_lab", "runa"} vai None (tad vecā konteksta aina)."""
+    np, pd = S.np, S.pd
+    veids, _, rest = str(c.get("atsl", "")).partition(":")
+    dal = rest.split(":")
+    sp, sg = D["sp"], D["sg"]
+    vards_ = str(c.get("vards") or "").upper()
+    if veids in ("goals_serija", "points_serija"):
+        kol = "goals" if veids == "goals_serija" else "points"
+        L = int(c.get("garums", 0))
+        gar = []
+        for _, g in sp.sort_values("datums").groupby("playerId"):
+            gar += _fj_serijas((pd.to_numeric(g[kol], errors="coerce").fillna(0) > 0).tolist())
+        bins, hero = _fj_bins_garumi(gar, L)
+        k, n = sum(1 for v in gar if v >= L), len(gar)
+        vv = "goal" if kol == "goals" else "point"
+        rez = {"bins": bins, "hero": hero, "x_lab": f"GAMES IN A ROW WITH A {vv.upper()}",
+               "apaksa": f"ALL {n} {vv.upper()} RUNS THIS SEASON (1+ GAMES)", "hero_lab": vards_,
+               "z1": f"ONLY {k} OF {n}" if k / max(1, n) <= 0.3 else f"{k} OF {n}", "z2": f"REACHED {L} GAMES  ·  TOP {_fj_proc(k, n)}",
+               "runa": f"Only {k} of {n} {vv} runs this season {'has' if k == 1 else 'have'} reached {L} games." if k / max(1, n) <= 0.3 else ""}
+    elif veids in ("kom_uzv", "kom_zaud"):
+        L = int(c.get("garums", 0))
+        s_ = sg[sg["home_total"].notna()].sort_values("datums")
+        gar = []
+        for kom in sorted(set(s_["home_team"]) | set(s_["away_team"])):
+            g = s_[(s_["home_team"] == kom) | (s_["away_team"] == kom)]
+            uzv = (g["uzvaretajs"] == kom).tolist()
+            gar += _fj_serijas(uzv if veids == "kom_uzv" else [not u for u in uzv])
+        bins, hero = _fj_bins_garumi(gar, L)
+        k, n = sum(1 for v in gar if v >= L), len(gar)
+        ko = "WINS IN A ROW" if veids == "kom_uzv" else "GAMES IN A ROW WITHOUT A WIN"
+        rez = {"bins": bins, "hero": hero, "x_lab": ko, "apaksa": f"ALL {n} TEAM RUNS THIS SEASON (1+ GAMES)",
+               "hero_lab": str(c.get("badge") or ""), "z1": f"ONLY {k} OF {n}" if k / max(1, n) <= 0.3 else f"{k} OF {n}",
+               "z2": f"REACHED {L} GAMES  ·  TOP {_fj_proc(k, n)}",
+               "runa": (f"Only {k} of {n} team runs this season {'has' if k == 1 else 'have'} reached {L} games." if k / max(1, n) <= 0.3 else "")}
+    elif veids == "liela":
+        pid, gid = float(dal[0]), int(dal[1])
+        x = sp[(sp["playerId"] == pid) & (sp["game_id"] == gid)]
+        if x.empty:
+            return None
+        G, P = int(x["goals"].iloc[0]), int(x["points"].iloc[0])
+        kol, v_ = ("goals", G) if G >= 3 else ("points", P)
+        vals = pd.to_numeric(sp[kol], errors="coerce").fillna(0).astype(int)
+        top = max(v_ + 1, 5)
+        bins = [(str(i) if i < top else f"{top}+", int((vals == i).sum()) if i < top else int((vals >= top).sum())) for i in range(0, top + 1)]
+        hero = v_ if v_ < top else top
+        k, n = int((vals >= v_).sum()), len(vals)
+        vv = "goals" if kol == "goals" else "points"
+        rez = {"bins": bins, "hero": hero, "x_lab": f"{vv.upper()} IN ONE GAME", "apaksa": f"ALL {n:,} PLAYER GAMES THIS SEASON".replace(",", " "),
+               "hero_lab": vards_, "z1": f"ONLY {k} OF {n:,}".replace(",", " "), "z2": f"PLAYER GAMES WITH {v_}+ {vv.upper()}  ·  TOP {_fj_proc(k, n)}",
+               "runa": f"Only {k} of {n:,} player games this season had {v_} or more {vv}.".replace(",", "")}
+    elif veids == "vartsargs":
+        sv_ = int(c.get("garums", 0))
+        vg = pd.concat([D.get("h_vg"), D["vg"]], ignore_index=True)
+        ga = pd.to_numeric(vg["goalsAgainst"], errors="coerce")
+        svs = pd.to_numeric(vg["saves"], errors="coerce")
+        so = svs[(ga == 0) & (svs >= 10) & (vg["starter"].astype(str) == "True")].astype(int)
+        if len(so) < 5:
+            return None
+        edges = [0, 20, 25, 30, 35, 40, 999]
+        labs = ["<20", "20–24", "25–29", "30–34", "35–39", "40+"]
+        bins = [(labs[i], int(((so >= edges[i]) & (so < edges[i + 1])).sum())) for i in range(len(labs))]
+        hero = next(i for i in range(len(labs)) if edges[i] <= sv_ < edges[i + 1])
+        k, n = int((so >= sv_).sum()), len(so)
+        rez = {"bins": bins, "hero": hero, "x_lab": "SAVES IN A SHUTOUT", "apaksa": f"ALL {n} SHUTOUTS SINCE 2023",
+               "hero_lab": vards_, "z1": f"ONLY {k} OF {n}" if k / n <= 0.3 else f"{k} OF {n}",
+               "z2": f"SHUTOUTS WITH {sv_}+ SAVES", "runa": (f"Since 2023, only {k} of {n} shutouts had {sv_} or more saves." if k / n <= 0.3 else "")}
+    elif veids == "periods":
+        g_ = int(c.get("garums", 0))
+        vals = pd.concat([pd.to_numeric(sg[f"{h}_p{p}"], errors="coerce") for h in ("home", "away") for p in (1, 2, 3)]).dropna().astype(int)
+        top = max(g_, 5)
+        bins = [(str(i) if i < top else f"{top}+", int((vals == i).sum()) if i < top else int((vals >= top).sum())) for i in range(0, top + 1)]
+        k, n = int((vals >= g_).sum()), len(vals)
+        rez = {"bins": bins, "hero": min(g_, top), "x_lab": "GOALS BY ONE TEAM IN ONE PERIOD", "apaksa": f"ALL {n:,} TEAM PERIODS THIS SEASON".replace(",", " "),
+               "hero_lab": str(c.get("badge") or ""), "z1": f"ONLY {k} OF {n:,}".replace(",", " "), "z2": f"PERIODS WITH {g_}+ GOALS  ·  TOP {_fj_proc(k, n)}",
+               "runa": f"Only {k} of {n:,} team periods this season had {g_} or more goals.".replace(",", "")}
+    else:
+        return None
+    if not rez["bins"] or rez["hero"] >= len(rez["bins"]):
+        return None
+    return rez
+
+
+def fakti_jauns(rez, D, m, izv, st, mini_runa):
+    """Faktu scenārijs → jaunais izskats. Jebkura kļūda → vecais izskats (video netiek salauzts)."""
+    if not JAUNS_FANTASY or not rez:
+        return rez
+    try:
+        n = len(izv)
+        hero = izv[0]
+        tv = {"lab": "NHL · THE WEEK", "liels": "IN NUMBERS", "kr": [S.ZILS] * (n - 1) + [S.DZELTENS],
+              "labaja": f"STATS THRU {S.dat(rez['lidz']).upper()}"}
+        rows = [{"nr": i + 1, "vards": c.get("vards"), "vards_pilns": f"{c.get('v1') or ''} {c.get('vards') or ''}".strip(),
+                 "badge": c.get("badge"), "hook": c.get("hook"), "kr": S.DZELTENS if i == 0 else S.ZILS} for i, c in enumerate(izv)]
+        st_nr = {c_.get("nr"): c_.get("stat_rindas") for c_ in rez["kartes"] if c_.get("tips") == "fakts_mini"}
+        for i, c in enumerate(izv[1:], 2):                            # #N → #2: paplašinātā informācija, kamēr runā balss
+            sr = st_nr.get(i) or []
+            if sr == [r_ for r_ in (c.get("rindas") or []) if r_[0]][:3]:   # nav sezonas datu (tās pašas rindas) – neatkārto
+                sr = []
+            rows[i - 1]["plus"] = {"virs": c.get("saraksts_virs"), "rindas": c.get("rindas"), "stats": sr[:3],
+                                   "kont": (c.get("konteksts") or [""])[0], "runa_pre": f"Number {i}. {c['runa'][0]}"}
+        virsr = [(f"TOP {n}", S.BALTS), ("THIS WEEK", S.DZELTENS)] if n > 1 else [("STAT OF", S.BALTS), ("THE WEEK", S.DZELTENS)]
+        kartes, runa = [], [rez["runa"][0]]
+        docked = []
+        for pos, nr in enumerate(range(n, 1, -1)):
+            kartes.append({"tips": "fakts_tablo", "ilgums": 6.0, "fakti": rows, "nr": nr, "docked": list(docked), "virsr": virsr,
+                           "pirmais": pos == 0, "_tv": tv, "_tv_idx": pos, "_bez_ieejas": pos > 0, "_bez_izejas": True, "_bez_tuv": True})
+            runa.append(mini_runa[pos])
+            docked.append(nr)
+        kartes.append({"tips": "fakts_tablo", "ilgums": 4.4, "fakti": rows, "nr": 1, "docked": list(docked), "virsr": virsr,
+                       "pirmais": n == 1, "bez_tablo": n == 1, "_tv": tv, "_tv_idx": n - 1, "_bez_ieejas": n > 1, "_bez_tuv": True})
+        runa.append(("Number one. " if n > 1 else "") + hero["runa"][0])
+        ripa = fakts_ripa_dati(D, m, hero)
+        if ripa:
+            if st:
+                ripa["stats"] = [(r_[0].replace("Games played", "GP").replace("Shots on goal", "SOG"), r_[2]) for r_ in st[1][:4]]
+                ripa["stats_virs"] = st[0]
+            kartes.append({"tips": "fakts_ripa", "ilgums": 6.0, "ripa": ripa, "_tv": tv, "_tv_idx": n - 1})
+            sk1, sk2 = set(re.findall(r"\d+", hero["runa"][1])), set(re.findall(r"\d+", st[3])) if st else set()
+            papild = (" " + st[3]) if st and not sk2 <= sk1 else ""          # sezona = sērija → neatkārto tos pašus skaitļus
+            runa.append((hero["runa"][1] + papild).strip())
+        else:
+            kartes.append({"tips": "fakts_saraksts", "ilgums": 2.6 + 0.22 * min(9, len(hero["rindas"])), **hero})
+            runa.append(hero["runa"][1])
+            if st:
+                kartes.append({"tips": "fakts_saraksts", "ilgums": 3.6, **hero, "saraksts_virs": st[0], "rindas": st[1],
+                               "kopsavilkums": st[2], "pill_kr": S.ZILS, "vards_w": 420 if st[0] != "BOX SCORE" else 330, "vards_kr": S.BALTS})
+                runa.append(st[3])
+        hist = fakts_hist_dati(D, hero)
+        if hist:
+            kartes.append({"tips": "fakts_hist", "ilgums": 5.0, "hist": hist, "_tv": tv, "_tv_idx": n - 1})
+            # "That's the 14th hat trick…" jau saka skaitu → "Only 14 of …" nepiebilst (citādi skan pretrunīgi / atkārtojas)
+            kart_ = re.search(r"\d+(st|nd|rd|th)\b", hero["runa"][2])
+            runa.append((hero["runa"][2] + ("" if kart_ else " " + hist.get("runa", ""))).strip())
+        else:
+            kartes.append({"tips": "fakts_konteksts", "ilgums": 4.0, **hero, "pill_k": "HOW RARE IS IT?"})
+            runa.append(hero["runa"][2])
+        if hero.get("nakamais") and len(hero["runa"]) > 3 and hero["runa"][3]:
+            th = hero.get("th_hook") or []
+            kartes.append({"tips": "fakts_nak_j", "ilgums": 3.6, "nakamais": hero["nakamais"], "badge": hero.get("badge"),
+                           "serija": " ".join(th).upper() if th else "", "_tv": tv, "_tv_idx": n - 1})
+            runa.append(hero["runa"][3])
+        runa.append(rez["runa"][-1])
+        # āķis – jaunajā stilā
+        ap = []
+        if str(hero.get("atsl", "")).startswith(("goals_serija", "points_serija")):
+            for r_ in hero.get("rindas") or []:
+                nums = [int(x) for x in re.findall(r"(\d+)\s*[GA]", str(r_[2]))]
+                ap.append(sum(nums))
+            ap = ap[-6:]
+        uzl = str(rez["intro"].get("uzlime") or "").upper()
+        h = list(hero.get("hook") or [""])
+        aki = {"liels": h[0], "apli": [f"+{v}" for v in ap], "izcelt": [int(S.np.argmax(ap))] if ap else [],
+               "zem": " ".join(h[1:]), "josla": ("..." + uzl) if uzl else "", "vards": str(hero.get("vards") or "").upper(),
+               "kom": hero.get("badge"), "tag": "NHL  ·  THE WEEK IN NUMBERS", "kart_txt": "#1"}
+        rez["intro"] = {"aki": True, "fantasy_aki": aki, "tag": aki["tag"], "ilgums": 2.6, "_tv": tv}
+        rez["kartes"], rez["runa"] = kartes, runa
+        rez["_bez_zimoga"] = True
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"  (faktu jaunais izskats: {type(ex).__name__}: {ex} – vecais)")
+    return rez
 
 
 if __name__ == "__main__":
