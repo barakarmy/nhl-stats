@@ -389,6 +389,7 @@ FAKTI_BEIGAS = [("WHICH ONE SURPRISED YOU MOST?", "Which one surprised you? Comm
                 ("VOTE WITH A NUMBER.", "Vote for the best one with a number in the comments.")]
 # Google Sheets piedāvājums fantasy / streameru video. YouTube NAV privāto ziņu, un saites Shorts aprakstā / komentāros
 # nav klikšķināmas – tāpēc: bez saites → "Comment SHEET"; ar saiti (Etsy) → "Link in the channel" (kanāla header saite).
+JAUNI_TEKSTI = False              # ShortsBT.py (jaunais izskats) ieslēdz – piem. balsī ", and climbing." pie rostered %
 SHEET_SAITE = ""                  # piem. "https://www.etsy.com/listing/..." – kad būs Etsy sludinājums
 FANTASY_CTA = ["Want the full fantasy sheet, updated every day? Comment SHEET below.",
                "The full fantasy sheet updates every day. Comment SHEET if you want it.",
@@ -1337,7 +1338,7 @@ def veids_fantasy(m, a):
     # ESPN % rostered
     e, e_dat = espn_dati()
     if e is not None:
-        g = g.join(e[["rostered", "delta7", "trauma"]], how="left")
+        g = g.join(e[["rostered", "delta7", "trauma"] + (["espn_id"] if "espn_id" in e else [])], how="left")
         rost_txt = f"under {a.max_rostered:.0f}% rostered on ESPN"
     else:
         print("BRĪDINĀJUMS: nav sezonas/fantasy_espn.csv (palaid python fantasy_espn.py) – izslēdzu sezonas top 60 pēc punktiem; drop netiek rādīti.")
@@ -1442,6 +1443,66 @@ def veids_fantasy(m, a):
         # krāsaini punkti katram pretiniekam (zaļš – vāja aizsardzība, pelēks – vidēja, sarkans – stipra), kā leģendā
         return "dots:" + "".join("s" if o in vajas else ("t" if o in stipras else "a") for _, _, o, _ in grafiks.get(r["team"], []))
 
+    # ---- dati jaunajam kartītes izskatam (ShortsB): pēdējās 5 spēles, procentiles, ESPN tendence, nedēļas kalendārs
+    _ped = nesen.sort_values("datums").groupby("playerId")
+    _p5 = _ped["points"].apply(lambda x: [int(v) for v in x.tail(5)])
+    _s5 = _ped["sog"].apply(lambda x: [int(v) for v in x.tail(5)])
+    _r_vest = {}
+    _pv = os.path.join(BASE, "sezonas", "fantasy_espn_vesture.csv")
+    if os.path.exists(_pv) and e is not None:
+        _v = pd.read_csv(_pv).sort_values("datums")
+        for eid_, gr_ in _v.groupby("espn_id"):
+            _r_vest[int(eid_)] = list(zip(gr_["datums"], gr_["rostered"]))
+
+    def _kartas(n):
+        return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+    def viz_dati(r, veids="ADD"):
+        pid = r.name
+        grp = g[g["grupa"] == r["grupa"]]
+        cand = []
+        for kol, lab, fmt in (("iHD60", "HD CHANCES / 60", "{:.1f}"), ("ixG60", "ixG / 60", "{:.2f}"), ("SOG60", "SHOTS / 60", "{:.1f}")):
+            v_ = r.get(kol, np.nan)
+            if np.isfinite(v_):
+                cand.append(((grp[kol] < v_).mean() * 100, kol, lab, fmt.format(v_)))
+        # pickup – spēlētāja stiprākais rādītājs; drop / bench – vājākais (lai kartīte atbilst ieteikumam)
+        izv_ = (min if veids in ("DROP", "BENCH") else max)
+        pct, kol, lab, val = izv_(cand) if cand else (np.nan, "ixG60", "ixG / 60", f"{r['ixG60']:.2f}")
+        sub = f"ixG/60 {r['ixG60']:.2f}" if kol != "ixG60" else f"HD {r['iHD60']:.1f}/60"
+        rv = []
+        eid = r.get("espn_id", np.nan)
+        if eid == eid and eid is not None:
+            rv = [(d_, float(x_)) for d_, x_ in _r_vest.get(int(eid), [])][-5:]
+            if np.isfinite(r["rostered"]) and (not rv or rv[-1][0] < e_dat):
+                rv = (rv + [(e_dat, float(r["rostered"]))])[-5:]
+        ned = []
+        for j in range(7):
+            dd = (pirmdiena + timedelta(days=j)).strftime("%Y-%m-%d")
+            sp_ = [x for x in grafiks.get(r["team"], []) if x[0] == dd]
+            if sp_:
+                _, _, o, kur = sp_[0]
+                kr = ZALS if o in vajas else (SARKANS if o in stipras else NEITRALS)
+                ned.append({"o": f"{'' if kur == 'vs' else '@'}{o}", "kr": kr, "pag": dd < start.strftime("%Y-%m-%d")})
+            else:
+                ned.append({"o": "", "kr": None, "pag": dd < start.strftime("%Y-%m-%d")})
+        return {"p5": _p5.get(pid, []), "s5": _s5.get(pid, []),
+                "hd": {"lab": lab, "val": val, "pct": None if not np.isfinite(pct) else int(round(pct)),
+                       "pct_txt": "" if not np.isfinite(pct) else f"{_kartas(int(round(pct)))} pct {'D' if r['grupa'] == 'D' else 'F'}", "sub": sub},
+                "toi_vec": None if not np.isfinite(r["TOI_vec"]) else float(r["TOI_vec"]), "toi": float(r["TOI"]), "dienas": dienas,
+                "ppp": int(r["PPP"]), "pts": int(r["P"]), "ga": f"{int(r['G'])}G {int(r['A'])}A",
+                "sog_gp": f"{r['SOG_gp']:.1f}", "sog60": f"{r['SOG60']:.1f}/60",
+                "rost": None if not np.isfinite(r["rostered"]) else float(r["rostered"]),
+                "rost_vest": [(dat(pd.Timestamp(d_)) if i == 0 else str(pd.Timestamp(d_).day), x_) for i, (d_, x_) in enumerate(rv)],
+                "ned": ned, "ned_lab": f"{NAK_LAB}  ·  {int(r['sp_nak'])} GP", "sp_nak": int(r["sp_nak"]),
+                "poz": {"C": "C", "L": "LW", "R": "RW", "D": "D"}.get(str(r["poz"]), str(r["poz"]))}
+
+    def _viz_drosi(r, veids):
+        try:
+            return viz_dati(r, veids)
+        except Exception as ex:                                       # noqa: BLE001
+            print(f"  (jaunā izskata dati {r['vards']}: {type(ex).__name__} – izlaisti)")
+            return None
+
     def karte(nr, r, veids):
         vv = str(r["vards"]).split(" ", 1)
         rost = "" if not np.isfinite(r["rostered"]) else f"{r['rostered']:.0f}% ROSTERED (ESPN)"
@@ -1465,7 +1526,7 @@ def veids_fantasy(m, a):
                        ("PP PTS", f"{int(r['PPP'])}", ""),
                        (NAK_LAB, f"{int(r['sp_nak'])} GP", pretinieku_txt(r))],
             "pretinieki": pretinieki, "liels": veids, "grafika_virs": "REST OF WEEK" if stream else "NEXT WEEK",
-            "apaksa": iemesls(r) if veids in ("ADD", "STREAM") else iemesls_drop(r)}
+            "apaksa": iemesls(r) if veids in ("ADD", "STREAM") else iemesls_drop(r), "viz": _viz_drosi(r, veids)}
 
     def grafika_runa(r):
         """Balsij: ja VISAS nākamās nedēļas spēles ir pret vāju (vai visas pret stipru) aizsardzību – pasaka to."""
@@ -1515,7 +1576,10 @@ def veids_fantasy(m, a):
         veids = "STREAM" if stream else "ADD"            # sestdienas video – ADD; STREAM – tikai trešdienas streameru video
         add_veids[pid] = veids
         kartes.append(karte(nr, r, veids))
-        ros = "" if not np.isfinite(r["rostered"]) else f" Rostered in only {r['rostered']:.0f} percent of leagues."
+        _rv = (kartes[-1].get("viz") or {}).get("rost_vest") or []
+        _rd = (_rv[-1][1] - _rv[0][1]) if len(_rv) >= 2 else 0
+        ros = "" if not np.isfinite(r["rostered"]) else (f" Rostered in only {r['rostered']:.0f} percent of leagues"
+                                                         + (", and climbing." if JAUNI_TEKSTI and _rd >= 0.5 else "."))
         fr_add.append(F("f_stream" if veids == "STREAM" else "f_add",
                         (["sched4"] if r["sp_nak"] >= 4 else []) + (["sched"] if r["sp_nak"] >= max(3, maxg) else [])))
         runa.append(f"{r['vards']}, {kom_nos(r['team'])}. {int(r['P'])} points in his last {int(r['GP'])} games, "
@@ -1573,7 +1637,39 @@ def veids_fantasy(m, a):
                 f"{r['ixG60']:.2f} ixG/60, {_mmss(r['TOI'])} TOI/GP, {int(r['sp_nak'])} games {'left this week' if stream else 'next week'}"
                 + ("" if not np.isfinite(r["rostered"]) else f", {r['rostered']:.1f}% rostered") for _, r in izv.iterrows()]
     saraksts += [f"{drop_veids[pid_]} {r['vards']} ({r['team']}): {r['rostered']:.0f}% rostered – {iemesls_drop(r)}" for pid_, r in drop.iterrows()]
+    # āķis (ShortsB jaunais izskats): #1 izvēles spilgtākais fakts – punkti / spēles / metieni pēdējās 5 spēlēs
+    _hv = kartes[1]["viz"] if len(kartes) > 1 and kartes[1].get("viz") else None
+    aki_f, aki_runa = None, ""
+    def _aki():
+        aki_f, aki_runa = None, ""
+        if not _hv:
+            return aki_f, aki_runa
+        _h = izv.iloc[0]
+        _n = len(_hv["p5"])
+        _p5, _s5 = sum(_hv["p5"]), sum(_hv["s5"])
+        _dn = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+        if _p5 >= 4:
+            aki_f = {"liels": f"{_p5} POINTS", "apli": [f"+{x}" if x else "0" for x in _hv["p5"]],
+                     "izcelt": [i for i, x in enumerate(_hv["p5"]) if x == max(_hv["p5"]) and x > 0], "zem": f"IN HIS LAST {_n} GAMES"}
+            aki_runa = f"{_p5} points in his last {_n} games. And he's still on waivers."
+        elif int(_h["sp_nak"]) >= 4:
+            aki_f = {"liels": f"{int(_h['sp_nak'])} GAMES", "apli": [_dn[j][:1] for j, x in enumerate(_hv["ned"]) if x["o"] and not x["pag"]],
+                     "izcelt": [], "zem": "LEFT THIS WEEK" if stream else "NEXT WEEK"}
+            aki_runa = f"{int(_h['sp_nak'])} games {'left this week' if stream else 'next week'}. And he's still on waivers."
+        else:
+            aki_f = {"liels": f"{_s5} SHOTS", "apli": [str(x) for x in _hv["s5"]],
+                     "izcelt": [i for i, x in enumerate(_hv["s5"]) if x == max(_hv["s5"])], "zem": f"IN HIS LAST {_n} GAMES"}
+            aki_runa = f"{_s5} shots in his last {_n} games. And he's still on waivers."
+        aki_f.update({"josla": "...AND HE'S STILL ON WAIVERS", "vards": str(_h["vards"]).split(" ", 1)[-1].upper(),
+                      "kom": str(_h["team"]), "tag": "NHL  ·  FANTASY STREAMERS" if stream else "NHL  ·  FANTASY WAIVER WIRE"})
+        return aki_f, aki_runa
+    try:
+        aki_f, aki_runa = _aki()
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"  (jaunā āķa dati: {type(ex).__name__} – izlaisti)")
+        aki_f, aki_runa = None, ""
     rez_ = {
+        "aki_f": aki_f, "aki_runa": aki_runa,
         "intro": {"tag": "NHL  ·  FANTASY WAIVER WIRE", "rindas": [(f"{n_add} PICKUP{'' if n_add == 1 else 'S'}", BALTS), (f"+ {n_drop} DROP{'' if n_drop == 1 else 'S'}" if n_drop else "FOR NEXT", BALTS),
                                                                   ("NEXT WEEK" if n_drop else "WEEK", DZELTENS)],
                   "apaksa": [f"Week of {dat(start)} – {dat(beigas, True)}", "Pickups " + rost_txt] + ([rezultats_txt] if rezultats_txt else []),
