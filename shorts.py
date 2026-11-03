@@ -994,7 +994,7 @@ def xg_viz_speletaji(kartes, ids, mm, lg_sh, n_laim, g=None):
         fant = ""
         if r_ is not None:
             atsl = ("sp_laim" if lucky else "sp_nelaim") + ("_zv" if r_ >= 90 else "")
-            fant = _xg_frase(XG_FANTASY[atsl], "speletaji", r=f"{r_:.0f}")
+            fant = _xg_frase(XG_FANTASY[atsl], "speletaji", r=(f"{r_:.0f}" if r_ >= 1 else "under 1"))
         c["viz"].update(runa_fakts=fakts, runa_fant=fant, runa_pap=(fakts + " " + fant).strip())
     if g is None:
         return None
@@ -1055,7 +1055,7 @@ def xg_viz_vartsargi(kartes, ids, mm, lg_sv, n_labie, g=None):
         fant = ""
         if r_ is not None:
             atsl = "va_labs" if labs else ("va_slikts_zv" if r_ >= 90 else "va_slikts")
-            fant = _xg_frase(XG_FANTASY[atsl], "vartsargi", r=f"{r_:.0f}")
+            fant = _xg_frase(XG_FANTASY[atsl], "vartsargi", r=(f"{r_:.0f}" if r_ >= 1 else "under 1"))
         c["viz"].update(runa_fakts=fakts, runa_fant=fant, runa_pap=(fakts + " " + fant).strip())
     if g is None:
         return None
@@ -1144,7 +1144,7 @@ def xg_atskats_viz(kartes, veids, j, pec, t, bil, lidz0, no2, lidz2):
                           "speles": [{"aug": _dd(x.datums), "vid": f"{int(x.G)}G", "apa": f"{x.xG:.1f} xG", "kr": ZALS if x.G > 0 else None}
                                      for x in last.itertuples(index=False)]}),
                 ("full", {"tips": "joslas", "lab": "GOALS − xG  ·  BEFORE → SINCE", "diverg": True,
-                          "rind": [("BEFORE", d1, minus(f"{d1:+.1f}"), "pel"), ("SINCE", d2, minus(f"{d2:+.1f}"), "prim")]})]
+                          "rind": [("BEFORE", d1, minus(f"{d1:+.1f}"), "pel"), ("SINCE", d2, minus(f"{d2:+.1f}"), c["akc"])]})]
             kart = {"liels": f"{G2} G", "maz": f"{xG2:.1f} xG SINCE"}
             poz = f"{sp2} GP"
         elif veids == "vartsargi":
@@ -1167,7 +1167,7 @@ def xg_atskats_viz(kartes, veids, j, pec, t, bil, lidz0, no2, lidz2):
                           "speles": [{"aug": _dd(x.datums), "vid": minus(f"{x.gs:+.1f}"), "apa": f"{int(x.GA)} GA", "kr": ZALS if x.gs >= 0 else SARKANS}
                                      for x in last.itertuples(index=False)]}),
                 ("full", {"tips": "joslas", "lab": "GSAx PER GAME  ·  BEFORE → SINCE", "diverg": True,
-                          "rind": [("BEFORE", r1, minus(f"{r1:+.2f}"), "pel"), ("SINCE", r2, minus(f"{r2:+.2f}"), "prim")]})]
+                          "rind": [("BEFORE", r1, minus(f"{r1:+.2f}"), "pel"), ("SINCE", r2, minus(f"{r2:+.2f}"), c["akc"])]})]
             kart = {"liels": minus(f"{r2:+.2f}"), "maz": "GSAx / GP SINCE"}
             poz = "G"
         else:
@@ -1195,7 +1195,7 @@ def xg_atskats_viz(kartes, veids, j, pec, t, bil, lidz0, no2, lidz2):
                                       "kr": ZALS if y.GF > y.GA else (SARKANS if y.GF < y.GA else None)} for y in last.itertuples(index=False)]}),
                 ("full", {"tips": "joslas", "lab": "PDO VS AVERAGE (100)  ·  BEFORE → SINCE", "diverg": True,
                           "rind": [("BEFORE", float(r["PDO"]) - 100, f"{float(r['PDO']):.1f}", "pel"),
-                                   ("SINCE", (p2 - 100) if np.isfinite(p2) else 0.0, p2t, "prim")]})]
+                                   ("SINCE", (p2 - 100) if np.isfinite(p2) else 0.0, p2t, c["akc"])]})]
             kart = {"liels": p2t, "maz": "PDO SINCE"}
             poz = f"{w}-{l_}-{o}"
         c["viz"] = {"spec": spec, "poz": poz, "grupa": grupa, "zimogs": str(c.get("liels", "")),
@@ -1365,8 +1365,11 @@ def atskats(fails, m, a):
     def ats_vk(c_, virs):
         fl = [(str(b[0]), b[3].format(b[1] + (b[4] if len(b) > 4 else 0)) if np.isfinite(b[1]) else "n/a")   # PDO: +100 (josla rāda novirzi)
               for b in c_.get("bars", [])[:2]]
-        return vk(virs, f"{c_.get('v1', '')} {c_.get('v2', '')}".strip().upper(), fl, c_.get("info", ""), c_.get("_frase", ""),
-                  c_["akc"], vizu="badge", badge=c_.get("badge", ""), bkr=c_.get("bkr"))
+        v_ = vk(virs, f"{c_.get('v1', '')} {c_.get('v2', '')}".strip().upper(), fl, c_.get("info", ""), c_.get("_frase", ""),
+                c_["akc"], vizu="badge", badge=c_.get("badge", ""), bkr=c_.get("bkr"))
+        if len(fl) > 1:
+            v_["izcelt_fl"] = 1                                       # iekrāso SINCE (iznākumu), nevis BEFORE
+        return v_
     labakie = [c_ for c_ in kartes if c_["akc"] == ZALS]
     garam = [c_ for c_ in kartes if c_["akc"] == SARKANS]
     neskait_ = len(kartes) - vert_skaits
@@ -2006,7 +2009,8 @@ def veids_fantasy(m, a):
         kartes.append(karte(nr, r, veids))
         _rv = (kartes[-1].get("viz") or {}).get("rost_vest") or []
         _rd = (_rv[-1][1] - _rv[0][1]) if len(_rv) >= 2 else 0
-        ros = "" if not np.isfinite(r["rostered"]) else (f" Rostered in only {r['rostered']:.0f} percent of leagues"
+        ros = "" if not np.isfinite(r["rostered"]) else ((f" Rostered in only {r['rostered']:.0f} percent of leagues" if r["rostered"] >= 0.5
+                                                          else " Rostered in almost no leagues")       # ne "0 percent"
                                                          + (", and climbing." if JAUNI_TEKSTI and _rd >= 0.5 else "."))
         fr_add.append(F("f_stream" if veids == "STREAM" else "f_add",
                         (["sched4"] if r["sp_nak"] >= 4 else []) + (["sched"] if r["sp_nak"] >= max(3, maxg) else [])))
