@@ -3620,7 +3620,7 @@ def aina_fantasy_jauna(t, c):
     def stabini(x1, y1, vert, a, T1, lab_=None):
         if not vert:
             return
-        bw, gap, base, mx = 30, 12, y1 - 38, 84
+        bw, gap, base, mx = 30, 12, y1 - 38, 60                      # ≤ 60 px – cipars virs stabiņa nepārklāj virsrakstu
         bx = x1 - 22 - len(vert) * bw - (len(vert) - 1) * gap
         mxv = max(max(vert), 1)
         for i, p in enumerate(vert):
