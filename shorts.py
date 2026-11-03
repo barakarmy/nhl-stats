@@ -605,8 +605,8 @@ def veids_speletaji(m, a):
     kartes += [karte(p, r, i, False) for i, (p, r) in enumerate(nelaim.iterrows(), 1)]
     for c_, (_, r_) in zip(kartes, pd.concat([laim, nelaim]).iterrows()):
         c_["_poz"] = r_["pozicija"]
-    xg_viz_drosi(xg_viz_speletaji, kartes, list(laim.index) + list(nelaim.index), mm,
-                 mm["varti"].sum() / max(1, mm["uz_v"].sum()) * 100, len(laim))
+    xg_karte = xg_viz_drosi(xg_viz_speletaji, kartes, list(laim.index) + list(nelaim.index), mm,
+                            mm["varti"].sum() / max(1, mm["uz_v"].sum()) * 100, len(laim), g)
     runa = [f"Which NHL scorers are running on luck? Goals versus expected goals, {dat(no)} to {dat(lidz)}."]
     F = Frazes()
     fr = []
@@ -633,6 +633,7 @@ def veids_speletaji(m, a):
     runa.append(f"{beigu_frase('speletaji')} {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "team": r["team"], "G": sk(r["G"]), "xG": sk(r["xG"]), "sog": sk(r["sog"]), "sp": sk(r["sp"])}  # noqa: E731
     return {
+        "xg_karte": xg_karte,
         "intro": {"tag": "NHL  ·  xG LUCK REPORT", "rindas": [("WHO'S", BALTS), ("RUNNING", BALTS), ("ON LUCK?", DZELTENS)],
                   "apaksa": ["Goals vs expected goals (xG)", periods_txt(no, lidz)],
                   "legenda": [("LUCKY  →  a cooldown is coming", ZALS, MELNS), ("UNLUCKY  →  due for goals", SARKANS, BALTS)]},
@@ -675,7 +676,7 @@ def veids_komandas(m, a):
                 "apaksa": f"{r['sh']:.1f} SH% + {r['sv']:.1f} SV%  ·  avg ≈ 100"}
     kartes = [karte(k, r, i, True) for i, (k, r) in enumerate(laim.iterrows(), 1)]
     kartes += [karte(k, r, i, False) for i, (k, r) in enumerate(nelaim.iterrows(), 1)]
-    xg_viz_drosi(xg_viz_komandas, kartes, list(laim.index) + list(nelaim.index), mm, t,
+    xg_karte = xg_viz_drosi(xg_viz_komandas, kartes, list(laim.index) + list(nelaim.index), mm, t,
                  t["GF"].sum() / max(1, t["SF"].sum()) * 100, (1 - t["GA"].sum() / max(1, t["SA"].sum())) * 100, len(laim), bil)
     zime = lambda v: ("plus " if v >= 0 else "minus ") + f"{abs(v):.0f}"   # noqa: E731
     zime_xg = lambda v: ("plus " if v >= 0 else "minus ") + xgv(abs(v))     # noqa: E731  (x.5 paliek)
@@ -707,6 +708,7 @@ def veids_komandas(m, a):
     runa.append(f"{beigu_frase('komandas')} {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {k_: sk(r[k_]) for k_ in ("PDO", "sh", "sv", "GD", "xGD", "GP")}   # noqa: E731
     return {
+        "xg_karte": xg_karte,
         "intro": {"tag": "NHL  ·  TEAM LUCK REPORT", "rindas": [("WHICH TEAMS", BALTS), ("ARE LIVING", BALTS), ("ON LUCK?", DZELTENS)],
                   "apaksa": ["PDO = shooting % + save %  ·  avg ≈ 100", periods_txt(no, lidz)],
                   "legenda": [("HIGH PDO  →  expect a drop", ZALS, MELNS), ("LOW PDO  →  better days ahead", SARKANS, BALTS)]},
@@ -757,8 +759,8 @@ def veids_vartsargi(m, a):
                 "apaksa": f"saved above expected  ·  .{round(r['sv'] * 10):03d} SV%  ·  {int(r['SA'])} shots"}
     kartes = [karte(r, i, True) for i, (_, r) in enumerate(labie.iterrows(), 1)]
     kartes += [karte(r, i, False) for i, (_, r) in enumerate(sliktie.iterrows(), 1)]
-    xg_viz_drosi(xg_viz_vartsargi, kartes, list(labie.index) + list(sliktie.index), mm,
-                 (1 - g["GA"].sum() / max(1, g["SA"].sum())) * 100, len(labie))
+    xg_karte = xg_viz_drosi(xg_viz_vartsargi, kartes, list(labie.index) + list(sliktie.index), mm,
+                            (1 - g["GA"].sum() / max(1, g["SA"].sum())) * 100, len(labie), g)
     runa = ["Which NHL goalies are stealing games, and which are costing them? Goals saved above expected."]
     F = Frazes()
     fr = []
@@ -783,6 +785,7 @@ def veids_vartsargi(m, a):
     runa.append(f"{beigu_frase('vartsargi')} {atskata_teksts()} Follow for weekly NHL stats.")
     rinda = lambda r: {"vards": r["vards"], "kom": r["kom"], **{k_: sk(r[k_]) for k_ in ("GSAx", "GSAx_sp", "GA", "xGA", "SA", "sv", "GP")}}  # noqa: E731
     return {
+        "xg_karte": xg_karte,
         "intro": {"tag": "NHL  ·  GOALIE REPORT", "rindas": [("WHO'S", BALTS), ("STEALING", BALTS), ("GAMES?", DZELTENS)],
                   "apaksa": ["Goals saved above expected (GSAx)", periods_txt(no, lidz)],
                   "legenda": [("STEALING  →  saves more than expected", ZALS, MELNS), ("COSTING  →  lets in more than expected", SARKANS, BALTS)]},
@@ -826,6 +829,66 @@ ATSKATS_XG_JOSLA = {
     "puse": ["...HALF RIGHT", "...A SPLIT DECISION", "...RIGHT DOWN THE MIDDLE"],
     "slikti": ["...NOT OUR BEST CALL", "...THE MODEL MISSED", "...NO HIDING THIS ONE"],
 }
+
+
+# xG kartīšu papildu balss (jaunais izskats): 1 fakts no flīzēm + fantasy teikums; ≥ 4 varianti, reta_frase (neatkārtojas)
+XG_FAKTI = {
+    "sp_sh": ["He's shooting {sh} percent. League average: {lg}.", "{sh} percent of his shots go in. Most players: about {lg}.",
+              "That's {sh} percent shooting, against a league average of {lg}.", "His shooting percentage is {sh}. The league average is {lg}."],
+    "sp_seri": ["A goal in {k} of his last {n} games.", "He's scored in {k} of his last {n} games.",
+                "{k} of his last {n} games with a goal.", "Goals in {k} of {n} games lately."],
+    "sp_sausais": ["No goals in {k} straight games.", "{k} straight games without a goal.",
+                   "Scoreless in his last {k} games.", "That's {k} games in a row without a goal."],
+    "sp_metieni": ["He's putting {s} shots on goal a game.", "{s} shots on goal per game. The volume is there.",
+                   "Still shooting: {s} shots on goal a game.", "{s} shots a game. The chances keep coming."],
+    "va_sv": ["He's stopping {sv} percent of shots. League average: {lg}.", "{sv} percent saves, against a league average of {lg}.",
+              "Save percentage: {sv}. League: {lg}.", "{sv} percent saved. Most goalies: about {lg}."],
+    "va_seri_labs": ["Better than expected in {k} of his last {n} games.", "{k} of his last {n} games above expected.",
+                     "He's beaten the model in {k} of {n} games.", "Above expected in {k} of his last {n} starts."],
+    "va_seri_slikts": ["Worse than expected in {k} of his last {n} games.", "{k} of his last {n} games below expected.",
+                       "Below the model in {k} of {n} games.", "Under expected in {k} of his last {n} starts."],
+    "va_slodze": ["He's facing {sa} shots a game.", "{sa} shots a night. That's a heavy workload.",
+                  "The defense isn't helping: {sa} shots a game.", "Facing {sa} shots every game."],
+    "kom_sh": ["They're shooting {sh} percent. League average: {lg}.", "Their shooters convert {sh} percent. Normal is about {lg}.",
+               "A {sh} percent shooting rate, against a league average of {lg}.", "Team shooting: {sh} percent. League: {lg}."],
+    "kom_sv": ["Their goalies are stopping {sv} percent. League average: {lg}.", "Their goalies save {sv} percent. League: {lg}.",
+               "Team save percentage: {sv}. Normal is about {lg}.", "Their goaltending is at {sv} percent. League: {lg}."],
+    "kom_uzv": ["They've won {k} of their last {n}.", "{k} wins in their last {n} games.",
+                "Winners in {k} of their last {n}.", "{k} of their last {n} went their way."],
+    "kom_zaud": ["They've lost {k} of their last {n}.", "{k} losses in their last {n} games.",
+                 "Only {w} wins in their last {n}.", "{k} of their last {n} got away from them."],
+}
+XG_FANTASY = {
+    "sp_laim": ["Rostered in {r} percent of ESPN leagues. A sell-high candidate.", "{r} percent rostered on ESPN. Sell high while you can.",
+                "{r} percent of fantasy teams have him. This is the time to sell high.", "A sell-high candidate, rostered in {r} percent of leagues."],
+    "sp_laim_zv": ["Enjoy it, but expect a cooldown.", "Don't expect this pace to last.", "Keep him, but expect fewer goals.",
+                   "Ride it, but the cooldown is coming."],
+    "sp_nelaim": ["Rostered in {r} percent of ESPN leagues. A buy-low candidate.", "{r} percent rostered on ESPN. Buy low.",
+                  "A buy-low target, rostered in {r} percent of leagues.", "{r} percent rostered. The goals should come."],
+    "sp_nelaim_zv": ["Don't panic. The goals should come.", "Hold him. The goals are coming.", "Don't sell low. The chances are there.",
+                     "Be patient. The goals will follow."],
+    "va_labs": ["{r} percent rostered on ESPN. Ride the hot hand.", "Rostered in {r} percent of leagues. Ride him while it lasts.",
+                "Fantasy managers: ride the hot hand.", "Start him while he's hot."],
+    "va_slikts": ["{r} percent rostered on ESPN. Bench him until he turns it around.", "Rostered in {r} percent of leagues. Sit him for now.",
+                  "Fantasy managers: bench him for now.", "Sit him until the numbers turn."],
+    "va_slikts_zv": ["Don't drop him. He'll turn it around.", "Hold him. Better days are coming.", "Patience. He's better than this.",
+                     "Keep him. This should turn."],
+}
+
+
+def _xg_frase(saraksts, veids, **v):
+    return reta_frase(saraksts, veids=veids, n=3).format(**{**{"sh": "", "lg": "", "k": "", "n": "", "s": "", "sv": "", "sa": "",
+                                                                "r": "", "w": ""}, **v})
+
+
+def _rost_now(e_now, pid):
+    try:
+        pid = int(float(pid))
+        if e_now is not None and pid in e_now.index and pd.notna(e_now.loc[pid]["rostered"]):
+            return float(e_now.loc[pid]["rostered"])
+    except Exception:                                                 # noqa: BLE001
+        pass
+    return None
 
 
 def rez_gadijums(ok, kopa):
@@ -876,7 +939,7 @@ def _teksts_rinda(c, apaksa):
     return {"tips": "teksts", "lab": "WHAT IT MEANS", "val": det, "sub": apaksa}
 
 
-def xg_viz_speletaji(kartes, ids, mm, lg_sh, n_laim):
+def xg_viz_speletaji(kartes, ids, mm, lg_sh, n_laim, g=None):
     e_now, vest = _espn_tendence()
     for i, (c, pid) in enumerate(zip(kartes, ids)):
         lucky = i < n_laim
@@ -908,10 +971,39 @@ def xg_viz_speletaji(kartes, ids, mm, lg_sh, n_laim):
             "kart": {"liels": minus(f"{d_:+.1f}"), "maz": f"{G} G · {xG:.1f} xG"},
             "aki": {"liels": f"{G} GOAL{'' if G == 1 else 'S'}", "apli": [f"+{int(x)}" if x else "0" for x in pg.tail(6)["G"]],
                     "izcelt": [int(np.argmax(pg.tail(6)["G"].to_numpy()))] if len(pg) else [],
-                    "zem": f"ON {xG:.1f} EXPECTED (xG)", "josla": "...AND IT WON'T LAST" if lucky else "...AND HE'S DUE"}}
+                    "zem": f"ON {xG:.1f} EXPECTED (xG)", "josla": "...AND IT WON'T LAST" if lucky else "...AND HE'S DUE"},
+            "xy": (xG, G)}
+        # papildu balss: fakts + fantasy
+        pl = pg.tail(min(10, len(pg)))
+        n_, k_ = len(pl), int((pl["G"] > 0).sum())
+        sausais = 0
+        for x in pg["G"].to_numpy()[::-1]:
+            if x > 0:
+                break
+            sausais += 1
+        if lucky:
+            fakts = (_xg_frase(XG_FAKTI["sp_seri"], "speletaji", k=k_, n=n_) if (n_ >= 5 and k_ / n_ >= 0.5 and sh < 1.6 * lg_sh)
+                     else _xg_frase(XG_FAKTI["sp_sh"], "speletaji", sh=f"{sh:.0f}", lg=f"{lg_sh:.0f}"))
+        elif sausais >= 3:
+            fakts = _xg_frase(XG_FAKTI["sp_sausais"], "speletaji", k=sausais)
+        elif sog / max(gp, 1) >= 2.8:
+            fakts = _xg_frase(XG_FAKTI["sp_metieni"], "speletaji", s=f"{sog / max(gp, 1):.1f}")
+        else:
+            fakts = _xg_frase(XG_FAKTI["sp_sh"], "speletaji", sh=f"{sh:.0f}", lg=f"{lg_sh:.0f}")
+        r_ = _rost_now(e_now, pid)
+        fant = ""
+        if r_ is not None:
+            atsl = ("sp_laim" if lucky else "sp_nelaim") + ("_zv" if r_ >= 90 else "")
+            fant = _xg_frase(XG_FANTASY[atsl], "speletaji", r=f"{r_:.0f}")
+        c["viz"].update(runa_fakts=fakts, runa_fant=fant, runa_pap=(fakts + " " + fant).strip())
+    if g is None:
+        return None
+    return {"punkti": [(float(a_), float(b_)) for a_, b_ in zip(g["xG"], g["G"])], "veids": "diag",
+            "x_lab": "EXPECTED GOALS (xG)", "y_lab": "GOALS", "linija": "GOALS = xG",
+            "augsa": ("LUCKY", ZALS), "apaksa": ("UNLUCKY", SARKANS)}
 
 
-def xg_viz_vartsargi(kartes, ids, mm, lg_sv, n_labie):
+def xg_viz_vartsargi(kartes, ids, mm, lg_sv, n_labie, g=None):
     e_now, vest = _espn_tendence()
     for i, (c, gid) in enumerate(zip(kartes, ids)):
         labs = i < n_labie
@@ -946,7 +1038,30 @@ def xg_viz_vartsargi(kartes, ids, mm, lg_sv, n_labie):
             "kart": {"liels": minus(f"{gs:+.1f}"), "maz": f"{svf(sv)} SV%"},
             "aki": {"liels": minus(f"{gs:+.1f}"), "apli": [minus(f"{x:+.1f}") for x in pg.tail(5)["gs"]],
                     "apli_kr": [ZALS if x >= 0 else SARKANS for x in pg.tail(5)["gs"]], "izcelt": [],
-                    "zem": "GOALS SAVED ABOVE EXPECTED", "josla": "...HE'S STEALING GAMES" if labs else "...HE'S COSTING GAMES"}}
+                    "zem": "GOALS SAVED ABOVE EXPECTED", "josla": "...HE'S STEALING GAMES" if labs else "...HE'S COSTING GAMES"},
+            "xy": (xGA, GA)}
+        pl = pg.tail(min(10, len(pg)))
+        n_, k_ = len(pl), int((pl["gs"] >= 0).sum())
+        if labs:
+            fakts = (_xg_frase(XG_FAKTI["va_seri_labs"], "vartsargi", k=k_, n=n_) if n_ >= 4 and k_ / n_ >= 0.6
+                     else _xg_frase(XG_FAKTI["va_sv"], "vartsargi", sv=f"{sv:.1f}", lg=f"{lg_sv:.1f}"))
+        elif n_ >= 4 and (n_ - k_) / n_ >= 0.6:
+            fakts = _xg_frase(XG_FAKTI["va_seri_slikts"], "vartsargi", k=n_ - k_, n=n_)
+        elif SA / max(gp, 1) >= 30:
+            fakts = _xg_frase(XG_FAKTI["va_slodze"], "vartsargi", sa=f"{SA / max(gp, 1):.0f}")
+        else:
+            fakts = _xg_frase(XG_FAKTI["va_sv"], "vartsargi", sv=f"{sv:.1f}", lg=f"{lg_sv:.1f}")
+        r_ = _rost_now(e_now, gid)
+        fant = ""
+        if r_ is not None:
+            atsl = "va_labs" if labs else ("va_slikts_zv" if r_ >= 90 else "va_slikts")
+            fant = _xg_frase(XG_FANTASY[atsl], "vartsargi", r=f"{r_:.0f}")
+        c["viz"].update(runa_fakts=fakts, runa_fant=fant, runa_pap=(fakts + " " + fant).strip())
+    if g is None:
+        return None
+    return {"punkti": [(float(a_), float(b_)) for a_, b_ in zip(g["xGA"], g["GA"])], "veids": "diag",
+            "x_lab": "EXPECTED GOALS AGAINST", "y_lab": "GOALS ALLOWED", "linija": "ALLOWED = EXPECTED",
+            "augsa": ("COSTING", SARKANS), "apaksa": ("STEALING", ZALS)}
 
 
 def _kom_rezultati(kom, no, lidz):
@@ -988,7 +1103,23 @@ def xg_viz_komandas(kartes, ids, mm, t, lg_sh, lg_sv, n_laim, bil):
             "kart": {"liels": f"{r['PDO']:.1f}", "maz": "PDO"},
             "aki": {"liels": f"{w}–{l_}–{o}", "apli": rez, "apli_kr": [ZALS if x == "W" else (SARKANS if x == "L" else NEITRALS) for x in rez],
                     "izcelt": [], "zem": f"PDO {r['PDO']:.1f}  ·  AVERAGE 100",
-                    "josla": "...AND IT'S LUCK" if lucky else "...AND IT'S BAD LUCK"}}
+                    "josla": "...AND IT'S LUCK" if lucky else "...AND IT'S BAD LUCK"},
+            "xy": (float(r["sv"]), float(r["sh"]))}
+        d_sh, d_sv = r["sh"] - lg_sh, r["sv"] - lg_sv
+        sh_avots = (d_sh >= d_sv) if lucky else (d_sh <= d_sv)
+        fakts = (_xg_frase(XG_FAKTI["kom_sh"], "komandas", sh=f"{r['sh']:.1f}", lg=f"{lg_sh:.1f}") if sh_avots
+                 else _xg_frase(XG_FAKTI["kom_sv"], "komandas", sv=f"{r['sv']:.1f}", lg=f"{lg_sv:.1f}"))
+        rz = _kom_rezultati(kom, no, lidz)[-10:]
+        n_, uzv = len(rz), sum(1 for x in rz if x == "W")
+        otrs = ""
+        if n_ >= 4 and lucky and uzv / n_ >= 0.6:
+            otrs = _xg_frase(XG_FAKTI["kom_uzv"], "komandas", k=uzv, n=n_)
+        elif n_ >= 4 and not lucky and (n_ - uzv) / n_ >= 0.5:
+            otrs = _xg_frase(XG_FAKTI["kom_zaud"], "komandas", k=n_ - uzv, n=n_, w=uzv)
+        c["viz"].update(runa_fakts=fakts, runa_fant=otrs, runa_pap=(fakts + " " + otrs).strip())
+    return {"punkti": [(float(a_), float(b_)) for a_, b_ in zip(t["sv"], t["sh"]) if np.isfinite(a_) and np.isfinite(b_)],
+            "veids": "pdo", "x_lab": "SAVE %", "y_lab": "SHOOTING %", "linija": "PDO = 100",
+            "augsa": ("LUCKY", ZALS), "apaksa": ("UNLUCKY", SARKANS)}
 
 
 def xg_atskats_viz(kartes, veids, j, pec, t, bil, lidz0, no2, lidz2):
@@ -1074,11 +1205,12 @@ def xg_atskats_viz(kartes, veids, j, pec, t, bil, lidz0, no2, lidz2):
 
 def xg_viz_drosi(fn, *args):
     try:
-        fn(*args)
+        return fn(*args)
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (jaunā izskata xG dati: {type(ex).__name__}: {ex} – izlaisti)")
         for c in args[0]:
             c.pop("viz", None)
+    return None
 
 
 # ================================================================ atskats
