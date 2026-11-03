@@ -4400,9 +4400,12 @@ def main():
     elif a.atskats:
         orig = os.path.dirname(os.path.abspath(a.atskats))
         info += [f"ATSKATS PAR:  {os.path.relpath(orig, BASE)}", "Šis ir atskats – jauns atskats nav vajadzīgs."]
-        # oriģinālajā INFO.txt atzīmē, ka atskats ir izveidots
+        # oriģinālajā INFO.txt atzīmē, ka atskats ir izveidots (tests citā mapē, piem. video_bt\ – neatzīmē, lai --gaida
+        # joprojām rāda īsto atskatu kā vajadzīgu)
         oi = os.path.join(orig, "INFO.txt")
-        if os.path.exists(oi):
+        if os.path.abspath(os.path.dirname(orig)) != os.path.abspath(a.mape):
+            print("  (tests citā mapē – oriģinālā INFO.txt netiek atzīmēts kā atskatīts)")
+        elif os.path.exists(oi):
             with open(oi, "a", encoding="utf-8") as f:
                 f.write(f"\nATSKATS IZVEIDOTS: {tagad:%Y-%m-%d %H:%M} → {os.path.relpath(mape, BASE)}\n")
     elif s.get("ref_vesture"):
