@@ -59,7 +59,7 @@ MAPE_FONS = os.path.join(S.BASE, "shorts_fons")
 MAPE_MUZIKA = os.path.join(S.BASE, "shorts_muzika")
 MAPE_SFX = os.path.join(S.BASE, "shorts_sfx")
 MUZIKAS_SKALUMS = 0.10          # rezerve: ja skaļumu neizdodas izmērīt (0–1)
-MUZIKA_ZEM_BALSS_DB = 18        # fona mūzika par tik dB (LUFS) klusāka nekā balss (lietotāja izvēle 28.10.; lielāks = klusāka);
+MUZIKA_ZEM_BALSS_DB = 20        # fona mūzika par tik dB (LUFS) klusāka nekā balss (lietotāja izvēle 28.10.; lielāks = klusāka);
                                 # kamēr runā balss – automātiski vēl klusāka. Strādā vienādi jebkurai dziesmai.
 SFX_SKALUMS = 0.55              # skaņu efekti
 FONA_TUMSUMS = 0.55             # cik stipri fona video aptumšots (0 = neaptumšots, 1 = melns)
@@ -537,12 +537,15 @@ def sfx_notikumi(ainas):
                 ev.append((t0 + 0.5, "tick", 0.9))
         if tips == "fakts_hook":
             ev.append((t0 + 1.0, "tick", 0.9))
-        elif tips == "intro":
+        elif tips in ("intro", "fantasy_intro"):
             ev.append((t0 + 1.0, "tick", 0.9))
         elif tips == "fakts_mini":
             ev += [(t0 + 0.9, "boom", 0.8)] + [(t0 + 1.3 + 0.15 * j, "tick", 0.6) for j in range(len(c.get("stat_rindas", [])))]
         elif tips == "fakts_konteksts":
             ev.append((t0 + 0.9, "boom", 1.0))
+        elif tips == "fantasy" and JAUNS_FANTASY and c.get("viz"):
+            ev += [(t0 + tt_, "tick", 0.5) for tt_ in (0.75, 1.0, 1.25, 1.5, 1.75)]
+            ev.append((t0 + _nv_zimoga_laiks(c) + 0.24, "boom", 0.9))
         elif tips == "fantasy":
             ev += [(t0 + 0.3 + 0.08 * i, "tick", 0.6) for i in range(len(c.get("flizes", [])))]
             ev.append((t0 + 1.45, "boom", 0.8))
@@ -838,6 +841,8 @@ def _pulss(t):
 
 def aina_aki(t, s):
     """Pirmais kadrs uzreiz pilns: skaitlis/apgalvojums + noslēpumaina #1 kartīte ar izpludinātu vārdu."""
+    if s.get("fantasy_aki"):
+        return aina_aki_fantasy(t, s)
     im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     S.pill(d, 0, 250, s["tag"], S.fonts("semi", 40), S.ZILS, S.MELNS, center=True)
@@ -1742,6 +1747,8 @@ def aina_karte(t, c):
 
 
 def aina_fantasy(t, c):
+    if JAUNS_FANTASY and c.get("viz"):                                # jaunais izskats (fantasy / streameri; ne atskats)
+        return aina_fantasy_jauna(t, c)
     """Fantasy kartīte: komandas josla augšā (50/50), flīžu skaitļi skaitās, verdikts – krāsaina poga."""
     im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
@@ -2350,6 +2357,9 @@ def renderet(s, izvade, kanals="", balss=None):
             print("BALSS: audio faili tukši vai nepilnīgi – video bez skaņas.")
         audio = None
     kopa = sum(a[2] for a in ainas)
+    for _v, _c, _ilg in ainas:                                        # ainas garums (jaunajai kartītei – zīmoga laiks)
+        if isinstance(_c, dict):
+            _c["_ilg"] = _ilg
     subt = []
     if audio and OPC["subtitri"] and len(S.VARDI_AINAS) == len(ainas):
         sak_, vv_ = 0.0, []
@@ -2374,7 +2384,8 @@ def renderet(s, izvade, kanals="", balss=None):
     T1 = ainas[0][2]                                                  # pirmās ainas beigas – galvene pārvēršas watermark
     fn_map = {"fantasy": aina_fantasy, "grafiks": aina_grafiks, "fakts_hook": aina_fakts_hook,
               "fakts_saraksts": aina_fakts_saraksts, "fakts_konteksts": aina_fakts_konteksts,
-              "fakts_nakamais": S.aina_fakts_nakamais, "fakts_mini": aina_fakts_mini}
+              "fakts_nakamais": S.aina_fakts_nakamais, "fakts_mini": aina_fakts_mini,
+              "fantasy_intro": lambda t_, c_: aina_intro(t_, c_["intro"])}
     # cilpai: āķa (1. ainas) sākuma kadrs – beigās video pāriet atpakaļ uz to
     v0, c0, _ = ainas[0]
     if v0 == "intro":
@@ -2510,6 +2521,9 @@ def ieslegt():
         return s_
     S.atskats = atskats_ar_aki
     S.VEIDI["fakts"] = veids_fakti_b
+    for v_ in ("fantasy", "streameri"):                               # jaunais āķis fantasy / streameru video
+        if v_ in S.VEIDI:
+            S.VEIDI[v_] = (lambda f_: (lambda m, a: fantasy_aki(f_(m, a))))(S.VEIDI[v_])
     for arg, k in (("--muzika", "muzika"), ("--fons", "fons")):     # konkrēts fails testam:  --muzika dziesma.mp3
         if arg in sys.argv:
             i_ = sys.argv.index(arg)
@@ -2526,6 +2540,429 @@ def ieslegt():
         if arg in sys.argv:
             OPC[k] = False
             sys.argv.remove(arg)
+
+
+
+# ================================================================ JAUNAIS FANTASY / STREAMERU IZSKATS (kopš 02.11.)
+# Āķis: "7 POINTS" + punkti pa spēlēm + "...AND HE'S STILL ON WAIVERS" + noslēpumaina #1 kartīte ar kustīgu "?".
+# Kartīte: vārds ar komandas kodu fonā un divkrāsu pasvītru "/", logs ar neona rāmi un vienu gaismiņu, kas
+# plūdeni "izrullējas" uz leju, flīzes ar mini grafikiem, ESPN rostered tendence, verdikta zīmogs virsū beigās.
+# Pagaidām tikai ShortsBT.py (testa versija, video_bt\\). ShortsB.py – vecais izskats, līdz jaunais būs pabeigts.
+JAUNS_FANTASY = False            # ShortsBT.py to ieslēdz (tests); kad gatavs – True arī šeit
+_NV_TILE, _NV_SL, _NV_LAB = (30, 41, 59), (100, 116, 139), (148, 163, 184)
+_NV_KESA = {}
+
+
+def _nv_timg(txt, f, fill, stroke=0, sfill=None):
+    k = (txt, f.path, f.size, fill, stroke, sfill)
+    if k not in _NV_KESA:
+        if len(_NV_KESA) > 400:
+            _NV_KESA.clear()
+        d0 = ImageDraw.Draw(Image.new("RGBA", (4, 4)))
+        bb = d0.textbbox((0, 0), txt, font=f, stroke_width=stroke)
+        im = Image.new("RGBA", (max(1, bb[2] - bb[0] + 8), max(1, bb[3] - bb[1] + 8)), (0, 0, 0, 0))
+        ImageDraw.Draw(im).text((4 - bb[0], 4 - bb[1]), txt, font=f, fill=fill, stroke_width=stroke, stroke_fill=sfill)
+        _NV_KESA[k] = im
+    return _NV_KESA[k]
+
+
+def _nv_put(layer, im, cx, cy, sc=1.0, a=1.0, rot=0.0, anchor="c"):
+    if a <= 0.01 or sc <= 0.01:
+        return
+    if sc != 1.0:
+        im = im.resize((max(1, int(im.width * sc)), max(1, int(im.height * sc))), Image.BICUBIC)
+    if rot:
+        im = im.rotate(rot, resample=Image.BICUBIC, expand=True)
+    if a < 1:
+        im = im.copy()
+        im.putalpha(im.getchannel("A").point(lambda v: int(v * a)))
+    x = cx - im.width / 2 if anchor == "c" else cx
+    layer.alpha_composite(im, (int(x), int(cy - im.height / 2)))
+
+
+def _nv_glow(layer, r=18, s=1.3):
+    sm = layer.resize((S.W // 4, S.H // 4), Image.BILINEAR).filter(ImageFilter.GaussianBlur(r / 4)).resize((S.W, S.H), Image.BILINEAR)
+    sm.putalpha(sm.getchannel("A").point(lambda v: min(255, int(v * s))))
+    out = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    out.alpha_composite(sm)
+    out.alpha_composite(sm)
+    out.alpha_composite(layer)
+    return out
+
+
+def _nv_mirgo(t, t0):
+    k = t - t0
+    if k < 0:
+        return 0.0
+    for lim, v in ((0.05, 1), (0.10, 0.1), (0.16, 0.9), (0.20, 0.2), (0.3, 1)):
+        if k < lim:
+            return v
+    return 1.0
+
+
+def _nv_perim(x0, y0, x1, y1, s, r=36, ins=2.5):
+    """Punkts uz noapaļota taisnstūra kontūras (tā pati līnija, ko zīmē rounded_rectangle)."""
+    x0, y0, x1, y1 = x0 + ins, y0 + ins, x1 - ins, y1 - ins
+    r = max(1.0, min(r - ins, (x1 - x0) / 2, (y1 - y0) / 2))
+    w_, h_ = x1 - x0 - 2 * r, y1 - y0 - 2 * r
+    loks = math.pi * r / 2
+    posmi = [("l", (x0 + r, y0), (1, 0), w_), ("a", (x1 - r, y0 + r), -90, loks), ("l", (x1, y0 + r), (0, 1), h_),
+             ("a", (x1 - r, y1 - r), 0, loks), ("l", (x1 - r, y1), (-1, 0), w_), ("a", (x0 + r, y1 - r), 90, loks),
+             ("l", (x0, y1 - r), (0, -1), h_), ("a", (x0 + r, y0 + r), 180, loks)]
+    s %= sum(p[3] for p in posmi)
+    for tips, p0, v, garums in posmi:
+        if s <= garums:
+            if tips == "l":
+                return (p0[0] + v[0] * s, p0[1] + v[1] * s)
+            ang = math.radians(v + 90 * s / loks)
+            return (p0[0] + r * math.cos(ang), p0[1] + r * math.sin(ang))
+        s -= garums
+    return (x0 + r, y0)
+
+
+def _nv_gaisma(dn, box, t, atr=410, kr=(255, 225, 225), garums=16):
+    """Viena gaismiņa, kas lēni skrien pa noapaļoto rāmi (ar mīkstu oreolu)."""
+    px, py = _nv_perim(*box, t * atr)
+    for rr, al in ((34, 25), (24, 45), (16, 70)):
+        dn.ellipse([px - rr, py - rr, px + rr, py + rr], fill=kr + (al,))
+    for j in range(garums):
+        px, py = _nv_perim(*box, t * atr - j * 9)
+        rr = 9 - j * 0.45
+        dn.ellipse([px - rr, py - rr, px + rr, py + rr], fill=kr + (int(255 * (1 - j / garums)),))
+
+
+_NV_DAL = [(random.Random(i).uniform(60, 1020), random.Random(i + 99).uniform(0, 1), random.Random(i + 7).uniform(0.6, 1.4),
+            random.Random(i + 3).choice([S.DZELTENS, S.ZILS, (255, 255, 255)])) for i in range(40)]
+
+
+def _nv_dalinas(L, t):
+    d = ImageDraw.Draw(L)
+    for x, ph, sp, kr in _NV_DAL:
+        p = (ph + t * 0.09 * sp) % 1
+        y = 1700 - p * 1500
+        a = int(150 * math.sin(math.pi * p))
+        r = 3 + 3 * sp
+        xx = x + 30 * math.sin(t + ph * 9)
+        d.ellipse([xx - r, y - r, xx + r, y + r], fill=kr + (a,))
+
+
+def _nv_kratit(L, t, t0, amp=14, dur=0.25):
+    k = (t - t0) / dur
+    if not 0 <= k < 1:
+        return L
+    a = amp * (1 - k) ** 2
+    rnd = random.Random(int(t * 1000))
+    out = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    out.paste(L, (int(rnd.uniform(-a, a)), int(rnd.uniform(-a, a))), L)
+    return out
+
+
+def _nv_zibsnis(L, t, t0, s=0.14, dur=0.14):
+    k = (t - t0) / dur
+    if 0 <= k < 1:
+        L.alpha_composite(Image.new("RGBA", (S.W, S.H), (255, 255, 255, int(255 * s * (1 - k)))))
+
+
+def fantasy_aki(s):
+    """Fantasy / streameru scenārijs → āķis sākumā (vecā ievada vietā) + āķa teikums balsī."""
+    if not s or not JAUNS_FANTASY or not s.get("aki_f"):
+        return s
+    vecais = s["intro"]
+    s["intro"] = {"aki": True, "fantasy_aki": s["aki_f"], "tag": s["aki_f"]["tag"], "ilgums": 2.6}
+    s["kartes"].insert(0, {"tips": "fantasy_intro", "intro": vecais, "ilgums": 3.2})   # vecais ievads – 2. ainā
+    s["runa"].insert(0, s["aki_runa"])
+    return s
+
+
+def aina_aki_fantasy(t, s):
+    """Fantasy / streameru āķis. Pirmais kadrs jau ar galveno skaitli (Shorts plūsmai un cilpai)."""
+    a_ = s["fantasy_aki"]
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
+    _nv_dalinas(L, t)
+    S.pill(d, 0, 250, a_["tag"], S.fonts("semi", 40), S.ZILS, S.MELNS, center=True)
+    f_l = S.ietilpinat(d, a_["liels"], "black", 210, S.W - 120)
+    _nv_put(L, _nv_timg(a_["liels"], f_l, S.BALTS), 540, 480, 1 + 0.12 * (1 - S.ease(t / 0.2)))
+    apli = a_.get("apli", [])
+    n = len(apli)
+    for i, txt in enumerate(apli):
+        kk = (t - 0.15 - i * 0.08) / 0.22
+        if kk <= 0:
+            continue
+        izc = i in a_.get("izcelt", [])
+        cx, cy = 540 + (i - (n - 1) / 2) * 160, 705
+        r = (72 if izc else 60) * ease_back(kk)
+        kr = S.DZELTENS if izc else S.ZILS
+        dn.ellipse([cx - r, cy - r, cx + r, cy + r], fill=kr + (255,))
+        if kk > 0.6:
+            dn.text((cx, cy), txt, font=S.fonts("black", 58 if izc else 48), fill=S.MELNS, anchor="mm")
+    _nv_put(L, _nv_timg(a_["zem"], S.fonts("black", 66), (203, 213, 225)), 540, 835, 1, S.ease((t - 0.45) / 0.25))
+    k = (t - 0.65) / 0.28
+    if k > 0:                                                         # dzeltena josla "izbrauc"
+        bar = Image.new("RGBA", (S.W, 170), (0, 0, 0, 0)); db = ImageDraw.Draw(bar)
+        f_ = S.ietilpinat(db, a_["josla"], "black", 58, S.W - 220)
+        tw = db.textlength(a_["josla"], font=f_) + 110; x0 = (S.W - tw) / 2
+        db.polygon([(x0 + 32, 25), (x0 + tw, 25), (x0 + tw - 32, 135), (x0, 135)], fill=S.DZELTENS)
+        db.text((S.W / 2, 80), a_["josla"], font=f_, fill=S.MELNS, anchor="mm")
+        m = Image.new("L", (S.W, 170), 0); ImageDraw.Draw(m).rectangle([0, 0, S.W * S.ease(min(1, k)), 170], fill=255)
+        from PIL import ImageChops
+        bar.putalpha(ImageChops.multiply(bar.getchannel("A"), m))
+        L.alpha_composite(bar, (0, 900))
+    k = (t - 0.85) / 0.3
+    if k > 0:                                                         # noslēpumainā kartīte: mirgojošs neona rāmis + kustīga "?"
+        prim, _ = kom_krasas(a_.get("kom"))
+        box = (190, 1130, 890, 1560)
+        al = _nv_mirgo(t, 0.85)
+        d.rounded_rectangle(box, radius=36, fill=(10, 14, 32, int(235 * S.ease(min(1, k)))))
+        dn.rounded_rectangle(box, radius=36, outline=prim + (int(255 * al),), width=5)
+        _nv_put(N, _nv_timg("#1", S.fonts("black", 124), S.DZELTENS), 540, 1230, 1, al)
+        nm = Image.new("RGBA", (640, 130), (0, 0, 0, 0))
+        ImageDraw.Draw(nm).text((320, 65), a_["vards"], font=S.ietilpinat(d, a_["vards"], "black", 100, 600), fill=S.BALTS, anchor="mm")
+        _nv_put(L, nm.filter(ImageFilter.GaussianBlur(18)), 540, 1415, 1, S.ease(min(1, k)))
+        if t > 1.15:
+            _nv_put(N, _nv_timg("?", S.fonts("black", 150), S.DZELTENS), 540 + 18 * math.sin(t * 5.5), 1410 - 22 * abs(math.sin(t * 4.2)),
+                    1 + 0.1 * math.sin(t * 9), S.ease((t - 1.15) / 0.2), 10 * math.sin(t * 5.5))
+    L.alpha_composite(_nv_glow(N, 20, 1.4))
+    return L
+
+
+def _nv_zimoga_laiks(c):
+    return max(3.2, c.get("_ilg", 6.5) - 1.9)
+
+
+def aina_fantasy_jauna(t, c):
+    v = c["viz"]
+    u = t
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
+    _nv_dalinas(L, t)
+    S.pill(d, 0, 250, c["augsa"], S.fonts("semi", 40), c["akc"], S.MELNS if c["akc"] in (S.ZALS, S.DZELTENS) else S.BALTS, center=True)
+    prim, sek = kom_krasas(c.get("badge"))
+    F = S.fonts
+    WH, LAB, SL, Y, G = S.BALTS, _NV_LAB, _NV_SL, S.DZELTENS, S.ZALS
+    ease, eb = S.ease, ease_back
+
+    def eo(x):
+        return ease(min(1.0, max(0.0, x)))
+
+    # --- vārds: komandas kods fonā + vārds + divkrāsu pasvītra "/"
+    kw_ = eo(u / 0.6)
+    _nv_put(L, _nv_timg(str(c.get("badge", "")), F("black", 300), prim + (55,)), 760 + (1 - kw_) * 160 - u * 6, 490, 1, kw_)
+    ka = eo((u - 0.05) / 0.25)
+    if c.get("v1"):
+        _nv_put(L, _nv_timg(c["v1"].upper(), F("semi", 52), (255, 255, 255, 225)), 100 - (1 - ka) * 200, 445, 1, ka, 0, "l")
+    vards = c["v2"].upper()
+    fn = S.ietilpinat(d, vards, "black", 140, 880)
+    x = 96
+    for i, ch in enumerate(vards):
+        kk = (u - 0.12 - i * 0.045) / 0.3
+        im = _nv_timg(ch, fn, WH)
+        if kk > 0:
+            _nv_put(L, im, x + im.width / 2, 540 - (1 - eb(min(1, kk), 2.2)) * 140, 1, min(1, kk * 3))
+        x += fn.getlength(ch)
+    kp = eo((u - 0.3) / 0.45)
+    if kp > 0:
+        x0p, x1p, yp = 100, 980, 622
+        xe = x0p + (x1p - x0p) * kp
+        xs = x0p + (x1p - x0p) * 0.6
+        d.polygon([(x0p, yp), (min(xe, xs + 8), yp), (min(xe, xs - 4), yp + 12), (x0p, yp + 12)], fill=prim)
+        if xe > xs + 20:
+            d.polygon([(xs + 20, yp), (xe, yp), (xe, yp + 12), (xs + 8, yp + 12)], fill=sek)
+    al = eo((u - 0.4) / 0.3)
+    if al > 0:
+        d.text((980, 420), f"{v['poz']}  ·  {c.get('badge', '')}", font=F("black", 34), fill=LAB + (int(255 * al),), anchor="ra")
+    # --- logs, kas plūdeni izrullējas
+    U0, U1, YA, YB = 0.45, 2.0, 700, 1625
+
+    def edge(uu):
+        k_ = min(1.0, max(0.0, (uu - U0) / (U1 - U0)))
+        return YA + (YB - YA) * k_ * k_ * (3 - 2 * k_)
+
+    def t_at(y):
+        lo, hi = U0, U1
+        for _ in range(30):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if edge(mid) < y else (lo, mid)
+        return hi
+    yb_ = edge(u) if u > U0 else 660
+    box = (70, 660, 1010, yb_)
+    kw = eo((u - 0.45) / 0.25)
+    C = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dc = ImageDraw.Draw(C)
+    if kw > 0 and yb_ > 690:
+        for pad, al_ in ((12, 22), (7, 45), (3, 80)):                   # mīksts spīdums ap rāmi (bez izpludināšanas – ātri)
+            d.rounded_rectangle((box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad), radius=36 + pad,
+                                outline=prim + (int(al_ * kw),), width=pad + 2)
+        d.rounded_rectangle(box, radius=36, fill=(10, 14, 32, int(240 * kw)))
+        d.rounded_rectangle(box, radius=36, outline=prim + (int(230 * kw),), width=5)
+        if u > 0.9:
+            _nv_gaisma(dn, box, u)
+    X0, X1, GAP = 100, 980, 20
+    CW = (X1 - X0 - GAP) / 2
+
+    def ta(y0):
+        return eo((yb_ - y0 - 10) / 130)
+
+    def gk(t0, dur=0.6):
+        return min(1.0, max(0.0, (u - t0) / dur))
+
+    def flize(x0, y0, x1, y1, lab, val, a, sub=None, sub_kr=None):
+        dc.rounded_rectangle([x0, y0, x1, y1], radius=24, fill=_NV_TILE + (int(255 * a),))
+        dc.text((x0 + 22, y0 + 16), lab, font=F("semi", 28), fill=LAB + (int(255 * a),))
+        dc.text((x0 + 22, y0 + 52), val, font=S.ietilpinat(dc, val, "black", 64, 230), fill=WH + (int(255 * a),))
+        if sub:
+            dc.text((x0 + 22, y1 - 46), sub, font=F("semi", 28), fill=(sub_kr or LAB) + (int(255 * a),))
+
+    def stabini(x1, y1, vert, a, T1):
+        if not vert:
+            return
+        bw, gap, base, mx = 30, 12, y1 - 38, 84
+        bx = x1 - 22 - len(vert) * bw - (len(vert) - 1) * gap
+        mxv = max(max(vert), 1)
+        for i, p in enumerate(vert):
+            kk = eb(gk(T1 + i * 0.08, 0.35))
+            hh = max(8, mx * p / max(3, mxv) * kk) if kk > 0 else 0
+            if hh:
+                dc.rounded_rectangle([bx + i * (bw + gap), base - hh, bx + i * (bw + gap) + bw, base], radius=8,
+                                     fill=(Y if p == mxv and p > 0 else SL) + (int(255 * a),))
+                if kk > 0.8:
+                    dc.text((bx + i * (bw + gap) + bw / 2, base - hh - 16), str(p), font=F("black", 24), fill=WH + (int(255 * a),), anchor="mm")
+        dc.text((x1 - 22, y1 - 14), f"LAST {len(vert)} GP", font=F("semi", 20), fill=LAB + (int(255 * a),), anchor="rb")
+
+    # 1) PTS
+    x0, y0, x1, y1 = X0, 685, X0 + CW, 865; a = ta(y0)
+    if a > 0:
+        flize(x0, y0, x1, y1, "PTS", str(v["pts"]), a, v["ga"])
+        stabini(x1, y1, v["p5"], a, t_at(y0 + 110))
+    # 2) SOG / GP
+    x0, y0, x1, y1 = X0 + CW + GAP, 685, X1, 865; a = ta(y0)
+    if a > 0:
+        flize(x0, y0, x1, y1, "SOG / GP", v["sog_gp"], a, v["sog60"])
+        stabini(x1, y1, v["s5"], a, t_at(y0 + 110) + 0.1)
+    # 3) spēlētāja stiprākais rādītājs (HD iespējas / ixG / metieni) – procentile savā grupā
+    x0, y0, x1, y1 = X0, 880, X0 + CW, 1060; a = ta(y0)
+    if a > 0:
+        h = v["hd"]
+        flize(x0, y0, x1, y1, h["lab"], h["val"], a, h["sub"])
+        if h.get("pct") is not None:
+            cx, cy, r = x1 - 105, y1 - 50, 80
+            dc.arc([cx - r, cy - r, cx + r, cy + r], 180, 360, fill=SL + (int(200 * a),), width=14)
+            pc = h["pct"] / 100 * eo(gk(t_at(y0 + 110), 0.7))
+            if pc > 0.005:
+                dc.arc([cx - r, cy - r, cx + r, cy + r], 180, 180 + 180 * pc, fill=Y + (int(255 * a),), width=14)
+            ang = math.radians(180 + 180 * pc)
+            dc.line([(cx, cy), (cx + (r - 24) * math.cos(ang), cy + (r - 24) * math.sin(ang))], fill=WH + (int(255 * a),), width=5)
+            dc.ellipse([cx - 8, cy - 8, cx + 8, cy + 8], fill=WH + (int(255 * a),))
+            dc.text((cx, cy + 24), h["pct_txt"], font=F("semi", 22), fill=LAB + (int(255 * a),), anchor="mm")
+    # 4) PP PTS – tikai skaitlis
+    x0, y0, x1, y1 = X0 + CW + GAP, 880, X1, 1060; a = ta(y0)
+    if a > 0:
+        flize(x0, y0, x1, y1, "PP PTS", str(v["ppp"]), a, f"last {v['dienas']} days")
+    # 5) ICE TIME – agrāk pret pēdējām N dienām
+    x0, y0, x1, y1 = X0, 1075, X1, 1235; a = ta(y0); T1 = t_at(y0 + 100)
+    if a > 0:
+        dc.rounded_rectangle([x0, y0, x1, y1], radius=24, fill=_NV_TILE + (int(255 * a),))
+        dc.text((x0 + 22, y0 + 16), "ICE TIME PER GAME", font=F("semi", 28), fill=LAB + (int(255 * a),))
+        rind = ([("EARLIER", v["toi_vec"], SL, T1)] if v.get("toi_vec") else []) + [(f"LAST {v['dienas']} DAYS", v["toi"], prim, T1 + 0.25)]
+        skala = max(22.0, math.ceil(max(x_[1] for x_ in rind)) + 1)
+        for jj, (lab, mins, kr, t0_) in enumerate(rind):
+            yy = y0 + 62 + jj * 48 + (24 if len(rind) == 1 else 0)
+            kk = eo(gk(t0_, 0.45))
+            dc.text((x0 + 22, yy + 18), lab, font=F("semi", 28), fill=(203, 213, 225, int(255 * a)), anchor="lm")
+            bx0, bw_ = x0 + 250, 480
+            dc.rounded_rectangle([bx0, yy, bx0 + bw_, yy + 36], radius=18, fill=(255, 255, 255, int(18 * a)))
+            if kk > 0:
+                bx1 = bx0 + bw_ * mins / skala * kk
+                dc.rounded_rectangle([bx0, yy, max(bx0 + 36, bx1), yy + 36], radius=18, fill=kr + (int(255 * a),))
+                dc.text((bx1 + 14, yy + 18), S._mmss(mins), font=F("black", 32), fill=WH + (int(255 * a),), anchor="lm")
+        if v.get("toi_vec") and abs(v["toi"] - v["toi_vec"]) >= 0.5:
+            dlt = v["toi"] - v["toi_vec"]
+            kc = (u - T1 - 0.65) / 0.3
+            if kc > 0:
+                ch = Image.new("RGBA", (170, 50), (0, 0, 0, 0)); dch = ImageDraw.Draw(ch)
+                dch.rounded_rectangle([0, 0, 169, 49], radius=25, fill=G if dlt > 0 else S.SARKANS)
+                dch.text((85, 25), ("+" if dlt > 0 else "−") + S._mmss(dlt), font=F("black", 34), fill=S.MELNS if dlt > 0 else WH, anchor="mm")
+                _nv_put(N, ch, x1 - 105, y0 + 30, 1 + 0.6 * (1 - eb(min(1, kc))), min(1, kc * 3))
+    # 6) NEDĒĻA – kalendārs ar pretiniekiem (zaļš – vāja aizsardzība, pelēks – vidēja, sarkans – stipra)
+    x0, y0, x1, y1 = X0, 1250, X1, 1425; a = ta(y0); T1 = t_at(y0 + 90)
+    if a > 0:
+        dc.rounded_rectangle([x0, y0, x1, y1], radius=24, fill=_NV_TILE + (int(255 * a),))
+        dc.text((x0 + 22, y0 + 16), v["ned_lab"], font=F("semi", 28), fill=LAB + (int(255 * a),))
+        bw, gap = 112, 10
+        for i, dd in enumerate(v["ned"]):
+            kk = eb(gk(T1 + i * 0.06, 0.3))
+            if kk <= 0:
+                continue
+            xx = x0 + 22 + i * (bw + gap); hh = 104 * kk; yb = y1 - 16
+            if dd["o"]:
+                fill = tuple(dd["kr"]) + (110 if dd["pag"] else 230,)
+            else:
+                fill = (255, 255, 255, 8 if dd["pag"] else 16)
+            dc.rounded_rectangle([xx, yb - hh, xx + bw, yb], radius=16, fill=fill)
+            if kk > 0.7:
+                tk_ = WH if dd["o"] and not dd["pag"] else LAB
+                dc.text((xx + bw / 2, yb - hh + 26), ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"][i], font=F("black", 24), fill=tk_, anchor="mm")
+                if dd["o"]:
+                    dc.text((xx + bw / 2, yb - 30), dd["o"], font=S.ietilpinat(dc, dd["o"], "black", 28, bw - 10), fill=tk_, anchor="mm")
+    # 7) ESPN ROSTERED – tendence pēdējās dienās
+    x0, y0, x1, y1 = X0, 1440, X1, 1600; a = ta(y0); T1 = t_at(y0 + 80)
+    rv = v.get("rost_vest") or []
+    if a > 0 and v.get("rost") is not None:
+        dc.rounded_rectangle([x0, y0, x1, y1], radius=24, fill=_NV_TILE + (int(255 * a),))
+        dc.text((x0 + 22, y0 + 16), f"ROSTERED ON ESPN" + (f" · LAST {len(rv)} DAYS" if len(rv) >= 2 else ""),
+                font=F("semi", 28), fill=LAB + (int(255 * a),))
+        g_ = gk(T1, 0.9)
+        r0 = rv[0][1] if len(rv) >= 2 else v["rost"]
+        vv = r0 + (v["rost"] - r0) * eo(g_)
+        dc.text((x0 + 22, y0 + 52), f"{vv:.1f}%", font=F("black", 60), fill=WH + (int(255 * a),))
+        dlt = v["rost"] - r0
+        kc = (u - T1 - 0.9) / 0.3
+        if len(rv) >= 2 and abs(dlt) >= 0.1 and kc > 0:
+            _nv_put(C, _nv_timg(("▲ " if dlt > 0 else "▼ ") + f"{abs(dlt):.1f}", F("black", 34), G if dlt > 0 else S.SARKANS),
+                    x0 + 200 + (20 if vv >= 10 else 0), y0 + 88, 1 + 0.5 * (1 - eb(min(1, kc))), min(1, kc * 3), 0, "l")
+        if c.get("liels") in ("DROP", "BENCH"):
+            txt = "leagues are dropping him" if dlt <= -0.5 else "still widely rostered"
+        else:
+            txt = "leagues are starting to notice" if dlt >= 0.5 else ("leagues are dropping him" if dlt <= -0.5 else "still under the radar")
+        dc.text((x0 + 22, y1 - 12), txt, font=F("semi", 24), fill=LAB + (int(255 * a * eo(kc if kc > 0 else 0)),), anchor="lb")
+        if len(rv) >= 2:
+            px0, px1, py0, py1 = x1 - 400, x1 - 34, y0 + 58, y1 - 40          # zem virsraksta rindas
+            lo_, hi_ = min(x_ for _, x_ in rv) - 0.15, max(x_ for _, x_ in rv) + 0.1
+            pts = [(px0 + i * (px1 - px0) / (len(rv) - 1), py1 - (py1 - py0) * (x_ - lo_) / (hi_ - lo_)) for i, (_, x_) in enumerate(rv)]
+            n = g_ * (len(pts) - 1); seg = [pts[0]]
+            for i in range(1, len(pts)):
+                if n >= i:
+                    seg.append(pts[i])
+                elif n > i - 1:
+                    f_ = n - (i - 1)
+                    seg.append((pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f_, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f_))
+            if len(seg) > 1:
+                dc.line(seg, fill=Y + (int(255 * a),), width=5, joint="curve")
+            for i, (p_, (dl, _)) in enumerate(zip(pts, rv)):
+                if n >= i - 0.01:
+                    dc.ellipse([p_[0] - 8, p_[1] - 8, p_[0] + 8, p_[1] + 8], fill=WH + (int(255 * a),))
+                dc.text((p_[0], y1 - 8), dl, font=F("semi", 20), fill=LAB + (int(255 * a),), anchor="mb")
+    if yb_ > 690 and yb_ >= YB - 0.5:
+        L.alpha_composite(C)                                          # izrullēts – maska nav vajadzīga
+    elif yb_ > 690:
+        from PIL import ImageChops
+        m = Image.new("L", (S.W, S.H), 0)
+        ImageDraw.Draw(m).rounded_rectangle([box[0] + 4, box[1] + 4, box[2] - 4, box[3] - 6], radius=min(32, (yb_ - 670) / 2), fill=255)
+        C.putalpha(ImageChops.multiply(C.getchannel("A"), m))
+        L.alpha_composite(C)
+    # --- verdikta zīmogs virsū kartītei
+    tz = _nv_zimoga_laiks(c)
+    k = (u - tz) / 0.24
+    if k > 0:
+        akc = tuple(c["akc"])
+        st = Image.new("RGBA", (680, 200), (0, 0, 0, 0)); ds = ImageDraw.Draw(st)
+        ds.rounded_rectangle([8, 8, 672, 192], radius=26, fill=(10, 14, 32, 215), outline=akc, width=12)
+        ds.text((340, 100), c["liels"], font=S.ietilpinat(ds, c["liels"], "black", 124, 600), fill=akc, anchor="mm")
+        _nv_put(N, st, 540, 1140, 1 + 1.5 * (1 - eo(k)), min(1, k * 3), 8)
+    L.alpha_composite(N)
+    if k > 0:
+        _nv_zibsnis(L, u, tz + 0.24)
+        L = _nv_kratit(L, u, tz + 0.24)
+    return L
 
 
 if __name__ == "__main__":
