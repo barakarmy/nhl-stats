@@ -2043,6 +2043,25 @@ def atskats_fantasy(j, m, a):
 
 POZ_GARA = {"L": "LW", "R": "RW", "C": "C", "D": "D", "LW": "LW", "RW": "RW"}
 
+# fantasy atskata pirmais ekrāns: "X for Y last week." + teikums (balss) un dzeltenā josla – pēc trāpījumu daļas.
+# Izvēle ar reta_frase: neatkārto variantus, kas bija pēdējos 4 atskatos.
+ATSKATS_REZ_BALSS = {
+    "perfekti": ["A perfect week.", "Every call landed.", "Clean sweep.", "Not a single miss.", "Perfect on every call."],
+    "labi": ["A strong week.", "Most of our calls hit.", "A good week for the list.", "We'll take that.", "Mostly right."],
+    "vairak": ["More hits than misses.", "On the right side.", "More right than wrong.", "A winning week, barely.",
+               "Positive, not perfect."],
+    "puse": ["Half right.", "A split week.", "Right down the middle.", "Half hits, half misses.", "An even split."],
+    "slikti": ["Not our best week.", "A tough week for us.", "We missed more than we hit.", "Not good enough.",
+               "No hiding this one."],
+}
+ATSKATS_REZ_JOSLA = {
+    "perfekti": ["...A PERFECT WEEK", "...EVERY CALL LANDED", "...CLEAN SWEEP"],
+    "labi": ["...A STRONG WEEK", "...MOST CALLS HIT", "...WE'LL TAKE THAT"],
+    "vairak": ["...MORE HITS THAN MISSES", "...MORE RIGHT THAN WRONG", "...POSITIVE, NOT PERFECT"],
+    "puse": ["...HALF RIGHT", "...A SPLIT WEEK", "...RIGHT DOWN THE MIDDLE"],
+    "slikti": ["...NOT OUR BEST WEEK", "...A TOUGH WEEK", "...NO HIDING THIS ONE"],
+}
+
 
 def atskats_jauna_dati(kartes, hit_, miss_, trap, kopa, no, lidz, j):
     """Fantasy atskats jaunajā izskatā (ShortsBT): katrai kartītei "viz" (punkti/metieni pa spēlēm, nedēļas kalendārs,
@@ -2099,16 +2118,9 @@ def atskats_jauna_dati(kartes, hit_, miss_, trap, kopa, no, lidz, j):
         return None, "", izvele
     sec = [c for c in kartes if c["akc"] in (ZALS, SARKANS)]
     dala = trap / kopa
-    if dala >= 1:
-        josla, teik = "...A PERFECT WEEK", "A perfect week."
-    elif dala >= 0.75:
-        josla, teik = "...A STRONG WEEK", "A strong week."
-    elif dala > 0.5:
-        josla, teik = "...MORE HITS THAN MISSES", "More hits than misses."
-    elif dala == 0.5:
-        josla, teik = "...HALF RIGHT", "Half right."
-    else:
-        josla, teik = "...NOT OUR BEST WEEK", "Not our best week."
+    gad = ("perfekti" if dala >= 1 else "labi" if dala >= 0.75 else "vairak" if dala > 0.5 else "puse" if dala == 0.5 else "slikti")
+    teik = reta_frase(ATSKATS_REZ_BALSS[gad], veids="atskats_fantasy", n=4)          # balss – ≥ 5 varianti
+    josla = reta_frase(ATSKATS_REZ_JOSLA[gad], veids="atskats_fantasy", n=4)         # josla ekrānā – 3 varianti
     aki = {"liels": f"{trap}/{kopa}", "apli": ["✓" if x["akc"] == ZALS else "✗" for x in sec][:6],
            "apli_kr": [ZALS if x["akc"] == ZALS else SARKANS for x in sec][:6], "izcelt": [],
            "zem": "OUR CALLS LAST WEEK", "josla": josla, "vards": "", "kom": "", "tag": "NHL  ·  FANTASY RECAP",
