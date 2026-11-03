@@ -1303,7 +1303,7 @@ def veids_fakti_b(m, a):
     mini_runa = []
     for nr, c in zip(range(n, 1, -1), citi[::-1]):
         st = fakta_statistika(D, c)
-        kartes.append({"tips": "fakts_mini", "ilgums": 5.0, **c, "nr": nr,
+        kartes.append({"tips": "fakts_mini", "ilgums": 5.0, **c, "nr": nr, "stat_virs": st[0] if st else None,
                        "stat_rindas": [r_ for r_ in (st[1] if st else c["rindas"]) if r_[0]][:3]})
         runa.append(f"Number {nr}. {c['runa'][0]} {c['runa'][2]}".replace("  ", " "))
         mini_runa.append(runa[-1])
@@ -2382,12 +2382,14 @@ def renderet(s, izvade, kanals="", balss=None):
     audio = S.ierunat(s["runa"], balss, tmp) if balss else None
     if audio and len(audio) == len(ainas) and all(dur > 0 for _, dur in audio):
         ainas = [(v, c, max(ilg, dur + 0.45)) for (v, c, ilg), (_, dur) in zip(ainas, audio)]
-        if JAUNS_FANTASY:                                             # jaunā kartīte: zīmogs pēc balss, aina pagarināta
+        if JAUNS_FANTASY and len(S.VARDI_AINAS) == len(ainas):       # jaunā kartīte: zīmogs kopā ar verdikta frāzi
             ainas_ = []
-            for (v, c, ilg), (_, dur) in zip(ainas, audio):
+            for i_, ((v, c, ilg), vl) in enumerate(zip(ainas, S.VARDI_AINAS)):
                 if isinstance(c, dict) and c.get("tips") == "fantasy" and c.get("viz"):
-                    c["_balss_beigas"] = dur + 0.15
-                    ilg = max(ilg, max(4.5, dur + 0.15) + 1.6)
+                    tz_ = _nv_frazes_laiks(vl, s["runa"][i_] if i_ < len(s["runa"]) else "", c.get("_zim_frase"))
+                    if tz_ is not None:
+                        c["_zim_t"] = tz_ + 0.15                      # balss sākas 0,15 s pēc ainas
+                        ilg = max(ilg, _nv_zimoga_laiks(c) + 1.6)
                 ainas_.append((v, c, ilg))
             ainas = ainas_
     else:
@@ -2989,7 +2991,8 @@ def aina_aki_fantasy(t, s):
                 dn.line([(cx + 20, cy - 20), (cx - 20, cy + 20)], fill=S.BALTS, width=12)
             else:
                 dn.text((cx, cy), txt, font=S.fonts("black", 58 if izc else 48), fill=S.MELNS, anchor="mm")
-    _nv_put(L, _nv_timg(a_["zem"], S.fonts("black", 66), (203, 213, 225)), 540, 835 + dy0, 1, S.ease((t - 0.45) / 0.25))
+    _nv_put(L, _nv_timg(a_["zem"], S.ietilpinat(d, a_["zem"], "black", 66, S.W - 140), (203, 213, 225)), 540, 835 + dy0, 1,
+            S.ease((t - 0.45) / 0.25))
     k = (t - 0.65) / 0.28
     if k > 0:                                                         # dzeltena josla "izbrauc"
         bar = Image.new("RGBA", (S.W, 170), (0, 0, 0, 0)); db = ImageDraw.Draw(bar)
@@ -3023,10 +3026,31 @@ def aina_aki_fantasy(t, s):
 
 
 def _nv_zimoga_laiks(c):
-    """Zīmogs: kad balss pateikusi savu teikumu līdz galam (ne agrāk kā 4,5 s); bez balss – 1,9 s pirms ainas beigām."""
-    if c.get("_balss_beigas") is not None:
-        return max(4.5, float(c["_balss_beigas"]))
+    """Zīmogs: kad balss SĀK verdikta frāzi ("Worth a pickup.", "The chances are there." …) – zīmogs un frāze kopā;
+    ne agrāk kā 2,4 s (kartīte izrullēta). Bez balss – 1,9 s pirms ainas beigām."""
+    if c.get("_zim_t") is not None:
+        return max(2.4, float(c["_zim_t"]) - 0.1)
     return max(3.2, c.get("_ilg", 6.5) - 1.9)
+
+
+def _nv_frazes_laiks(vardi, teksts, frase):
+    """Verdikta frāzes sākuma laiks (s) ainas balsī: vārdu skaits pirms frāzes → tuvākais atbilstošais vārds vārdu laikos."""
+    if not vardi or not teksts:
+        return None
+    teksts = str(teksts)
+    if frase and str(frase) in teksts:
+        pirms, fr_ = teksts[:teksts.rfind(str(frase))], str(frase)
+    else:                                                             # rezerve – pēdējais teikums
+        tk = re.split(r"(?<=[.!?])\s+", teksts.strip())
+        if len(tk) < 2:
+            return None
+        pirms, fr_ = " ".join(tk[:-1]), tk[-1]
+    n = len(S.balsij(pirms).split())
+    tirs = lambda x: re.sub(r"[^a-z0-9]", "", str(x).lower())        # noqa: E731
+    pirmais = tirs((S.balsij(fr_).split() or [""])[0])
+    kand = [i for i in range(max(0, n - 4), min(len(vardi), n + 5)) if tirs(vardi[i][2]) == pirmais]
+    i = min(kand, key=lambda j: abs(j - n)) if kand else min(n, len(vardi) - 1)
+    return float(vardi[i][0])
 
 
 def _nv_datums(z):
@@ -4063,7 +4087,7 @@ def _fj_karte_plus(f_, kr):
             di.text((x + tw / 2, yy + 86), cc_, font=S.ietilpinat(di, cc_, "black", 30, tw - 14), fill=kr_c, anchor="mm")
         y += rindu * (TH + GAP)
     if st:
-        di.text((40, y + 4), "SEASON SO FAR", font=F("semi", 26), fill=_NV_LAB)
+        di.text((40, y + 4), str(pl.get("stats_virs") or "SEASON SO FAR").upper(), font=F("semi", 26), fill=_NV_LAB)
         y += 36
         tw = (cw - 80 - GAP * (len(st) - 1)) / len(st)
         for i, (lab_, _, val) in enumerate(st):
@@ -4368,9 +4392,9 @@ def aina_fakts_nak_j(t, c):
             if c.get("serija"):
                 d.text((400, 920), c["serija"], font=S.ietilpinat(d, c["serija"], "semi", 34, 560), fill=S.DZELTENS + (int(255 * k),), anchor="lm")
     kq = (t - 1.3) / 0.35
-    if kq > 0 and len(nk) > 2 and nk[2]:
-        sc = 1 + 0.04 * math.sin(t * 4) if kq >= 1 else 1 + 0.5 * (1 - ease_back(min(1.0, kq)))
-        _nv_put(N, _nv_timg(str(nk[2]).upper(), S.ietilpinat(d, str(nk[2]).upper(), "black", 84, 900), S.DZELTENS), 540, 1200, sc, min(1.0, kq * 2))
+    if kq > 0 and len(nk) > 2 and nk[2]:                              # jautājums – parasts teksts (bez spīduma / pulsēšanas)
+        jt = str(nk[2]).upper()
+        S.teksts_c(d, 1150, jt, S.ietilpinat(d, jt, "black", 64, 900), S.BALTS + (int(255 * min(1.0, kq)),))
     L.alpha_composite(_nv_glow(N, 12, 1.3))
     return L
 
@@ -4642,11 +4666,13 @@ def fakti_jauns(rez, D, m, izv, st, mini_runa):
         rows = [{"nr": i + 1, "vards": c.get("vards"), "vards_pilns": f"{c.get('v1') or ''} {c.get('vards') or ''}".strip(),
                  "badge": c.get("badge"), "hook": c.get("hook"), "kr": S.DZELTENS if i == 0 else S.ZILS} for i, c in enumerate(izv)]
         st_nr = {c_.get("nr"): c_.get("stat_rindas") for c_ in rez["kartes"] if c_.get("tips") == "fakts_mini"}
+        sv_nr = {c_.get("nr"): c_.get("stat_virs") for c_ in rez["kartes"] if c_.get("tips") == "fakts_mini"}
         for i, c in enumerate(izv[1:], 2):                            # #N → #2: paplašinātā informācija, kamēr runā balss
             sr = st_nr.get(i) or []
             if sr == [r_ for r_ in (c.get("rindas") or []) if r_[0]][:3]:   # nav sezonas datu (tās pašas rindas) – neatkārto
                 sr = []
             rows[i - 1]["plus"] = {"virs": c.get("saraksts_virs"), "rindas": c.get("rindas"), "stats": sr[:3],
+                                   "stats_virs": sv_nr.get(i) or "SEASON SO FAR",
                                    "kont": (c.get("konteksts") or [""])[0], "runa_pre": f"Number {i}. {c['runa'][0]}"}
         virsr = [(f"TOP {n}", S.BALTS), ("THIS WEEK", S.DZELTENS)] if n > 1 else [("STAT OF", S.BALTS), ("THE WEEK", S.DZELTENS)]
         kartes, runa = [], [rez["runa"][0]]
