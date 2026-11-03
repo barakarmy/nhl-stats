@@ -1947,7 +1947,8 @@ def aina_verdikts(t, s, kanals):
             d.rounded_rectangle([tx, y + 104, tx + tw_, y + 196], radius=16, fill=S.ar_alfa((24, 32, 64), 255 * kc))
             d.text((tx + 16, y + 112), str(lab), font=S.ietilpinat(d, str(lab), "semi", 22, tw_ - 28), fill=S.ar_alfa(S.PELEKS, 255 * kc))
             fvv = S.ietilpinat(d, str(val), "black", 48, tw_ - 28)
-            d.text((tx + 16, y + 138), str(val), font=fvv, fill=S.ar_alfa(S.BALTS if j else akc, 255 * kc))
+            d.text((tx + 16, y + 138), str(val), font=fvv,
+                   fill=S.ar_alfa(akc if j == c.get("izcelt_fl", 0) else S.BALTS, 255 * kc))   # atskatā – SINCE (2.)
         sal_ = c.get("sal", "")
         iz_s = 26
         while iz_s > 18 and S.platums(d, sal_, S.fonts("reg", iz_s)) > rw:     # ietilpināt kartītē (var būt < 30 px)
@@ -2900,7 +2901,6 @@ def fantasy_atskats_jauns(s):
         if not all(c.get("tips") == "fantasy" and c.get("viz") for c in kar) or len(s["runa"]) != len(kar) + 2:
             return s
         vecais = s["intro"]
-        ap = [str(x) for x in vecais.get("apaksa", [])]
         no_, lidz_ = s.get("periods", "").replace("week of ", "").split(" – ")[:2] if " – " in s.get("periods", "") else ("", "")
         ned = re.sub(r",\s*\d{4}$", "", f"{no_} – {lidz_}").upper()
         ned = re.sub(r"\b([A-Z]{3}) (\d+) – \1 (\d+)\b", r"\1 \2 – \3", ned)
