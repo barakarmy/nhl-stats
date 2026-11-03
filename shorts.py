@@ -1966,6 +1966,10 @@ def atskats_fantasy(j, m, a):
                      "GOOD CALL": F("fa_good"), "BAD CALL": F("fa_bad"), "EVEN": "Even."}[verd]
             kartes[-1]["_frase"] = frase if verd != "DIDN'T PLAY" else "He didn't play."
             kartes[-1]["_pts"], kartes[-1]["_med"] = P, med
+            kartes[-1]["_a"] = {"pid": pid, "grupa": grupa, "G": G, "A": A, "P": P, "SOG": SOG, "PPP": PPP, "GP": GP,
+                                "med": med, "verd": verd, "rost0": r.get("rostered"), "poz": r.get("poz", ""),
+                                "spel": [(pd.Timestamp(g_.datums).weekday(), info.get((g_.game_id, g_.team), ("vs", "?")), int(g_.points),
+                                          int(g_.sog)) for g_ in w[w["playerId"] == pid].sort_values("datums").itertuples(index=False)]}
             runa.append((f"{r['vards']}: " if grupa == "add" else f"Our {r['veids'].lower()} call, {r['vards']}: ")
                         + f"{G} goal{'' if G == 1 else 's'}, {A} assist{'' if A == 1 else 's'}, {P} point{'' if P == 1 else 's'} in {GP} games. "
                         + frase)
@@ -1989,7 +1993,8 @@ def atskats_fantasy(j, m, a):
     verdikts = [vk("THE SCORE", "LAST WEEK'S CALLS", [("LAST WEEK", f"{trap}/{kopa}"), ("SEASON", f"{H}/{T}")],
                    (f"{vien} even (not counted)  ·  " if vien else "") + f"season {H / max(T, 1) * 100:.0f}%",
                    "No hiding misses", kr_rez, vizu="skaitlis", liels=f"{trap}/{kopa}")]
-    starp = lambda c_: c_["_pts"] - c_["_med"]
+    # cik labs ieteikums: ADD – punkti virs tipiskā; DROP – punkti zem tipiskā (agrāk DROP kļūdas tika kārtotas otrādi)
+    starp = lambda c_: (c_["_pts"] - c_["_med"]) * (-1 if c_.get("_a", {}).get("grupa") == "drop" else 1)
     hit_ = sorted([c_ for c_ in kartes if c_["akc"] == ZALS], key=starp, reverse=True)       # labākais pirmais
     miss_ = sorted([c_ for c_ in kartes if c_["akc"] == SARKANS], key=starp)                  # sliktākais pirmais
     if hit_ and miss_:
@@ -2002,7 +2007,16 @@ def atskats_fantasy(j, m, a):
         verdikts.append(far_vk(miss_[0], "THE MISS"))
         if len(miss_) > 1:
             verdikts.append(far_vk(miss_[-1], "THE NEAR MISS"))
+    # jaunā izskata dati (ShortsBT): āķis, kartīšu "viz", kuras 2 kartītes rādīt – aizsargāti (kļūda nesalauž video)
+    aki_f, aki_runa, izvele = None, "", []
+    try:
+        aki_f, aki_runa, izvele = atskats_jauna_dati(kartes, hit_, miss_, trap, kopa, no, lidz, j)
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"  (atskata jaunā izskata dati: {type(ex).__name__} – izlaisti)")
+    for c_ in kartes:
+        c_.pop("_a", None)
     return {
+        "aki_f": aki_f, "aki_runa": aki_runa, "atskats_izvele": izvele, "atskats_rek": (trap, kopa),
         "intro": {"tag": "NHL  ·  FANTASY RECAP", "rindas": [("HOW DID", BALTS), ("WE DO?", DZELTENS)],
                   "apaksa": [f"Our picks for {dat(no)} – {dat(lidz, True)}", "vs a typical player in the same pool"],
                   "legenda": [("GOOD CALL  →  we got it right", ZALS, MELNS), ("BAD CALL  →  we missed", SARKANS, BALTS)]},
@@ -2018,11 +2032,89 @@ def atskats_fantasy(j, m, a):
                                f"typical rostered player: {med_drop:.0f} pt{'' if round(med_drop) == 1 else 's'}",
                                 f"Season record: {H}/{T}"],
         "apraksts": f"Fantasy hockey recap for the week of {dat(no)} – {dat(lidz, True)}: how our pickups and drops performed.",
+        "piezime": "Typical = median points of players in the same ESPN rostered % range that week (2+ games).",
+        "tagi": "#NHL #hockey #fantasyhockey #NHLstats #Shorts",
         "nosaukums": f"xg_atskats_fantasy_{no}",
         "thumb": {"tag": "NHL  ·  FANTASY RECAP", "hook": ["HOW DID", "WE DO?"], "vards": "FANTASY PICKS", "badge": "",
                   "skaitlis": f"{trap}/{kopa}", "kr": kr_rez, "apaksa": f"season {H}/{T} ({H / max(T, 1) * 100:.0f}%)",
                   "datums": None, "nedela": f"WEEK OF {dat(no).upper()}"},
     }
+
+
+POZ_GARA = {"L": "LW", "R": "RW", "C": "C", "D": "D", "LW": "LW", "RW": "RW"}
+
+
+def atskats_jauna_dati(kartes, hit_, miss_, trap, kopa, no, lidz, j):
+    """Fantasy atskats jaunajā izskatā (ShortsBT): katrai kartītei "viz" (punkti/metieni pa spēlēm, nedēļas kalendārs,
+    TYPICAL, ESPN rostered kopš mūsu ieteikuma) un pirmais ekrāns – nedēļas rezultāts ("1/4" + ✓/✗ + balss teksts)."""
+    pe = os.path.join(BASE, "sezonas", "fantasy_espn.csv")
+    pv = os.path.join(BASE, "sezonas", "fantasy_espn_vesture.csv")
+    e_now = vest = None
+    if os.path.exists(pe):
+        e_ = pd.read_csv(pe)
+        e_ = e_[pd.to_numeric(e_["playerId"], errors="coerce").notna()].copy()
+        e_["playerId"] = e_["playerId"].astype(int)
+        e_now = e_.drop_duplicates("playerId").set_index("playerId")
+    if os.path.exists(pv):
+        vest = pd.read_csv(pv)
+    pick_d = str(j.get("lidz") or no)                                  # dati līdz – ieteikums nākamajā dienā
+    for c in kartes:
+        a_ = c.get("_a")
+        if not a_:
+            continue
+        ned = [{"o": "", "p": None} for _ in range(7)]
+        for wd, (kur, opp), p_, _s in a_["spel"]:
+            ned[wd] = {"o": f"{'' if kur == 'vs' else '@'}{opp}", "p": p_}
+        rost, rv = None, []
+        if e_now is not None and a_["pid"] in e_now.index:
+            x = e_now.loc[a_["pid"]]
+            rost = float(x["rostered"]) if pd.notna(x["rostered"]) else None
+            if vest is not None and pd.notna(x.get("espn_id")):
+                h = vest[(vest["espn_id"] == x["espn_id"]) & (vest["datums"] > pick_d)].sort_values("datums")
+                if len(h) > 6:                                         # ≤ 6 punkti (vienmērīgi, pēdējais – jaunākais)
+                    h = h.iloc[np.linspace(0, len(h) - 1, 6).round().astype(int)]
+                rv = [(dat(d_) if i_ == 0 else str(pd.Timestamp(d_).day), float(v_)) for i_, (d_, v_) in enumerate(zip(h["datums"], h["rostered"]))]
+        if a_["rost0"] is not None:
+            rv = [("PICK", float(a_["rost0"]))] + rv
+            if rost is None and len(rv) == 1:
+                rv = []
+        c["viz"] = {"atskats": True, "grupa": a_["grupa"], "pts": a_["P"], "ga": f"{a_['G']}G {a_['A']}A", "sog": a_["SOG"],
+                    "ppp": a_["PPP"], "gp": a_["GP"], "med": a_["med"], "verd": a_["verd"],
+                    "p_sp": [x_[2] for x_ in a_["spel"]], "s_sp": [x_[3] for x_ in a_["spel"]],
+                    "ned": ned, "ned_lab": f"WEEK OF {dat(no).upper()} – {dat(lidz).upper()}  ·  {a_['GP']} GP",
+                    "rost0": a_["rost0"], "rost": rost if rost is not None else (rv[-1][1] if rv else None),
+                    "rost_vest": rv if len(rv) >= 2 else [], "poz": POZ_GARA.get(str(a_["poz"]), str(a_["poz"]))}
+    # kuras 2 kartītes (tāpat kā THE FINAL VERDICT): labākais + lielākā kļūda / tuvākais
+    idx = {id(c): i for i, c in enumerate(kartes)}
+    if hit_ and miss_:
+        izvele = [(idx[id(hit_[0])], "THE BEST CALL"), (idx[id(miss_[0])], "THE MISS")]
+    elif hit_:
+        izvele = [(idx[id(hit_[0])], "THE BEST CALL")] + ([(idx[id(hit_[-1])], "THE CLOSEST CALL")] if len(hit_) > 1 else [])
+    elif miss_:
+        izvele = [(idx[id(miss_[0])], "THE MISS")] + ([(idx[id(miss_[-1])], "THE NEAR MISS")] if len(miss_) > 1 else [])
+    else:
+        izvele = [(0, "THE CALL")]
+    # pirmais ekrāns: pagājušās nedēļas rezultāts (X/Y + ✓/✗ katram ieteikumam) un tas pats teksts, ko saka balss
+    if not kopa:
+        return None, "", izvele
+    sec = [c for c in kartes if c["akc"] in (ZALS, SARKANS)]
+    dala = trap / kopa
+    if dala >= 1:
+        josla, teik = "...A PERFECT WEEK", "A perfect week."
+    elif dala >= 0.75:
+        josla, teik = "...A STRONG WEEK", "A strong week."
+    elif dala > 0.5:
+        josla, teik = "...MORE HITS THAN MISSES", "More hits than misses."
+    elif dala == 0.5:
+        josla, teik = "...HALF RIGHT", "Half right."
+    else:
+        josla, teik = "...NOT OUR BEST WEEK", "Not our best week."
+    aki = {"liels": f"{trap}/{kopa}", "apli": ["✓" if x["akc"] == ZALS else "✗" for x in sec][:6],
+           "apli_kr": [ZALS if x["akc"] == ZALS else SARKANS for x in sec][:6], "izcelt": [],
+           "zem": "OUR CALLS LAST WEEK", "josla": josla, "vards": "", "kom": "", "tag": "NHL  ·  FANTASY RECAP",
+           "bez_kartes": True}
+    runa_ = f"{trap} for {kopa} last week. {teik}"
+    return aki, runa_, izvele
 
 
 # ================================================================ piektdienas video: nedēļas fakts
