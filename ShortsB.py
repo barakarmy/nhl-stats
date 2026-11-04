@@ -10,7 +10,8 @@ mainās tikai izskats un kustība:
   • āķa ainā uzlīme "GUESS BEFORE THE REVEAL", beigās – aicinājums komentēt
   • komandu krāsas kartītēs un datu joslās (primārā + sekundārā krāsa)
   • fons – izpludināts hokeja video (B-roll) no mapes shorts_fons\\ (ja tur ir video)
-  • āķis pirmajās ~2,4 s (konkrēts skaitlis + izpludināts #1), secība #3 → #1, cilpa beigās ("…remember:")
+  • āķis pirmajās ~3 s – NOSLĒPUMA ĀĶIS (kopš 04.11.2026): krekla siluets ar "?", 2 jautājumi, glitch ar komandas
+    mājienu; vecais āķis (skaitlis + izpludināts #1) – --bez-noslepuma. Secība #3 → #1, cilpa beigās ("…remember the name.")
   • pirmajā ainā "brand header" (ripa + balts @IceMathHockey); ainu maiņā teksts izbalē un tā pati ripa
     kļūst 70 % necaurspīdīga (watermark), augšā pa kreisi; krāsains ICE MATH logo beigu kadrā
   • tiesnešu video fons automātiski palēnināts tā, lai klips izstieptos pa visu video (FONA_ATRUMS_VEIDAM)
@@ -5596,24 +5597,26 @@ def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None, atcer
     runa_pec – vecā āķa teikums (atskatiem – rezultāts) → 2. ainas balss sākumā."""
     if not (NOSL_AKIS and JAUNS_FANTASY) or not s or not s.get("intro") or not krekli or len(s.get("runa") or []) < 2:
         return s
-    try:
-        a = S.reta_frase(q1, veids=veids_v, n=2)
+    try:                                                              # viss vispirms uz kopijas – kļūdas gadījumā video
+        a = S.reta_frase(q1, veids=veids_v, n=2)                      # paliek pilnībā ar parasto āķi (ne pa pusei mainīts)
         b = S.reta_frase(q2, veids=veids_v, n=4)
         if x_vards:
             a = (tuple(r.replace("{X}", x_vards.upper()) for r in a[0]), a[1].replace("{x}", x_vards.lower()))
         nsl = {"krekli": [(str(k or ""), str(v or "").upper()) for k, v in krekli][:8], "q1": a, "q2": b}
-        s["intro"]["noslepums"] = nsl
-        s["intro"]["ilgums"] = 3.3
+        runa = [str(r) for r in s["runa"]]
         if runa_pec:
-            s["runa"][1] = (str(runa_pec).strip() + " " + s["runa"][1]).strip()
-        s["runa"][0] = f"{a[1]} {b[1]}"
-        if atkl and 0 < atkl[0] < len(s["runa"]) - 1:                  # varoņa kartīte: "Mystery solved. Olen Zellweger, …"
+            runa[1] = (str(runa_pec).strip() + " " + runa[1]).strip()
+        runa[0] = f"{a[1]} {b[1]}"
+        if atkl and 0 < atkl[0] < len(runa) - 1:                      # varoņa kartīte: "Mystery solved. Olen Zellweger, …"
             fr_ = S.reta_frase(NOSL_ATKL[atkl[1]], veids=veids_v, n=3)
-            t_ = s["runa"][atkl[0]]
-            s["runa"][atkl[0]] = ("Number one. " + fr_ + " " + t_[len("Number one. "):]) if t_.startswith("Number one. ") \
+            t_ = runa[atkl[0]]
+            runa[atkl[0]] = ("Number one. " + fr_ + " " + t_[len("Number one. "):]) if t_.startswith("Number one. ") \
                 else (fr_ + " " + t_)
         if atcere:                                                    # cilpa: "…and remember: 7 goals." → "…and remember the name."
-            s["runa"][-1] = re.sub(r"and remember:\s*[^.?!]*\d[^.?!]*[.?!]?\s*$", f"and remember {atcere}.", s["runa"][-1])
+            runa[-1] = re.sub(r"and remember:\s*[^.?!]*\d[^.?!]*[.?!]?\s*$", f"and remember {atcere}.", runa[-1])
+        s["runa"][:] = runa
+        s["intro"]["noslepums"] = nsl
+        s["intro"]["ilgums"] = 3.3
         print(f"ĀĶIS: noslēpums – \"{' '.join(a[0])}\" → \"{' '.join(b[0])}\"")
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (noslēpuma āķis: {type(ex).__name__}: {ex} – parastais āķis)")
@@ -5641,9 +5644,41 @@ def _ns_virsraksts(s, vards, komanda=False):
         if m.start() == 0:
             jauns = jauns[0].upper() + jauns[1:]
         s["virsraksts"] = jauns
-        s["apraksts"] = (str(s.get("apraksts") or "").rstrip() + f"\n#1: {re.sub(r'^The ', '', nos)}").strip()
+        _ns_vards_apraksta(s, re.sub(r"^The ", "", nos))
     except Exception:                                                 # noqa: BLE001
         pass
+
+
+def _ns_vards_apraksta(s, nos):
+    """Noslēpuma vārds aprakstā – saraksta beigās ("#1: Leon Draisaitl"), lai meklēšana atrod; ja vārds jau ir
+    apraksta tekstā (faktu stāsts) – nedublē."""
+    nos = str(nos or "").strip()
+    if not nos or nos.lower() in str(s.get("apraksts") or "").lower():
+        return
+    if isinstance(s.get("saraksts"), list):
+        s["saraksts"].append(f"#1: {nos}")
+    else:
+        s["apraksts"] = (str(s.get("apraksts") or "").rstrip() + f"\n#1: {nos}").strip()
+
+
+# xG virsraksts noslēpuma video – pēc VAROŅA (kartīte, par kuru āķis), ne pēc saraksta #1:
+# līdz 04.11. nelaimīga varoņa video virsrakstā palika laimīgākā vārds ("Alexis Lafrenière is running HOT…").
+NOSL_XG_VIRSR = {
+    ("speletaji", True): "Guess who's running HOT… but xG says it won't last 🏒",
+    ("speletaji", False): "Guess who's due for goals – xG says they're coming 🏒",
+    ("vartsargi", True): "Guess who's STEALING games – the numbers 🥅",
+    ("vartsargi", False): "Guess which goalie is COSTING games – the numbers 🥅",
+    ("komandas", True): "Guess which team is winning on LUCK – here's the proof 🏒",
+    ("komandas", False): "Guess which team is better than its record – here's the proof 🏒",
+}
+
+
+def _ns_xg_virsraksts(s, veids, laim, vards):
+    if not (NOSL_VIRSRAKSTS and s and vards and (s.get("intro") or {}).get("noslepums")):
+        return
+    v_ = veids if veids in ("vartsargi", "komandas") else "speletaji"
+    s["virsraksts"] = NOSL_XG_VIRSR[(v_, bool(laim))]
+    _ns_vards_apraksta(s, vards)
 
 
 def _ns_fantasy(s):
@@ -5661,13 +5696,14 @@ def _ns_xg(s, veids, hero):
     if veids == "komandas":
         noslepuma_aki(s, [(hero.get("badge"), "")], NOSL_Q1["komanda"], NOSL_Q2["kom_laim" if laim else "kom_nelaim"], veids,
                       atcere="this team", atkl=(len(s["runa"]) - 2, "komanda"))
-        _ns_virsraksts(s, hero.get("v2"), komanda=True)
+        k_ = S.KOMANDAS.get(str(hero.get("badge") or ""))
+        _ns_xg_virsraksts(s, veids, laim, f"{k_[0]} {k_[1]}" if k_ else hero.get("v2"))
     else:
         q1 = NOSL_Q1["vartsargs" if veids == "vartsargi" else "speletajs"]
         q2 = NOSL_Q2[("va_labs" if laim else "va_slikts") if veids == "vartsargi" else ("sp_laim" if laim else "sp_nelaim")]
         noslepuma_aki(s, [(hero.get("badge"), hero.get("v2"))], q1, q2, veids, atcere="the name",
                       atkl=(len(s["runa"]) - 2, "vartsargs" if veids == "vartsargi" else "speletajs"))
-        _ns_virsraksts(s, hero.get("v2"))
+        _ns_xg_virsraksts(s, veids, laim, " ".join(str(x) for x in (hero.get("v1"), hero.get("v2")) if x))
     return s
 
 
