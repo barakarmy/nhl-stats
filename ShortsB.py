@@ -50,7 +50,7 @@ import re
 import subprocess
 import sys
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 import shorts as S
 
@@ -508,6 +508,9 @@ def _ielasit_audio(fails):
 def skanas():
     """Efektu paraugi: no shorts_sfx\\ (ja ir swoosh/boom/tick fails), citādi ģenerēti (boom = hokeja slap shot)."""
     out = {"swoosh": _swoosh(), "boom": _boom(), "tick": _tick()}
+    if _NS_SFX.get("ev"):                                             # noslēpuma āķim
+        out.update({"riser": _sfx_riser(), "glitch": _sfx_glitch(0.3), "glitch_mazs": _sfx_glitch(0.09, 3),
+                    "trieciens": _sfx_trieciens(), "sirds": _sfx_sirds(), "klik": _sfx_klik()})
     if os.path.isdir(MAPE_SFX):
         for f in os.listdir(MAPE_SFX):
             nos, ext = os.path.splitext(f.lower())
@@ -522,7 +525,7 @@ def sfx_notikumi(ainas):
     """[(laiks_s, efekts, skaļums)] – pēc tā, kas notiek katrā ainā."""
     ev, t0 = [], 0.0
     for nr, (veids, c, ilg) in enumerate(ainas):
-        if nr > 0:
+        if nr > 0 and not (nr == 1 and _NS_SFX.get("ev")):             # pēc noslēpuma āķa – swoosh jau ir āķa beigās
             ev.append((max(0, t0 - 0.12), "swoosh", 0.8))
         tips = c.get("tips") if c else veids
         if veids == "outro" and c and c.get("verdikts"):               # THE FINAL VERDICT: boom + tick katrai kartītei
@@ -533,6 +536,10 @@ def sfx_notikumi(ainas):
             ev += [(t0 + 0.45 + 0.22 * j, "tick", 0.7) for j in range(len(c["fakti_tiles"]))]
             if c.get("streak"):
                 ev.append((t0 + 0.6 + 0.22 * len(c["fakti_tiles"]), "boom", 0.5))
+        if nr == 0 and veids == "intro" and _NS_SFX.get("ev"):          # noslēpuma āķis: savi efekti pēc balss
+            ev += [(t0 + a_, e_, g_) for a_, e_, g_ in _NS_SFX["ev"]]
+            t0 += ilg
+            continue
         if nr == 0:
             ev.append((t0, "boom", 0.9))
             if veids == "intro":
@@ -2265,6 +2272,8 @@ _THUMB = {"im": None}
 def thumbnail_kadrs(aina, s, fona_fails, atr, fn_map):
     """Sīktēls: video pirmā aina (āķis) pilnā izskatā, uz tā paša fona – bez uzlīmes, datuma, progresa joslas un logo."""
     veids, c, _ = aina
+    if veids == "intro" and (s.get("intro") or {}).get("noslepums"):
+        return noslepums_thumbnail(s["intro"]["noslepums"])           # silueti ar "?" + 2. jautājums
     if veids == "intro":
         i_ = dict(s["intro"])
         if i_.get("aki"):
@@ -2398,6 +2407,20 @@ def renderet(s, izvade, kanals="", balss=None):
         if audio:
             print("BALSS: audio faili tukši vai nepilnīgi – video bez skaņas.")
         audio = None
+    nsl = (s.get("intro") or {}).get("noslepums") if (ainas and ainas[0][0] == "intro") else None
+    _NS_SFX["ev"] = None
+    if nsl:                                                           # noslēpuma āķis: notikumi pēc balss vārdiem
+        try:
+            vl0 = ([(a_ + 0.15, b_ + 0.15, x_) for a_, b_, x_ in S.VARDI_AINAS[0]]
+                   if (audio and len(S.VARDI_AINAS) == len(ainas)) else None)
+            nsl["_laiki"] = _ns_laiki(nsl, vl0, ainas[0][2])
+            ainas[0] = ("intro", None, nsl["_laiki"]["beigas"])
+            _NS_SFX["ev"] = _ns_sfx_ev(nsl["_laiki"])
+            _ns_krekli(nsl)                                           # krekli – vienreiz, pirms kadriem
+        except Exception as ex:                                       # noqa: BLE001
+            print(f"  (noslēpuma āķis: {type(ex).__name__}: {ex} – parastais āķis)")
+            nsl = None
+            s["intro"].pop("noslepums", None)
     kopa = sum(a[2] for a in ainas)
     for _v, _c, _ilg in ainas:                                        # ainas garums (jaunajai kartītei – zīmoga laiks)
         if isinstance(_c, dict):
@@ -2409,8 +2432,9 @@ def renderet(s, izvade, kanals="", balss=None):
     subt = []
     if audio and OPC["subtitri"] and len(S.VARDI_AINAS) == len(ainas):
         sak_, vv_ = 0.0, []
-        for (_, _, ilg_), vl in zip(ainas, S.VARDI_AINAS):
-            vv_ += [(sak_ + 0.15 + a, sak_ + 0.15 + b, x) for a, b, x in vl]   # balss sākas 0,15 s pēc ainas (miksets)
+        for i_s, ((_, _, ilg_), vl) in enumerate(zip(ainas, S.VARDI_AINAS)):
+            if not (nsl and i_s == 0):                                # noslēpuma āķī subtitru nav – jautājums jau ir uz ekrāna
+                vv_ += [(sak_ + 0.15 + a, sak_ + 0.15 + b, x) for a, b, x in vl]   # balss sākas 0,15 s pēc ainas (miksets)
             sak_ += ilg_
         subt = _subt_gabali(vv_)
     fona_fails = izveleties_fonu()
@@ -2436,56 +2460,64 @@ def renderet(s, izvade, kanals="", balss=None):
               "fakts_nak_j": aina_fakts_nak_j}
     # cilpai: āķa (1. ainas) sākuma kadrs – beigās video pāriet atpakaļ uz to
     v0, c0, _ = ainas[0]
-    if v0 == "intro":
+    if v0 == "intro" and nsl:
+        cilpa_sl = None                                               # noslēpuma āķis – pilns kadrs (sk. cilpa_kadrs)
+    elif v0 == "intro":
         cilpa_sl = aina_intro(0.0 if s["intro"].get("aki") else 1.1, s["intro"])
     elif v0 == "karte":
         cilpa_sl = fn_map.get(c0.get("tips"), aina_karte)(1.1, c0)
     else:
         cilpa_sl = None
     cilpa_sl = _zona(cilpa_sl) if cilpa_sl is not None else None
+    cilpa_kadrs = aina_noslepums(0.0, nsl, ainas[0][2]) if nsl else None
     t0 = 0.0
     for nr, (veids, c, ilg) in enumerate(ainas):
         for fr in range(int(round(ilg * S.FPS))):
             t = fr / S.FPS
-            if veids == "intro":
-                sl = aina_intro(t, s["intro"])
-            elif veids == "outro":
-                sl = aina_outro(t, s["outro"], kanals)
+            if nsl and veids == "intro":                              # noslēpuma āķis: pilns kadrs ar savu fonu
+                kadrs = aina_noslepums(t, nsl, ilg)
             else:
-                sl = fn_map.get(c.get("tips"), aina_karte)(t, c)
-            # pāreja: uzlec no apakšas ar atsitienu; iziet – izbalē un paceļas
-            if nr == 0:                                               # 1. aina: pilns kadrs uzreiz + "punch-in"
-                tt = t + (0 if (veids == "intro" and s["intro"].get("aki")) else 1.1)
                 if veids == "intro":
-                    sl = aina_intro(tt, s["intro"])
-                elif veids != "outro":
-                    sl = fn_map.get(c.get("tips"), aina_karte)(tt, c)
-                if t < 0.25:
-                    sc = 1.08 - 0.08 * S.ease(t / 0.25)
-                    w_, h_ = int(S.W * sc), int(S.H * sc)
-                    big = sl.resize((w_, h_), Image.BILINEAR)
-                    yt = int(250 * sc) - 250                          # augšējā zīmīte paliek vietā (nepārklāj datumu)
-                    sl = big.crop(((w_ - S.W) // 2, yt, (w_ - S.W) // 2 + S.W, yt + S.H))
-                alfa, dy = 1, 0
-                if t > ilg - 0.22:
+                    sl = aina_intro(t, s["intro"])
+                elif veids == "outro":
+                    sl = aina_outro(t, s["outro"], kanals)
+                else:
+                    sl = fn_map.get(c.get("tips"), aina_karte)(t, c)
+                # pāreja: uzlec no apakšas ar atsitienu; iziet – izbalē un paceļas
+                if nr == 0:                                               # 1. aina: pilns kadrs uzreiz + "punch-in"
+                    tt = t + (0 if (veids == "intro" and s["intro"].get("aki")) else 1.1)
+                    if veids == "intro":
+                        sl = aina_intro(tt, s["intro"])
+                    elif veids != "outro":
+                        sl = fn_map.get(c.get("tips"), aina_karte)(tt, c)
+                    if t < 0.25:
+                        sc = 1.08 - 0.08 * S.ease(t / 0.25)
+                        w_, h_ = int(S.W * sc), int(S.H * sc)
+                        big = sl.resize((w_, h_), Image.BILINEAR)
+                        yt = int(250 * sc) - 250                          # augšējā zīmīte paliek vietā (nepārklāj datumu)
+                        sl = big.crop(((w_ - S.W) // 2, yt, (w_ - S.W) // 2 + S.W, yt + S.H))
+                    alfa, dy = 1, 0
+                    if t > ilg - 0.22:
+                        k = S.ease((t - (ilg - 0.22)) / 0.22)
+                        alfa, dy = 1 - k, -k * 120
+                elif t < 0.4 and not (isinstance(c, dict) and c.get("_bez_ieejas")):
+                    k = ease_back(t / 0.4)
+                    alfa, dy = min(1, t / 0.2), (1 - k) * 260
+                elif t > ilg - 0.22 and veids != "outro" and not (isinstance(c, dict) and c.get("_bez_izejas")):
                     k = S.ease((t - (ilg - 0.22)) / 0.22)
                     alfa, dy = 1 - k, -k * 120
-            elif t < 0.4 and not (isinstance(c, dict) and c.get("_bez_ieejas")):
-                k = ease_back(t / 0.4)
-                alfa, dy = min(1, t / 0.2), (1 - k) * 260
-            elif t > ilg - 0.22 and veids != "outro" and not (isinstance(c, dict) and c.get("_bez_izejas")):
-                k = S.ease((t - (ilg - 0.22)) / 0.22)
-                alfa, dy = 1 - k, -k * 120
-            else:
-                alfa, dy = 1, 0
-            zm_ = 0.0 if (isinstance(c, dict) and c.get("_bez_tuv")) else (0.04 if nr == 0 else TUVINAJUMS)   # TOP N tablo – bez lēcieniem
-            sl = _zona(sl, zm_ * S.ease(t / ilg))                     # drošā zona + lēna tuvināšana
-            if veids == "outro" and cilpa_sl is not None and t > ilg - CILPA:      # cilpa: atpakaļ uz āķi
-                sl = Image.blend(sl, cilpa_sl, S.ease((t - (ilg - CILPA)) / CILPA))
-            kadrs = fons.kadrs(t0 + t)
-            if alfa < 1:
-                sl.putalpha(sl.getchannel("A").point(lambda v: int(v * alfa)))
-            kadrs.paste(sl, (0, int(dy)), sl)
+                else:
+                    alfa, dy = 1, 0
+                zm_ = 0.0 if (isinstance(c, dict) and c.get("_bez_tuv")) else (0.04 if nr == 0 else TUVINAJUMS)   # TOP N tablo – bez lēcieniem
+                sl = _zona(sl, zm_ * S.ease(t / ilg))                     # drošā zona + lēna tuvināšana
+                if veids == "outro" and cilpa_sl is not None and t > ilg - CILPA:      # cilpa: atpakaļ uz āķi
+                    sl = Image.blend(sl, cilpa_sl, S.ease((t - (ilg - CILPA)) / CILPA))
+                kadrs = fons.kadrs(t0 + t)
+                if alfa < 1:
+                    sl.putalpha(sl.getchannel("A").point(lambda v: int(v * alfa)))
+                kadrs.paste(sl, (0, int(dy)), sl)
+            if cilpa_kadrs is not None and veids == "outro" and t > ilg - CILPA:     # cilpa: atpakaļ uz noslēpuma āķi
+                kadrs = Image.blend(kadrs, cilpa_kadrs, S.ease((t - (ilg - CILPA)) / CILPA))
             dd = ImageDraw.Draw(kadrs, "RGBA")
             if not s.get("_bez_zimoga"):                              # jaunajā izskatā datums ir kartītes tablo joslā
                 fz = S.ietilpinat(dd, s["zimogs"], "semi", 34, S.W - 100)
@@ -2552,7 +2584,11 @@ def testa_mape():
 
 
 def ieslegt():
-    global JAUNS_FANTASY
+    global JAUNS_FANTASY, NOSL_AKIS
+    if "--bez-noslepuma" in sys.argv:                                 # vecais āķis (ar skaitli), noslēpuma vietā
+        sys.argv.remove("--bez-noslepuma")
+        NOSL_AKIS = False
+        print("ĀĶIS: bez noslēpuma (--bez-noslepuma)")
     if "--vecais" in sys.argv:                                        # vecais izskats (rezerve, ja jaunajā kāda kļūda)
         sys.argv.remove("--vecais")
         JAUNS_FANTASY = False
@@ -2820,7 +2856,7 @@ def fantasy_aki(s):
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (tablo josla ievadam: {type(ex).__name__} – vecā zīmīte)")
     s["_bez_zimoga"] = True                                           # datums – tablo joslā, ne atsevišķā rindā
-    return s
+    return _ns_fantasy(s)                                             # noslēpuma āķis (ja ieslēgts)
 
 
 XG_VIRSR = {"speletaji": [("WHO'S", S.BALTS), ("RUNNING", S.BALTS), ("ON LUCK?", S.DZELTENS)],
@@ -2879,6 +2915,7 @@ def xg_jauns(s, veids):
         s["runa"] = [s["runa"][0], s.get("_intro_runa", "")] + r_k + [s["runa"][-1]]
         s["kartes"] = jaunas
         s["_bez_zimoga"] = True
+        _ns_xg(s, veids, hero)                                        # noslēpuma āķis (ja ieslēgts)
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (xG jaunais izskats: {type(ex).__name__}: {ex} – vecais)")
     return s
@@ -2916,6 +2953,10 @@ def xg_atskats_jauns(s):
         s["runa"] = [s["aki_runa"], s.get("_intro_runa", s["runa"][0])] + s["runa"][1:]
         s["kartes"] = jaunas
         s["_bez_zimoga"] = True
+        kom_ = liels_ == "TEAMS"                                      # noslēpuma āķis: visi atzīmētie – silueti rindā
+        noslepuma_aki(s, [(c.get("badge"), "" if kom_ else c.get("v2")) for c in kar], NOSL_Q1["atskats_xg"],
+                      NOSL_Q2["atskats_xg"], "atskats_" + ("vartsargi" if liels_ == "GOALIES" else ("komandas" if kom_ else "speletaji")),
+                      x_vards={"GOALIES": "goalies", "TEAMS": "teams"}.get(liels_, "players"), runa_pec=s["aki_runa"])
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (xG atskata jaunais izskats: {type(ex).__name__}: {ex} – vecais)")
     return s
@@ -2962,6 +3003,8 @@ def fantasy_atskats_jauns(s):
         s["runa"] = [s["aki_runa"], s["runa"][0]] + runa_k + [s["runa"][-1]]
         s["kartes"] = jaunas
         s["_bez_zimoga"] = True
+        noslepuma_aki(s, [(c.get("badge"), c.get("v2")) for c in kar], NOSL_Q1["atskats_f"], NOSL_Q2["atskats_f"],
+                      "atskats_fantasy", runa_pec=s["aki_runa"])      # noslēpuma āķis: visi ieteiktie – silueti rindā
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (atskata jaunais izskats: {type(ex).__name__} – vecais)")
     return s
@@ -4751,8 +4794,849 @@ def fakti_jauns(rez, D, m, izv, st, mini_runa):
         rez["intro"] = {"aki": True, "fantasy_aki": aki, "tag": aki["tag"], "ilgums": 2.6, "_tv": tv}
         rez["kartes"], rez["runa"] = kartes, runa
         rez["_bez_zimoga"] = True
+        _ns_fakti(rez, hero)                                          # noslēpuma āķis (ja ieslēgts)
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (faktu jaunais izskats: {type(ex).__name__}: {ex} – vecais)")
+    return rez
+
+
+# ================================================================ NOSLĒPUMA ĀĶIS (kopš 04.11.2026)
+# Āķis bez skaitļiem un sīka teksta: melns krekla siluets (mala – komandas krāsā) ar spīdošu "?" prožektora gaismā,
+# jautājums 1 ("WHO IS THIS?") → glitch (uz mirkli uzzibsnī īstais krekls – vārds izpludināts, numura vietā "?")
+# → jautājums 2 ("WHY IS HE STILL FREE?"), sirdspuksti, kamera ielido "?" iekšā → nākamā aina. Balss nolasa abus
+# jautājumus; subtitru āķī nav (jautājums jau ir uz ekrāna). Frāzes neatkārtojas pēdējos video (frazes_vesture.json).
+# Vecais āķis (ar skaitli):  python ShortsB.py ... --bez-noslepuma
+NOSL_AKIS = True
+NOSL_VIRSRAKSTS = True           # YouTube virsrakstā vārda vietā "guess who's …" / "guess which team …" (vārds – aprakstā)
+_NS_SFX = {"ev": None}
+
+NOSL_Q1 = {
+    "speletajs": [(("WHO IS", "THIS?"), "Who is this?"), (("GUESS", "WHO?"), "Guess who."),
+                  (("KNOW", "THIS GUY?"), "Do you know this guy?")],
+    "vartsargs": [(("WHO IS", "THIS?"), "Who is this?"), (("GUESS THE", "GOALIE"), "Guess the goalie."),
+                  (("KNOW THIS", "GOALIE?"), "Do you know this goalie?")],
+    "komanda": [(("WHICH TEAM", "IS THIS?"), "Which team is this?"), (("GUESS THE", "TEAM"), "Guess the team."),
+                (("NAME THIS", "TEAM"), "Can you name this team?")],
+    "duo": [(("WHO ARE", "THESE TWO?"), "Who are these two?"), (("GUESS", "THE DUO"), "Guess the duo."),
+            (("KNOW", "THESE TWO?"), "Do you know these two?")],
+    "atskats_f": [(("OUR PICKS", "LAST WEEK"), "Our picks from last week."), (("REMEMBER", "THESE GUYS?"), "Remember these guys?"),
+                  (("LAST WEEK", "WE SAID…"), "Last week, we said…")],
+    "atskats_xg": [(("WE FLAGGED", "THESE {X}"), "We flagged these {x}."), (("REMEMBER", "THESE {X}?"), "Remember these {x}?"),
+                   (("xG FLAGGED", "THESE {X}"), "The numbers flagged these {x}.")],
+}
+NOSL_Q2 = {
+    "fantasy": [(("WHY IS HE", "STILL", "FREE?"), "Why is he still free?"),
+                (("NOBODY", "WANTS", "HIM?"), "Nobody wants him?"),
+                (("WHY IS NOBODY", "ADDING", "HIM?"), "Why is nobody adding him?"),
+                (("HOW IS HE", "STILL ON", "WAIVERS?"), "How is he still on waivers?"),
+                (("THE STEAL", "OF THE", "WEEK?"), "The steal of the week?"),
+                (("DID YOUR", "LEAGUE", "FORGET HIM?"), "Did your league forget him?")],
+    "streameri": [(("YOUR", "NEXT", "STREAMER?"), "Your next streamer?"),
+                  (("STREAM HIM", "THIS", "WEEK?"), "Stream him this week?"),
+                  (("FREE POINTS", "THIS", "WEEK?"), "Free points this week?"),
+                  (("WHY IS NOBODY", "STREAMING", "HIM?"), "Why is nobody streaming him?"),
+                  (("THE STREAMER", "NOBODY", "TALKS ABOUT"), "The streamer nobody talks about.")],
+    "sp_laim": [(("HOT STREAK", "OR JUST", "LUCK?"), "Hot streak, or just luck?"),
+                (("IS IT", "JUST", "LUCK?"), "Is it just luck?"),
+                (("TOO HOT", "TO", "LAST?"), "Too hot to last?"),
+                (("REAL", "OR", "LUCKY?"), "Real, or lucky?"),
+                (("TIME TO", "SELL", "HIGH?"), "Time to sell high?")],
+    "sp_nelaim": [(("WHERE ARE", "THE", "GOALS?"), "Where are the goals?"),
+                  (("DUE FOR A", "BIG", "BREAKOUT?"), "Due for a big breakout?"),
+                  (("BAD LUCK", "OR", "BAD PLAYER?"), "Bad luck, or bad player?"),
+                  (("TIME TO", "BUY", "LOW?"), "Time to buy low?"),
+                  (("ABOUT TO", "FINALLY", "SCORE?"), "Is he about to finally score?")],
+    "va_labs": [(("IS HE", "STEALING", "GAMES?"), "Is he stealing games?"),
+                (("IS THIS", "FOR", "REAL?"), "Is this for real?"),
+                (("A BRICK WALL", "OR JUST", "LUCK?"), "A brick wall, or just luck?"),
+                (("CAN HE", "KEEP THIS", "UP?"), "Can he keep this up?"),
+                (("THE BEST", "GOALIE", "RIGHT NOW?"), "The best goalie right now?")],
+    "va_slikts": [(("IS HE", "COSTING", "GAMES?"), "Is he costing his team games?"),
+                  (("WHAT IS", "GOING", "WRONG?"), "What is going wrong?"),
+                  (("BAD LUCK", "OR", "BAD GOALIE?"), "Bad luck, or bad goalie?"),
+                  (("TIME FOR", "A", "CHANGE?"), "Time for a change?"),
+                  (("CAN HE", "TURN IT", "AROUND?"), "Can he turn it around?")],
+    "kom_laim": [(("WINNING", "OR JUST", "LUCKY?"), "Winning, or just lucky?"),
+                 (("GOOD", "OR", "LUCKY?"), "Good, or lucky?"),
+                 (("CAN THIS", "REALLY", "LAST?"), "Can this really last?"),
+                 (("RIDING", "THE", "LUCK?"), "Riding the luck?"),
+                 (("ABOUT", "TO", "CRASH?"), "About to crash?")],
+    "kom_nelaim": [(("BETTER", "THAN THEIR", "RECORD?"), "Better than their record?"),
+                   (("THE UNLUCKIEST", "TEAM", "RIGHT NOW?"), "The unluckiest team right now?"),
+                   (("ABOUT TO", "TURN IT", "AROUND?"), "About to turn it around?"),
+                   (("BAD TEAM", "OR", "BAD LUCK?"), "Bad team, or bad luck?"),
+                   (("DON'T", "WRITE THEM", "OFF"), "Don't write them off.")],
+    "fakti_sp": [(("CAN ANYONE", "STOP", "HIM?"), "Can anyone stop him?"),
+                 (("HOW IS THIS", "EVEN", "POSSIBLE?"), "How is this even possible?"),
+                 (("THE STAT", "OF THE", "WEEK?"), "The stat of the week?"),
+                 (("NOBODY SAW", "THIS", "COMING"), "Nobody saw this coming."),
+                 (("THE HOTTEST", "PLAYER", "RIGHT NOW?"), "The hottest player right now?")],
+    "fakti_va": [(("CAN ANYONE", "BEAT", "HIM?"), "Can anyone beat him?"),
+                 (("HOW IS THIS", "EVEN", "POSSIBLE?"), "How is this even possible?"),
+                 (("THE WALL", "OF THE", "WEEK?"), "The wall of the week?"),
+                 (("NOBODY SAW", "THIS", "COMING"), "Nobody saw this coming."),
+                 (("THE HOTTEST", "GOALIE", "RIGHT NOW?"), "The hottest goalie right now?")],
+    "fakti_duo": [(("CAN ANYONE", "STOP", "THEM?"), "Can anyone stop them?"),
+                  (("THE BEST DUO", "IN THE", "NHL?"), "The best duo in the NHL?"),
+                  (("HOW IS THIS", "EVEN", "POSSIBLE?"), "How is this even possible?"),
+                  (("THE STAT", "OF THE", "WEEK?"), "The stat of the week?"),
+                  (("NOBODY SAW", "THIS", "COMING"), "Nobody saw this coming.")],
+    "fakti_kom": [(("CAN ANYONE", "STOP", "THEM?"), "Can anyone stop them?"),
+                  (("HOW IS THIS", "EVEN", "POSSIBLE?"), "How is this even possible?"),
+                  (("THE TEAM", "OF THE", "WEEK?"), "The team of the week?"),
+                  (("NOBODY SAW", "THIS", "COMING"), "Nobody saw this coming."),
+                  (("THE HOTTEST", "TEAM", "RIGHT NOW?"), "The hottest team right now?")],
+    "fakti_kom_zaud": [(("WHEN WILL", "THEY", "WIN?"), "When will they win again?"),
+                       (("WHAT IS", "GOING", "WRONG?"), "What is going wrong?"),
+                       (("IS THIS", "ROCK", "BOTTOM?"), "Is this rock bottom?"),
+                       (("CAN THEY", "TURN IT", "AROUND?"), "Can they turn it around?"),
+                       (("HOW DID IT", "GET THIS", "BAD?"), "How did it get this bad?")],
+    "atskats_f": [(("DID THEY", "DELIVER?"), "Did they deliver?"),
+                  (("WERE WE", "RIGHT?"), "Were we right?"),
+                  (("HIT", "OR", "MISS?"), "Hit, or miss?"),
+                  (("DID WE", "NAIL IT?"), "Did we nail it?"),
+                  (("TIME TO", "CHECK THE", "RECEIPTS"), "Time to check the receipts.")],
+    "atskats_xg": [(("WAS xG", "RIGHT?"), "Were the numbers right?"),
+                   (("CALLED IT", "OR", "BLEW IT?"), "Called it, or blew it?"),
+                   (("HIT", "OR", "MISS?"), "Hit, or miss?"),
+                   (("WERE WE", "RIGHT?"), "Were we right?"),
+                   (("LET'S CHECK", "THE", "RECEIPTS"), "Let's check the receipts.")],
+}
+
+
+# ---------------------------------------------------------------- reālistisks krekls (mugurpuse, bez logo)
+_KR_WH, _KR_BK = (245, 247, 250), (10, 12, 18)
+KREKLI = {    # mājas krekli: ķermenis, svītras [(krāsa, platums)…], apkakle, numurs + kontūras, vārds (+ kontūra)
+    "BUF": dict(body=(0, 48, 135), stripes=[(_KR_WH, 12), ((252, 181, 20), 50), (_KR_WH, 12)], collar=(252, 181, 20),
+                num=_KR_WH, o1=(252, 181, 20), o2=None, name=_KR_WH, name_o=None),
+    "EDM": dict(body=(4, 30, 66), stripes=[((252, 76, 0), 16), (_KR_WH, 10), ((252, 76, 0), 46)], collar=(252, 76, 0),
+                num=(252, 76, 0), o1=_KR_WH, o2=None, name=(252, 76, 0), name_o=_KR_WH),
+    "DAL": dict(body=(0, 104, 71), stripes=[(_KR_BK, 10), (_KR_WH, 48), (_KR_BK, 10)], collar=_KR_WH,
+                num=_KR_WH, o1=_KR_BK, o2=(162, 170, 173), name=_KR_WH, name_o=_KR_BK),
+    "TBL": dict(body=(0, 40, 104), stripes=[(_KR_WH, 50)], collar=_KR_WH, num=_KR_WH, o1=None, o2=None, name=_KR_WH, name_o=None),
+    "BOS": dict(body=(17, 17, 17), stripes=[((252, 181, 20), 14), (_KR_WH, 8), ((252, 181, 20), 40)], collar=(252, 181, 20),
+                num=(252, 181, 20), o1=_KR_WH, o2=None, name=(252, 181, 20), name_o=None),
+    "TOR": dict(body=(0, 32, 91), stripes=[(_KR_WH, 46)], collar=_KR_WH, num=_KR_WH, o1=None, o2=None, name=_KR_WH, name_o=None),
+    "DET": dict(body=(206, 17, 38), stripes=[(_KR_WH, 54)], collar=_KR_WH, num=_KR_WH, o1=None, o2=None, name=_KR_WH, name_o=None),
+    "CHI": dict(body=(207, 10, 44), stripes=[(_KR_WH, 10), (_KR_BK, 40), (_KR_WH, 10)], collar=_KR_WH,
+                num=_KR_WH, o1=_KR_BK, o2=None, name=_KR_WH, name_o=_KR_BK),
+    "NYR": dict(body=(0, 56, 168), stripes=[((206, 17, 38), 14), (_KR_WH, 10), ((206, 17, 38), 14)], collar=_KR_WH,
+                num=(206, 17, 38), o1=_KR_WH, o2=None, name=_KR_WH, name_o=None),
+    "NYI": dict(body=(0, 83, 155), stripes=[(_KR_WH, 10), ((244, 125, 48), 40), (_KR_WH, 10)], collar=(244, 125, 48),
+                num=(244, 125, 48), o1=_KR_WH, o2=None, name=_KR_WH, name_o=None),
+    "NSH": dict(body=(255, 184, 28), stripes=[((4, 30, 66), 16), (_KR_WH, 8), ((4, 30, 66), 16)], collar=(4, 30, 66),
+                num=(4, 30, 66), o1=_KR_WH, o2=None, name=(4, 30, 66), name_o=None),
+    "PIT": dict(body=(17, 17, 17), stripes=[((252, 181, 20), 14), (_KR_WH, 10), ((252, 181, 20), 14)], collar=(252, 181, 20),
+                num=_KR_WH, o1=(252, 181, 20), o2=None, name=_KR_WH, name_o=None),
+    "MTL": dict(body=(175, 30, 45), stripes=[(_KR_WH, 10), ((25, 33, 104), 40), (_KR_WH, 10)], collar=(25, 33, 104),
+                num=_KR_WH, o1=(25, 33, 104), o2=None, name=_KR_WH, name_o=None),
+    "PHI": dict(body=(247, 73, 2), stripes=[(_KR_WH, 10), (_KR_BK, 36), (_KR_WH, 10)], collar=_KR_BK,
+                num=_KR_WH, o1=_KR_BK, o2=None, name=_KR_WH, name_o=_KR_BK),
+    "COL": dict(body=(111, 38, 61), stripes=[(_KR_WH, 10), ((35, 97, 146), 40), (_KR_WH, 10)], collar=(35, 97, 146),
+                num=_KR_WH, o1=(35, 97, 146), o2=None, name=_KR_WH, name_o=None),
+    "VAN": dict(body=(0, 32, 91), stripes=[(_KR_WH, 10), ((0, 132, 61), 40), (_KR_WH, 10)], collar=(0, 132, 61),
+                num=_KR_WH, o1=(0, 132, 61), o2=None, name=_KR_WH, name_o=None),
+}
+
+
+def _kr_dizains(kom):
+    if kom in KREKLI:
+        return KREKLI[kom]
+    b = tuple(S.kkrasa(kom) or (40, 60, 120))
+    s_ = tuple(SEKUNDARAS.get(str(kom), _KR_WH))
+    tumss_s = sum(s_) < 300
+    return dict(body=b, stripes=[(_KR_WH, 12), (s_, 48), (_KR_WH, 12)], collar=s_, num=_KR_WH if tumss_s else s_,
+                o1=s_ if tumss_s else _KR_WH, o2=None, name=_KR_WH, name_o=None)
+
+
+def _kr_blur(a, s):
+    """~Gausa izpludināšana (3 kastes filtri ar cumsum) – tikai numpy."""
+    np = S.np
+    if s <= 0:
+        return a
+    r = max(1, int(round(s * 0.87)))
+    out = a.astype(np.float32)
+    for ax in (0, 1):
+        for _ in range(3):
+            p = np.pad(out, [(r + 1, r) if i == ax else (0, 0) for i in range(2)], mode="edge")
+            c = np.cumsum(p, axis=ax, dtype=np.float64)
+            out = (((c[2 * r + 1:] - c[:-2 * r - 1]) if ax == 0 else (c[:, 2 * r + 1:] - c[:, :-2 * r - 1])) / (2 * r + 1)).astype(np.float32)
+    return out
+
+
+def _kr_chaikin(pts, n=2):
+    for _ in range(n):
+        q = []
+        for i in range(len(pts)):
+            a, b = pts[i], pts[(i + 1) % len(pts)]
+            q += [(0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]), (0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1])]
+        pts = q
+    return pts
+
+
+def _kr_maska(pts, Wd, Hd, sc):
+    m = Image.new("L", (Wd, Hd), 0)
+    ImageDraw.Draw(m).polygon([(x * sc, y * sc) for x, y in pts], fill=255)
+    return S.np.asarray(m, S.np.float32) / 255
+
+
+_KR_KREISA = [(500, 92), (455, 88), (420, 76), (400, 62), (350, 74), (290, 92), (235, 118), (190, 170), (140, 260), (95, 370),
+              (58, 480), (30, 590), (14, 660), (60, 688), (115, 710), (160, 722), (175, 650), (195, 560), (215, 470), (232, 400),
+              (242, 350), (238, 450), (232, 600), (228, 760), (224, 900), (220, 1005), (260, 1012), (380, 1018), (500, 1020)]
+_KR_PIED = [(270, 98), (235, 118), (190, 170), (140, 260), (95, 370), (58, 480), (30, 590), (14, 660), (60, 688), (115, 710),
+            (160, 722), (175, 650), (195, 560), (215, 470), (232, 400), (242, 350), (252, 270), (262, 180)]
+_KR_ASS = ((250, 150), (88, 700))                                      # piedurknes ass: plecs → aproce
+
+
+def _kr_mir(pts):
+    return [(1000 - x, y) for x, y in pts]
+
+
+def _kr_kroka(H_, X, Y, p0, p1, w, amp, sc):
+    np = S.np
+    x0, y0, x1, y1 = p0[0] * sc, p0[1] * sc, p1[0] * sc, p1[1] * sc
+    m_ = 4 * w * sc
+    xa, xb = int(max(0, min(x0, x1) - m_)), int(min(H_.shape[1], max(x0, x1) + m_))
+    ya, yb = int(max(0, min(y0, y1) - m_)), int(min(H_.shape[0], max(y0, y1) + m_))
+    if xb <= xa or yb <= ya:
+        return
+    Xs, Ys = X[ya:yb, xa:xb], Y[ya:yb, xa:xb]
+    dx, dy = x1 - x0, y1 - y0
+    t = np.clip(((Xs - x0) * dx + (Ys - y0) * dy) / (dx * dx + dy * dy), 0, 1)
+    d2 = (Xs - x0 - t * dx) ** 2 + (Ys - y0 - t * dy) ** 2
+    H_[ya:yb, xa:xb] += amp * np.exp(-d2 / (2 * (w * sc) ** 2)) * np.clip(np.sin(np.pi * t), 0, 1) ** 0.6
+
+
+def _kr_burti(txt, h_px, squeeze=0.8, track=0.04):
+    """Bloka burti (krekla numurs / vārds): Inter Black, saspiesti, ar atstarpēm → L attēls."""
+    f0 = S.fonts("black", max(8, int(h_px * 1.38)))
+    bb = f0.getbbox("H")
+    f = S.fonts("black", max(8, int(h_px * 1.38 * h_px / max(1, bb[3] - bb[1]))))
+    ws = [f.getlength(ch) for ch in txt]
+    tr = track * h_px
+    im = Image.new("L", (int(sum(ws) + tr * (len(txt) - 1) + 40), int(h_px * 1.8)), 0)
+    d = ImageDraw.Draw(im)
+    x = 20
+    for ch, w in zip(txt, ws):
+        d.text((x, h_px * 1.35), ch, font=f, fill=255, anchor="ls")
+        x += w + tr
+    im = im.crop(im.getbbox())
+    return im.resize((max(1, int(im.width * squeeze)), im.height), Image.LANCZOS)
+
+
+def _kr_uzlikt(arr, im, cx, cy, rot=0.0):
+    np = S.np
+    if rot:
+        im = im.rotate(rot, resample=Image.BICUBIC, expand=True)
+    a = np.asarray(im, np.float32) / 255
+    h, w = a.shape
+    x0, y0 = int(cx - w / 2), int(cy - h / 2)
+    xs0, ys0, xs1, ys1 = max(0, x0), max(0, y0), min(arr.shape[1], x0 + w), min(arr.shape[0], y0 + h)
+    if xs1 > xs0 and ys1 > ys0:
+        arr[ys0:ys1, xs0:xs1] = np.maximum(arr[ys0:ys1, xs0:xs1], a[ys0 - y0:ys1 - y0, xs0 - x0:xs1 - x0])
+
+
+def _kr_paplest(m, px):
+    im = Image.fromarray((S.np.clip(m, 0, 1) * 255).astype(S.np.uint8))
+    k = int(px) * 2 + 1
+    while k > 1:
+        kk = min(k, 31) | 1
+        im = im.filter(ImageFilter.MaxFilter(kk))
+        k -= kk - 1
+    return S.np.asarray(im.filter(ImageFilter.GaussianBlur(0.8)), S.np.float32) / 255
+
+
+def krekls_reals(kom, vards, numurs, izm=820, vards_izpl=0.0):
+    """Reālistisks hokeja krekls no mugurpuses → RGBA (izm × 1,08·izm): forma ar krokām, auduma tekstūra, gaisma
+    (normāļu karte), uzšūts vārds un numurs ar kontūrām, svītras, numuri uz piedurknēm. Bez komandu logo."""
+    np = S.np
+    K = _kr_dizains(kom)
+    ss = 2
+    sc = izm * ss / 1000
+    Wd, Hd = int(1000 * sc), int(1080 * sc)
+    Y, X = np.mgrid[0:Hd, 0:Wd].astype(np.float32)
+    M = _kr_maska(_kr_chaikin(_KR_KREISA + _kr_mir(_KR_KREISA[1:-1])[::-1]), Wd, Hd, sc)
+    SL = np.maximum(_kr_maska(_kr_chaikin(_KR_PIED), Wd, Hd, sc), _kr_maska(_kr_chaikin(_kr_mir(_KR_PIED)), Wd, Hd, sc)) * M
+    A = np.zeros((Hd, Wd, 3), np.float32)
+    A[:] = np.array(K["body"], np.float32)
+
+    def krasot(m, kr):
+        A[:] = A * (1 - m[..., None]) + np.array(kr, np.float32) * m[..., None]
+
+    (ax_a, ax_b) = _KR_ASS
+    for side in (0, 1):
+        a_ = ax_a if side == 0 else (1000 - ax_a[0], ax_a[1])
+        b_ = ax_b if side == 0 else (1000 - ax_b[0], ax_b[1])
+        dx, dy = b_[0] - a_[0], b_[1] - a_[1]
+        Ln = math.hypot(dx, dy)
+        s_ = (X / sc - a_[0]) * dx / Ln + (Y / sc - a_[1]) * dy / Ln
+        smask = SL * ((X < Wd / 2) if side == 0 else (X >= Wd / 2))
+        pos = Ln * 0.60
+        for kr, w in K["stripes"]:
+            krasot(_kr_blur(((s_ >= pos) & (s_ < pos + w)).astype(np.float32), 0.7 * ss) * smask, kr)
+            pos += w + 6
+        krasot(_kr_blur((s_ >= Ln * 0.94).astype(np.float32), 0.7 * ss) * smask, K["stripes"][len(K["stripes"]) // 2][0])
+    y = 845
+    for kr, w in K["stripes"]:
+        krasot(_kr_blur(((Y / sc >= y) & (Y / sc < y + w)).astype(np.float32), 0.7 * ss) * M * (1 - SL), kr)
+        y += w + 6
+    col = [(402, 62), (420, 76), (455, 88), (500, 92), (545, 88), (580, 76), (598, 62), (606, 82), (583, 100), (548, 114),
+           (500, 119), (452, 114), (417, 100), (394, 82)]
+    krasot(_kr_maska(_kr_chaikin(col), Wd, Hd, sc) * M, K["collar"])
+    NUMm, NUMo1, NUMo2, NAMm = (np.zeros((Hd, Wd), np.float32) for _ in range(4))
+    if vards:
+        nm = _kr_burti(str(vards).upper(), 50 * sc, 0.86, 0.06)
+        if nm.width > 390 * sc:
+            nm = nm.resize((int(390 * sc), nm.height), Image.LANCZOS)
+        na = np.asarray(nm, np.float32) / 255
+        h_, w_ = na.shape
+        pad = int(h_ * 0.6)
+        arc = np.zeros((h_ + pad, w_), np.float32)
+        for xi in range(w_):                                          # vārds nedaudz arkā
+            off = int(((xi - w_ / 2) ** 2) / (2 * 1500 * sc))
+            arc[off:off + h_, xi] = na[:, xi]
+        _kr_uzlikt(NAMm, Image.fromarray((arc * 255).astype(np.uint8)), 500 * sc, 226 * sc + pad / 2)
+        if vards_izpl:
+            NAMm = _kr_blur(NAMm, vards_izpl * ss)
+    _kr_uzlikt(NUMm, _kr_burti(str(numurs), 290 * sc, 0.80, 0.03), 500 * sc, 520 * sc)
+    ang = math.degrees(math.atan2(ax_b[0] - ax_a[0], ax_b[1] - ax_a[1]))
+    for side in (0, 1):
+        px, py = ax_a[0] + (ax_b[0] - ax_a[0]) * 0.33, ax_a[1] + (ax_b[1] - ax_a[1]) * 0.33
+        _kr_uzlikt(NUMm, _kr_burti(str(numurs), 66 * sc, 0.80, 0.03), (1000 - px if side else px) * sc, py * sc,
+                   ang if side else -ang)
+    if K["o1"]:
+        NUMo1 = _kr_paplest(NUMm, 9 * sc)
+        if K["o2"]:
+            NUMo2 = _kr_paplest(NUMm, 16 * sc)
+            krasot(NUMo2 * M, K["o2"])
+        krasot(NUMo1 * M, K["o1"])
+    krasot(NUMm * M, K["num"])
+    if K.get("name_o") and vards:
+        krasot(_kr_paplest(NAMm, 4 * sc) * M, K["name_o"])
+    krasot(NAMm * M, K["name"])
+    # augstuma karte: apjoms + krokas + audums + uzšuves
+    Hh = _kr_blur(M, 38 * ss) * 26 + _kr_blur(M, 10 * ss) * 6
+    for side in (0, 1):
+        f_ = (lambda p: p) if side == 0 else (lambda p: (1000 - p[0], p[1]))
+        for p0, p1, w, amp in (((244, 362), (365, 545), 16, -9), ((250, 392), (335, 650), 22, -6), ((362, 132), (340, 470), 28, 5),
+                               ((262, 878), (470, 926), 22, 5), ((240, 938), (292, 1008), 14, -5), ((222, 200), (112, 520), 18, 6),
+                               ((244, 300), (168, 640), 14, -6), ((66, 498), (210, 522), 12, -8), ((44, 560), (192, 588), 10, -6),
+                               ((170, 230), (90, 420), 10, -4)):
+            _kr_kroka(Hh, X, Y, f_(p0), f_(p1), w, amp, sc)
+        _kr_kroka(Hh, X, Y, f_((270, 98)), f_((256, 230)), 2.2, -3, sc)    # piedurknes šuve
+        _kr_kroka(Hh, X, Y, f_((256, 230)), f_((242, 352)), 2.2, -3, sc)
+    _kr_kroka(Hh, X, Y, (500, 300), (500, 960), 40, -4, sc)
+    rng = np.random.default_rng(3)
+    Hh += _kr_blur(rng.standard_normal((Hd, Wd)).astype(np.float32), 1.0 * ss) * 0.9
+    Hh += np.sin((X + Y) * 2 * np.pi / (7 * ss)) * np.sin((X - Y) * 2 * np.pi / (7 * ss)) * 0.18
+    Hh += _kr_blur(np.clip(NUMm + NUMo1 + NUMo2 + NAMm, 0, 1), 1.2 * ss) * 2.2
+    Hh *= M
+    gy, gx = np.gradient(Hh / ss)
+    nl = np.sqrt(gx * gx + gy * gy + 1)
+    nx, ny, nz = -gx / nl, -gy / nl, 1 / nl
+    lx, ly, lz = -0.38, -0.62, 0.68
+    ll = math.sqrt(lx * lx + ly * ly + lz * lz); lx, ly, lz = lx / ll, ly / ll, lz / ll
+    dif = np.clip(nx * lx + ny * ly + nz * lz, 0, 1)
+    hl = math.sqrt(lx * lx + ly * ly + (lz + 1) ** 2)
+    spec = np.clip((nx * lx + ny * ly + nz * (lz + 1)) / hl, 0, 1) ** 46
+    ao = np.clip(1 - 0.07 * (_kr_blur(Hh, 14 * ss) - Hh), 0.55, 1.0)
+    rgb = A * ((0.36 + 0.78 * dif) * ao * (1.05 - 0.22 * (Y / Hd)))[..., None] + (spec * 70 * M)[..., None]
+    edge = np.clip(_kr_paplest(NUMm, 2.5 * sc) - NUMm, 0, 1)                 # diega šuve gar numuru
+    dots = (np.sin(X * 2 * np.pi / (9 * ss)) * np.sin(Y * 2 * np.pi / (9 * ss)) > 0.2).astype(np.float32)
+    rgb = np.clip(rgb * (1 - 0.25 * edge * dots)[..., None], 0, 255)
+    im = Image.fromarray(np.dstack([rgb, M * 255]).astype(np.uint8), "RGBA")
+    return im.resize((izm, int(izm * 1.08)), Image.LANCZOS)
+
+
+# ---------------------------------------------------------------- aina
+_NS_KESA = {}
+
+
+def _ns_fons(inten):
+    """Tumšs fons + prožektora konuss no augšas + vinjete (kešā pēc spožuma)."""
+    k = ("fons", round(inten, 2))
+    if k not in _NS_KESA:
+        np = S.np
+        a = np.linspace(0, 1, S.H)[:, None]
+        img = (np.array((5, 7, 15)) * (1 - a) + np.array((11, 13, 26)) * a)[:, None, :].repeat(S.W, 1).reshape(S.H, S.W, 3)
+        im = Image.fromarray(img.astype(np.uint8), "RGB").convert("RGBA")
+        m = Image.new("L", (S.W // 4, S.H // 4), 0)
+        d = ImageDraw.Draw(m)
+        d.polygon([(480 / 4, -5), (600 / 4, -5), (1140 / 4, 1500 / 4), (-60 / 4, 1500 / 4)], fill=70)
+        d.ellipse([110 / 4, 1150 / 4, 970 / 4, 1290 / 4], fill=95)
+        m = m.filter(ImageFilter.GaussianBlur(14))
+        ma = (np.asarray(m, np.float32) * np.linspace(1.0, 0.45, S.H // 4)[:, None] * inten).clip(0, 255).astype(np.uint8)
+        kon = Image.new("RGBA", (S.W, S.H), (255, 240, 215, 0))
+        kon.putalpha(Image.fromarray(ma).resize((S.W, S.H), Image.BILINEAR))
+        im.alpha_composite(kon)
+        _NS_KESA[k] = im
+    return _NS_KESA[k].copy()
+
+
+def _ns_vinjete():
+    if "vin" not in _NS_KESA:
+        v = Image.new("L", (S.W // 8, S.H // 8), 0)
+        ImageDraw.Draw(v).ellipse([-S.W // 14, -S.H // 30, S.W // 8 + S.W // 14, S.H // 8 + S.H // 30], fill=255)
+        v = v.filter(ImageFilter.GaussianBlur(12)).resize((S.W, S.H), Image.BILINEAR)
+        dark = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+        dark.putalpha(ImageChops.invert(v).point(lambda x: int(x * 0.8)))
+        _NS_KESA["vin"] = dark
+    return _NS_KESA["vin"]
+
+
+_NS_PUT = [tuple(x) for x in S.np.random.default_rng(5).uniform(0, 1, (110, 5))]
+
+
+def _ns_puteklis(im, t, inten):
+    L = Image.new("RGBA", (S.W // 2, S.H // 2), (0, 0, 0, 0))
+    d = ImageDraw.Draw(L)
+    for (u, v, r, ph, sp) in _NS_PUT:
+        r, ph, sp = 0.75 + 1.5 * r, ph * 6.28, 10 + 20 * sp
+        y = (v * 1500 - t * sp) % 1500
+        x = 540 + (u - 0.5) * 2 * (60 + 540 * y / 1500) + 12 * math.sin(t * 0.8 + ph)
+        a = int(150 * inten * (0.5 + 0.5 * math.sin(t * 2.3 + ph)) * (1 - y / 1700))
+        d.ellipse([x / 2 - r, y / 2 - r, x / 2 + r, y / 2 + r], fill=(255, 245, 225, max(0, a)))
+    im.alpha_composite(L.resize((S.W, S.H), Image.BILINEAR))
+
+
+def _ns_gaismot(img, inten):
+    np = S.np
+    a = np.asarray(img, np.float32)
+    g = (1.08 - 0.30 * np.linspace(0, 1, a.shape[0]))[:, None, None] * (0.18 + 0.82 * inten)
+    return Image.fromarray(np.dstack([(a[..., :3] * g).clip(0, 255), a[..., 3:]]).astype(np.uint8), "RGBA")
+
+
+def _ns_siluets(img, rim):
+    a = img.getchannel("A")
+    s_ = Image.new("RGBA", img.size, (6, 8, 14, 255)); s_.putalpha(a)
+    rm = Image.new("RGBA", img.size, tuple(rim) + (0,))
+    rm.putalpha(ImageChops.subtract(a.filter(ImageFilter.MaxFilter(7)), a.filter(ImageFilter.MinFilter(5))))
+    out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    out.alpha_composite(rm.filter(ImageFilter.GaussianBlur(6)))
+    out.alpha_composite(rm.filter(ImageFilter.GaussianBlur(2)))
+    out.alpha_composite(s_)
+    return out
+
+
+def _ns_mala(kom):
+    """Silueta mala – komandas krāsā (mājiens); tumšām krāsām – apkakles/sekundārā krāsa."""
+    K = _kr_dizains(kom)
+    b = K["body"]
+    if 0.299 * b[0] + 0.587 * b[1] + 0.114 * b[2] < 60:
+        b = K["collar"]
+    return tuple(int(x + (255 - x) * 0.15) for x in b)
+
+
+def _ns_txt(s_, sz, fill, box=None, maxw=880):
+    k = ("txt", s_, sz, fill, box, maxw)
+    if k not in _NS_KESA:
+        f = S.fonts("black", sz)
+        while f.getlength(s_) > maxw and sz > 40:
+            sz -= 4
+            f = S.fonts("black", sz)
+        bb = f.getbbox(s_)
+        tw, th = bb[2] - bb[0], bb[3] - bb[1]
+        im = Image.new("RGBA", (int(tw + 2 * (40 if box else 24) + 60), int(th + 2 * (40 if box else 24) + 30)), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        cx, cy = im.width / 2, im.height / 2
+        if box:
+            bw, bh = tw + 70, th + 56
+            d.polygon([(cx - bw / 2 + 22, cy - bh / 2), (cx + bw / 2 + 4, cy - bh / 2), (cx + bw / 2 - 22, cy + bh / 2),
+                       (cx - bw / 2 - 4, cy + bh / 2)], fill=tuple(box) + (255,))
+            d.text((cx, cy), s_, font=f, fill=fill, anchor="mm")
+        else:
+            sh = Image.new("RGBA", im.size, (0, 0, 0, 0))
+            ImageDraw.Draw(sh).text((cx + 5, cy + 8), s_, font=f, fill=(0, 0, 0, 200), anchor="mm")
+            im.alpha_composite(sh.filter(ImageFilter.GaussianBlur(7)))
+            d.text((cx, cy), s_, font=f, fill=fill, anchor="mm", stroke_width=4, stroke_fill=(0, 0, 0, 255))
+        _NS_KESA[k] = im
+    return _NS_KESA[k]
+
+
+def _ns_jzime(izm):
+    k = ("jz", izm)
+    if k not in _NS_KESA:
+        q = _ns_txt("?", int(420 * izm / 820), S.DZELTENS)
+        _NS_KESA[k] = (q, q.filter(ImageFilter.GaussianBlur(18 * izm / 820)))
+    return _NS_KESA[k]
+
+
+def _ns_put(L, im, cx, cy, sc=1.0, a=1.0, rot=0.0):
+    if a <= 0.01 or sc <= 0.01:
+        return
+    if sc != 1.0:
+        im = im.resize((max(1, int(im.width * sc)), max(1, int(im.height * sc))), Image.BICUBIC)
+    if rot:
+        im = im.rotate(rot, resample=Image.BICUBIC, expand=True)
+    if a < 1:
+        im = im.copy()
+        im.putalpha(im.getchannel("A").point(lambda v: int(v * a)))
+    L.alpha_composite(im, (int(cx - im.width / 2), int(cy - im.height / 2)))
+
+
+def _ns_punch(t, t0, amp=0.07, dur=0.25):
+    k = (t - t0) / dur
+    return 1 + amp * math.sin(math.pi * k) if 0 <= k <= 1 else 1.0
+
+
+def _ns_trice(t, t0, amp=16, dur=0.3):
+    k = t - t0
+    if not 0 <= k <= dur:
+        return 0, 0
+    a = amp * (1 - k / dur) ** 2
+    return a * math.sin(k * 97), a * math.cos(k * 73)
+
+
+def _ns_glitch(im, sila, seed):
+    np = S.np
+    r = np.random.default_rng(seed)
+    a = np.asarray(im.convert("RGB")).copy()
+    dx = int(14 * sila)
+    a[..., 0] = np.roll(a[..., 0], dx, 1)
+    a[..., 2] = np.roll(a[..., 2], -dx, 1)
+    for _ in range(int(9 * sila)):
+        y0, hh = int(r.uniform(0, S.H - 80)), int(r.uniform(12, 90))
+        a[y0:y0 + hh] = np.roll(a[y0:y0 + hh], int(r.uniform(-90, 90) * sila), 1)
+    return Image.fromarray(a, "RGB").convert("RGBA")
+
+
+def _ns_kamera(im, sc, dx=0.0, dy=0.0, cy=820, cx=540):
+    if sc == 1 and not dx and not dy:
+        return im
+    return im.transform((S.W, S.H), Image.AFFINE, (1 / sc, 0, cx - cx / sc - dx / sc, 0, 1 / sc, cy - cy / sc - dy / sc),
+                        resample=Image.BILINEAR)
+
+
+def _ns_izkartojums(n, thumb=False):
+    """[(cx, augša, izmērs)] krekliem: 1 – liels; 2–3 – rindā; 4+ – divās rindās."""
+    y0, y1 = (95, 900) if thumb else (150, 1090)
+    if n == 1:
+        return [(540, y0, 740 if thumb else 820)]
+    rindas = 1 if n <= 3 else 2
+    per = math.ceil(n / rindas)
+    izm = int(min(980 / per - 20, ((y1 - y0) / rindas - 40) / 1.08, 470))
+    h = izm * 1.08
+    top0 = y0 + max(0, ((y1 - y0) - (rindas * h + (rindas - 1) * 40)) / 2)
+    out = []
+    for r in range(rindas):
+        cnt = per if r < rindas - 1 else n - per * (rindas - 1)
+        w = cnt * izm + (cnt - 1) * 20
+        out += [(540 - w / 2 + izm / 2 + c * (izm + 20), top0 + r * (h + 40), izm) for c in range(cnt)]
+    return out
+
+
+def _ns_krekli(nsl, thumb=False):
+    k = ("kr", id(nsl), thumb)
+    if k not in _NS_KESA:
+        out = []
+        for (kom, v), (cx, top, izm) in zip(nsl["krekli"], _ns_izkartojums(len(nsl["krekli"]), thumb)):
+            kb = ("mist", kom, v, izm)
+            if kb not in _NS_KESA:
+                _NS_KESA[kb] = krekls_reals(kom, v, "?", izm, vards_izpl=11 * izm / 820)
+            mist = _NS_KESA[kb]
+            out.append({"cx": cx, "top": top, "izm": izm, "mist": mist, "sil": _ns_siluets(mist, _ns_mala(kom)),
+                        "cy": top + mist.height / 2, "hint": _ns_gaismot(mist, 0.9)})
+        _NS_KESA[k] = out
+    return _NS_KESA[k]
+
+
+def _ns_laiki(nsl, vardi=None, ilg=None):
+    """Notikumu laiki āķa ainā (s): rindu parādīšanās pēc balss vārdiem (vardi – jau ar +0,15 s nobīdi), glitch,
+    sirdspuksti, izeja. Bez balss – noklusējums."""
+    q1, q2 = nsl["q1"][0], nsl["q2"][0]
+    a1, b1, a2, b2 = 0.15, 0.85, 1.30, 2.10
+    n1 = len(S.balsij(nsl["q1"][1]).split())
+    ok = bool(vardi) and len(vardi) > n1
+    if ok:
+        a1, b1, a2, b2 = vardi[0][0], vardi[n1 - 1][1], vardi[n1][0], vardi[-1][1]
+
+    def rindu(rindas, a, b, sak):
+        vv = [len(r.split()) for r in rindas]
+        out, c = [], 0
+        for x in vv:
+            if ok:
+                kopa_v = len(vardi) - sak if sak else n1
+                j = sak + int(round(c * kopa_v / max(1, sum(vv))))
+                out.append(vardi[min(j, len(vardi) - 1)][0])
+            else:
+                out.append(a + (b - a) * c / max(1, sum(vv)))
+            c += x
+        return out
+    t1 = rindu(q1, a1, b1, 0)
+    t1[0] = 0.0                                                       # pirmā rinda – jau pirmajā kadrā
+    t2 = rindu(q2, a2, b2, n1)
+    lg = (max(t1[-1] + 0.15, a2 - 0.25), a2)
+    mazi = [t1[-1] + 0.13]
+    if lg[0] - t1[-1] > 0.6:
+        mazi.append((t1[-1] + lg[0]) / 2 + 0.05)
+    beigas = max(float(ilg or 0), b2 + 1.25)
+    mazi.append(min(b2 + 0.45, beigas - 0.7))
+    return {"q1": t1, "q2": t2, "q2_beigas": b2, "glitch": mazi, "glitch_liels": lg, "sirds": b2 + 0.25,
+            "izeja": beigas - 0.45, "beigas": beigas}
+
+
+def _ns_sfx_ev(L_):
+    """Āķa skaņu efekti (laiks no ainas sākuma)."""
+    ev = [(0.0, "riser", 0.5), (L_["q1"][-1], "klik", 0.6)]
+    ev += [(x, "glitch_mazs", 0.45) for x in L_["glitch"]]
+    ev += [(L_["glitch_liels"][0], "glitch", 0.8)]
+    ev += [(x, "klik", 0.6) for x in L_["q2"][1:-1]]
+    ev += [(L_["q2"][0], "trieciens", 0.5), (L_["q2"][-1], "trieciens", 0.95), (L_["sirds"], "sirds", 0.9),
+           (L_["izeja"] - 0.05, "swoosh", 0.8)]
+    return ev
+
+
+def _ns_jautajums(L, t, rindas, t0s, thumb=False):
+    if len(rindas) == 2:
+        y0, dy, izm = (1010, 170, (170, 200)) if thumb else (1170, 175, (160, 190))
+    else:
+        y0, dy, izm = (975, 142, (128, 148, 172)) if thumb else (1135, 146, (128, 148, 172))
+    for i, (r, t_) in enumerate(zip(rindas, t0s)):
+        k = (t - t_) / 0.16
+        if t_ > 0 and k <= 0:
+            continue
+        sc = (1 + 0.7 * (1 - S.ease(k))) if (t_ > 0 and k < 1) else 1.0
+        last = i == len(rindas) - 1
+        im = _ns_txt(r, izm[min(i, len(izm) - 1)], (8, 12, 26) if last else S.BALTS, S.DZELTENS if last else None)
+        _ns_put(L, im, 540, y0 + i * dy + (12 if last else 0), sc, min(1.0, (t - t_) / 0.08) if t_ > 0 else 1.0, 2 if last else 0)
+
+
+def aina_noslepums(t, nsl, ilg=None, thumb=False):
+    """Noslēpuma āķis – pilns kadrs (RGB, ar savu fonu; drošā zona jau ievērota)."""
+    L_ = nsl.get("_laiki") or _ns_laiki(nsl, None, ilg)
+    js = _ns_krekli(nsl, thumb)
+    q2 = thumb or t >= L_["q2"][0]
+    im = _ns_fons(0.9 if q2 else 0.75)
+    gl, hint = 0.0, False
+    if not thumb:
+        for x in L_["glitch"]:
+            if 0 <= t - x < 0.09:
+                gl, hint = 0.5, True
+        a_, b_ = L_["glitch_liels"]
+        if a_ <= t < b_:
+            gl, hint = 1.0, int(t * S.FPS) % 2 == 0
+    sirds = L_["sirds"]
+    for i, j in enumerate(js):
+        rot = 0.0 if thumb else 0.6 * math.sin(t * 2.0 + i * 1.3)
+        sc_k = j["izm"] / 820
+        d = ImageDraw.Draw(im)                                        # pakaramais
+        cx, yt = j["cx"], j["top"] + 30 * sc_k
+        d.line([(cx, yt + 30 * sc_k), (cx, yt - 12 * sc_k)], fill=(190, 196, 208, 255), width=max(3, int(9 * sc_k)))
+        d.arc([cx - 30 * sc_k, yt - 72 * sc_k, cx + 30 * sc_k, yt - 12 * sc_k], 140, 400, fill=(190, 196, 208, 255), width=max(3, int(9 * sc_k)))
+        if hint:
+            _ns_put(im, j["hint"], j["cx"], j["cy"], 1, 1, rot)
+            continue
+        _ns_put(im, j["sil"], j["cx"], j["cy"], 1.0 if thumb else _ns_punch(t, L_["q2"][0], 0.03), 1, rot)
+        q, qg = _ns_jzime(j["izm"])
+        tau = 0.0 if thumb else max(0.0, t - (L_["q2"][-1] + 0.2))
+        rq = 6 * math.sin(2 * math.pi * tau / 2.0 + i * 0.9) * min(1.0, tau / 0.4)
+        p = 1.0 if thumb else ((1 + 0.04 * math.sin(t * 6 + i * 0.9)) * _ns_punch(t, L_["q2"][0], 0.12, 0.3)
+                               * _ns_punch(t, sirds, 0.06, 0.2) * _ns_punch(t, sirds + 0.17, 0.05, 0.2))
+        _ns_put(im, qg, j["cx"], j["cy"] + 20 * sc_k, p, 0.95, rq)
+        _ns_put(im, q, j["cx"], j["cy"] + 20 * sc_k, p, 1, rq)
+    if not thumb:
+        _ns_puteklis(im, t, 0.7)
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    if q2:
+        _ns_jautajums(L, 9.0 if thumb else t, nsl["q2"][0], [0.0] * 3 if thumb else L_["q2"], thumb)
+    else:
+        _ns_jautajums(L, t, nsl["q1"][0], L_["q1"])
+    im.alpha_composite(L)
+    im.alpha_composite(_ns_vinjete())
+    if thumb:
+        return im.convert("RGB")
+    kf = (t - L_["q2"][-1]) / 0.16                                    # zibsnis pēdējai rindai
+    if 0 <= kf <= 1:
+        im.alpha_composite(Image.new("RGBA", (S.W, S.H), (255, 255, 255, int(64 * (1 - kf) ** 1.5))))
+    if gl:
+        im = _ns_glitch(im, gl, int(t * S.FPS))
+    dx, dy = _ns_trice(t, L_["q2"][-1], 16)
+    sc = 1 + 0.04 * S.ease(t / max(0.1, L_["izeja"]))
+    if t > L_["izeja"]:                                               # izeja: kamera ielido "?" iekšā (centrālākajam kreklam)
+        k = S.ease((t - L_["izeja"]) / max(0.05, L_["beigas"] - L_["izeja"]))
+        j0 = min(js, key=lambda j: abs(j["cx"] - 540) + 0.5 * abs(j["cy"] - 620))
+        fx, fy = j0["cx"] + (540 - j0["cx"]) * (1 - k), j0["cy"] + 20 * j0["izm"] / 820
+        im = _ns_kamera(im, sc * (1 + 4.0 * 820 / j0["izm"] * k ** 1.6), dx, dy, cy=fy, cx=fx)
+        im.alpha_composite(Image.new("RGBA", (S.W, S.H), (0, 0, 0, int(235 * k * k))))
+    else:
+        im = _ns_kamera(im, sc, dx, dy)
+    return im.convert("RGB")
+
+
+def noslepums_thumbnail(nsl):
+    """Sīktēls: silueti ar "?" + 2. jautājums (augstāk – lai YouTube nosaukums apakšā to neaizsedz)."""
+    return aina_noslepums(0.0, nsl, None, thumb=True)
+
+
+# ---------------------------------------------------------------- skaņas efekti āķim (ģenerēti; aizstāj shorts_sfx\\<nosaukums>.mp3)
+def _sfx_lp(x, fc):
+    np = S.np
+    fc = np.broadcast_to(np.asarray(fc, float), x.shape)
+    a = 1 - np.exp(-2 * np.pi * fc / SR)
+    y = np.empty_like(x)
+    v = 0.0
+    for i in range(len(x)):
+        v += a[i] * (x[i] - v)
+        y[i] = v
+    return y
+
+
+def _sfx_norm(x, p):
+    m = abs(x).max()
+    return x * (p / m) if m > 0 else x
+
+
+def _sfx_riser(d=1.3):
+    np = S.np
+    t = np.arange(int(SR * d)) / SR
+    n = _sfx_lp(np.random.default_rng(4).standard_normal(len(t)), 400 + 7000 * (t / d) ** 2)
+    tone = np.sin(2 * np.pi * np.cumsum(180 + 900 * (t / d) ** 2) / SR) * 0.35
+    return _sfx_norm((n + tone) * (t / d) ** 2.2, 0.7)
+
+
+def _sfx_glitch(d=0.3, seed=9):
+    np = S.np
+    rng = np.random.default_rng(seed)
+    t = np.arange(int(SR * d)) / SR
+    y = np.zeros_like(t)
+    i = 0
+    while i < len(t):
+        L = int(SR * rng.uniform(0.012, 0.045))
+        f = rng.choice([180, 340, 620, 1250, 2400, 3900])
+        seg = np.sign(np.sin(2 * np.pi * f * np.arange(L) / SR)) * (0.35 if rng.random() < 0.7 else 0)
+        if rng.random() < 0.35:
+            seg = np.round(rng.standard_normal(L) * 3) / 6
+        y[i:i + L] = seg[:len(y[i:i + L])]
+        i += L
+    return _sfx_norm(y * np.exp(-t * 3), 0.6)
+
+
+def _sfx_trieciens():
+    """Kino trieciens: zemas frekvences kritiens + trokšņa sitiens + neliela atbalss."""
+    np = S.np
+    t = np.arange(int(SR * 1.2)) / SR
+    y = np.sin(2 * np.pi * np.cumsum(95 * np.exp(-t * 2.2) + 38) / SR) * np.exp(-t * 3.2)
+    y += _sfx_lp(np.random.default_rng(6).standard_normal(len(t)) * np.exp(-t * 18), 900) * 1.6
+    out = np.zeros(len(y) + int(SR * 0.4))
+    out[:len(y)] += y
+    for k, dl in enumerate((0.031, 0.047, 0.071, 0.093)):
+        o = int(SR * dl)
+        out[o:o + len(y)] += y * 0.35 * 0.55 ** (k + 1)
+    return _sfx_norm(out, 0.95)
+
+
+def _sfx_sirds():
+    np = S.np
+    t = np.arange(int(SR * 0.7)) / SR
+    y = np.zeros_like(t)
+    for o, g in ((0.0, 1.0), (0.17, 0.7)):
+        k = int(SR * o)
+        tt = t[:len(t) - k]
+        y[k:] += g * np.sin(2 * np.pi * (48 + 20 * np.exp(-tt * 30)) * tt) * np.exp(-tt * 16)
+    return _sfx_norm(_sfx_lp(y, 400), 0.95)
+
+
+def _sfx_klik():
+    np = S.np
+    t = np.arange(int(SR * 0.06)) / SR
+    return 0.6 * np.sin(2 * np.pi * 1800 * t) * np.exp(-t * 120) + 0.3 * np.random.default_rng(2).standard_normal(len(t)) * np.exp(-t * 400)
+
+
+# ---------------------------------------------------------------- dati katram video veidam
+def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None):
+    """Ieliek āķī noslēpumu: krekli [(komanda, uzvārds)], jautājums 1 / 2 (neatkārtojas pēdējos video), balss.
+    runa_pec – vecā āķa teikums (atskatiem – rezultāts) → 2. ainas balss sākumā."""
+    if not (NOSL_AKIS and JAUNS_FANTASY) or not s or not s.get("intro") or not krekli or len(s.get("runa") or []) < 2:
+        return s
+    try:
+        a = S.reta_frase(q1, veids=veids_v, n=2)
+        b = S.reta_frase(q2, veids=veids_v, n=4)
+        if x_vards:
+            a = (tuple(r.replace("{X}", x_vards.upper()) for r in a[0]), a[1].replace("{x}", x_vards.lower()))
+        nsl = {"krekli": [(str(k or ""), str(v or "").upper()) for k, v in krekli][:8], "q1": a, "q2": b}
+        s["intro"]["noslepums"] = nsl
+        s["intro"]["ilgums"] = 3.3
+        if runa_pec:
+            s["runa"][1] = (str(runa_pec).strip() + " " + s["runa"][1]).strip()
+        s["runa"][0] = f"{a[1]} {b[1]}"
+        print(f"ĀĶIS: noslēpums – \"{' '.join(a[0])}\" → \"{' '.join(b[0])}\"")
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"  (noslēpuma āķis: {type(ex).__name__}: {ex} – parastais āķis)")
+        (s.get("intro") or {}).pop("noslepums", None)
+    return s
+
+
+def _ns_virsraksts(s, vards, komanda=False):
+    """YouTube virsrakstā spēlētāja / komandas vārda vietā "guess who's …" / "guess which team is …"; vārds – aprakstā."""
+    if not (NOSL_VIRSRAKSTS and s and vards and (s.get("intro") or {}).get("noslepums")):
+        return
+    try:
+        v = str(s.get("virsraksts") or "")
+        pat = (r"(?:The\s+)?" if komanda else r"(?:[A-ZÀ-Ž][\w'’.\-]*\s+)?") + re.escape(str(vards)) + r"(\s+(?:is|are|has|have)\b)?"
+        m = re.search(pat, v, flags=re.I)
+        if not m:
+            return
+        verb = (m.group(1) or "").strip().lower()
+        if komanda:
+            rep = "guess which team" + {"is": " is", "are": " is", "has": " has", "have": " has"}.get(verb, "")
+        else:
+            rep = "guess who" + {"is": "'s", "are": "'s", "has": " has", "have": " has"}.get(verb, "")
+        nos = v[m.start():m.end() - len(m.group(1) or "")].strip()
+        jauns = v[:m.start()] + rep + v[m.end():]
+        if m.start() == 0:
+            jauns = jauns[0].upper() + jauns[1:]
+        s["virsraksts"] = jauns
+        s["apraksts"] = (str(s.get("apraksts") or "").rstrip() + f"\n#1: {re.sub(r'^The ', '', nos)}").strip()
+    except Exception:                                                 # noqa: BLE001
+        pass
+
+
+def _ns_fantasy(s):
+    af = s.get("aki_f") or {}
+    stream = "STREAMER" in str((s.get("intro") or {}).get("tag", "")).upper()
+    noslepuma_aki(s, [(af.get("kom"), af.get("vards"))], NOSL_Q1["speletajs"], NOSL_Q2["streameri" if stream else "fantasy"],
+                  "streameri" if stream else "fantasy")
+    _ns_virsraksts(s, af.get("vards"))
+    return s
+
+
+def _ns_xg(s, veids, hero):
+    laim = hero["viz"].get("grupa") == "laim"
+    if veids == "komandas":
+        noslepuma_aki(s, [(hero.get("badge"), "")], NOSL_Q1["komanda"], NOSL_Q2["kom_laim" if laim else "kom_nelaim"], veids)
+        _ns_virsraksts(s, hero.get("v2"), komanda=True)
+    else:
+        q1 = NOSL_Q1["vartsargs" if veids == "vartsargi" else "speletajs"]
+        q2 = NOSL_Q2[("va_labs" if laim else "va_slikts") if veids == "vartsargi" else ("sp_laim" if laim else "sp_nelaim")]
+        noslepuma_aki(s, [(hero.get("badge"), hero.get("v2"))], q1, q2, veids)
+        _ns_virsraksts(s, hero.get("v2"))
+    return s
+
+
+def _ns_fakti(rez, hero):
+    atsl = str(hero.get("atsl", ""))
+    kom, v = hero.get("badge"), hero.get("vards")
+    if not kom or atsl.startswith("tiesnesis"):
+        return rez
+    if atsl.startswith(("points_serija", "goals_serija", "liela:")):
+        kr, q1, q2, kom_v = [(kom, v)], NOSL_Q1["speletajs"], NOSL_Q2["fakti_sp"], None
+    elif atsl.startswith("vartsargs"):
+        kr, q1, q2, kom_v = [(kom, v)], NOSL_Q1["vartsargs"], NOSL_Q2["fakti_va"], None
+    elif atsl.startswith("liela_duo"):
+        kr, q1, q2, kom_v = [(kom, x.strip()) for x in str(v).split("&")][:3], NOSL_Q1["duo"], NOSL_Q2["fakti_duo"], None
+    else:
+        kr, q1, kom_v = [(kom, "")], NOSL_Q1["komanda"], v
+        q2 = NOSL_Q2["fakti_kom_zaud" if atsl.startswith("kom_zaud") else "fakti_kom"]
+    vecais = str(rez["runa"][0])
+    noslepuma_aki(rez, kr, q1, q2, "fakts")
+    if (rez.get("intro") or {}).get("noslepums"):
+        m = re.match(r"(The NHL week in numbers[^.]*\.)", vecais)       # ievada teikums → 2. ainā
+        if m and not rez["runa"][1].startswith("The NHL week"):
+            rez["runa"][1] = m.group(1) + " " + rez["runa"][1]
+        if kom_v:
+            _ns_virsraksts(rez, kom_v, komanda=True)
+        elif not atsl.startswith("liela_duo"):
+            _ns_virsraksts(rez, v)
     return rez
 
 
