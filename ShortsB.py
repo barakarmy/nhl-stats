@@ -26,6 +26,7 @@ Mapes (izveido pats nhl-stats saknē; ja mapes nav vai tā tukša – attiecīg�
     speletaji_1.mp4, speletaji_2.mp4 (der arī komandas un vartsargi video), fantasy_1.mp4,
     fakts_1.mp4, tiesnesi_1.mp4,
     atskats_1.mp4 (visi atskati) vai precīzāk atskats_speletaji_1.mp4, atskats_fantasy_1.mp4 ...,
+    (ja atskatam savu nav – tie paši faili, ko parastajam šī veida video: speletaji_ / xg_, fantasy_),
     visi_1.mp4 (vai jebkurš cits nosaukums) – der jebkuram veidam, kam nav savu failu.
   Ja veidam ir vairāki faili, tie tiek ņemti pēc kārtas (1, 2, 3, 1 ...); kārta saglabājas
   video\\shorts_mediji.json. Ja nav ne sava, ne visi_ faila – fons paliek krāsainais / bez mūzikas.
@@ -376,26 +377,8 @@ def _arg(nos, nokl=None):
     return sys.argv[sys.argv.index(nos) + 1] if nos in sys.argv and sys.argv.index(nos) + 1 < len(sys.argv) else nokl
 
 
-def veida_atslegas():
-    """Kuri failu nosaukumu sākumi der šim video, svarīgākais pirmais.
-    Piem. xG atskats par spēlētājiem: ['atskats_speletaji', 'atskats', 'visi']."""
-    ats = _arg("--atskats")
-    if ats:
-        veids = ""
-        try:
-            import json
-            js = ats
-            if os.path.isdir(ats):
-                js = os.path.join(ats, sorted(f for f in os.listdir(ats) if f.endswith(".json"))[0])
-            veids = json.load(open(js, encoding="utf-8")).get("veids", "")
-        except Exception:                                             # noqa: BLE001
-            pass
-        a_ = [f"atskats_{veids}"] if veids else []
-        if veids in XG_VEIDI and veids != "speletaji":
-            a_.append("atskats_speletaji")
-        grupa = MUZIKAS_GRUPA.get(veids)                              # tad – parastā grupa (xg_ / fantasy_)
-        return a_ + ["atskats"] + ([grupa] if grupa else []) + ["visi"]
-    veids = _arg("--veids", "speletaji")
+def _parastas_atslegas(veids):
+    """Failu nosaukumu sākumi parastajam (ne atskata) video, svarīgākais pirmais."""
     if veids in XG_VEIDI:                                             # komandas / vartsargi → kā spēlētājiem, tad xg_
         return ([veids] if veids != "speletaji" else []) + ["speletaji", "xg", "visi"]
     if veids == "streameri":                                          # streameri → tie paši faili kā fantasy
@@ -403,6 +386,33 @@ def veida_atslegas():
     if veids == "fakts":                                              # fakti_ (kā mūzikai) vai vecais fakts_
         return ["fakti", "fakts", "visi"]
     return [veids, "visi"]
+
+
+def veida_atslegas():
+    """Kuri failu nosaukumu sākumi der šim video, svarīgākais pirmais.
+    Atskats: vispirms savi (atskats_<veids>_, atskats_), tad – TIEŠI tie paši, ko parastajam šī veida video.
+    Piem. xG atskats par vārtsargiem: ['atskats_vartsargi', 'atskats_speletaji', 'atskats',
+                                        'vartsargi', 'speletaji', 'xg', 'visi']."""
+    ats = _arg("--atskats")
+    if not ats:
+        return _parastas_atslegas(_arg("--veids", "speletaji"))
+    veids = ""
+    try:
+        import json
+        js = ats
+        if os.path.isdir(ats):
+            js = os.path.join(ats, sorted(f for f in os.listdir(ats) if f.endswith(".json"))[0])
+        veids = json.load(open(js, encoding="utf-8")).get("veids", "")
+    except Exception:                                                 # noqa: BLE001
+        pass
+    a_ = [f"atskats_{veids}"] if veids else []
+    if veids in XG_VEIDI and veids != "speletaji":
+        a_.append("atskats_speletaji")
+    a_.append("atskats")
+    for x in (_parastas_atslegas(veids) if veids else ["visi"]):     # līdz 04.11.: xG atskatam trūka speletaji_ → fona nebija
+        if x not in a_:
+            a_.append(x)
+    return a_
 
 
 def izveleties_mediju(mape, paplasinajumi, tips):
