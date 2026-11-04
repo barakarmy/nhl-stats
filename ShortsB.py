@@ -569,6 +569,10 @@ def sfx_notikumi(ainas):
             nb = len(c["hist"]["bins"])
             ev += [(t0 + 0.9 + i * 0.14, "tick", 0.5) for i in range(nb)]
             ev.append((t0 + 0.9 + nb * 0.14 + 1.0, "boom", 0.7))
+        elif tips == "fakts_reti":                                   # kartīte (tick), skaitlis (tick), zīmogs (boom)
+            ev += [(t0 + 0.4, "tick", 0.5), (t0 + 0.8, "tick", 0.6)]
+            if len(c.get("konteksts") or []) > 1:
+                ev.append((t0 + 1.75, "boom", 0.7))
         elif tips == "fakts_nak_j":
             ev.append((t0 + 1.3, "boom", 0.6))
         elif tips == "xg_karte":                                     # līgas karte: tick katram izceltajam
@@ -2468,6 +2472,7 @@ def renderet(s, izvade, kanals="", balss=None):
               "fakts_nakamais": S.aina_fakts_nakamais, "fakts_mini": aina_fakts_mini,
               "fantasy_intro": lambda t_, c_: aina_intro(t_, c_["intro"]), "fantasy_kartis": aina_kartis, "xg_karte": aina_xg_karte,
               "fakts_tablo": aina_fakts_tablo, "fakts_ripa": aina_fakts_ripa, "fakts_hist": aina_fakts_hist,
+              "fakts_reti": aina_fakts_reti,
               "fakts_nak_j": aina_fakts_nak_j}
     # cilpai: āķa (1. ainas) sākuma kadrs – beigās video pāriet atpakaļ uz to
     v0, c0, _ = ainas[0]
@@ -4472,6 +4477,45 @@ def aina_fakts_hist(t, c):
     return L
 
 
+def aina_fakts_reti(t, c):
+    """HOW RARE IS IT? jaunajā izskatā faktiem bez histogrammas (piem. 2–3 biedri vienā spēlē): tablo, liels skaitlis
+    kartītē, paskaidrojums, dzeltens zīmogs (konteksts[1]). Līdz 04.11. te rādījās vecā izskata aina."""
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    _nv_dalinas(L, t)
+    _fj_tablo(L, N, t, c)
+    _fj_virsr(L, t, [("HOW", S.BALTS), ("RARE", S.BALTS), ("IS IT?", S.DZELTENS)], 390, 120)
+    kont = [str(x) for x in (c.get("konteksts") or []) if str(x).strip()]
+    kp = S.ease(min(1.0, max(0.0, (t - 0.35) / 0.4)))
+    if kp > 0:
+        yb = 540 + (1250 - 540) * kp
+        d.rounded_rectangle([80, 540, 1000, yb], radius=36, fill=(10, 14, 32, 235))
+        ImageDraw.Draw(N).rounded_rectangle([80, 540, 1000, yb], radius=36, outline=S.ZILS + (220,), width=4)
+    if kp >= 1:
+        ks = str(c.get("k_skaitlis") or "")
+        k1 = min(1.0, max(0.0, (t - 0.75) / 0.25))
+        if ks and k1 > 0:
+            sk = skaitit(ks, S.ease(min(1.0, (t - 0.75) / 0.8)))
+            f = S.ietilpinat(d, ks, "black", 280, 820)
+            _nv_put(N, _nv_timg(sk, f, S.DZELTENS), 540, 760, 1 + 0.35 * (1 - ease_back(k1)), min(1.0, k1 * 2))
+        k2 = min(1.0, max(0.0, (t - 1.1) / 0.35))
+        if kont and k2 > 0:
+            f2, rr = S.rindas_ietilpinat(d, kont[0].upper(), "black", 64, 820, 3)
+            y = 1010 - (len(rr) - 1) * f2.size * 0.6
+            for r_ in rr:
+                S.teksts_c(d, int(y), r_, f2, S.BALTS + (int(255 * k2),))
+                y += f2.size * 1.2
+    kb = (t - 1.7) / 0.35
+    if kb > 0 and len(kont) > 1:
+        z = kont[1].upper()
+        ch = Image.new("RGBA", (880, 130), (0, 0, 0, 0)); dc = ImageDraw.Draw(ch)
+        dc.rounded_rectangle([0, 0, 879, 129], radius=40, fill=S.DZELTENS)
+        dc.text((440, 65), z, font=S.ietilpinat(dc, z, "black", 46, 820), fill=S.MELNS, anchor="mm")
+        _nv_put(L, ch, 540, 1420, 1 + 0.4 * (1 - ease_back(min(1.0, kb))), min(1.0, kb * 2), -3)
+    L.alpha_composite(_nv_glow(N, 14, 1.3))
+    return L
+
+
 def aina_fakts_nak_j(t, c):
     """NEXT UP – nākamā spēle aktīvai sērijai (bez aicinājuma komentēt)."""
     F = S.fonts
@@ -4726,6 +4770,82 @@ def fakts_hist_dati(D, c):
         rez = {"bins": bins, "hero": hero, "x_lab": f"{vv.upper()} IN ONE GAME", "apaksa": f"ALL {n:,} PLAYER GAMES THIS SEASON".replace(",", " "),
                "hero_lab": vards_, "z1": f"ONLY {k} OF {n:,}".replace(",", " "), "z2": f"PLAYER GAMES WITH {v_}+ {vv.upper()}  ·  TOP {_fj_proc(k, n)}",
                "runa": f"Only {k} of {n:,} player games this season had {v_} or more {vv}.".replace(",", "")}
+    elif veids == "vartsargs" and not (str(c.get("skaitlis_apaksa", "")).lower() == "shutout"
+                                       or "SHUTOUT" in " ".join(str(x) for x in (c.get("hook") or [])).upper()):
+        # 45+ atvairīti BEZ sausās spēles (līdz 04.11. te kļūdaini rādīja sauso spēļu histogrammu)
+        sv_ = int(c.get("garums", 0))
+        vg = pd.concat([D.get("h_vg"), D["vg"]], ignore_index=True)
+        svs = pd.to_numeric(vg["saves"], errors="coerce")
+        so = svs[(vg["starter"].astype(str) == "True") & svs.notna()].astype(int)
+        if len(so) < 20:
+            return None
+        edges = [0, 25, 30, 35, 40, 45, 50, 999]
+        labs = ["<25", "25–29", "30–34", "35–39", "40–44", "45–49", "50+"]
+        bins = [(labs[i], int(((so >= edges[i]) & (so < edges[i + 1])).sum())) for i in range(len(labs))]
+        hero = next(i for i in range(len(labs)) if edges[i] <= sv_ < edges[i + 1])
+        k, n = int((so >= sv_).sum()), len(so)
+        rez = {"bins": bins, "hero": hero, "x_lab": "SAVES IN ONE GAME", "apaksa": f"ALL {n:,} STARTS SINCE 2023".replace(",", " "),
+               "hero_lab": vards_, "z1": f"ONLY {k} OF {n:,}".replace(",", " "), "z2": f"STARTS WITH {sv_}+ SAVES  ·  TOP {_fj_proc(k, n)}",
+               "runa": f"Since 2023, only {k} of {n} starts had {sv_} or more saves."}
+    elif veids == "comeback":                                         # cik vārtus uzvarētājs bija iedzīts – visas sezonas uzvaras
+        d_ = int(c.get("garums", 0))
+        vg_ = D["va"].groupby("game_id")
+        vals = []
+        for r in sg[sg["uzvaretajs"].notna()].itertuples(index=False):
+            if r.game_id not in vg_.groups:
+                continue
+            m_ = 0
+            for _, _, _, h_, a_ in S._gaita(vg_.get_group(r.game_id)):
+                m_ = max(m_, (a_ - h_) if r.uzvaretajs == r.home_team else (h_ - a_))
+            vals.append(m_)
+        if len(vals) < 20 or d_ < 1:
+            return None
+        top = max(4, d_)
+        bins = [(str(i), sum(1 for v in vals if v == i)) for i in range(top)] + [(f"{top}+", sum(1 for v in vals if v >= top))]
+        k, n = sum(1 for v in vals if v >= d_), len(vals)
+        rez = {"bins": bins, "hero": min(d_, top), "x_lab": "GOALS DOWN – AND STILL WON", "apaksa": f"ALL {n:,} WINS THIS SEASON".replace(",", " "),
+               "hero_lab": str(c.get("badge") or ""), "z1": f"ONLY {k} OF {n:,}".replace(",", " "),
+               "z2": f"WINS FROM {d_}+ GOALS DOWN  ·  TOP {_fj_proc(k, n)}",
+               "runa": f"Only {k} of {n:,} wins this season came from {d_} or more goals down.".replace(",", "")}
+    elif veids == "atri":                                             # ātrākie 2 vienas komandas vārti katrā spēlē
+        sek = abs(int(c.get("garums", 0)))
+        x = D["va"].copy()
+        if x.empty or sek <= 0:
+            return None
+        x["s"] = x["laiks"].map(S._sek) + (x["period"] - 1) * 1200
+        x = x.sort_values(["game_id", "s"])
+        x["d"] = x.groupby(["game_id", "komanda"])["s"].diff()
+        vals = [int(v) for v in x.dropna(subset=["d"]).groupby("game_id")["d"].min().tolist()]
+        if len(vals) < 20:
+            return None
+        edges = [0, 11, 21, 31, 61, 121, 10 ** 6]
+        labs = ["≤10", "11–20", "21–30", "31–60", "61–120", "120+"]
+        bins = [(labs[i], sum(1 for v in vals if edges[i] <= v < edges[i + 1])) for i in range(len(labs))]
+        hero = next(i for i in range(len(labs)) if edges[i] <= sek < edges[i + 1])
+        k, n = sum(1 for v in vals if v <= sek), len(vals)
+        rez = {"bins": bins, "hero": hero, "x_lab": "FASTEST 2 GOALS BY ONE TEAM IN A GAME (SECONDS)",
+               "apaksa": f"ALL {n:,} GAMES WITH 2+ GOALS BY ONE TEAM".replace(",", " "), "hero_lab": str(c.get("badge") or ""),
+               "z1": f"ONLY {k} OF {n:,}".replace(",", " "), "z2": f"GAMES WITH 2 GOALS IN {sek} SEC OR LESS  ·  TOP {_fj_proc(k, n)}",
+               "runa": f"Only {k} of {n:,} games this season had two goals by one team that fast.".replace(",", "")}
+    elif veids == "metieni":                                          # par cik metieniem uzvarētājs bija pārspēts
+        starp = int(c.get("garums", 0))
+        vals = []
+        for r in sg[sg["uzvaretajs"].notna()].itertuples(index=False):
+            try:
+                hm, am = int(r.home_sog_total), int(r.away_sog_total)
+            except (TypeError, ValueError):
+                continue
+            vals.append((am - hm) if r.uzvaretajs == r.home_team else (hm - am))
+        if len(vals) < 20 or starp < 1:
+            return None
+        edges = [-999, 1, 10, 15, 20, 25, 999]
+        labs = ["≤0", "1–9", "10–14", "15–19", "20–24", "25+"]
+        bins = [(labs[i], sum(1 for v in vals if edges[i] <= v < edges[i + 1])) for i in range(len(labs))]
+        hero = next(i for i in range(len(labs)) if edges[i] <= starp < edges[i + 1])
+        k, n = sum(1 for v in vals if v >= starp), len(vals)
+        rez = {"bins": bins, "hero": hero, "x_lab": "SHOTS THE WINNER WAS OUTSHOT BY", "apaksa": f"ALL {n:,} WINS THIS SEASON".replace(",", " "),
+               "hero_lab": str(c.get("badge") or ""), "z1": f"ONLY {k} OF {n:,}".replace(",", " "),
+               "z2": f"WINS WHILE OUTSHOT BY {starp}+  ·  TOP {_fj_proc(k, n)}", "runa": ""}   # balss jau saka "99 percent"
     elif veids == "vartsargs":
         sv_ = int(c.get("garums", 0))
         vg = pd.concat([D.get("h_vg"), D["vg"]], ignore_index=True)
@@ -4813,8 +4933,8 @@ def fakti_jauns(rez, D, m, izv, st, mini_runa):
             # "That's the 14th hat trick…" jau saka skaitu → "Only 14 of …" nepiebilst (citādi skan pretrunīgi / atkārtojas)
             kart_ = re.search(r"\d+(st|nd|rd|th)\b", hero["runa"][2])
             runa.append((hero["runa"][2] + ("" if kart_ else " " + hist.get("runa", ""))).strip())
-        else:
-            kartes.append({"tips": "fakts_konteksts", "ilgums": 4.0, **hero, "pill_k": "HOW RARE IS IT?"})
+        else:                                                         # bez histogrammas – tā pati aina jaunajā izskatā
+            kartes.append({"tips": "fakts_reti", "ilgums": 4.4, **hero, "_tv": tv, "_tv_idx": n - 1})
             runa.append(hero["runa"][2])
         if hero.get("nakamais") and len(hero["runa"]) > 3 and hero["runa"][3]:
             th = hero.get("th_hook") or []
