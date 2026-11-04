@@ -3092,6 +3092,45 @@ def _gaita(va):
             for r in va.sort_values(["period", "laiks"]).itertuples(index=False)]
 
 
+def _spele_sek(periods, laiks):
+    """Spēles laiks sekundēs (periods 1–3 pa 20 min, OT pēc tam)."""
+    return (int(periods) - 1) * 1200 + _sek(laiks)
+
+
+def laiks_vardiem(sek):
+    """126 → "2 minutes and 6 seconds" (balsij)."""
+    sek = int(round(sek))
+    m_, s_ = divmod(sek, 60)
+    st_ = f"{s_} second{'' if s_ == 1 else 's'}"
+    if m_ == 0:
+        return st_
+    mt = f"{m_} minute{'' if m_ == 1 else 's'}"
+    return mt if s_ == 0 else f"{mt} and {st_}"
+
+
+def _laiks_mmss(sek):
+    sek = int(round(sek))
+    return f"{sek // 60}:{sek % 60:02d}"
+
+
+def _atspelesanas(gaita, uzv, home):
+    """Atspēlēšanās: no (pēdējā) lielākā deficīta līdz izlīdzinājumam → {"n": uzvarētāja vārti, "sek": cik ilgā laikā,
+    "per": periods (ja visi vienā periodā) vai None, "rindas": [(P3, "17:21"), ...]} vai None."""
+    defs = [((a_ - h_) if uzv == home else (h_ - a_)) for _, _, _, h_, a_ in gaita]
+    if not defs or max(defs) <= 0:
+        return None
+    mx = max(defs)
+    i0 = max(i for i, v in enumerate(defs) if v == mx)
+    i1 = next((i for i in range(i0 + 1, len(defs)) if defs[i] == 0), None)
+    if i1 is None:
+        return None
+    run = gaita[i0 + 1:i1 + 1]
+    sek = _spele_sek(run[-1][0], run[-1][1]) - _spele_sek(run[0][0], run[0][1])
+    per = run[0][0] if all(g[0] == run[0][0] for g in run) else None
+    return {"n": sum(1 for g in run if g[2] == uzv), "sek": sek, "per": per,
+            "rindas": [(f"P{g[0]}" if g[0] <= 3 else "OT", str(g[1])) for g in run]}
+
+
 def f_speles(D):
     """F/G/H/I: comebacks, 4+ vārti periodā, 2 vārti ātri pēc kārtas, uzvara ar lielu metienu deficītu."""
     out = []
@@ -3160,6 +3199,13 @@ def f_speles(D):
         if d_ >= 3:
             biez = sum(x >= d_ for x in h_def) / nh
             rindas = [(f"P{p}" if p <= 3 else "OT", l, f"{k}  {h}:{a}") for p, l, k, h, a in gaita][-9:]
+            cb = _atspelesanas(gaita, uzv, r.home_team)                # cik ātri atspēlējās (ja vienā periodā / īsā laikā)
+            if cb and cb["n"] >= 2 and ((cb["per"] and cb["per"] <= 3 and cb["sek"] <= 15 * 60) or cb["sek"] <= 10 * 60):
+                cb_runa = (f" They scored {cb['n']} goals in {'just ' if cb['sek'] <= 5 * 60 else ''}{laiks_vardiem(cb['sek'])}"
+                           + (f" of the {_kartas(cb['per'])} period." if cb["per"] and cb["per"] <= 3 else "."))
+                cb_txt = f"{cb['n']} GOALS IN {_laiks_mmss(cb['sek'])}"
+            else:
+                cb, cb_runa, cb_txt = None, "", ""
             out.append({
                 "atsl": f"comeback:{r.game_id}", "garums": d_, "aktiva": False, "datums": r.datums,
                 "retums": _retums_no_biezuma(biez) + 0.1, "slav": 0.6, "sv": _sv(D, r.datums),
@@ -3171,10 +3217,11 @@ def f_speles(D):
                 "k_skaitlis": _kartas(lidz_sim(s_def, r.datums, lambda v: v >= d_)),
                 "konteksts": [f"{d_}+ GOAL COMEBACK WIN OF THE SEASON", f"League-wide: {n_sp} games played this season"],
                 "nakamais": None,
-                "runa": [f"The {kom_nos(uzv)} were down {d_} goals against the {kom_nos(zaud)}, and won.",
+                "runa": [f"The {kom_nos(uzv)} were down {d_} goals against the {kom_nos(zaud)}, and won.{cb_runa}",
                          f"Final score: {i.get('gf')} to {i.get('ga')}.",
                          f"That's the {_kartas(lidz_sim(s_def, r.datums, lambda v: v >= d_))} comeback from {d_} down this season.", ""],
                 "yt": f"Down {d_} goals… the {kom_nos(uzv)} came back and won 🤯",
+                "izcelt_rindas": cb["rindas"] if cb else None, "izcelt_txt": cb_txt,
             })
         # G – 4+ vārti vienā periodā
         for k_, kom in (("home", r.home_team), ("away", r.away_team)):
@@ -3184,6 +3231,11 @@ def f_speles(D):
                     biez = sum(x >= g_ for x in h_per) / nh
                     io = D["info"].get((r.game_id, kom), {})
                     rindas = [(f"P{p}", l, f"{kk}  {h}:{a}") for p, l, kk, h, a in gaita if p == p_ and kk == kom]
+                    sek_p = (_sek(rindas[-1][1]) - _sek(rindas[0][1])) if len(rindas) >= 2 else None
+                    per_runa, per_txt = "", ""
+                    if sek_p is not None and sek_p <= 10 * 60:                # visi īsā laikā – piemin
+                        per_runa = f" All {len(rindas)} in {'just ' if sek_p <= 5 * 60 else ''}{laiks_vardiem(sek_p)}."
+                        per_txt = f"{len(rindas)} GOALS IN {_laiks_mmss(sek_p)}"
                     out.append({
                         "atsl": f"periods:{r.game_id}:{kom}:{p_}", "garums": g_, "aktiva": False, "datums": r.datums,
                         "retums": _retums_no_biezuma(biez), "slav": 0.6, "sv": _sv(D, r.datums),
@@ -3195,10 +3247,11 @@ def f_speles(D):
                         "k_skaitlis": _kartas(lidz_sim(s_per, r.datums, lambda v: v >= g_)),
                         "konteksts": [f"{g_}+ GOAL PERIOD OF THE SEASON", f"By one team · {n_sp} games played"],
                         "nakamais": None,
-                        "runa": [f"The {kom_nos(kom)} scored {g_} goals in the {_kartas(p_)} period against the {kom_nos(io.get('o', ''))}.",
+                        "runa": [f"The {kom_nos(kom)} scored {g_} goals in the {_kartas(p_)} period against the {kom_nos(io.get('o', ''))}.{per_runa}",
                                  f"Final score: {io.get('gf')} to {io.get('ga')}.",
                                  f"That's the {_kartas(lidz_sim(s_per, r.datums, lambda v: v >= g_))} time this season.", ""],
                         "yt": f"{g_} goals in ONE period – the {kom_nos(kom)} exploded 🔥",
+                        "izcelt_txt": per_txt,
                     })
         # H – 2 vārti ≤ 15 s
         x = va.copy()
