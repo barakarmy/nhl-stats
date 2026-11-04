@@ -2454,6 +2454,7 @@ def atskats_fantasy(j, m, a):
         return None
     # sezonas rezultāts (fantasy_rezultati.json; tās pašas nedēļas atkārtots atskats aizstāj iepriekšējo)
     rez = [x for x in fantasy_rezultati(a.mape) if x["nedela"] != no] + [{"nedela": no, "trapijumi": trap, "kopa": kopa}]
+    os.makedirs(a.mape, exist_ok=True)                                # jauna / tukša --mape (citādi FileNotFoundError)
     with open(os.path.join(a.mape, FANTASY_REZULTATI), "w", encoding="utf-8") as f:
         json.dump(sorted(rez, key=lambda x: x["nedela"]), f, ensure_ascii=False, indent=1)
     H, T = sum(x["trapijumi"] for x in rez), sum(x["kopa"] for x in rez)
@@ -3016,7 +3017,7 @@ def _apvienot_lielas(D, out):
             "k_skaitlis": str(len(dd)),
             "konteksts": [f"TEAMMATES WITH A {nos_v} – SAME NIGHT", f"NHL total so far this season: {sez_k}"],
             "nakamais": None,
-            "runa": [f"{vardi_txt}: " + (f"a {dd[0]['nos'].lower()} each" if vienadi else " and ".join(f"{d_['P']} points" for d_ in dd))
+            "runa": [f"{vardi_txt}: " + (f"a {dd[0]['nos'].lower()} each" if vienadi else _punkti_txt([d_["P"] for d_ in dd]))
                      + f" against the {kom_nos(i.get('o', ''))}.",
                      cc[0]["runa"][1],
                      f"{skaits_v} teammates with a {nos_v.lower()} in the same night. That's rare.", ""],
@@ -3025,7 +3026,7 @@ def _apvienot_lielas(D, out):
             "pids": [d_["pid"] for d_ in dd],
             # āķim: balss teikums, jautājums daudzskaitlī, kartītē – punkti
             "aki_runa": (f"{skaits_v} teammates, a {nos_v.lower()} each, in the same game" if vienadi
-                         else f"{skaits_v} teammates, {' and '.join(str(d_['P']) for d_ in dd)} points, in the same game"),
+                         else f"{skaits_v} teammates, {_punkti_txt([d_['P'] for d_ in dd])}, in the same game"),
             "aki_jaut": "Who are they?",
             "aki_skaitlis": " + ".join(str(d_["G"] if varti else d_["P"]) for d_ in dd),
             "aki_apaksa": f"{'goals' if varti else 'points'}  ·  vs {kom_nos(i.get('o', ''))}, {dat(cc[0]['datums'])}",
@@ -3104,6 +3105,15 @@ def f_vartsargi(D):
         except Exception:                                             # noqa: BLE001
             pass
     return out
+
+
+def _punkti_txt(pp):
+    """[5, 4] → "5 and 4 points"; [5, 4, 4] → "5, 4 and 4 points"; [4, 4] → "4 points each" (balsij)."""
+    pp = [int(x) for x in pp]
+    if len(set(pp)) == 1:
+        return f"{pp[0]} point{'' if pp[0] == 1 else 's'} each"
+    t_ = ", ".join(str(x) for x in pp[:-1]) + f" and {pp[-1]}"
+    return f"{t_} points"
 
 
 def _gaita(va):
