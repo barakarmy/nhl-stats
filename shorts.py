@@ -389,7 +389,7 @@ FAKTI_BEIGAS = [("WHICH ONE SURPRISED YOU MOST?", "Which one surprised you? Comm
                 ("VOTE WITH A NUMBER.", "Vote for the best one with a number in the comments.")]
 # Google Sheets piedāvājums fantasy / streameru video. YouTube NAV privāto ziņu, un saites Shorts aprakstā / komentāros
 # nav klikšķināmas – tāpēc: bez saites → "Comment SHEET"; ar saiti (Etsy) → "Link in the channel" (kanāla header saite).
-JAUNI_TEKSTI = False              # ShortsBT.py (jaunais izskats) ieslēdz – piem. balsī ", and climbing." pie rostered %
+JAUNI_TEKSTI = True               # jaunā izskata balss teksti (piem. ", and climbing." pie rostered %); ShortsB.py --vecais → False
 SHEET_SAITE = ""                  # piem. "https://www.etsy.com/listing/..." – kad būs Etsy sludinājums
 FANTASY_CTA = ["Want the full fantasy sheet, updated every day? Comment SHEET below.",
                "The full fantasy sheet updates every day. Comment SHEET if you want it.",
@@ -815,7 +815,7 @@ def veids_vartsargi(m, a):
 VEIDI = {"speletaji": veids_speletaji, "komandas": veids_komandas, "vartsargi": veids_vartsargi}
 
 
-# ================================================================ xG video jaunajā izskatā (ShortsBT) – kartīšu dati
+# ================================================================ xG video jaunajā izskatā – kartīšu dati
 # Katrai kartītei c["viz"] = {"spec": [5 rindas flīžu], "poz", "grupa", "zimogs", "tablo_lab", "tablo_txt", "kart", "aki"}.
 # ShortsB.py tās zīmē vienādā stilā (_nv_flizes_spec). Viss aizsargāts – kļūda nesalauž parasto video.
 
@@ -2483,7 +2483,7 @@ def atskats_fantasy(j, m, a):
         verdikts.append(far_vk(miss_[0], "THE MISS"))
         if len(miss_) > 1:
             verdikts.append(far_vk(miss_[-1], "THE NEAR MISS"))
-    # jaunā izskata dati (ShortsBT): āķis, kartīšu "viz", kuras 2 kartītes rādīt – aizsargāti (kļūda nesalauž video)
+    # jaunā izskata dati: āķis, kartīšu "viz", kuras 2 kartītes rādīt – aizsargāti (kļūda nesalauž video)
     aki_f, aki_runa, izvele = None, "", []
     try:
         aki_f, aki_runa, izvele = atskats_jauna_dati(kartes, hit_, miss_, trap, kopa, no, lidz, j)
@@ -2540,7 +2540,7 @@ ATSKATS_REZ_JOSLA = {
 
 
 def atskats_jauna_dati(kartes, hit_, miss_, trap, kopa, no, lidz, j):
-    """Fantasy atskats jaunajā izskatā (ShortsBT): katrai kartītei "viz" (punkti/metieni pa spēlēm, nedēļas kalendārs,
+    """Fantasy atskats jaunajā izskatā: katrai kartītei "viz" (punkti/metieni pa spēlēm, nedēļas kalendārs,
     TYPICAL, ESPN rostered kopš mūsu ieteikuma) un pirmais ekrāns – nedēļas rezultāts ("1/4" + ✓/✗ + balss teksts)."""
     pe = os.path.join(BASE, "sezonas", "fantasy_espn.csv")
     pv = os.path.join(BASE, "sezonas", "fantasy_espn_vesture.csv")
