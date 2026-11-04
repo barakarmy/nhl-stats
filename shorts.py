@@ -2818,6 +2818,7 @@ def f_serijas(D):
                           f"Can he make it {n + 1}?") if nak else ""],
                 "yt": f"{vards} has a {nos.lower()} in {n} straight games 🔥",
             })
+            _ip_pielikt(out[-1], *_ip_serija(D, pid, n, g, kol, out[-1]["atsl"]))
     return out
 
 
@@ -2897,6 +2898,7 @@ def f_komandu_serijas(D):
             "yt": f"The {nos} have {'won' if val else 'gone winless in'} {n} straight 🏒",
         })
         out[-1]["hook"] = [x for x in out[-1]["hook"] if x]
+        _ip_pielikt(out[-1], *_ip_kom_serija(D, kom, val, g, out[-1]["atsl"]))
     return out
 
 
@@ -2955,6 +2957,10 @@ def f_lielas_speles(D):
             "_d": {"pid": int(r["playerId"]), "gid": r["game_id"], "G": G, "A": A, "P": P, "vards": vards, "kom": kom, "nos": nos,
                    "sez_k": sez_k, "i": i},
         })
+        try:
+            _ip_pielikt(out[-1], *_ip_liela(D, va, int(r["playerId"]), kom, _majas(D, r["game_id"]), i, G, out[-1]["atsl"]))
+        except Exception:                                             # noqa: BLE001
+            pass
     return _apvienot_lielas(D, out)
 
 
@@ -3024,6 +3030,16 @@ def _apvienot_lielas(D, out):
             "aki_skaitlis": " + ".join(str(d_["G"] if varti else d_["P"]) for d_ in dd),
             "aki_apaksa": f"{'goals' if varti else 'points'}  ·  vs {kom_nos(i.get('o', ''))}, {dat(cc[0]['datums'])}",
         })
+        try:                                                          # nestandarta: cik vārtos abi piedalījās kopā
+            ids = [d_["pid"] for d_ in dd]
+            kopa_ = sum(1 for g_ in va.itertuples(index=False)
+                        if sum(1 for p_ in ids if p_ in (_pid(g_.scorer_id), _pid(g_.assist1_id), _pid(g_.assist2_id))) >= 2)
+            if kopa_ >= 2:
+                _ip_pielikt(rez[-1], [_variants(rez[-1]["atsl"], [f"They combined on {kopa_} goals."]
+                                                + ([f"{kopa_} goals had both of their names on them."] if len(ids) == 2 else []))],
+                            f"COMBINED ON {kopa_} GOALS")
+        except Exception:                                             # noqa: BLE001
+            pass
     for c in rez:
         c.pop("_d", None)
     return rez
@@ -3083,6 +3099,10 @@ def f_vartsargi(D):
                      (galv.capitalize().replace("nhl", "NHL") + ".") if sausa else f"That's more saves than {pct * 100:.1f} percent of starts this season.", ""],
             "yt": f"{vards} stops all {sv_} shots 🥅" if sausa else f"{vards} makes {sv_} saves 🥅",
         })
+        try:
+            _ip_pielikt(out[-1], *_ip_vartsargs(D, r, sausa, i, out[-1]["atsl"]))
+        except Exception:                                             # noqa: BLE001
+            pass
     return out
 
 
@@ -3129,6 +3149,255 @@ def _atspelesanas(gaita, uzv, home):
     per = run[0][0] if all(g[0] == run[0][0] for g in run) else None
     return {"n": sum(1 for g in run if g[2] == uzv), "sek": sek, "per": per,
             "rindas": [(f"P{g[0]}" if g[0] <= 3 else "OT", str(g[1])) for g in run]}
+
+
+# ---- NESTANDARTA SITUĀCIJAS faktos (kopš 04.11.2026): ja kaut kas sakrīt neparasti (abi vārti vienam spēlētājam,
+#      izlīdzināja pēdējā minūtē, "natural hat trick", katra sezonas spēle sērijā …) – papildu teikums balsī (fakta 1. teikumam)
+#      un īss uzraksts kartītē (izcelt_txt). Variants – pēc fakta atslēgas (tas pats fakts skan vienādi, blakus fakti – dažādi).
+def _variants(atsl, saraksts):
+    import zlib
+    return saraksts[zlib.crc32(str(atsl).encode("utf-8")) % len(saraksts)]
+
+
+def _uzv(vards):
+    return str(vards).split(" ", 1)[-1]
+
+
+def _majas(D, gid):
+    x = D["sg"][D["sg"]["game_id"] == gid]
+    return str(x["home_team"].iloc[0]) if len(x) else ""
+
+
+def _rez_pec(g, kom, home):
+    """Rezultāts pēc šiem vārtiem komandas skatījumā → (savi, pretinieka)."""
+    h_, a_ = int(g.home_score), int(g.away_score)
+    return (h_, a_) if kom == home else (a_, h_)
+
+
+def _uzvaras_varti(va_g, kom, home, i):
+    """Uzvaras vārtu rinda (namedtuple) vai None (zaudējums / uzvara pēcspēles metienos)."""
+    if not i.get("w"):
+        return None
+    for g in va_g.sort_values(["period", "laiks"]).itertuples(index=False):
+        if g.komanda == kom and _rez_pec(g, kom, home)[0] == int(i.get("ga", -9)) + 1:
+            return g
+    return None
+
+
+def _pid(x):
+    try:
+        return int(float(x)) if x == x and x is not None and str(x).strip() != "" else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _ip_atri(D, va_g, divi, kom, home, i, sek, atsl):
+    """2 vārti ≤ 15 s: abi vienam / viens spēlētājs abos, no zaudējuma uz vadību, uzvaras vārti, perioda pirmā/pēdējā minūte."""
+    tk, ekr = [], ""
+    g1, g2 = list(divi.itertuples(index=False))[:1] + list(divi.itertuples(index=False))[-1:]
+    s1, s2 = _pid(g1.scorer_id), _pid(g2.scorer_id)
+    if s1 and s1 == s2:
+        n = _sp_vards(D, s1)[0]
+        tk.append(_variants(atsl + "a", [f"Both by {n}.", f"{n} scored both.", f"And both goals were {n}'s."]))
+        ekr = f"BOTH BY {_uzv(n).upper()}"
+    else:
+        p1 = {_pid(x) for x in (g1.scorer_id, g1.assist1_id, g1.assist2_id)} - {None}
+        p2 = {_pid(x) for x in (g2.scorer_id, g2.assist1_id, g2.assist2_id)} - {None}
+        kop = sorted(p1 & p2, key=lambda p: 0 if p in (s1, s2) else 1)
+        if kop:
+            n = _sp_vards(D, kop[0])[0]
+            tk.append(_variants(atsl + "b", [f"{n} had a point on both.", f"{n} was in on both.", f"{n} had a hand in both."]))
+            ekr = f"{_uzv(n).upper()} ON BOTH"
+    m1, o1 = _rez_pec(g1, kom, home)
+    m2, o2 = _rez_pec(g2, kom, home)
+    pirms, pec = (m1 - 1) - o1, m2 - o2
+    uzv_g = _uzvaras_varti(va_g, kom, home, i)
+    per = int(g2.period)
+    if pirms < 0 < pec:
+        tk.append(_variants(atsl + "c", [f"From trailing to leading in {sek} seconds.", f"Behind, then ahead, {sek} seconds later."]))
+        ekr = ekr or "FROM BEHIND TO AHEAD"
+    elif pirms == -2 and pec == 0:
+        tk.append(f"A two-goal deficit, gone in {sek} seconds.")
+        ekr = ekr or "2 DOWN → TIED"
+    elif pirms == 0 and pec == 2:
+        tk.append("A tie game became a two-goal lead.")
+        ekr = ekr or "TIE → 2-GOAL LEAD"
+    elif uzv_g is not None and (str(uzv_g.laiks), int(uzv_g.period)) in ((str(g1.laiks), int(g1.period)), (str(g2.laiks), int(g2.period))):
+        tk.append("The second one was the game-winner." if str(uzv_g.laiks) == str(g2.laiks) else "The first one was the game-winner.")
+        ekr = ekr or "INCLUDING THE WINNER"
+    elif per <= 3 and _sek(g1.laiks) >= 19 * 60:
+        tk.append(f"Both in the final minute of the {_kartas(per)} period.")
+        ekr = ekr or "FINAL MINUTE OF THE PERIOD"
+    elif per <= 3 and _sek(g2.laiks) <= 60:
+        tk.append(f"Both in the first minute of the {_kartas(per)} period.")
+        ekr = ekr or "FIRST MINUTE OF THE PERIOD"
+    if "empty" in str(g2.goal_modifier).lower():                    # godīgi: otrie – tukšos vārtos (svarīgāk par pārējo)
+        tk = tk[:1] + ["The second one went into an empty net."]
+    return tk[:2], ekr
+
+
+def _ip_comeback(D, va_g, cb, uzv, home, i, atsl):
+    """Atspēlēšanās: kurš guva vairākus, izlīdzināja pēdējās minūtēs, uzvara papildlaikā."""
+    tk, ekr = [], ""
+    if not cb:
+        return tk, ekr
+    keys = set(cb["rindas"])
+    run = [g for g in va_g.itertuples(index=False) if g.komanda == uzv and ((f"P{int(g.period)}" if int(g.period) <= 3 else "OT"), str(g.laiks)) in keys]
+    cnt = {}
+    for g in run:
+        p = _pid(g.scorer_id)
+        if p:
+            cnt[p] = cnt.get(p, 0) + 1
+    b = str(i.get("beigas", "")).strip().upper()
+    ot = [g for g in va_g.itertuples(index=False) if int(g.period) >= 4 and g.komanda == uzv] if b == "OT" else []
+    ot_p = _pid(ot[-1].scorer_id) if ot else None
+    if cnt:
+        p, k = max(cnt.items(), key=lambda x: x[1])
+        if k >= 2:
+            n = _sp_vards(D, p)[0]
+            if p == ot_p:                                             # tas pats arī uzvarēja papildlaikā – viens teikums
+                tk.append(f"{n} scored {k} of them, then won it in overtime.")
+                ot_p = None
+            else:
+                tk.append(_variants(atsl + "a", [f"{n} scored {k} of them.", f"{k} of them from {n}."]))
+            ekr = f"{k} BY {_uzv(n).upper()}"
+    if run:
+        last = max(run, key=lambda g: _spele_sek(g.period, g.laiks))
+        if int(last.period) == 3 and _sek(last.laiks) >= 18 * 60:
+            atl = 1200 - _sek(last.laiks)
+            tk.append(f"They tied it with {laiks_vardiem(atl)} left.")
+            ekr = ekr or f"TIED WITH {_laiks_mmss(atl)} LEFT"
+    if ot_p:
+        tk.append(f"{_sp_vards(D, ot_p)[0]} won it in overtime.")
+    elif b == "SO":
+        tk.append("Then they won it in a shootout.")
+    return tk[:2], ekr
+
+
+def _ip_periods(D, rindas_va, g_, atsl):
+    """4+ vārti periodā: hat trick periodā, visi dažādi vārtu guvēji, vairākums vairākumā."""
+    tk, ekr = [], ""
+    cnt = {}
+    for g in rindas_va:
+        p = _pid(g.scorer_id)
+        if p:
+            cnt[p] = cnt.get(p, 0) + 1
+    pp = sum(1 for g in rindas_va if str(g.strength).lower() == "pp")
+    if cnt and max(cnt.values()) >= 3:
+        p, k = max(cnt.items(), key=lambda x: x[1])
+        n = _sp_vards(D, p)[0]
+        tk.append(_variants(atsl + "a", [f"{n} scored {k} of them.", f"{k} of them by {n}."]))
+        ekr = f"{k} BY {_uzv(n).upper()}"
+    elif len(cnt) == g_ >= 4:
+        tk.append(f"{g_} different goal scorers.")
+        ekr = f"{g_} DIFFERENT SCORERS"
+    if pp >= 3:
+        tk.append(f"{pp} of them on the power play.")
+        ekr = ekr or f"{pp} ON THE POWER PLAY"
+    return tk[:2], ekr
+
+
+def _ip_liela(D, va_g, pid, kom, home, i, G, atsl):
+    """Liela spēle: "natural hat trick", visi vārti vienā periodā, uzvaras / papildlaika vārti, visi vairākumā."""
+    tk, ekr = [], ""
+    sec = list(va_g.sort_values(["period", "laiks"]).itertuples(index=False))
+    savi = [g for g in sec if _pid(g.scorer_id) == pid]
+    if G >= 3:
+        for j in range(len(sec) - 2):
+            if all(_pid(g.scorer_id) == pid for g in sec[j:j + 3]):
+                tk.append(_variants(atsl + "a", ["A natural hat trick: three straight goals.", "Three goals in a row – a natural hat trick."]))
+                ekr = "NATURAL HAT TRICK"
+                break
+        if not tk and len({int(g.period) for g in savi}) == 1 and int(savi[0].period) <= 3:
+            per = int(savi[0].period)
+            tk.append(f"All {G} in the {_kartas(per)} period.")
+            ekr = f"ALL IN THE {_kartas(per).upper()} PERIOD"
+    uzv_g = _uzvaras_varti(va_g, kom, home, i)
+    if uzv_g is not None and _pid(uzv_g.scorer_id) == pid:
+        ot = int(uzv_g.period) >= 4
+        tk.append("Including the overtime winner." if ot else "Including the game-winner.")
+        ekr = ekr or ("+ THE OVERTIME WINNER" if ot else "+ THE GAME-WINNER")
+    if G >= 2 and savi and all(str(g.strength).lower() == "pp" for g in savi):
+        tk.append("All on the power play.")
+        ekr = ekr or "ALL ON THE POWER PLAY"
+    return tk[:2], ekr
+
+
+def _ip_serija(D, pid, n, g, kol, atsl):
+    """Spēlētāja sērija: katra sezonas spēle, daudz vairāku punktu / vārtu spēļu."""
+    gp = D["sp"][D["sp"]["playerId"] == pid]["game_id"].nunique()
+    if gp and n >= gp and n >= 8:                                     # agri sezonā (5 spēles) – nav nekas īpašs
+        return ["That's every game he's played this season."], "EVERY GAME THIS SEASON"
+    if kol == "points":
+        k = int((g["points"] >= 2).sum())
+        if k >= 3:
+            return [_variants(atsl, [f"{k} of them multi-point games.", f"With {k} multi-point games along the way."])], f"{k} MULTI-POINT GAMES"
+    else:
+        k = int((g["goals"] >= 2).sum())
+        if k >= 2:
+            return [f"{k} of them with two goals or more."], f"{k} MULTI-GOAL GAMES"
+    return [], ""
+
+
+def _ip_kom_serija(D, kom, val, g, atsl):
+    """Komandas sērija: visas uzvaras ar 2+ vārtiem, papildlaiki, vienu vārtu zaudējumi, sausās spēles."""
+    ii = [D["info"][(r.game_id, kom)] for r in g.itertuples(index=False)]
+    if val:
+        if all(x["gf"] - x["ga"] >= 2 for x in ii):
+            return ["Every win by two goals or more."], "EVERY WIN BY 2+"
+        k = sum(1 for x in ii if str(x["beigas"]).strip())
+        if k >= 2:
+            return [f"{k} of them needed overtime or a shootout."], f"{k} WENT TO OT / SO"
+    else:
+        k0 = sum(1 for x in ii if x["gf"] == 0)
+        if k0 >= 2:
+            return [f"Shut out {k0} times along the way."], f"SHUT OUT {k0} TIMES"
+        k = sum(1 for x in ii if x["ga"] - x["gf"] == 1)
+        if k >= 3:
+            return [f"{k} of them were one-goal games."], f"{k} ONE-GOAL LOSSES"
+    return [], ""
+
+
+def _ip_vartsargs(D, r, sausa, i, atsl):
+    """Vārtsargs: vairākas sausās spēles pēc kārtas; daudz atvairītu, bet zaudēja."""
+    if sausa:
+        st = D["vg"][(D["vg"]["playerId"] == r["playerId"]) & (D["vg"]["starter"].astype(str) == "True")].sort_values(["datums", "game_id"])
+        st = st[(st["datums"] < r["datums"]) | ((st["datums"] == r["datums"]) & (st["game_id"] <= r["game_id"]))]
+        k = 0
+        for x in pd.to_numeric(st["goalsAgainst"], errors="coerce").to_numpy()[::-1]:
+            if x == 0:
+                k += 1
+            else:
+                break
+        if k >= 2:
+            vv = {2: "second", 3: "third", 4: "fourth"}.get(k, _kartas(k))
+            return [f"That's his {vv} straight shutout."], f"{k} STRAIGHT SHUTOUTS"
+    elif not i.get("w"):
+        return ["And his team still lost."], "IN A LOSS"
+    return [], ""
+
+
+def _ip_metieni(D, gid, uzv, atsl):
+    """Uzvara, esot pārspētiem metienos: kurš vārtsargs to izturēja."""
+    v = D["vg"][(D["vg"]["game_id"] == gid) & (D["vg"]["team"].astype(str) == uzv)]
+    if not len(v):
+        return [], ""
+    v = v.assign(_s=pd.to_numeric(v["saves"], errors="coerce")).sort_values("_s").iloc[-1]
+    n, sv_ = str(v["vards"]), int(v["_s"])
+    if sv_ < 30:
+        return [], ""
+    return [_variants(atsl, [f"{n} made {sv_} saves.", f"{n} stopped {sv_} shots."])], f"{_uzv(n).upper()}: {sv_} SAVES"
+
+
+def _ip_pielikt(c, tk, ekr):
+    """Pievieno faktam papildu teikumus (1. teikumā) un uzrakstu kartītē (ja tāda vēl nav)."""
+    if tk:
+        c["runa"][0] = (c["runa"][0].rstrip() + " " + " ".join(tk)).strip()
+    if ekr and not c.get("izcelt_txt"):
+        c["izcelt_txt"] = ekr
+    if ekr:
+        c["teksts"] = f"{c.get('teksts', '')}  [{ekr}]"
+    return c
 
 
 def f_speles(D):
@@ -3199,13 +3468,15 @@ def f_speles(D):
         if d_ >= 3:
             biez = sum(x >= d_ for x in h_def) / nh
             rindas = [(f"P{p}" if p <= 3 else "OT", l, f"{k}  {h}:{a}") for p, l, k, h, a in gaita][-9:]
-            cb = _atspelesanas(gaita, uzv, r.home_team)                # cik ātri atspēlējās (ja vienā periodā / īsā laikā)
-            if cb and cb["n"] >= 2 and ((cb["per"] and cb["per"] <= 3 and cb["sek"] <= 15 * 60) or cb["sek"] <= 10 * 60):
+            cb_v = _atspelesanas(gaita, uzv, r.home_team)              # cik ātri atspēlējās (ja vienā periodā / īsā laikā)
+            cb = cb_v if (cb_v and cb_v["n"] >= 2 and ((cb_v["per"] and cb_v["per"] <= 3 and cb_v["sek"] <= 15 * 60)
+                                                       or cb_v["sek"] <= 10 * 60)) else None
+            if cb:
                 cb_runa = (f" They scored {cb['n']} goals in {'just ' if cb['sek'] <= 5 * 60 else ''}{laiks_vardiem(cb['sek'])}"
                            + (f" of the {_kartas(cb['per'])} period." if cb["per"] and cb["per"] <= 3 else "."))
                 cb_txt = f"{cb['n']} GOALS IN {_laiks_mmss(cb['sek'])}"
             else:
-                cb, cb_runa, cb_txt = None, "", ""
+                cb_runa, cb_txt = "", ""
             out.append({
                 "atsl": f"comeback:{r.game_id}", "garums": d_, "aktiva": False, "datums": r.datums,
                 "retums": _retums_no_biezuma(biez) + 0.1, "slav": 0.6, "sv": _sv(D, r.datums),
@@ -3221,8 +3492,13 @@ def f_speles(D):
                          f"Final score: {i.get('gf')} to {i.get('ga')}.",
                          f"That's the {_kartas(lidz_sim(s_def, r.datums, lambda v: v >= d_))} comeback from {d_} down this season.", ""],
                 "yt": f"Down {d_} goals… the {kom_nos(uzv)} came back and won 🤯",
-                "izcelt_rindas": cb["rindas"] if cb else None, "izcelt_txt": cb_txt,
+                "izcelt_rindas": cb_v["rindas"] if cb_v else None, "izcelt_txt": cb_txt,
             })
+            try:
+                tk_, ekr_ = _ip_comeback(D, va, cb_v, uzv, r.home_team, i, out[-1]["atsl"])
+                _ip_pielikt(out[-1], tk_[:1] if cb else tk_, ekr_)       # kopā ar laika teikumu – ne vairāk par 2 papildu teikumiem
+            except Exception:                                         # noqa: BLE001
+                pass
         # G – 4+ vārti vienā periodā
         for k_, kom in (("home", r.home_team), ("away", r.away_team)):
             for p_ in (1, 2, 3):
@@ -3253,6 +3529,12 @@ def f_speles(D):
                         "yt": f"{g_} goals in ONE period – the {kom_nos(kom)} exploded 🔥",
                         "izcelt_txt": per_txt,
                     })
+                    try:
+                        rv = [g for g in va.itertuples(index=False) if int(g.period) == p_ and g.komanda == kom]
+                        tk_, ekr_ = _ip_periods(D, rv, g_, out[-1]["atsl"])
+                        _ip_pielikt(out[-1], tk_[:1] if per_runa else tk_, ekr_)
+                    except Exception:                                 # noqa: BLE001
+                        pass
         # H – 2 vārti ≤ 15 s
         x = va.copy()
         x["s"] = x["laiks"].map(_sek) + (x["period"] - 1) * 1200
@@ -3282,6 +3564,10 @@ def f_speles(D):
                          f"That's the {_kartas(lidz_sim(s_atri, r.datums, lambda v: v <= sek))} time this season.", ""],
                 "yt": f"2 goals in {sek} seconds 😳 {kom_nos(kom)}",
             })
+            try:
+                _ip_pielikt(out[-1], *_ip_atri(D, va, divi, kom, r.home_team, io, sek, out[-1]["atsl"]))
+            except Exception:                                         # noqa: BLE001
+                pass
         # I – uzvara, esot pārspētiem metienos par 15+
         try:
             hm, am = int(r.home_sog_total), int(r.away_sog_total)
@@ -3318,6 +3604,10 @@ def f_speles(D):
                           f"That's a bigger shot gap than {pct * 100:.0f} percent of wins this season."), ""],
                 "yt": f"Outshot {z_met}–{u_met}… and WON 🤯",
             })
+            try:
+                _ip_pielikt(out[-1], *_ip_metieni(D, r.game_id, uzv, out[-1]["atsl"]))
+            except Exception:                                         # noqa: BLE001
+                pass
     return out
 
 
