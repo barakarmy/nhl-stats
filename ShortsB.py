@@ -4856,6 +4856,12 @@ NOSL_Q1 = {
     "atskats_xg": [(("WE FLAGGED", "THESE {X}"), "We flagged these {x}."), (("REMEMBER", "THESE {X}?"), "Remember these {x}?"),
                    (("xG FLAGGED", "THESE {X}"), "The numbers flagged these {x}.")],
 }
+NOSL_ATKL = {     # kad noslēpuma spēlētāja / komandas kartīte parādās – balss sākumā (atklāšana)
+    "speletajs": ["Mystery solved.", "Remember the jersey?", "Did you guess right?", "Time for the reveal.", "Here's our mystery man."],
+    "vartsargs": ["Mystery solved.", "Remember the jersey?", "Did you guess right?", "Time for the reveal.", "Here's our mystery goalie."],
+    "komanda": ["Mystery solved.", "Remember the jersey?", "Did you guess the team?", "Time for the reveal."],
+    "duo": ["Mystery solved.", "Did you guess them?", "Time for the reveal.", "Remember the jerseys?"],
+}
 NOSL_Q2 = {
     "fantasy": [(("WHY IS HE", "STILL", "FREE?"), "Why is he still free?"),
                 (("NOBODY", "WANTS", "HIM?"), "Nobody wants him?"),
@@ -5575,7 +5581,7 @@ def _sfx_klik():
 
 
 # ---------------------------------------------------------------- dati katram video veidam
-def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None, atcere=None):
+def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None, atcere=None, atkl=None):
     """Ieliek āķī noslēpumu: krekli [(komanda, uzvārds)], jautājums 1 / 2 (neatkārtojas pēdējos video), balss.
     runa_pec – vecā āķa teikums (atskatiem – rezultāts) → 2. ainas balss sākumā."""
     if not (NOSL_AKIS and JAUNS_FANTASY) or not s or not s.get("intro") or not krekli or len(s.get("runa") or []) < 2:
@@ -5591,6 +5597,11 @@ def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None, atcer
         if runa_pec:
             s["runa"][1] = (str(runa_pec).strip() + " " + s["runa"][1]).strip()
         s["runa"][0] = f"{a[1]} {b[1]}"
+        if atkl and 0 < atkl[0] < len(s["runa"]) - 1:                  # varoņa kartīte: "Mystery solved. Olen Zellweger, …"
+            fr_ = S.reta_frase(NOSL_ATKL[atkl[1]], veids=veids_v, n=3)
+            t_ = s["runa"][atkl[0]]
+            s["runa"][atkl[0]] = ("Number one. " + fr_ + " " + t_[len("Number one. "):]) if t_.startswith("Number one. ") \
+                else (fr_ + " " + t_)
         if atcere:                                                    # cilpa: "…and remember: 7 goals." → "…and remember the name."
             s["runa"][-1] = re.sub(r"and remember:\s*[^.?!]*\d[^.?!]*[.?!]?\s*$", f"and remember {atcere}.", s["runa"][-1])
         print(f"ĀĶIS: noslēpums – \"{' '.join(a[0])}\" → \"{' '.join(b[0])}\"")
@@ -5628,8 +5639,9 @@ def _ns_virsraksts(s, vards, komanda=False):
 def _ns_fantasy(s):
     af = s.get("aki_f") or {}
     stream = "STREAMER" in str((s.get("intro") or {}).get("tag", "")).upper()
+    k1 = next((j for j, c in enumerate(s.get("kartes") or []) if c.get("tips") == "fantasy"), None)
     noslepuma_aki(s, [(af.get("kom"), af.get("vards"))], NOSL_Q1["speletajs"], NOSL_Q2["streameri" if stream else "fantasy"],
-                  "streameri" if stream else "fantasy")
+                  "streameri" if stream else "fantasy", atkl=(k1 + 1, "speletajs") if k1 is not None else None)
     _ns_virsraksts(s, af.get("vards"))
     return s
 
@@ -5638,12 +5650,13 @@ def _ns_xg(s, veids, hero):
     laim = hero["viz"].get("grupa") == "laim"
     if veids == "komandas":
         noslepuma_aki(s, [(hero.get("badge"), "")], NOSL_Q1["komanda"], NOSL_Q2["kom_laim" if laim else "kom_nelaim"], veids,
-                      atcere="this team")
+                      atcere="this team", atkl=(len(s["runa"]) - 2, "komanda"))
         _ns_virsraksts(s, hero.get("v2"), komanda=True)
     else:
         q1 = NOSL_Q1["vartsargs" if veids == "vartsargi" else "speletajs"]
         q2 = NOSL_Q2[("va_labs" if laim else "va_slikts") if veids == "vartsargi" else ("sp_laim" if laim else "sp_nelaim")]
-        noslepuma_aki(s, [(hero.get("badge"), hero.get("v2"))], q1, q2, veids, atcere="the name")
+        noslepuma_aki(s, [(hero.get("badge"), hero.get("v2"))], q1, q2, veids, atcere="the name",
+                      atkl=(len(s["runa"]) - 2, "vartsargs" if veids == "vartsargi" else "speletajs"))
         _ns_virsraksts(s, hero.get("v2"))
     return s
 
@@ -5663,7 +5676,11 @@ def _ns_fakti(rez, hero):
         kr, q1, kom_v = [(kom, "")], NOSL_Q1["komanda"], v
         q2 = NOSL_Q2["fakti_kom_zaud" if atsl.startswith("kom_zaud") else "fakti_kom"]
     vecais = str(rez["runa"][0])
-    noslepuma_aki(rez, kr, q1, q2, "fakts", atcere="this team" if kom_v else ("these names" if len(kr) > 1 else "the name"))
+    h0 = str((hero.get("runa") or [""])[0])[:40]
+    i1 = next((j for j, r_ in enumerate(rez["runa"]) if j > 0 and (str(r_).startswith("Number one.") or (h0 and str(r_).startswith(h0)))), None)
+    tips_ = "komanda" if kom_v else ("duo" if len(kr) > 1 else ("vartsargs" if atsl.startswith("vartsargs") else "speletajs"))
+    noslepuma_aki(rez, kr, q1, q2, "fakts", atcere="this team" if kom_v else ("these names" if len(kr) > 1 else "the name"),
+                  atkl=(i1, tips_) if i1 else None)
     if (rez.get("intro") or {}).get("noslepums"):
         m = re.match(r"(The NHL week in numbers[^.]*\.)", vecais)       # ievada teikums → 2. ainā
         if m and not rez["runa"][1].startswith("The NHL week"):
