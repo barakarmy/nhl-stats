@@ -396,6 +396,61 @@ SHEET_SAITE = ""                  # piem. "https://www.etsy.com/listing/..." –
 FANTASY_CTA = ["Want the full fantasy sheet, updated every day? Comment SHEET below.",
                "The full fantasy sheet updates every day. Comment SHEET if you want it.",
                "Want every player, every day, in one sheet? Comment SHEET below."]
+# Fantasy / streameru kartītes balsī – rostered % teikums (kopš 04.11.2026 nejaušs variants; aug ≥ +0,5 / krīt ≤ −0,5 punkti
+# pēdējās ~5 dienās (tā pati līkne, kas kartītē "ROSTERED ON ESPN · LAST 5 DAYS"); vienā video neatkārtojas,
+# un ne tie paši, kas pēdējos 2 šī veida video). {r} = rostered %, {a} = 100 − r (cik līgās brīvs).
+ROST_KAPJ = ["Rostered in only {r} percent of leagues, and climbing.",
+             "Only {r} percent of leagues have him, and that number is rising.",
+             "He's in just {r} percent of leagues, but more managers are grabbing him.",
+             "Still available in {a} percent of leagues, but managers are catching on.",
+             "Only {r} percent rostered so far, and the number keeps going up.",
+             "{r} percent rostered, and rising. The secret is getting out.",
+             "Rostered in just {r} percent of leagues, and trending up.",
+             "Only {r} percent of managers have him, but that's changing.",
+             "Just {r} percent rostered, and his ownership is on the rise.",
+             "Still only {r} percent rostered, but the adds are picking up.",
+             "He's in only {r} percent of leagues, and more teams add him every day."]
+ROST_PARASTI = ["Rostered in only {r} percent of leagues.",
+                "Only {r} percent of leagues have him.",
+                "He's rostered in just {r} percent of leagues.",
+                "Still available in {a} percent of leagues.",
+                "Only {r} percent rostered on ESPN.",
+                "Just {r} percent of managers have him.",
+                "{r} percent rostered. Most leagues are sleeping on him.",
+                "Still on the wire in most leagues: just {r} percent rostered.",
+                "Owned in only {r} percent of leagues."]
+ROST_KRIT = ["Rostered in only {r} percent of leagues, and some managers are even dropping him.",
+             "Only {r} percent rostered, and that number is dropping. Their loss.",
+             "Managers are letting him go: just {r} percent rostered.",
+             "His rostered rate is falling, down to {r} percent. That's your window.",
+             "Only {r} percent of leagues have him, and fewer every day.",
+             "Just {r} percent rostered, and sliding. Nobody's watching.",
+             "Still available in {a} percent of leagues, and more managers are cutting him.",
+             "Rostered in just {r} percent of leagues, and trending down. Good timing to grab him.",
+             "Only {r} percent rostered, and dropping. The numbers say that's a mistake.",
+             "Fewer managers have him every day. Just {r} percent now."]
+ROST_MAZ_KAPJ = ["Rostered in almost no leagues, but that's starting to change.",
+                 "Almost nobody has him yet, but the adds are coming in.",
+                 "Barely rostered anywhere, and climbing.",
+                 "He's on the wire almost everywhere, but managers are starting to notice."]
+ROST_MAZ = ["Rostered in almost no leagues.", "Almost nobody has him.", "He's on the wire in nearly every league.",
+            "Barely rostered anywhere."]
+
+
+def rost_teikums(rost, tend, veids):
+    """Rostered % teikums kartītei (balsij). tend: 1 = aug, -1 = krīt, 0 = līdzīgi (pēdējās ~5 dienās).
+    --vecais (JAUNI_TEKSTI = False) – vecais vienādais teksts."""
+    if not JAUNI_TEKSTI:
+        return (f"Rostered in only {rost:.0f} percent of leagues" if rost >= 0.5 else "Rostered in almost no leagues") + "."
+    if rost >= 0.5:
+        sar = ROST_KAPJ if tend > 0 else (ROST_KRIT if tend < 0 else ROST_PARASTI)
+    else:
+        sar = ROST_MAZ_KAPJ if tend > 0 else ROST_MAZ
+    robezas = {"most leagues": 45, "sleeping on him": 45, "Nobody's watching": 20}   # neder, ja rostered % jau liels
+    sar = [x for x in sar if all(k not in x or rost < v for k, v in robezas.items())] or sar
+    return reta_frase(sar, veids=veids, n=2).format(r=f"{rost:.0f}", a=f"{100 - rost:.0f}")
+
+
 FANTASY_CTA_EPASTS = ["Want the full fantasy sheet, updated every day? Drop us an email with the subject SHEET. "
                       "The address is in the description.",
                       "The full fantasy sheet updates every day. For more info, drop us an email with the subject SHEET. "
@@ -2058,15 +2113,18 @@ def veids_fantasy(m, a):
         kartes.append(karte(nr, r, veids))
         _rv = (kartes[-1].get("viz") or {}).get("rost_vest") or []
         _rd = (_rv[-1][1] - _rv[0][1]) if len(_rv) >= 2 else 0
-        ros = "" if not np.isfinite(r["rostered"]) else ((f" Rostered in only {r['rostered']:.0f} percent of leagues" if r["rostered"] >= 0.5
-                                                          else " Rostered in almost no leagues")       # ne "0 percent"
-                                                         + (", and climbing." if JAUNI_TEKSTI and _rd >= 0.5 else "."))
+        ros = "" if not np.isfinite(r["rostered"]) else \
+            " " + rost_teikums(float(r["rostered"]), 1 if _rd >= 0.5 else (-1 if _rd <= -0.5 else 0),
+                               "streameri" if stream else "fantasy")    # nejaušs variants (aug / krīt / līdzīgi)
         fr_add.append(F("f_stream" if veids == "STREAM" else "f_add",
                         (["sched4"] if r["sp_nak"] >= 4 else []) + (["sched"] if r["sp_nak"] >= max(3, maxg) else [])))
         runa.append(f"{r['vards']}, {kom_nos(r['team'])}. {int(r['P'])} points in his last {int(r['GP'])} games, "
                     f"{r['SOG_gp']:.1f} shots a game, and {int(r['sp_nak'])} game{'' if r['sp_nak'] == 1 else 's'} "
                     f"{'left this week' if stream else 'next week'}.{grafika_runa(r)}{ros} " + fr_add[-1])
         kartes[-1]["_zim_frase"] = fr_add[-1]                         # zīmogs krīt, kad balss sāk šo frāzi
+    if stream and n_add > 1:                                          # streameri: #3 → #1 (kā citos video; noslēpuma #1 – pēdējais)
+        kartes[-n_add:] = kartes[-n_add:][::-1]
+        runa[-n_add:] = runa[-n_add:][::-1]
     for nr, (pid, r) in enumerate(drop.iterrows(), 1):
         veids = drop_veids[pid]
         kartes.append(karte(nr, r, veids))
@@ -2121,7 +2179,8 @@ def veids_fantasy(m, a):
                 + ("" if not np.isfinite(r["rostered"]) else f", {r['rostered']:.1f}% rostered") for _, r in izv.iterrows()]
     saraksts += [f"{drop_veids[pid_]} {r['vards']} ({r['team']}): {r['rostered']:.0f}% rostered – {iemesls_drop(r)}" for pid_, r in drop.iterrows()]
     # āķis (ShortsB jaunais izskats): #1 izvēles spilgtākais fakts – punkti / spēles / metieni pēdējās 5 spēlēs
-    _hv = kartes[1]["viz"] if len(kartes) > 1 and kartes[1].get("viz") else None
+    _k1 = next((c for c in kartes if c.get("tips") == "fantasy" and c.get("nr") == 1 and c.get("liels") in ("ADD", "STREAM")), None)
+    _hv = _k1["viz"] if _k1 and _k1.get("viz") else None              # #1 kartīte (streameriem tā ir pēdējā)
     aki_f, aki_runa = None, ""
     def _aki():
         aki_f, aki_runa = None, ""
@@ -4589,9 +4648,18 @@ def renderet(s, izvade, kanals="", balss=None):
 YT_MAX = 100                       # YouTube nosaukuma limits (zīmes)
 
 
+_EMOJI = "[\U0001F000-\U0001FAFF\u2600-\u26FF\u2B50\u2B55\uFE0F\u200D]"
+
+
+def bez_emoji(t):
+    """Izņem emocijzīmes (🏒 📊 🔥 …) no .txt teksta (kopš 04.11.2026) – kopā ar atstarpi pirms tām / aiz tām rindas sākumā."""
+    t = re.sub(r"(?m)^([ \t]*)" + _EMOJI + r"+[ \t]*", r"\1", str(t))
+    return re.sub(r"[ \t]?" + _EMOJI + r"+", "", t)
+
+
 def yt_virsraksts(v):
     """Virsraksts + " #NHL #Shorts", bet ≤ 100 zīmes: vispirms atmet #Shorts, tad #NHL, tad saīsina pie vārda."""
-    v = str(v).strip()
+    v = bez_emoji(v).strip()
     for beigas in (" #NHL #Shorts", " #NHL", ""):
         if len(v) + len(beigas) <= YT_MAX:
             return v + beigas
@@ -4612,23 +4680,23 @@ def _cta_kur(kontakts=""):
         return f"Get it here: {SHEET_SAITE}  (or tap the link in the channel)"
     e = cta_epasts(kontakts)
     if e:
-        return f"📧 For more info, email {e} with the subject \"SHEET\"."
+        return f"For more info, email {e} with the subject \"SHEET\"."
     return "Comment \"SHEET\" below and we'll reply with access & pricing."
 
 
 def cta_apraksts(kontakts=""):
-    return ("📊 WANT THE FULL FANTASY SHEET?\n"
+    return ("WANT THE FULL FANTASY SHEET?\n"
             "Google Sheets planner with every skater's form, shots, xG, ice time, power-play points, next week's schedule "
             "and ESPN rostered % – updated automatically every day.\n" + _cta_kur(kontakts) + "\n")
 
 
 def cta_komentars(kontakts=""):
     if SHEET_SAITE:
-        return f"📊 Want the full fantasy hockey sheet (Google Sheets, updated daily)? The link is in the channel 👆"
+        return "Want the full fantasy hockey sheet (Google Sheets, updated daily)? The link is in the channel."
     if cta_epasts(kontakts):
-        return ("📊 Want the full fantasy hockey sheet (Google Sheets, updated daily)? Our email is in the description 📧 "
+        return ("Want the full fantasy hockey sheet (Google Sheets, updated daily)? Our email is in the description. "
                 "Send us a message with the subject \"SHEET\" and we'll get back to you with all the info!")
-    return "📊 Want the full fantasy hockey sheet (Google Sheets, updated daily)? Comment \"SHEET\" and we'll reply!"
+    return "Want the full fantasy hockey sheet (Google Sheets, updated daily)? Comment \"SHEET\" and we'll reply!"
 
 
 def gaidosie_atskati(mape):
@@ -4782,7 +4850,7 @@ def main():
     with open(izv[:-4] + ".txt", "w", encoding="utf-8") as f:
         tagi = " ".join(t_ for t_ in s.get("tagi", "#NHL #hockey #NHLstats #xG #fantasyhockey #Shorts").split()
                         if t_.lower() not in YT_NOKL_TAGI | {"#shorts"})
-        f.write("===== VIRSRAKSTS → YouTube \"Title\" =====\n"
+        f.write(bez_emoji("===== VIRSRAKSTS → YouTube \"Title\" =====\n"
                 f"{yt_virsraksts(s['virsraksts'])}\n\n"
                 "===== APRAKSTS → \"Description\" (kopē visu bloku; kanāla teksts un #NHL #hockey #fantasyhockey #nhlstats "
                 "pievienojas paši no Upload defaults) =====\n"
@@ -4794,7 +4862,7 @@ def main():
                 + ("===== KOMENTĀRS → pēc publicēšanas ieraksti zem video → ⋮ → Pin (NAV aprakstā) =====\n"
                    f"{cta_komentars(kontakts)}\n\n" if ar_cta else "")
                 + "===== RUNAS TEKSTS – tikai tev, nekopē =====\n"
-                + "\n".join(f"{i}. {t}" for i, t in enumerate(s["runa"])) + "\n")
+                + "\n".join(f"{i}. {t}" for i, t in enumerate(s["runa"])) + "\n"))   # bez emocijzīmēm (kopš 04.11.)
     json_fails = None
     if "momentuzn" in s:
         json_fails = izv[:-4] + ".json"
@@ -4858,7 +4926,7 @@ def main():
             ("  Ja kāds savainots: papildini --izslegt sarakstu un ģenerē vēlreiz" if a.izslegt
              else "  Ja kāds savainots: ģenerē vēlreiz ar to pašu komandu + --izslegt \"Uzvārds\" (vairākus – ar komatu)")]
     with open(os.path.join(mape, "INFO.txt"), "w", encoding="utf-8") as f:
-        f.write("\n".join(info) + "\n")
+        f.write(bez_emoji("\n".join(info) + "\n"))
     print(f"Gatavs: {os.path.relpath(mape, BASE)}/ ({kopa:.0f} s, {'ar balsi' if ar_balsi else 'bez skaņas'})")
     for r in info[7:]:
         print(r)
