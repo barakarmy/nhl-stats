@@ -3201,8 +3201,8 @@ def _nv_kartis_dati(s, vecais):
     kar = [c for c in s["kartes"] if c.get("tips") == "fantasy" and c.get("viz")]
     if not kar:
         return None
-    pk = [c for c in kar if c.get("liels") not in ("DROP", "BENCH")]
-    dr = [c for c in kar if c.get("liels") in ("DROP", "BENCH")]
+    pk = sorted([c for c in kar if c.get("liels") not in ("DROP", "BENCH")], key=lambda c: c.get("nr", 0))   # kārtis #1, #2, #3
+    dr = [c for c in kar if c.get("liels") in ("DROP", "BENCH")]                                              # (streameru kartītes – #3 → #1)
     kartis = []
     for grupa in (pk, dr):
         for j, c in enumerate(grupa, 1):
@@ -3210,7 +3210,7 @@ def _nv_kartis_dati(s, vecais):
             ir_r = v.get("rost") is not None
             kartis.append({"kom": str(c.get("badge", "")), "poz": str(v.get("poz", "")), "akc": tuple(c["akc"]),
                            "liels": (f"{v['rost']:.0f}%" if v["rost"] >= 1 else f"{v['rost']:.1f}%") if ir_r else str(v.get("pts", "")),
-                           "maz": "ROSTERED" if ir_r else "POINTS", "lab": f"{c.get('liels', 'ADD')} #{j}"})
+                           "maz": "ROSTERED" if ir_r else "POINTS", "lab": f"{c.get('liels', 'ADD')} #{c.get('nr') or j}"})
     ap = [str(x) for x in (vecais or {}).get("apaksa", [])]
     ned = re.sub(r"^Week of\s+", "", ap[0]) if ap else ""
     ned = re.sub(r",\s*\d{4}$", "", ned).upper()
@@ -5804,7 +5804,9 @@ def _ns_xg_virsraksts(s, veids, laim, vards):
 def _ns_fantasy(s):
     af = s.get("aki_f") or {}
     stream = "STREAMER" in str((s.get("intro") or {}).get("tag", "")).upper()
-    k1 = next((j for j, c in enumerate(s.get("kartes") or []) if c.get("tips") == "fantasy"), None)
+    kk = s.get("kartes") or []                                        # #1 kartīte (streameriem – pēdējā, secība #3 → #1)
+    k1 = next((j for j, c in enumerate(kk) if c.get("tips") == "fantasy" and c.get("nr") == 1 and c.get("liels") in ("ADD", "STREAM")),
+              next((j for j, c in enumerate(kk) if c.get("tips") == "fantasy"), None))
     noslepuma_aki(s, [(af.get("kom"), af.get("vards"))], NOSL_Q1["speletajs"], NOSL_Q2["streameri" if stream else "fantasy"],
                   "streameri" if stream else "fantasy", atkl=(k1 + 1, "speletajs") if k1 is not None else None)
     _ns_virsraksts(s, af.get("vards"))
