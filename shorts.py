@@ -388,12 +388,20 @@ FAKTI_BEIGAS = [("WHICH ONE SURPRISED YOU MOST?", "Which one surprised you? Comm
                 ("WHICH ONE DIDN'T YOU SEE COMING?", "Which one didn't you see coming? Comment the number."),
                 ("VOTE WITH A NUMBER.", "Vote for the best one with a number in the comments.")]
 # Google Sheets piedāvājums fantasy / streameru video. YouTube NAV privāto ziņu, un saites Shorts aprakstā / komentāros
-# nav klikšķināmas – tāpēc: bez saites → "Comment SHEET"; ar saiti (Etsy) → "Link in the channel" (kanāla header saite).
+# nav klikšķināmas – tāpēc (kopš 04.11.2026): e-pasts aprakstā, temats "SHEET" (balss, verdikta aina, apraksts, piespraustais
+# komentārs); ar saiti (Etsy) → "Link in the channel". Bez e-pasta (KONTAKTS_EPASTS = "") → vecais "Comment SHEET".
+KONTAKTS_EPASTS = "icemathhockey@gmail.com"   # --kontakts cits@epasts.lv to aizstāj vienam video
 JAUNI_TEKSTI = True               # jaunā izskata balss teksti (piem. ", and climbing." pie rostered %); ShortsB.py --vecais → False
 SHEET_SAITE = ""                  # piem. "https://www.etsy.com/listing/..." – kad būs Etsy sludinājums
 FANTASY_CTA = ["Want the full fantasy sheet, updated every day? Comment SHEET below.",
                "The full fantasy sheet updates every day. Comment SHEET if you want it.",
                "Want every player, every day, in one sheet? Comment SHEET below."]
+FANTASY_CTA_EPASTS = ["Want the full fantasy sheet, updated every day? Drop us an email with the subject SHEET. "
+                      "The address is in the description.",
+                      "The full fantasy sheet updates every day. For more info, drop us an email with the subject SHEET. "
+                      "The address is in the description.",
+                      "Want every player, every day, in one sheet? Email us with the subject SHEET for more info. "
+                      "The address is in the description."]
 FANTASY_CTA_SAITE = ["Want the full fantasy sheet, updated every day? The link is in the channel.",
                      "The full fantasy sheet updates every day. Find the link in the channel.",
                      "Want every player, every day, in one sheet? The link is in the channel."]
@@ -4591,11 +4599,20 @@ def yt_virsraksts(v):
     return v + "…"
 
 
+def cta_epasts(kontakts=""):
+    """E-pasts Google Sheets piedāvājumam: --kontakts (ja tas ir e-pasts), citādi KONTAKTS_EPASTS ("" – nav)."""
+    k = str(kontakts or "").strip()
+    if "@" in k and not k.startswith("@") and "." in k.split("@")[-1]:
+        return k
+    return KONTAKTS_EPASTS
+
+
 def _cta_kur(kontakts=""):
     if SHEET_SAITE:
         return f"Get it here: {SHEET_SAITE}  (or tap the link in the channel)"
-    if kontakts and "@" in kontakts and "." in kontakts.split("@")[-1]:
-        return f"Comment \"SHEET\" below or email {kontakts} for access & pricing."
+    e = cta_epasts(kontakts)
+    if e:
+        return f"📧 For more info, email {e} with the subject \"SHEET\"."
     return "Comment \"SHEET\" below and we'll reply with access & pricing."
 
 
@@ -4608,6 +4625,9 @@ def cta_apraksts(kontakts=""):
 def cta_komentars(kontakts=""):
     if SHEET_SAITE:
         return f"📊 Want the full fantasy hockey sheet (Google Sheets, updated daily)? The link is in the channel 👆"
+    if cta_epasts(kontakts):
+        return ("📊 Want the full fantasy hockey sheet (Google Sheets, updated daily)? Our email is in the description 📧 "
+                "Send us a message with the subject \"SHEET\" and we'll get back to you with all the info!")
     return "📊 Want the full fantasy hockey sheet (Google Sheets, updated daily)? Comment \"SHEET\" and we'll reply!"
 
 
@@ -4654,8 +4674,8 @@ def main():
     ap.add_argument("--bez-balss", action="store_true")
     ap.add_argument("--kanals", default="", help="kanāla nosaukums beigu kadram, piem. @nhlxg")
     ap.add_argument("--mape", default=os.path.join(BASE, "video"))
-    ap.add_argument("--kontakts", default="", help="kur rakstīt, lai saņemtu Google Sheets tabulu (piem. @nhlxg vai e-pasts); "
-                                                    "noklusējums – --kanals")
+    ap.add_argument("--kontakts", default="", help="e-pasts Google Sheets piedāvājumam (aprakstā, balss un komentārs to piemin); "
+                                                    "noklusējums – KONTAKTS_EPASTS")
     ap.add_argument("--cta", action="store_true", help="piedāvājums par Google Sheets tabulu arī xG video (fantasy video – vienmēr)")
     ap.add_argument("--bez-cta", action="store_true", help="bez piedāvājuma par Google Sheets tabulu")
     ap.add_argument("--gaida", action="store_true", help="parādīt video, kuriem vēl jāizveido atskats (un kad)")
@@ -4731,9 +4751,12 @@ def main():
     kontakts = a.kontakts
     ar_cta = not a.bez_cta and (a.veids in ("fantasy", "streameri") and not a.atskats or a.cta)
     if ar_cta:
+        em_ = cta_epasts(kontakts)
         s["outro"]["cta"] = ("WANT THE FULL FANTASY SHEET?", "Google Sheets · updated daily",
-                             "Link in the channel" if SHEET_SAITE else "Comment \"SHEET\" below")
-        s["runa"][-1] += " " + reta_frase(FANTASY_CTA_SAITE if SHEET_SAITE else FANTASY_CTA, veids=a.veids, n=2)
+                             "Link in the channel" if SHEET_SAITE else
+                             ("Email in the description · subject \"SHEET\"" if em_ else "Comment \"SHEET\" below"))
+        s["runa"][-1] += " " + reta_frase(FANTASY_CTA_SAITE if SHEET_SAITE else (FANTASY_CTA_EPASTS if em_ else FANTASY_CTA),
+                                          veids=a.veids, n=2)
 
     # katrai ģenerācijai sava mape: video/<šodienas datums>_<veids>/ (ja jau ir – _2, _3 ...)
     tagad = pd.Timestamp.now()
