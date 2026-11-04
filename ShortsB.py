@@ -552,7 +552,7 @@ def sfx_notikumi(ainas):
             ev.append((t0 + 0.15, "tick", 0.8))
             ev.append((t0 + max(0.8, ilg - 0.8 + 0.4), "boom", 0.45))
         elif tips == "fakts_ripa":                                   # tick katrai ripai
-            n_ = len(c["ripa"]["punkti"]); dt_ = min(0.5, max(0.1, (ilg - 2.6) / max(1, n_)))
+            n_ = len(c["ripa"]["punkti"]); dt_ = _fj_ripa_dt(ilg, n_)
             ev += [(t0 + 0.9 + i * dt_ + 0.35, "tick", 0.55) for i in range(min(n_, 40))]
         elif tips == "fakts_hist":
             nb = len(c["hist"]["bins"])
@@ -3711,13 +3711,16 @@ def _nv_flizes_spec(dc, N, u, c, v, prim, ta, gk, t_at, stabini, X0, X1, CW, GAP
             val = float(val)
             if f.get("diverg"):
                 L_ = bw_ / 2 * min(1.0, abs(val) / m_) * kk
+                r_j = min(18, max(14, L_) / 2)                       # pie centra – taisna mala, ārējais gals noapaļots
                 if val >= 0:
                     xa, xb = cx_, cx_ + max(14, L_)
-                    dc.rounded_rectangle([xa, yy, xb, yy + 36], radius=18, fill=kr_(kr) + (int(255 * a),))
+                    dc.rounded_rectangle([xa, yy, xb, yy + 36], radius=r_j, fill=kr_(kr) + (int(255 * a),))
+                    dc.rectangle([xa, yy, xa + r_j, yy + 36], fill=kr_(kr) + (int(255 * a),))
                     uzraksti.append(((xb + 12, yy + 18), txt, "lm"))
                 else:
                     xa, xb = cx_ - max(14, L_), cx_
-                    dc.rounded_rectangle([xa, yy, xb, yy + 36], radius=18, fill=kr_(kr) + (int(255 * a),))
+                    dc.rounded_rectangle([xa, yy, xb, yy + 36], radius=r_j, fill=kr_(kr) + (int(255 * a),))
+                    dc.rectangle([xb - r_j, yy, xb, yy + 36], fill=kr_(kr) + (int(255 * a),))
                     uzraksti.append(((xa - 12, yy + 18), txt, "rm"))
             else:
                 bx1 = bx0 + bw_ * max(0.0, val) / skala * kk
@@ -4134,20 +4137,39 @@ def _fj_karte_plus(f_, kr):
     di.line([(40, 446), (cw - 40, 446)], fill=(255, 255, 255, 30), width=2)
     if n:
         virs = str(pl.get("virs") or "").upper() + (f"  ·  LAST {n} OF {len(rind)}" if len(rind) > n else "")
-        di.text((40, y + 4), virs, font=S.ietilpinat(di, virs, "semi", 26, cw - 80), fill=_NV_LAB)
+        izc_t = str(pl.get("izcelt_txt") or "").upper()               # piem. "4 GOALS IN 2:06" – dzeltens, labajā pusē
+        if izc_t:
+            fz_ = S.ietilpinat(di, izc_t, "black", 26, 300)
+            di.text((cw - 40, y + 4), izc_t, font=fz_, fill=S.DZELTENS, anchor="ra")
+            virs_w = cw - 80 - di.textlength(izc_t, font=fz_) - 24
+        else:
+            virs_w = cw - 80
+        di.text((40, y + 4), virs, font=S.ietilpinat(di, virs, "semi", 26, virs_w), fill=_NV_LAB)
         y += 36
         tw = (cw - 80 - GAP * (per - 1)) / per
+        izc_k = {(str(p_), str(l_)) for p_, l_ in (pl.get("izcelt") or [])}
         for i, r_ in enumerate(vis):
             row, col = divmod(i, per)
             x = 40 + col * (tw + GAP); yy = y + row * (TH + GAP)
             a_, b_, c_ = (list(r_) + ["", "", ""])[:3]
+            izc = (str(a_), str(b_)) in izc_k
             di.rounded_rectangle([x, yy, x + tw, yy + TH], radius=18, fill=_NV_TILE + (255,))
             di.text((x + tw / 2, yy + 22), str(a_).upper(), font=S.ietilpinat(di, str(a_).upper(), "black", 24, tw - 14), fill=S.BALTS, anchor="mm")
             if str(b_).strip():
                 di.text((x + tw / 2, yy + 52), str(b_).upper(), font=S.ietilpinat(di, str(b_).upper(), "semi", 22, tw - 14), fill=_NV_LAB, anchor="mm")
             cc_ = str(c_).upper().strip()
             kr_c = S.ZALS if re.match(r"^W\b", cc_) else (S.SARKANS if re.match(r"^(L|OTL)\b", cc_) else S.DZELTENS)   # W / L spēlēm
-            di.text((x + tw / 2, yy + 86), cc_, font=S.ietilpinat(di, cc_, "black", 30, tw - 14), fill=kr_c, anchor="mm")
+            if izc:                                                   # izceltā sērija (piem. atspēlēšanās vārti) – dzeltens rāmis
+                di.rounded_rectangle([x, yy, x + tw, yy + TH], radius=18, outline=S.DZELTENS + (255,), width=4)
+            f_c = S.ietilpinat(di, cc_, "black", 30, tw - 14)
+            if di.textlength(cc_, font=f_c) > tw - 14 and " · " in cc_:    # nesatilpst (2 spēlētāji) – divās rindās, vārtu guvējs pirmais
+                dal = sorted(cc_.split(" · "), key=lambda x_: 0 if x_.endswith(" G") else 1)
+                l1, l2 = dal[0], " · ".join(dal[1:])
+                fl = S.ietilpinat(di, max(l1, l2, key=len), "black", 24, tw - 14)
+                di.text((x + tw / 2, yy + 77), l1, font=fl, fill=S.DZELTENS if l1.endswith(" G") else kr_c, anchor="mm")
+                di.text((x + tw / 2, yy + 99), l2, font=fl, fill=(203, 213, 225) if l2.endswith(" A") else kr_c, anchor="mm")
+            else:
+                di.text((x + tw / 2, yy + 86), cc_, font=f_c, fill=kr_c, anchor="mm")
         y += rindu * (TH + GAP)
     if st:
         di.text((40, y + 4), str(pl.get("stats_virs") or "SEASON SO FAR").upper(), font=F("semi", 26), fill=_NV_LAB)
@@ -4283,6 +4305,14 @@ def _fj_laukums(d, x0, y0, w, h):
 _FJ_KR = {"G": S.DZELTENS, "A": S.ZILS, "GA": S.SARKANS, "S": (203, 213, 225)}
 
 
+FJ_RIPA_PAUZE = 2.8              # s – pēc pēdējās ripas aina vēl stāv (var apskatīt visus vārtus kopā)
+
+
+def _fj_ripa_dt(ilg, n):
+    """Laiks starp ripām: visas nokrīt FJ_RIPA_PAUZE s pirms ainas beigām (0,9 s sākums, 0,35 s lidojums)."""
+    return min(0.5, max(0.06, (ilg - 0.9 - 0.35 - FJ_RIPA_PAUZE) / max(1, n)))
+
+
 def aina_fakts_ripa(t, c):
     """Katrs sērijas / spēles vārts (vai atvairītais metiens) uz ripas: ripa pa vienai lido vārtos, skaitītājs aug."""
     F = S.fonts
@@ -4307,7 +4337,7 @@ def aina_fakts_ripa(t, c):
     pk = R["punkti"]
     ilg = c.get("_ilg", c.get("ilgums", 5.5))
     T0 = 0.9
-    DT = min(0.5, max(0.1, (ilg - 2.6) / max(1, len(pk))))
+    DT = _fj_ripa_dt(ilg, len(pk))
     tx, ty = X(89), Yf(0)
     nv, ped = 0, None
     for i, p_ in enumerate(pk):
@@ -4736,7 +4766,8 @@ def fakti_jauns(rez, D, m, izv, st, mini_runa):
                 sr = []
             rows[i - 1]["plus"] = {"virs": c.get("saraksts_virs"), "rindas": c.get("rindas"), "stats": sr[:3],
                                    "stats_virs": sv_nr.get(i) or "SEASON SO FAR",
-                                   "kont": (c.get("konteksts") or [""])[0], "runa_pre": f"Number {i}. {c['runa'][0]}"}
+                                   "kont": (c.get("konteksts") or [""])[0], "runa_pre": f"Number {i}. {c['runa'][0]}",
+                                   "izcelt": c.get("izcelt_rindas"), "izcelt_txt": c.get("izcelt_txt")}
         virsr = [(f"TOP {n}", S.BALTS), ("THIS WEEK", S.DZELTENS)] if n > 1 else [("STAT OF", S.BALTS), ("THE WEEK", S.DZELTENS)]
         kartes, runa = [], [rez["runa"][0]]
         docked = []
@@ -4753,7 +4784,8 @@ def fakti_jauns(rez, D, m, izv, st, mini_runa):
             if st:
                 ripa["stats"] = [(r_[0].replace("Games played", "GP").replace("Shots on goal", "SOG"), r_[2]) for r_ in st[1][:4]]
                 ripa["stats_virs"] = st[0]
-            kartes.append({"tips": "fakts_ripa", "ilgums": 6.0, "ripa": ripa, "_tv": tv, "_tv_idx": n - 1})
+            kartes.append({"tips": "fakts_ripa", "ilgums": max(6.0, 1.25 + 0.1 * len(ripa["punkti"]) + FJ_RIPA_PAUZE),
+                           "ripa": ripa, "_tv": tv, "_tv_idx": n - 1})
             sk1, sk2 = set(re.findall(r"\d+", hero["runa"][1])), set(re.findall(r"\d+", st[3])) if st else set()
             papild = (" " + st[3]) if st and not sk2 <= sk1 else ""          # sezona = sērija → neatkārto tos pašus skaitļus
             runa.append((hero["runa"][1] + papild).strip())
@@ -5543,7 +5575,7 @@ def _sfx_klik():
 
 
 # ---------------------------------------------------------------- dati katram video veidam
-def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None):
+def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None, atcere=None):
     """Ieliek āķī noslēpumu: krekli [(komanda, uzvārds)], jautājums 1 / 2 (neatkārtojas pēdējos video), balss.
     runa_pec – vecā āķa teikums (atskatiem – rezultāts) → 2. ainas balss sākumā."""
     if not (NOSL_AKIS and JAUNS_FANTASY) or not s or not s.get("intro") or not krekli or len(s.get("runa") or []) < 2:
@@ -5559,6 +5591,8 @@ def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None):
         if runa_pec:
             s["runa"][1] = (str(runa_pec).strip() + " " + s["runa"][1]).strip()
         s["runa"][0] = f"{a[1]} {b[1]}"
+        if atcere:                                                    # cilpa: "…and remember: 7 goals." → "…and remember the name."
+            s["runa"][-1] = re.sub(r"and remember:\s*[^.?!]*\d[^.?!]*[.?!]?\s*$", f"and remember {atcere}.", s["runa"][-1])
         print(f"ĀĶIS: noslēpums – \"{' '.join(a[0])}\" → \"{' '.join(b[0])}\"")
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (noslēpuma āķis: {type(ex).__name__}: {ex} – parastais āķis)")
@@ -5603,12 +5637,13 @@ def _ns_fantasy(s):
 def _ns_xg(s, veids, hero):
     laim = hero["viz"].get("grupa") == "laim"
     if veids == "komandas":
-        noslepuma_aki(s, [(hero.get("badge"), "")], NOSL_Q1["komanda"], NOSL_Q2["kom_laim" if laim else "kom_nelaim"], veids)
+        noslepuma_aki(s, [(hero.get("badge"), "")], NOSL_Q1["komanda"], NOSL_Q2["kom_laim" if laim else "kom_nelaim"], veids,
+                      atcere="this team")
         _ns_virsraksts(s, hero.get("v2"), komanda=True)
     else:
         q1 = NOSL_Q1["vartsargs" if veids == "vartsargi" else "speletajs"]
         q2 = NOSL_Q2[("va_labs" if laim else "va_slikts") if veids == "vartsargi" else ("sp_laim" if laim else "sp_nelaim")]
-        noslepuma_aki(s, [(hero.get("badge"), hero.get("v2"))], q1, q2, veids)
+        noslepuma_aki(s, [(hero.get("badge"), hero.get("v2"))], q1, q2, veids, atcere="the name")
         _ns_virsraksts(s, hero.get("v2"))
     return s
 
@@ -5628,7 +5663,7 @@ def _ns_fakti(rez, hero):
         kr, q1, kom_v = [(kom, "")], NOSL_Q1["komanda"], v
         q2 = NOSL_Q2["fakti_kom_zaud" if atsl.startswith("kom_zaud") else "fakti_kom"]
     vecais = str(rez["runa"][0])
-    noslepuma_aki(rez, kr, q1, q2, "fakts")
+    noslepuma_aki(rez, kr, q1, q2, "fakts", atcere="this team" if kom_v else ("these names" if len(kr) > 1 else "the name"))
     if (rez.get("intro") or {}).get("noslepums"):
         m = re.match(r"(The NHL week in numbers[^.]*\.)", vecais)       # ievada teikums → 2. ainā
         if m and not rez["runa"][1].startswith("The NHL week"):
