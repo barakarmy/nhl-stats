@@ -34,6 +34,8 @@ Mapes (izveido pats nhl-stats saknē; ja mapes nav vai tā tukša – attiecīg�
   shorts_wordmark.png  logo ar nosaukumu (caurspīdīgs) – beigu kadrā. Ja failu nav, rāda tikai @rokturi.
   Rokturis pēc noklusējuma: KANALS_NOKL (zemāk); --kanals @cits to aizstāj.
 Papildu parametri: --bez-fona-video  --bez-muzikas  --bez-sfx  --bez-logo
+  --tests    video un vēstures – mapē video_test\\ (īstā vēsture video\\ netiek aiztikta)
+  --vecais   vecais izskats (līdz 04.11.) – rezerve, ja jaunajā izskatā kāda kļūda
 
 Lietošana (nhl-stats mapē datorā; pirms tam git pull – dati atjaunojas ~08:40 pēc Rīgas laika):
     python ShortsB.py --veids speletaji --dienas 21      (visi veidi un parametri – SHORTS_KOMANDAS.txt)
@@ -2550,6 +2552,12 @@ def testa_mape():
 
 
 def ieslegt():
+    global JAUNS_FANTASY
+    if "--vecais" in sys.argv:                                        # vecais izskats (rezerve, ja jaunajā kāda kļūda)
+        sys.argv.remove("--vecais")
+        JAUNS_FANTASY = False
+        S.JAUNI_TEKSTI = False
+        print("IZSKATS: vecais (--vecais)")
     for k in ("fakts_konteksts", "karte", "fantasy", "fakts_hook", "outro", "intro"):
         _orig[k] = getattr(S, "aina_" + k)
     _orig["pill"] = S.pill
@@ -2566,7 +2574,7 @@ def ieslegt():
         s_ = orig_ats(fails, m, a)
         if s_ and "FOLLOW-UP" in str(s_.get("intro", {}).get("tag", "")):
             s_ = xg_atskats_jauns(pievienot_aki(s_, "atskats"))
-        if s_ and "RECAP" in str(s_.get("intro", {}).get("tag", "")):     # fantasy atskats – jaunais izskats (ShortsBT)
+        if s_ and "RECAP" in str(s_.get("intro", {}).get("tag", "")):     # fantasy atskats – jaunais izskats
             s_ = fantasy_atskats_jauns(s_)
         return s_
     S.atskats = atskats_ar_aki
@@ -2597,8 +2605,8 @@ def ieslegt():
 # Āķis: "7 POINTS" + punkti pa spēlēm + "...AND HE'S STILL ON WAIVERS" + noslēpumaina #1 kartīte ar kustīgu "?".
 # Kartīte: vārds ar komandas kodu fonā un divkrāsu pasvītru "/", logs ar neona rāmi un vienu gaismiņu, kas
 # plūdeni "izrullējas" uz leju, flīzes ar mini grafikiem, ESPN rostered tendence, verdikta zīmogs virsū beigās.
-# Pagaidām tikai ShortsBT.py (testa versija, video_bt\\). ShortsB.py – vecais izskats, līdz jaunais būs pabeigts.
-JAUNS_FANTASY = False            # ShortsBT.py to ieslēdz (tests); kad gatavs – True arī šeit
+# Kopš 04.11. – noklusējums ShortsB.py (vecais izskats: --vecais).
+JAUNS_FANTASY = True             # jaunais izskats (kopš 04.11.); ārkārtas gadījumā vecais:  python ShortsB.py ... --vecais
 _NV_TILE, _NV_SL, _NV_LAB = (30, 41, 59), (100, 116, 139), (148, 163, 184)
 _NV_KESA = {}
 
@@ -4000,7 +4008,7 @@ def aina_fantasy_jauna(t, c):
     return L
 
 
-# ================================================================ FAKTU VIDEO – JAUNAIS IZSKATS (ShortsBT)
+# ================================================================ FAKTU VIDEO – JAUNAIS IZSKATS
 # Āķis (jaunais stils) → TOP N tablo: fakti #N → #2 ielido kā lielas kartītes un "nolaižas" tablo rindā, #1 pulsē līdz
 # beigām → #1 atklājas → "katrs vārts uz ripas" (īstās metienu vietas) + sezonas skaitļi → "HOW RARE IS IT?" histogramma
 # (visas sezonas sērijas / spēles) → NEXT UP. Ja kādam fakta veidam datu nav – tā vietā vecā aina (saraksts / konteksts).
