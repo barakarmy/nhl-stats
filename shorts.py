@@ -3571,6 +3571,16 @@ def f_speles(D):
                 "yt": f"Down {d_} goals… the {kom_nos(uzv)} came back and won 🤯",
                 "izcelt_rindas": cb_v["rindas"] if cb_v else None, "izcelt_txt": cb_txt,
             })
+            try:                                                      # vēla atspēlēšanās (izlīdzināja 3. perioda beigās) – bonuss
+                if cb_v and cb_v.get("rindas"):
+                    pp_, ll_ = cb_v["rindas"][-1]
+                    atl_ = 1200 - _sek(ll_) if pp_ == "P3" else None
+                    if atl_ is not None and atl_ <= 600:
+                        vel_ = 1.0 if atl_ <= 120 else (0.6 if atl_ <= 300 else 0.3)
+                        out[-1]["bonuss"] = round(vel_ * (15 + 10 * (d_ - 3)))
+                        out[-1]["teksts"] += f"  [IZLĪDZINĀJA {_laiks_mmss(atl_)} PIRMS BEIGĀM: +{out[-1]['bonuss']}]"
+            except Exception:                                         # noqa: BLE001
+                pass
             try:
                 tk_, ekr_ = _ip_comeback(D, va, cb_v, uzv, r.home_team, i, out[-1]["atsl"])
                 _ip_pielikt(out[-1], tk_[:1] if cb else tk_, ekr_)       # kopā ar laika teikumu – ne vairāk par 2 papildu teikumiem
@@ -3754,7 +3764,7 @@ def fakti_kandidati(D, mape_video):
             if v["atsl"] == c["atsl"] and v["datums"] >= robeza and c["garums"] < v["garums"] + 3:
                 c["vert"] -= 40
                 c["teksts"] += "  (jau bija)"
-        c["vert"] = round(float(np.clip(c["vert"], 0, 100)))
+        c["vert"] = round(float(np.clip(c["vert"], 0, 100)) + c.get("bonuss", 0))   # bonuss var pacelt virs 100 (vēla atspēlēšanās)
     kand.sort(key=lambda c: (c["biezi"], -c["vert"]))                # ikdienišķie vienmēr saraksta beigās
     # viens spēlētājs / komanda – tikai viens (labākais) fakts; nākamie no saraksta paceļas augstāk
     def vienumi(c):
