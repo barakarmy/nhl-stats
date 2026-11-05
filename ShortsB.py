@@ -1251,6 +1251,8 @@ def aina_fakts_mini(t, c):
 def _fakti_izvele(arg, kand):
     """--fakts 3 | 1,3,5 | top3 | auto  → kandidātu saraksts (max 5), sakārtots pēc vērtējuma (augstākais pirmais)."""
     arg = str(arg or "auto").strip().lower()
+    manuali = arg.endswith("!")                                       # "--fakts 8,1,2!" – secība tieši tāda (pirmais = #1)
+    arg = arg.rstrip("!")
     if arg in ("auto", ""):
         idx = [0]
     elif arg.startswith("top"):
@@ -1275,6 +1277,8 @@ def _fakti_izvele(arg, kand):
                 izv.append(c)
     else:
         izv = [kand[i] for i in idx if i < len(kand)]
+    if manuali:
+        return izv
     izv = sorted(izv, key=lambda c: -c["vert"])
     # vienas kategorijas fakti (ja izvēlēti ar numuriem) – lielākais skaitlis augstāk (29 atvairīti pirms 26)
     for k_ in {_kategorija(c) for c in izv}:
@@ -2474,6 +2478,7 @@ def renderet(s, izvade, kanals="", balss=None):
               "fakts_tablo": aina_fakts_tablo, "fakts_ripa": aina_fakts_ripa, "fakts_hist": aina_fakts_hist,
               "fakts_reti": aina_fakts_reti,
               "fakts_nak_j": aina_fakts_nak_j}
+    _DAL["fons"] = bool(JAUNS_FANTASY and s.get("_bez_zimoga"))       # jaunais izskats: burbuļi fonā (ne āķī)
     # cilpai: āķa (1. ainas) sākuma kadrs – beigās video pāriet atpakaļ uz to
     v0, c0, _ = ainas[0]
     if v0 == "intro" and nsl:
@@ -2529,6 +2534,8 @@ def renderet(s, izvade, kanals="", balss=None):
                 if veids == "outro" and cilpa_sl is not None and t > ilg - CILPA:      # cilpa: atpakaļ uz āķi
                     sl = Image.blend(sl, cilpa_sl, S.ease((t - (ilg - CILPA)) / CILPA))
                 kadrs = fons.kadrs(t0 + t)
+                if _DAL["fons"] and veids != "intro":
+                    _nv_dalinas_fons(kadrs, t0 + t)
                 if alfa < 1:
                     sl.putalpha(sl.getchannel("A").point(lambda v: int(v * alfa)))
                 kadrs.paste(sl, (0, int(dy)), sl)
@@ -2563,6 +2570,7 @@ def renderet(s, izvade, kanals="", balss=None):
         t0 += ilg
     p.stdin.close()
     p.wait()
+    _DAL["fons"] = False
     if fona_fails:
         fons.aizvert()
     try:                                                              # sīktēls = āķa kadrs ar to pašu fonu
@@ -2806,8 +2814,22 @@ _NV_DAL = [(random.Random(i).uniform(60, 1020), random.Random(i + 99).uniform(0,
             random.Random(i + 3).choice([S.DZELTENS, S.ZILS, (255, 255, 255)])) for i in range(40)]
 
 
+_DAL = {"fons": False}   # True – burbuļi tiek zīmēti fonā (renderet), ne katrā ainā atsevišķi
+
+
 def _nv_dalinas(L, t):
-    d = ImageDraw.Draw(L)
+    if _DAL["fons"]:                                                  # jaunajā izskatā – fonā (visās ainās, izņemot āķi)
+        return
+    _nv_dalinas_zim(ImageDraw.Draw(L), t)
+
+
+def _nv_dalinas_fons(kadrs, T):
+    """Burbuļi, kas lido uz augšu – uz video fona (RGB), vienmērīgi visu video (laiks no video sākuma). Kopš 05.11.2026:
+    nepazūd grafika / verdikta ainās, zīmoga brīdī un ainu maiņās."""
+    _nv_dalinas_zim(ImageDraw.Draw(kadrs, "RGBA"), T)
+
+
+def _nv_dalinas_zim(d, t):
     for x, ph, sp, kr in _NV_DAL:
         p = (ph + t * 0.09 * sp) % 1
         y = 1700 - p * 1500
@@ -2824,8 +2846,8 @@ def _nv_kratit(L, t, t0, amp=14, dur=0.25):
     a = amp * (1 - k) ** 2
     rnd = random.Random(int(t * 1000))
     out = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
-    out.paste(L, (int(rnd.uniform(-a, a)), int(rnd.uniform(-a, a))), L)
-    return out
+    out.paste(L, (int(rnd.uniform(-a, a)), int(rnd.uniform(-a, a))))   # bez maskas: ar masku caurspīdīgie slāņi
+    return out                                                        # (komandas burti fonā, burbuļi) uz brīdi pazuda
 
 
 def _nv_zibsnis(L, t, t0, s=0.14, dur=0.14):
