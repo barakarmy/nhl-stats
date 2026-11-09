@@ -399,6 +399,8 @@ FANTASY_CTA = ["Want the full fantasy sheet, updated every day? Comment SHEET be
 # Fantasy / streameru kartītes balsī – rostered % teikums (kopš 04.11.2026 nejaušs variants; aug ≥ +0,5 / krīt ≤ −0,5 punkti
 # pēdējās ~5 dienās (tā pati līkne, kas kartītē "ROSTERED ON ESPN · LAST 5 DAYS"); vienā video neatkārtojas,
 # un ne tie paši, kas pēdējos 2 šī veida video). {r} = rostered %, {a} = 100 − r (cik līgās brīvs).
+FANTASY_PEDEJAIS = ["And now, our top pickup of the week.", "And finally, the number one add.", "Now, the pickup we like most.",
+                    "And the best add of the week."]
 ROST_KAPJ = ["Rostered in only {r} percent of leagues, and climbing.",
              "Only {r} percent of leagues have him, and that number is rising.",
              "He's in just {r} percent of leagues, but more managers are grabbing him.",
@@ -2134,6 +2136,14 @@ def veids_fantasy(m, a):
         runa.append(f"{sakums}{r['vards']}, {kom_nos(r['team'])}. Rostered in {r['rostered']:.0f} percent of leagues, but "
                     f"{ie_[0].lower() + ie_[1:]}.{'' if 'tough' in ie_ else grafika_runa(r)} " + fr_drop[-1])
         kartes[-1]["_zim_frase"] = fr_drop[-1]
+    if not stream and n_add > 1:                                      # fantasy: #3 → #2 → (drop) → #1 pēdējais (noslēpuma #1)
+        ka, kd = kartes[-(n_add + n_drop):-n_drop or None], kartes[len(kartes) - n_drop:] if n_drop else []
+        ra, rd = runa[-(n_add + n_drop):len(runa) - n_drop], runa[len(runa) - n_drop:] if n_drop else []
+        jaunas_k = ka[1:][::-1] + kd + ka[:1]
+        jaunas_r = ra[1:][::-1] + rd + ra[:1]
+        jaunas_r[-2] = jaunas_r[-2].rstrip() + " " + reta_frase(FANTASY_PEDEJAIS, veids="fantasy", n=2)
+        kartes[-(n_add + n_drop):] = jaunas_k
+        runa[-(n_add + n_drop):] = jaunas_r
 
     def fa_vk(pid, r, virs, frase, kr):
         ros_ = f"rostered {r['rostered']:.0f}%  ·  " if np.isfinite(r["rostered"]) else ""
@@ -2820,6 +2830,95 @@ def _rinda_sp(D, r, vertiba):
 
 # ---------------------------------------------------------------- detektori
 
+PUNKTU_SERIJA_MIN = 10        # punktu sērija kā atsevišķs fakts un kopsavilkumā – tikai no 10 spēlēm
+SAUSA_SERIJA_MIN = 120 * 60   # vārtsarga sērija bez ielaistiem vārtiem (nedēļas kopsavilkumā) – vismaz 120 min
+
+
+def punktu_serijas_kopsavilkums(D, min_n=PUNKTU_SERIJA_MIN):
+    """Aktīvās punktu sērijas ≥ min_n: kopējā, mājās, izbraukumā (mājas / izbraukuma – tikai, ja garāka par kopējo).
+    → [{pid, vards, team, veids ("ALL"/"HOME"/"AWAY"), n}] garākās pirmās."""
+    out = []
+    sp = D["sp"].sort_values(["datums", "game_id"])
+    robeza = (pd.Timestamp(D["lidz"]) - timedelta(days=7)).strftime("%Y-%m-%d")
+    for pid, g in sp.groupby("playerId"):
+        if g["datums"].max() < robeza:                                # nespēlē (savainots) – sērija nav "aktīva"
+            continue
+
+        def gar(x):
+            n = 0
+            for v in (x["points"].fillna(0).to_numpy() > 0)[::-1]:
+                if not v:
+                    break
+                n += 1
+            return n
+        n_all = gar(g)
+        vards, kom = str(g["vards"].iloc[-1]), str(g["team"].iloc[-1])
+        if n_all >= min_n:
+            out.append({"pid": int(pid), "vards": vards, "team": kom, "veids": "ALL", "n": n_all})
+        for v_, k_ in (("home", "HOME"), ("away", "AWAY")):
+            n_ = gar(g[g["home_away"] == v_])
+            if n_ >= min_n and n_ > n_all:
+                out.append({"pid": int(pid), "vards": vards, "team": kom, "veids": k_, "n": n_})
+    return sorted(out, key=lambda x: (-x["n"], x["veids"] != "ALL"))
+
+
+def _toi_sek(x):
+    try:
+        m_, s_ = str(x).split(":")
+        return int(m_) * 60 + int(s_)
+    except (TypeError, ValueError):
+        return 0
+
+
+def sausas_serijas_nedela(D, m, min_sek=SAUSA_SERIJA_MIN):
+    """Vārtsargu sērijas bez ielaistiem vārtiem (laukumā pavadītais laiks), kas daļēji vai pilnībā bija pēdējās 7 dienās
+    – arī pārtrauktās. Metieni – no metieni.csv (vārtsargs = kam meta). → [{pid, vards, team, sek, atvairiti, aktiva}]."""
+    if m is None or not len(m) or "vartsargs" not in m:
+        return []
+    no = (pd.Timestamp(D["lidz"]) - timedelta(days=6)).strftime("%Y-%m-%d")
+    sg = D["sg"].set_index("game_id")
+    mm = m[m["tips"].isin(["sog", "goal"]) & m["vartsargs"].notna()].copy()
+    mm["t_abs"] = (pd.to_numeric(mm["period"], errors="coerce") - 1) * 1200 + pd.to_numeric(mm["sek"], errors="coerce")
+    mm["vartsargs"] = pd.to_numeric(mm["vartsargs"], errors="coerce")
+    vg = D["vg"].copy()
+    vg["toi_s"] = vg["toi"].map(_toi_sek)
+    vg = vg[vg["toi_s"] > 0].sort_values(["datums", "game_id"])
+    out = []
+    for pid, g in vg.groupby("playerId"):
+        if g["datums"].max() < no:
+            continue
+        sm = mm[mm["vartsargs"] == pid]
+        serijas, cur = [], {"sek": 0, "atv": 0, "no": None, "lidz": None}
+        for r in g.itertuples(index=False):
+            beigas = sg.loc[r.game_id, "spele_beidzas"] if r.game_id in sg.index else "REG"
+            garums = 3600 + (300 if str(beigas) != "REG" else 0)
+            a0, a1 = (0, min(r.toi_s, garums)) if str(r.starter) == "True" else (max(0, garums - r.toi_s), garums)
+            ev = sm[sm["game_id"] == r.game_id].sort_values("t_abs")
+            t = a0
+            if cur["no"] is None:
+                cur["no"] = r.datums
+            for e in ev.itertuples(index=False):
+                if not (a0 <= e.t_abs <= a1 + 1):
+                    continue
+                if e.tips == "goal":
+                    cur["sek"] += max(0, e.t_abs - t)
+                    cur["lidz"] = r.datums
+                    serijas.append(dict(cur, aktiva=False))
+                    cur = {"sek": 0, "atv": 0, "no": r.datums, "lidz": None}
+                    t = e.t_abs
+                else:
+                    cur["atv"] += 1
+            cur["sek"] += max(0, a1 - t)
+            cur["lidz"] = r.datums
+        serijas.append(dict(cur, aktiva=True))
+        der = [x for x in serijas if x["sek"] >= min_sek and str(x["lidz"]) >= no]
+        if der:
+            b = max(der, key=lambda x: x["sek"])
+            out.append({"pid": int(pid), "vards": str(g["vards"].iloc[-1]), "team": str(g["team"].iloc[-1]),
+                        "sek": int(b["sek"]), "atvairiti": int(b["atv"]), "aktiva": bool(b["aktiva"])})
+    return sorted(out, key=lambda x: -x["sek"])
+
+
 def f_serijas(D):
     """A/B: aktīvās punktu un vārtu sērijas."""
     out = []
@@ -2848,6 +2947,8 @@ def f_serijas(D):
         sez_best = max(labakas.values())
         sez_best_pid = max(labakas, key=labakas.get)
         for pid, (n, g) in aktivas.items():
+            if kol == "points" and n < PUNKTU_SERIJA_MIN:               # īsākas punktu sērijas – tikai kopsavilkuma ainā (≥ 10)
+                continue
             vards, kom = _sp_vards(D, pid)
             rank = 1 + sum(1 for x, _ in akt_sar if x > n)
             vienadi = sum(1 for x, _ in akt_sar if x == n) > 1
@@ -3552,6 +3653,11 @@ def f_speles(D):
                 cb_runa = (f" They scored {cb['n']} goals in {'just ' if cb['sek'] <= 5 * 60 else ''}{laiks_vardiem(cb['sek'])}"
                            + (f" of the {_kartas(cb['per'])} period." if cb["per"] and cb["per"] <= 3 else "."))
                 cb_txt = f"{cb['n']} GOALS IN {_laiks_mmss(cb['sek'])}"
+                atl0 = 1200 - _sek(cb["rindas"][0][1]) if cb["per"] == 3 else None       # cik palika, kad sāka atspēlēties
+                if atl0 is not None and atl0 <= 300:                  # pašās beigās – to jāpasaka skaidri
+                    cb_runa = (f" They scored {cb['n']} goals in just {laiks_vardiem(cb['sek'])}, "
+                               f"all in the final {laiks_vardiem(atl0)} of the third period.")
+                    cb_txt = f"{cb['n']} GOALS IN THE LAST {_laiks_mmss(atl0)}"
             else:
                 cb_runa, cb_txt = "", ""
             out.append({
@@ -3577,7 +3683,7 @@ def f_speles(D):
                     atl_ = 1200 - _sek(ll_) if pp_ == "P3" else None
                     if atl_ is not None and atl_ <= 600:
                         vel_ = 1.0 if atl_ <= 120 else (0.6 if atl_ <= 300 else 0.3)
-                        out[-1]["bonuss"] = round(vel_ * (15 + 10 * (d_ - 3)))
+                        out[-1]["bonuss"] = round(vel_ * (30 + 15 * (d_ - 3)))
                         out[-1]["teksts"] += f"  [IZLĪDZINĀJA {_laiks_mmss(atl_)} PIRMS BEIGĀM: +{out[-1]['bonuss']}]"
             except Exception:                                         # noqa: BLE001
                 pass
@@ -3764,7 +3870,10 @@ def fakti_kandidati(D, mape_video):
             if v["atsl"] == c["atsl"] and v["datums"] >= robeza and c["garums"] < v["garums"] + 3:
                 c["vert"] -= 40
                 c["teksts"] += "  (jau bija)"
-        c["vert"] = round(float(np.clip(c["vert"], 0, 100)) + c.get("bonuss", 0))   # bonuss var pacelt virs 100 (vēla atspēlēšanās)
+        # sērijām – garums atšķir (citādi visas garās sērijas "100"); vēla atspēlēšanās – bonuss. Augšējās robežas nav.
+        if c["atsl"].split(":")[0] in ("points_serija", "goals_serija", "kom_uzv", "kom_zaud") and not c["biezi"]:
+            c["vert"] += min(12.0, 0.6 * float(c.get("garums") or 0)) + (3 if "EVERY GAME THIS SEASON" in str(c.get("izcelt_txt", "")) else 0)
+        c["vert"] = round(max(0.0, float(c["vert"])) + c.get("bonuss", 0))
     kand.sort(key=lambda c: (c["biezi"], -c["vert"]))                # ikdienišķie vienmēr saraksta beigās
     # viens spēlētājs / komanda – tikai viens (labākais) fakts; nākamie no saraksta paceļas augstāk
     def vienumi(c):
@@ -4130,6 +4239,23 @@ def veids_tiesnesi(m, a):
                 "kopsavilkums": f"LEAGUE POWER PLAY: {lg * 100:.0f}%"},
                 f"Who made them pay? The {kom_nos(kt)} scored on {pk['pct'].iloc[0] * 100:.0f} percent of their power plays.",
                 f"pp: {kt} {pk['pct'].iloc[0] * 100:.0f}%"))
+            # mazākums (PK): pretinieka vairākuma vārti / reizes mazākumā – sliktākie (kopš 09.11.2026)
+            pkd = pd.concat([sp_m[["home_team", "away_ppg", "away_pp_opp"]].set_axis(["kom", "g", "o"], axis=1),
+                             sp_m[["away_team", "home_ppg", "home_pp_opp"]].set_axis(["kom", "g", "o"], axis=1)])
+            pkd[["g", "o"]] = pkd[["g", "o"]].apply(pd.to_numeric, errors="coerce").fillna(0)
+            pkk = pkd.groupby("kom")[["g", "o"]].sum()
+            pkk = pkk[pkk["o"] >= 12]
+            if len(pkk) >= 10:
+                pkk["pct"] = 1 - pkk["g"] / pkk["o"]
+                pkk = pkk.sort_values(["pct", "g"], ascending=[True, False])
+                lgk = 1 - lg
+                kw = pkk.index[0]
+                kand.append(("pk", (lgk - pkk["pct"].iloc[0]) / 0.08, {
+                    "tips2": "saraksts", "saraksts_virs": "WHO COULDN'T KILL IT? · PENALTY KILL", "pill_kr": SARKANS, "vards_w": 330, "vards_kr": BALTS,
+                    "rindas": [(knos(k), f"{int(x['o'] - x['g'])}/{int(x['o'])}", f"{x['pct'] * 100:.0f}%") for k, x in pkk.head(REF_SARAKSTS - 2).iterrows()],
+                    "kopsavilkums": f"LEAGUE PENALTY KILL: {lgk * 100:.0f}%"},
+                    f"And the worst penalty kill: the {kom_nos(kw)}, only {pkk['pct'].iloc[0] * 100:.0f} percent.",
+                    f"pk: {kw} {pkk['pct'].iloc[0] * 100:.0f}%"))
     if len(pl_m) and "noraid" in pl_m:
         pl_m["noraid"] = pd.to_numeric(pl_m["noraid"], errors="coerce").fillna(0)
         pl_m["pim"] = pd.to_numeric(pl_m["pim"], errors="coerce").fillna(0)
@@ -4161,8 +4287,8 @@ def veids_tiesnesi(m, a):
     vert = {k: v - (0.5 if k in pag else 0) for k, v, *_ in kand}
     if a.ref_ainas:
         izv_k = [x.strip() for x in a.ref_ainas.split(",") if x.strip() in vert][:3]
-    else:
-        izv_k = sorted(vert, key=lambda k: -vert[k])[:3]
+    else:                                                             # PP un PK – vienmēr (kopš 09.11.2026) + 3 interesantākās citas
+        izv_k = sorted((k for k in vert if k not in ("pp", "pk")), key=lambda k: -vert[k])[:3] + [k for k in ("pp", "pk") if k in vert]
     izv = [x for k in izv_k for x in kand if x[0] == k]
     for k, _, dati, rr, _ in izv:
         if dati.get("tips2") == "saraksts":
@@ -4790,7 +4916,7 @@ def main():
         fakti_saraksts(fakti_kandidati(D, a.mape))
         return 0
     if a.atskats and os.path.isdir(a.atskats):                     # var norādīt arī mapi – tad ņem tās .json failu
-        js = sorted(f for f in os.listdir(a.atskats) if f.endswith(".json"))
+        js = sorted(f for f in os.listdir(a.atskats) if f.endswith(".json") and f != "video_info.json")
         if not js:
             print(f"Mapē {a.atskats} nav .json faila (atskats iespējams tikai speletaji / komandas / vartsargi video).")
             return 1
