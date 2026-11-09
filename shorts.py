@@ -2973,8 +2973,8 @@ def f_serijas(D):
                           + (" (garākā aktīvā NHL)" if rank == 1 else f" ({rank}. garākā aktīvā)"),
                 "hook": [f"{n} STRAIGHT", f"GAMES WITH", f"A {nos}"], "v1": vv[0] if len(vv) > 1 else "", "vards": vv[-1], "badge": kom,
                 "th_hook": [f"{n}-GAME", f"{nos} STREAK"],
-                "skaitlis": "#1 IN NHL" if rank == 1 else f"{n} GAMES",
-                "skaitlis_apaksa": "longest active streak" if rank == 1 else f"in a row with a {nos.lower()}",
+                "skaitlis": f"{n} GAMES",                              # (līdz 09.11. #1 sērijai – "#1 IN NHL", nesaskanēja ar citiem)
+                "skaitlis_apaksa": f"in a row with a {nos.lower()}" + (" · longest active" if rank == 1 else ""),
                 "saraksts_virs": "THE STREAK", "rindas": rindas,
                 "kopsavilkums": f"{G} G  ·  {A} A  ·  {P} PTS" if kol == "points" else f"{G} GOALS IN {n} GAMES",
                 "k_skaitlis": str(n), "konteksts": [galv, otra],
