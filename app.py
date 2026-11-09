@@ -517,11 +517,22 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .tb .bl { display: block; white-space: nowrap; }
 .tb .bubble a { color: #2563eb; text-decoration: underline; font-weight: 600; }
 .tb .bubble .bpiez { opacity: .75; }
+/* Karstākie spēlētāji (kopš 09.11.2026): statuss zem vārda, forma (stabiņi + zīmīte), divrindu šūnas */
+.fb.kv { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.fb.kv .knm { font-weight: 600; }
+.fb.kv .kss, .fb.kv .ksm { font-size: .74rem; opacity: .8; }
+.fb.kf { gap: 8px; }
+.fb.kf .kst { display: inline-flex; align-items: flex-end; gap: 3px; height: 28px; }
+.fb.kf .kst b { display: inline-block; width: 7px; border-radius: 2px; background: #3b82f6; }
+.fb.kf .kst b.v { background: #8b5cf6; }
+.fb.kf .kst b.n { opacity: .35; }
+.fb.kf .kchip { min-width: 2.1rem; padding: .1rem .4rem; border-radius: 999px; font-size: .78rem; font-weight: 700; text-align: center; color: #fff; }
+.kchip.k3 { background: #ef4444; } .kchip.k2 { background: #f59e0b; } .kchip.k1 { background: #eab308; color: #1f2937 !important; } .kchip.k0 { background: rgba(128,128,128,.45); }
 /* šaurs ekrāns vai ierīce bez peles: tabula ritinās horizontāli, burbulis atveras kā apakšējā lapa (fiksēts, tāpēc netiek nogriezts) un paliek atvērts, kamēr lietotājs tajā klikšķina */
 @media (max-width: 900px), (hover: none) {
   .tb-wrap { overflow-x: auto; }
   .tb td.tbsp { cursor: pointer; }
-  .tb td.tbsp:focus-within .bubble, .tb th:focus-within .bubble { display: block; }      /* pieskāriens atver, kamēr fokuss ir burbulī */
+  .tb td.tbsp:focus-within .bubble, .tb th:focus-within .bubble, .tb .spw:focus-within .bubble { display: block; }      /* pieskāriens atver, kamēr fokuss ir burbulī */
   .tb .bubble, .tb th:nth-last-child(-n+3) .bubble { position: fixed; left: .5rem; right: .5rem; top: auto; bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); transform: none; width: auto; max-width: none;
     max-height: 55vh; overflow-y: auto; margin: 0; z-index: 2000; box-shadow: 0 -.25rem 1.5rem rgba(0,0,0,.28); }
   .tb .bubble::before { display: none; }
@@ -5108,6 +5119,9 @@ def lapa_karstie():
 
     with st.expander("Kā tiek noteikts, ka spēlētājs ir karsts?"):
         st.markdown(
+            "- **Kārtot: Karstākie kopā** (noklusējums) – kopējais karstums 0–100: forma logā pret līgas vidējo savā pozīcijā (40 %), "
+            "cik spēlētājs pārspēj savu normu (30 %), sērija (20 %) un vai metieni logā auguši (10 %). Tā augšā ir arī zvaigznes, "
+            "kas visu laiku spēlē augstā līmenī. **Virs savas normas** – tikai karstuma indekss (zemāk).\n"
             "- **Salīdzina ar gaidāmo.** Aprēķina, cik punktu (vārtu / piespēļu) spēlētājam būtu jāiegūst pēdējās N spēlēs, "
             "ņemot vērā viņa iepriekšējo vidējo (pievilktu pie līgas vidējā uzbrucējiem vai aizsargiem, ja spēļu ir maz).\n"
             "- **Karstuma indekss** = (faktiskais − gaidāmais) / √gaidāmais. 0 ir parasts līmenis, 2 un vairāk ir karsts (🔥), 3 un vairāk ir ļoti karsts (🔥🔥). "
@@ -5128,15 +5142,19 @@ def lapa_karstie():
         min_sp = st.slider("Minimālais spēļu skaits logā", 2, 5, max(2, min(3, max_gp)), key="ks_min",
                                help="Viena spēle nekad netiek ņemta vērā; agrā sezonā logā var būt mazāk spēļu")
     logs_t = "Pēdējās 5"                                   # logs vienmēr pēdējās 5 spēles
-    with st.container(key="frinda_ks"):                   # Rādītājs un Pozīcija blakus pa kreisi
+    with st.container(key="frinda_ks"):                   # Rādītājs, Pozīcija un Kārtot blakus pa kreisi
         metrika = izvele("Rādītājs", ["Punkti", "Vārti", "Piespēles"], key="ks_m")
         poz = sledzis("Pozīcija", ["Uzbrucēji", "Aizsargi"], "Visi", key="ks_poz")
+        kart = izvele("Kārtot", ["Karstākie kopā", "Virs savas normas"], key="ks_kart")
 
     mkods = {"Punkti": "punkti", "Vārti": "vardi", "Piespēles": "piespeles"}[metrika]
     nos = {"punkti": "punkti", "vardi": "vārti", "piespeles": "piespēles"}[mkods]
+    kol_m = {"punkti": "points", "vardi": "goals", "piespeles": "assists"}[mkods]
+    norma = kart == "Virs savas normas"
     logs = int(logs_t.split()[-1])
-    res = da.karstie_speletaji(sk, mkods, logs, min_sp)
-    res = res[(res["z"].notna()) | res["tr_serija"]] if not res.empty else res      # indekss vai sērija mājās/izbraukumā
+    res = da.karstie_speletaji(sk, mkods, logs, min_sp, kartot="norma" if norma else "kopa")
+    if not res.empty:
+        res = res[(res["z"].notna()) | res["tr_serija"]] if norma else res[res["karstums"].notna() | res["tr_serija"]]
     if not res.empty and poz != "Visi":
         res = res[res["grupa"] == ("D" if poz == "Aizsargi" else "F")]
     if res.empty:
@@ -5145,52 +5163,69 @@ def lapa_karstie():
         return
     res = res.head(50)
 
-    ind = f"Karstuma indekss ({nos})"
-    vid_w, vid_s = f"{metrika} spēlē logā", f"{metrika} spēlē sezonā"
-    gaid = f"Gaidāmie {nos} nākamajā spēlē"
-    vis = pd.DataFrame({
-        "Spēlētājs": res["Speletajs"].values, "Komanda": [da.logo_url(k) for k in res["Komanda"]], "Poz": res["Poz"].values,
-        "Statuss": [(" ".join(x for x in (("🔥🔥" if z >= 3 else "🔥" if z >= 2 else ""),
-                                          (f"🏠{int(m)}" if m >= da.VIETAS_SERIJAS_SLIEKSNIS else ""),
-                                          (f"✈️{int(v)}" if v >= da.VIETAS_SERIJAS_SLIEKSNIS else "")) if x)) or "–"
-                    for z, m, v in zip(res["z"].fillna(0), res["ser_majas"], res["ser_viesos"])],
-        "Sp. logā": res["n_w"].astype(int).values,
-        "G": res["G_w"].astype(int).values, "A": res["A_w"].astype(int).values, "P": res["P_w"].astype(int).values,
-        vid_w: res["vid_w"].values, vid_s: res["vid_sez"].values,
-        "Sērija": res["serija"].astype(int).values,
-        ind: res["z"].values, gaid: res["gaidamie_nakamaja"].values,
-        "Sezona īsumā": [f"{int(r.GP)} sp · {int(r.G_sez)}G {int(r.A_sez)}A {int(r.P_sez)}P · {int(r.SOG_sez)} metieni"
-                         for r in res.itertuples()],
-        "Kāpēc karsts": [da.karstuma_teksts(r, mkods) for _, r in res.iterrows()],
-    })
-    # burbulis kolonnai "Sp. logā": spēlētāja pēdējās spēles (jaunākā augšā), mājās vai izbraukumā, un ko viņš tajā guva
+    e = _html.escape
     speles_df = da.speletaju_speles(sk[sk["playerId"].isin(res.index)], RAW, logs)
-    burbuli = []
-    for pid in res.index:
-        g = speles_df[speles_df["playerId"] == pid]
-        ier = [{"teksts": f"{r.datums:%d.%m.} · {ETIKETES.get(r.vieta, r.vieta)} vs {r.pretinieks}", "piez": f"{int(r.goals)}G {int(r.assists)}A ({int(r.points)}P)"}
-               for r in g.itertuples()]
-        burbuli.append(burbula_html(f"Pēdējās {logs} spēles (jaunākā augšā)", ier))
+
+    def _liesmas(r):                                        # statuss pie vārda (B): liesmas + mājas / izbraukuma sērija
+        lv = r.karstums if not norma else (r.z if pd.notna(r.z) else 0) * 100 / 3 * 0.7
+        f_ = "🔥🔥" if lv >= 70 else ("🔥" if lv >= 50 else "")
+        d_ = [f_] if f_ else []
+        if r.ser_majas >= da.VIETAS_SERIJAS_SLIEKSNIS:
+            d_.append(f"🏠{int(r.ser_majas)}")
+        if r.ser_viesos >= da.VIETAS_SERIJAS_SLIEKSNIS:
+            d_.append(f"✈️{int(r.ser_viesos)}")
+        return " ".join(d_)
+
+    def _forma(pid, r):                                     # 5 stabiņi (vecākā → jaunākā) + karstuma zīmīte
+        g = speles_df[speles_df["playerId"] == pid].iloc[::-1]
+        st_ = ""
+        for x in g.itertuples():
+            v = int(getattr(x, kol_m))
+            h = 4 + min(v, 4) * 6
+            kl = "m" if x.vieta == "Mājās" else "v"
+            tip = f"{x.datums:%d.%m} · {'mājās' if kl == 'm' else 'izbr.'} vs {x.pretinieks} · {int(x.goals)}G {int(x.assists)}A"
+            st_ += f'<b class="{kl}{" n" if v == 0 else ""}" style="height:{h}px" title="{e(tip)}"></b>'
+        if norma:
+            val, lab = (f"{r.z:+.1f}" if pd.notna(r.z) else "–"), "virs normas (z)"
+            lv = (r.z if pd.notna(r.z) else 0) / 3 * 70
+        else:
+            val, lab = (f"{r.karstums:.0f}" if pd.notna(r.karstums) else "–"), "karstums 0–100"
+            lv = r.karstums if pd.notna(r.karstums) else 0
+        kr = "k3" if lv >= 70 else ("k2" if lv >= 50 else ("k1" if lv >= 30 else "k0"))
+        return f'<span class="fb kf"><span class="kst">{st_}</span><span class="kchip {kr}" title="{e(lab)}">{val}</span></span>'
+
+    vis = pd.DataFrame({
+        "Spēlētājs": [f'<span class="fb kv"><span class="knm">{e(r.Speletajs)}</span>'
+                      + (f'<span class="kss">{e(_liesmas(r))}</span>' if _liesmas(r) else "") + "</span>" for r in res.itertuples()],
+        "Komanda": [da.logo_url(k) for k in res["Komanda"]], "Poz": res["Poz"].values,
+        "Forma": [_forma(pid, r) for pid, r in zip(res.index, res.itertuples())],
+        "Logā": [f'<span class="fb kv"><span>{int(r.G_w)}G {int(r.A_w)}A · <b>{int(r.P_w)}P</b></span>'
+                 f'<span class="ksm">{r.vid_w:.2f} / sp. · {int(r.n_w)} sp.</span></span>' for r in res.itertuples()],
+        "Sērija": res["serija"].astype(int).values,
+        "Sezonā": res["vid_sez"].values,
+        "Nāk. sp.": res["gaidamie_nakamaja"].values,
+        "Sezona īsumā": [f'<span class="fb kv"><span class="spw" tabindex="0">{int(r.GP)} sp · {int(r.G_sez)}G {int(r.A_sez)}A {int(r.P_sez)}P · '
+                         f'{int(r.SOG_sez)} metieni<span class="bubble"><span class="bt">Kāpēc karsts</span>{e(da.karstuma_teksts(r_, mkods))}</span></span></span>'
+                         for r, (_, r_) in zip(res.itertuples(), res.iterrows())],
+    })
     pask = {
-        "Sp. logā": "Spēles izvēlētajā logā. Uzvedot peli, redzams, vai spēle bija mājās vai viesos un ko spēlētājs tajā guva (jaunākā augšā)",
-        "Statuss": f"🔥 karsts (indekss 2+), 🔥🔥 ļoti karsts (3+); 🏠/✈️ ar skaitli = rādītājs tik mājas/viesu spēlēs pēc kārtas (no {da.VIETAS_SERIJAS_SLIEKSNIS})",
-        "G": "Vārti izvēlētajā logā", "A": "Piespēles izvēlētajā logā", "P": "Punkti (vārti + piespēles) izvēlētajā logā",
-        vid_w: f"Vidēji {nos} spēlē izvēlētajā logā", vid_s: f"Vidēji {nos} spēlē visā sezonā",
-        ind: f"Faktiskie {nos} logā pret gaidāmajiem (z-vērtība): 0 = parasts līmenis, 2+ = karsts, 3+ = ļoti karsts. "
-             "Netiek rēķināts, ja logā ir pārāk maz spēļu vai rādītājs bijis tikai vienā spēlē",
-        gaid: f"Piesardzīgs novērtējums: 75% sezonas vidējais + 25% pēdējo spēļu vidējais ({nos} spēlē), pievilkti pie līgas vidējā",
+        "Spēlētājs": f"Zem vārda: 🔥🔥 ļoti karsts, 🔥 karsts; 🏠/✈️ ar skaitli = rādītājs tik mājas / izbraukuma spēlēs pēc kārtas (no {da.VIETAS_SERIJAS_SLIEKSNIS})",
+        "Forma": f"Stabiņi – {nos} katrā loga spēlē (vecākā → jaunākā; zils = mājās, violets = izbraukumā; uzvedot peli – spēle). "
+                 + ("Zīmīte – indekss virs savas normas (z): 2+ karsts, 3+ ļoti karsts." if norma else
+                    "Zīmīte – kopējais karstums 0–100: forma pret līgu 40 %, virs savas normas 30 %, sērija 20 %, metieni 10 %."),
+        "Logā": f"Vārti, piespēles un punkti pēdējās {logs} spēlēs; zem – {nos} spēlē logā",
+        "Sērija": f"Spēles pēc kārtas ar {'punktu' if mkods == 'punkti' else ('vārtiem' if mkods == 'vardi' else 'piespēli')}",
+        "Sezonā": f"Vidēji {nos} spēlē visā sezonā",
+        "Nāk. sp.": f"Gaidāmie {nos} nākamajā spēlē: 75% sezonas vidējais + 25% pēdējo spēļu vidējais (abi pievilkti pie līgas vidējā)",
+        "Sezona īsumā": "Sezonas kopsavilkums. Uzvedot peli (telefonā – pieskaroties): kāpēc spēlētājs ir karsts",
     }
-    df_html(vis, formati={vid_w: "{:.2f}", vid_s: "{:.2f}", ind: "{:.1f}", gaid: "{:.2f}"}, prog={ind: (0, 5)}, paskaidr=pask,
-            logo_kol=("Komanda",), burbuli=burbuli, bur_kol="Sp. logā", platas=("Kāpēc karsts",))
-    st.caption(f"Logs: {logs_t.lower()} (ja spēlētājs nospēlējis mazāk, tiek ņemtas visas viņa spēles). "
+    df_html(vis, formati={"Sezonā": "{:.2f}", "Nāk. sp.": "{:.2f}"}, paskaidr=pask, logo_kol=("Komanda",))
+    st.caption(("Kārtots pēc kopējā karstuma (forma, sērija, virs savas normas, metieni). " if not norma else
+                "Kārtots pēc tā, cik spēlētājs pārspēj savu līdzšinējo līmeni. ")
+               + f"Logs: {logs_t.lower()} (ja spēlētājs nospēlējis mazāk, tiek ņemtas visas viņa spēles). "
                "Sezonas sākumā izlase ir maza, tāpēc rangs var strauji mainīties. Tā ir statistikas indikācija, nevis garantija.")
 
 
-# ============================================================================
-# NAVIGĀCIJA
-# Struktūra ir šeit, vienā vietā: lapas var pārvietot starp grupām, grupas pārsaukt vai lapu izvilkt kā atsevišķu pogu
-# ({"lapa": (...)} ieraksts bez grupas). Ikonas ir Material Symbols (fonts.google.com/icons).
-# ============================================================================
 def augseja_josla(aktiva):
     """Viena josla augšā: zīmols + atsevišķas pogas + grupas, kuru lapas parādās, uzvedot peli virsū (vai pieskaroties)."""
     pedejais = len(STRUKTURA) - 1
