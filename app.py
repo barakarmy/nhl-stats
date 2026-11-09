@@ -522,10 +522,11 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .fb.kv .knm { font-weight: 600; }
 .fb.kv .kss, .fb.kv .ksm { font-size: .74rem; opacity: .8; }
 .fb.kv .kss { display: inline-flex; align-items: center; gap: 7px; opacity: 1; font-weight: 600; }
-.kss .ki { display: inline-flex; align-items: center; gap: 2px; line-height: 1; }
-.kss .ki svg { width: 13px; height: 13px; flex: 0 0 auto; }
-.kss .ki.f3 { color: #ef4444; } .kss .ki.f2 { color: #f59e0b; } .kss .ki.m { color: #3b82f6; } .kss .ki.v { color: #8b5cf6; }
-html.tumss .kss .ki.m { color: #60a5fa; } html.tumss .kss .ki.v { color: #a78bfa; }
+.kss .kik { display: inline-flex; background: none; border: 0; padding: 0; align-items: center; gap: 2px; line-height: 1; }
+.kss .kik svg { width: 13px; height: 13px; flex: 0 0 auto; }
+.kss .kik.f3 { color: #ef4444; } .kss .kik.f2 { color: #f59e0b; } .kss .kik.m { color: #3b82f6; } .kss .kik.v { color: #8b5cf6; }
+html.tumss .kss .kik.m { color: #60a5fa; } html.tumss .kss .kik.v { color: #a78bfa; }
+.kss { display: inline-flex; align-items: center; gap: 7px; }
 .fb.kf { gap: 8px; }
 .fb.kf .kst { display: inline-flex; align-items: flex-end; gap: 3px; height: 28px; }
 .fb.kf .kst b { display: inline-block; width: 7px; border-radius: 2px; background: #3b82f6; }
@@ -5120,6 +5121,18 @@ def lapa_tiesnesi():
 # ============================================================================
 # LAPA: KARSTĀKIE SPĒLĒTĀJI
 # ============================================================================
+KARST_IK = {                                                 # B variants: vienkrāsainas SVG ikonas (krāsa no CSS, kā formas stabiņiem)
+    "f": '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 1s1 3.5-1.5 6.5S8 12 9 15c-2-1-3-3-3-5C3 13 3 22 12 23c6 0 9-4 9-9 0-6-5-8-7.5-13z"/></svg>',
+    "m": '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 2 12h3v8h5v-6h4v6h5v-8h3z"/></svg>',
+    "v": '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>',
+}
+
+
+def _ik_html(veids, kl, n=""):
+    """Ikona paskaidrojuma tekstam (tādā pašā izskatā kā tabulā)."""
+    return f'<span class="kss"><span class="kik {kl}">{KARST_IK[veids] * (2 if kl == "f3" else 1)}{n}</span></span>'
+
+
 def lapa_karstie():
     sk = ielasit_papildu("speletaji", VERSIJA)
     if sk is None:
@@ -5137,17 +5150,17 @@ def lapa_karstie():
             "3. **Sērija – 20 %.** Spēles pēc kārtas ar rādītāju; pilnu svaru dod ~10 spēļu sērija (līdz 15 – vēl nedaudz vairāk).\n"
             "4. **Pamatotība – 10 %.** Vai metienu skaits logā audzis pret sezonas vidējo (līdz ±50 %). Vairāk metienu nozīmē, ka forma nav tikai veiksme. "
             "Piespēlēm metieni neko nepasaka, tāpēc tur šī daļa visiem ir vienāda.\n\n"
-            "Līmeņi: **70+** ļoti karsts, **50–69** karsts, **30–49** silts, zem 30 – parasti.\n\n"
+            f"Līmeņi: **70+** ļoti karsts {_ik_html('f', 'f3')}, **50–69** karsts {_ik_html('f', 'f2')}, **30–49** silts, zem 30 – parasti.\n\n"
             "**Kārtot: Virs savas normas** – tikai indekss **z** = (faktiskais − gaidāmais) / √gaidāmais. Gaidāmais = spēlētāja iepriekšējo spēļu vidējais "
             "(pirms loga), pievilkts pie līgas vidējā ar 10 spēlēm, lai jaunam vai maz spēlējušam spēlētājam tas būtu tuvu līgas vidējam; reizināts ar spēlēm logā. "
-            "0 = parasts līmenis, **1+** silts, **2+** karsts, **3+** ļoti karsts. Šajā režīmā augšā ir tie, kas pēkšņi spēlē daudz labāk nekā parasti "
+            f"0 = parasts līmenis, **1+** silts, **2+** karsts {_ik_html('f', 'f2')}, **3+** ļoti karsts {_ik_html('f', 'f3')}. Šajā režīmā augšā ir tie, kas pēkšņi spēlē daudz labāk nekā parasti "
             "(arī vidējie spēlētāji), bet zvaigzne, kas spēlē savā ierastajā augstajā līmenī, ir zemāk.\n\n"
             "**Kas tiek sarakstā.** Vismaz izvēlētais spēļu skaits logā (slīdnis) un rādītājs vismaz **2 dažādās** spēlēs – viena “uzspridzināta” spēle nepadara karstu. "
-            f"Papildus tiek iekļauti spēlētāji ar rādītāju **{da.VIETAS_SERIJAS_SLIEKSNIS}+ mājas** vai **izbraukuma** spēlēs pēc kārtas "
+            f"Papildus tiek iekļauti spēlētāji ar rādītāju **{da.VIETAS_SERIJAS_SLIEKSNIS}+ mājas** {_ik_html('m', 'm')} vai **izbraukuma** {_ik_html('v', 'v')} spēlēs pēc kārtas "
             "(skaitot tikai attiecīgās vietas spēles), pat ja kopējā forma nav izcila. Rāda līdz 50 spēlētājiem.\n\n"
             "**Simboli un kolonnas**\n"
-            "- Zem vārda: divas sarkanas liesmas – ļoti karsts, viena oranža – karsts; zila māja 4 / violeta lidmašīna 5 – rādītājs tik mājas / "
-            "izbraukuma spēlēs pēc kārtas (krāsas kā formas stabiņiem). Uzvedot peli uz ikonas – paskaidrojums.\n"
+            f"- Zem vārda: {_ik_html('f', 'f3')} ļoti karsts, {_ik_html('f', 'f2')} karsts; {_ik_html('m', 'm', '4')} / {_ik_html('v', 'v', '5')} – "
+            "rādītājs tik mājas / izbraukuma spēlēs pēc kārtas (krāsas kā formas stabiņiem). Uzvedot peli uz ikonas – paskaidrojums.\n"
             "- **Forma:** 5 stabiņi – katra loga spēle no vecākās (pa kreisi) uz jaunāko; augstums = rādītājs spēlē, zils – mājās, violets – izbraukumā, "
             "zems pelēks – 0. Uzvedot peli uz stabiņa – datums, pretinieks, G un A. Zīmīte labajā pusē – karstums (vai z režīmā “Virs savas normas”), "
             "krāsa: sarkana – ļoti karsts, oranža – karsts, dzeltena – silts, pelēka – parasti.\n"
@@ -5158,7 +5171,7 @@ def lapa_karstie():
             "- **Sezona īsumā:** sezonas spēles, G, A, P un metieni. Uzvedot peli (telefonā – pieskaroties) – **“Kāpēc karsts”**: cik iegūts logā, "
             "sērijas, vai auguši metieni (pamatots) vai ļoti augsts šaušanas % (var būt veiksme), un vai audzis laiks laukumā (+1 min un vairāk).\n\n"
             "**Ņem vērā.** Sezonas sākumā izlase ir maza, tāpēc vietas var strauji mainīties. Pretinieku stiprums netiek ņemts vērā. "
-            "Tā ir statistikas indikācija, nevis garantija.")
+            "Tā ir statistikas indikācija, nevis garantija.", unsafe_allow_html=True)
 
     max_gp = int(sk.groupby("playerId").size().max())
     s1, _ = st.columns([1, 2])                              # minimālais spēļu skaits: uzreiz zem skaidrojuma
@@ -5197,22 +5210,17 @@ def lapa_karstie():
         k_ = r.karstums if pd.notna(r.karstums) else 0
         return 3 if k_ >= 70 else (2 if k_ >= 50 else (1 if k_ >= 30 else 0))
 
-    _IK = {                                                 # B variants: vienkrāsainas SVG ikonas (krāsa no CSS, kā formas stabiņiem)
-        "f": '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 1s1 3.5-1.5 6.5S8 12 9 15c-2-1-3-3-3-5C3 13 3 22 12 23c6 0 9-4 9-9 0-6-5-8-7.5-13z"/></svg>',
-        "m": '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 2 12h3v8h5v-6h4v6h5v-8h3z"/></svg>',
-        "v": '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>',
-    }
     rad_v = {"punkti": "punkts", "vardi": "vārti", "piespeles": "piespēle"}[mkods]
 
     def _liesmas(r):                                        # statuss zem vārda (B): liesmas + mājas / izbraukuma sērija
         lv = _limenis(r)
         d_ = []
         if lv >= 2:
-            d_.append(f'<span class="ki f{lv}" title="{"ļoti karsts" if lv == 3 else "karsts"}">' + _IK["f"] * (lv - 1) + "</span>")
+            d_.append(f'<span class="kik f{lv}" title="{"ļoti karsts" if lv == 3 else "karsts"}">' + KARST_IK["f"] * (lv - 1) + "</span>")
         if r.ser_majas >= da.VIETAS_SERIJAS_SLIEKSNIS:
-            d_.append(f'<span class="ki m" title="{rad_v} {int(r.ser_majas)} mājas spēlēs pēc kārtas">{_IK["m"]}{int(r.ser_majas)}</span>')
+            d_.append(f'<span class="kik m" title="{rad_v} {int(r.ser_majas)} mājas spēlēs pēc kārtas">{KARST_IK["m"]}{int(r.ser_majas)}</span>')
         if r.ser_viesos >= da.VIETAS_SERIJAS_SLIEKSNIS:
-            d_.append(f'<span class="ki v" title="{rad_v} {int(r.ser_viesos)} izbraukuma spēlēs pēc kārtas">{_IK["v"]}{int(r.ser_viesos)}</span>')
+            d_.append(f'<span class="kik v" title="{rad_v} {int(r.ser_viesos)} izbraukuma spēlēs pēc kārtas">{KARST_IK["v"]}{int(r.ser_viesos)}</span>')
         return "".join(d_)
 
     def _forma(pid, r):                                     # 5 stabiņi (vecākā → jaunākā) + karstuma zīmīte
