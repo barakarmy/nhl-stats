@@ -371,6 +371,8 @@ class VideoFons:
 VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "streameri", "fakts", "tiesnesi", "atskats", "visi",
                   "xg", "fakti")
 MEDIJU_VESTURE = "shorts_mediji.json"
+MEDIJI_JSON = "video_info.json"   # katra video mapē: datums, nosaukums, fons, mūzika (ja YouTube Content ID claim – redzams, kura dziesma)
+_IZMANTOTS = {"muzika": None}
 XG_VEIDI = ("speletaji", "komandas", "vartsargi")      # xG video – izmanto speletaji_ failus (ja nav savu komandas_ / vartsargi_)
 
 
@@ -402,7 +404,7 @@ def veida_atslegas():
         import json
         js = ats
         if os.path.isdir(ats):
-            js = os.path.join(ats, sorted(f for f in os.listdir(ats) if f.endswith(".json"))[0])
+            js = os.path.join(ats, sorted(f for f in os.listdir(ats) if f.endswith(".json") and f != MEDIJI_JSON)[0])
         veids = json.load(open(js, encoding="utf-8")).get("veids", "")
     except Exception:                                                 # noqa: BLE001
         pass
@@ -569,6 +571,9 @@ def sfx_notikumi(ainas):
             nb = len(c["hist"]["bins"])
             ev += [(t0 + 0.9 + i * 0.14, "tick", 0.5) for i in range(nb)]
             ev.append((t0 + 0.9 + nb * 0.14 + 1.0, "boom", 0.7))
+        elif tips == "fakts_serijas":                                # tick katrai rindai
+            n_ = min(8, len(c.get("rindas") or []))
+            ev += [(t0 + 0.6 + i * (0.22 if n_ <= 5 else 0.15), "tick", 0.5) for i in range(n_)]
         elif tips == "fakts_reti":                                   # kartīte (tick), skaitlis (tick), zīmogs (boom)
             ev += [(t0 + 0.4, "tick", 0.5), (t0 + 0.8, "tick", 0.6)]
             if len(c.get("konteksts") or []) > 1:
@@ -660,7 +665,7 @@ def _video_veids():
         import json
         js = ats
         if os.path.isdir(ats):
-            js = os.path.join(ats, sorted(f for f in os.listdir(ats) if f.endswith(".json"))[0])
+            js = os.path.join(ats, sorted(f for f in os.listdir(ats) if f.endswith(".json") and f != MEDIJI_JSON)[0])
         return json.load(open(js, encoding="utf-8")).get("veids", "speletaji"), True
     except Exception:                                                 # noqa: BLE001
         return "speletaji", True
@@ -676,6 +681,7 @@ def izveleties_muziku():
         return None
     f_ = _izvelets("muzika", MAPE_MUZIKA)
     if f_:
+        _IZMANTOTS["muzika"] = f_
         return f_
     if not os.path.isdir(MAPE_MUZIKA):
         return None
@@ -715,7 +721,8 @@ def izveleties_muziku():
     except Exception:                                                 # noqa: BLE001
         pass
     print(f"MŪZIKA: {izv}  (kārta {k.split(':')[1]}: {len(vest[k])}/{len(faili)})")
-    return os.path.join(MAPE_MUZIKA, izv)
+    _IZMANTOTS["muzika"] = os.path.join(MAPE_MUZIKA, izv)
+    return _IZMANTOTS["muzika"]
 
 
 def _lufs(faili, max_s=None):
@@ -2476,7 +2483,7 @@ def renderet(s, izvade, kanals="", balss=None):
               "fakts_nakamais": S.aina_fakts_nakamais, "fakts_mini": aina_fakts_mini,
               "fantasy_intro": lambda t_, c_: aina_intro(t_, c_["intro"]), "fantasy_kartis": aina_kartis, "xg_karte": aina_xg_karte,
               "fakts_tablo": aina_fakts_tablo, "fakts_ripa": aina_fakts_ripa, "fakts_hist": aina_fakts_hist,
-              "fakts_reti": aina_fakts_reti,
+              "fakts_reti": aina_fakts_reti, "fakts_serijas": aina_fakts_serijas,
               "fakts_nak_j": aina_fakts_nak_j}
     _DAL["fons"] = bool(JAUNS_FANTASY and s.get("_bez_zimoga"))       # jaunais izskats: burbuļi fonā (ne āķī)
     # cilpai: āķa (1. ainas) sākuma kadrs – beigās video pāriet atpakaļ uz to
@@ -2578,8 +2585,21 @@ def renderet(s, izvade, kanals="", balss=None):
     except Exception as ex:                                           # noqa: BLE001
         print(f"SĪKTĒLS: neizdevās no āķa ({type(ex).__name__}: {ex}) – vecais variants")
         _THUMB["im"] = None
+    _IZMANTOTS["muzika"] = None
     miksets(video_tmp, izvade, audio, ainas, kopa, tmp)
     shutil.rmtree(tmp, ignore_errors=True)
+    try:                                                              # video_info.json – kas izmantots šajā video
+        import json, datetime
+        info = {"izveidots": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), "video": os.path.basename(izvade),
+                "virsraksts": S.yt_virsraksts(s.get("virsraksts", "")) if hasattr(S, "yt_virsraksts") else s.get("virsraksts", ""),
+                "komanda": "python ShortsB.py " + " ".join(sys.argv[1:]),
+                "fons": os.path.basename(fona_fails) if fona_fails else None, "fona_cels": fona_fails,
+                "muzika": os.path.basename(_IZMANTOTS["muzika"]) if _IZMANTOTS["muzika"] else None,
+                "muzikas_cels": _IZMANTOTS["muzika"], "balss": balss if audio else None, "garums_s": round(kopa, 1)}
+        with open(os.path.join(os.path.dirname(os.path.abspath(izvade)), MEDIJI_JSON), "w", encoding="utf-8") as f_:
+            json.dump(info, f_, ensure_ascii=False, indent=1)
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"  ({MEDIJI_JSON}: {type(ex).__name__}: {ex})")
     return kopa, bool(audio)
 
 
@@ -4538,6 +4558,106 @@ def aina_fakts_reti(t, c):
     return L
 
 
+def aina_fakts_serijas(t, c):
+    """Kopsavilkums pirms verdikta: aktīvās punktu sērijas 10+ (kopā / mājās / izbraukumā) vai nedēļas vārtsargu sērijas
+    bez ielaistiem vārtiem (≥ 120 min, arī pārtrauktās). Rindas ielido pa vienai; video jau pieminētā – dzeltenā rāmī."""
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
+    _nv_dalinas(L, t)
+    _fj_tablo(L, N, t, c)
+    _fj_virsr(L, t, c["virsr"], 390, 112)
+    a0 = S.ease(min(1.0, max(0.0, (t - 0.35) / 0.3)))
+    S.teksts_c(d, 478, c["apaksa"], S.ietilpinat(d, c["apaksa"], "semi", 34, 900), _NV_LAB + (int(255 * a0),))
+    rr = c["rindas"][:8]
+    RH, GAP, Y0 = (132, 16, 560) if len(rr) <= 5 else (106, 11, 540)   # vairāk rindu – zemākas (ekrāns aizpildīts)
+    dt_ = 0.22 if len(rr) <= 5 else 0.15
+    for i, r in enumerate(rr):
+        k = S.ease(min(1.0, max(0.0, (t - 0.6 - i * dt_) / 0.35)))
+        if k <= 0:
+            continue
+        y = Y0 + i * (RH + GAP) + (1 - k) * 60
+        al = int(235 * k)
+        mans = bool(r.get("video"))
+        d.rounded_rectangle([80, y, 1000, y + RH], radius=30, fill=(10, 14, 32, al))
+        (dn if mans else d).rounded_rectangle([80, y, 1000, y + RH], radius=30, outline=(S.DZELTENS if mans else S.ZILS) + (int(220 * k),),
+                                              width=4 if mans else 3)
+        sk_ = RH / 132
+        _fj_ripa(d, 160, y + RH / 2, int(42 * sk_), r.get("team"), int(255 * k))
+        nm = str(r["vards"]).upper()
+        d.text((230, y + 42 * sk_), nm, font=S.ietilpinat(d, nm, "black", int(46 * sk_), 470), fill=S.BALTS + (int(255 * k),), anchor="lm")
+        d.text((230, y + 94 * sk_), r["apaksa"], font=S.ietilpinat(d, r["apaksa"], "semi", int(30 * sk_), 470), fill=_NV_LAB + (int(255 * k),), anchor="lm")
+        kr_l = S.DZELTENS if r.get("izcelt", mans or i == 0) else S.BALTS
+        d.text((960, y + 50 * sk_), r["liels"], font=S.ietilpinat(d, r["liels"], "black", int(64 * sk_), 260), fill=kr_l + (int(255 * k),), anchor="rm")
+        d.text((960, y + 100 * sk_), r["maz"], font=S.ietilpinat(d, r["maz"], "semi", int(26 * sk_), 260), fill=r.get("maz_kr", _NV_LAB) + (int(255 * k),), anchor="rm")
+    L.alpha_composite(_nv_glow(N, 12, 1.3))
+    return L
+
+
+def fakti_serijas_ainas(D, m, izv, tv, idx):
+    """Divas kopsavilkuma ainas pirms verdikta (ja ir dati): punktu sērijas 10+ un nedēļas sausās sērijas.
+    → [(kartīte, balss teksts)]. Video jau atsevišķi pieminētās sērijas rāda, bet balsī nesauc vārdā."""
+    out = []
+    try:
+        mans = {str(c.get("atsl", "")) for c in izv}
+        ps = S.punktu_serijas_kopsavilkums(D, min_n=3)[:8]              # garākās aktīvās (ekrāns pilns); 10+ – dzeltenas
+        if ps:
+            vv = {"ALL": "STRAIGHT GAMES", "HOME": "STRAIGHT HOME GAMES", "AWAY": "STRAIGHT ROAD GAMES"}
+            rindas = [{"vards": x["vards"], "team": x["team"], "liels": str(x["n"]), "maz": vv[x["veids"]],
+                       "apaksa": {"ALL": "point streak", "HOME": "point streak at home", "AWAY": "point streak on the road"}[x["veids"]],
+                       "video": x["veids"] == "ALL" and f"points_serija:{x['pid']}" in mans,
+                       "izcelt": x["n"] >= S.PUNKTU_SERIJA_MIN} for x in ps]
+            desmit = [x for x in ps if x["n"] >= S.PUNKTU_SERIJA_MIN]
+            citi = [x for x, r in zip(ps, rindas) if r["izcelt"] and not r["video"]][:4]
+            kur = {"ALL": "", "HOME": " at home", "AWAY": " on the road"}
+            if citi:
+                saka = "; ".join(f"{x['vards']}, {x['n']} games{kur[x['veids']]}" for x in citi)
+                runa = ("Other active point streaks" if len(citi) < len(desmit) else "Active point streaks") + \
+                       " of ten games or more: " + saka + "."
+            elif desmit:
+                runa = "No one else has an active point streak of ten games or more. Here's who's closest."
+            else:
+                runa = "No active point streak has reached ten games yet. Here are the longest right now."
+            out.append(({"tips": "fakts_serijas", "ilgums": 4.8, "virsr": [("POINT", S.BALTS), ("STREAKS", S.DZELTENS)],
+                         "apaksa": "LONGEST ACTIVE  ·  ALL / HOME / ROAD  ·  10+ IN YELLOW", "rindas": rindas, "_tv": tv, "_tv_idx": idx}, runa))
+        # GOALIES OF THE WEEK (kopš 09.11.2026): augšā sausās sērijas ≥ 120 min (dzeltenas), tālāk – nedēļas labākie pēc
+        # atvairīto % (≥ 2 starti), lai ekrāns vienmēr pilns; aina ir vienmēr (arī, ja sēriju nav)
+        ss = S.sausas_serijas_nedela(D, m)[:3]
+        rindas = [{"vards": x["vards"], "team": x["team"], "liels": f"{x['sek'] // 60}:{x['sek'] % 60:02d}",
+                   "maz": "STILL GOING" if x["aktiva"] else "ENDED", "maz_kr": S.ZALS if x["aktiva"] else _NV_LAB,
+                   "apaksa": f"shutout streak · {x['atvairiti']} saves", "izcelt": True} for x in ss]
+        no_ = (S.pd.Timestamp(D["lidz"]) - S.timedelta(days=6)).strftime("%Y-%m-%d")
+        vg = D["vg"][(D["vg"]["datums"] >= no_) & (D["vg"]["starter"].astype(str) == "True")].copy()
+        for c_ in ("saves", "shotsAgainst", "goalsAgainst"):
+            vg[c_] = S.pd.to_numeric(vg[c_], errors="coerce").fillna(0)
+        gw = vg.groupby("playerId").agg(vards=("vards", "last"), team=("team", "last"), gs=("game_id", "nunique"),
+                                        sv=("saves", "sum"), sa=("shotsAgainst", "sum"), ga=("goalsAgainst", "sum"))
+        gw = gw[(gw["gs"] >= 2) & (gw["sa"] > 0)]
+        gw["pct"] = gw["sv"] / gw["sa"]
+        gw = gw.sort_values(["pct", "sv"], ascending=False)
+        jau = {x["pid"] for x in ss}
+        labakie = [(int(p_), r_) for p_, r_ in gw.iterrows() if int(p_) not in jau][:max(0, 8 - len(rindas))]
+        for p_, r_ in labakie:
+            rindas.append({"vards": r_["vards"], "team": r_["team"], "liels": f"{r_['pct']:.3f}".lstrip("0"),
+                           "maz": "SAVE %", "apaksa": f"{int(r_['gs'])} starts · {int(r_['sv'])} saves, {int(r_['ga'])} goals allowed",
+                           "izcelt": False})
+        if rindas:
+            if ss:
+                dal = [f"{x['vards']}: {x['sek'] // 60} minutes, {x['atvairiti']} saves" + (", and still going" if x["aktiva"] else "")
+                       for x in ss]
+                runa = ("Shutout streaks this week. " if len(ss) > 1 else "The shutout streak of the week. ") + ". ".join(dal) + "."
+            else:
+                runa = "No shutout streak of two hours this week. Here are the hottest goalies instead."
+                if labakie:
+                    p0, r0 = labakie[0]
+                    runa += f" {r0['vards']} leads with a {r0['pct']:.3f} save percentage.".replace(" 0.", " .")
+            out.append(({"tips": "fakts_serijas", "ilgums": 4.8, "virsr": [("GOALIES", S.BALTS), ("OF THE WEEK", S.DZELTENS)],
+                         "apaksa": "SHUTOUT STREAKS 120+ MIN IN YELLOW  ·  SAVE %  ·  2+ STARTS", "rindas": rindas,
+                         "_tv": tv, "_tv_idx": idx}, runa))
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"  (sēriju kopsavilkums: {type(ex).__name__}: {ex} – izlaists)")
+    return out
+
+
 def aina_fakts_nak_j(t, c):
     """NEXT UP – nākamā spēle aktīvai sērijai (bez aicinājuma komentēt)."""
     F = S.fonts
@@ -4963,6 +5083,9 @@ def fakti_jauns(rez, D, m, izv, st, mini_runa):
             kartes.append({"tips": "fakts_nak_j", "ilgums": 3.6, "nakamais": hero["nakamais"], "badge": hero.get("badge"),
                            "serija": " ".join(th).upper() if th else "", "_tv": tv, "_tv_idx": n - 1})
             runa.append(hero["runa"][3])
+        for k_, r_ in fakti_serijas_ainas(D, m, izv, tv, n - 1):        # sēriju kopsavilkums pirms verdikta
+            kartes.append(k_)
+            runa.append(r_)
         runa.append(rez["runa"][-1])
         # āķis – jaunajā stilā
         ap = []
