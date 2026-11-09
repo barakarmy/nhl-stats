@@ -3944,6 +3944,8 @@ def aina_fantasy_jauna(t, c):
         return hi
     yb_ = edge(u) if u > U0 else 660
     box = (70, 660, 1010, yb_)
+    if U0 < u < U1:                                                   # skenera līnija pie izrullēšanās malas
+        _skeneris(N, 70, 1010, yb_)
     kw = eo((u - 0.45) / 0.25)
     C = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dc = ImageDraw.Draw(C)
     if kw > 0 and yb_ > 690:
@@ -4288,6 +4290,8 @@ def aina_fakts_tablo(t, c):
             yb = y0 + (y1 - y0) * kp
             d.rounded_rectangle([90, y0, 990, yb], radius=36, fill=(10, 14, 32, 235))
             dn.rounded_rectangle([90, y0, 990, yb], radius=36, outline=S.ZILS + (220,), width=4)
+            if kp < 1:
+                _skeneris(N, 90, 990, yb)
         if kp >= 1:
             for rw in fakti:                                          # (ne f_ – tas ir pašreizējais fakts)
                 y = y0 + 20 + (rw["nr"] - 1) * 76
@@ -4373,6 +4377,16 @@ def aina_fakts_tablo(t, c):
 #   4 – PRINTERIS: rinda atveras, kartīte izslīd no tās uz augšu kā čeks; atpakaļ – ieslīd rindā un tā aizveras
 #   5 – GLITCH:   kartīte "teleportējas" sagriezta joslās ar RGB nobīdi; atpakaļ – izjūk joslās un sabrūk rindā
 FJ_IEN, FJ_NOL = 0.6, 0.6        # s – uzrašanās / iekrišana
+
+
+def _skeneris(N, x0, x1, y, a=1.0):
+    """Dzeltena skenera līnija ar mirdzumu (lietota visur, kur logs / saraksts atklājas no augšas)."""
+    if a <= 0.01:
+        return
+    dn = ImageDraw.Draw(N)
+    for g_, al in ((14, 50), (8, 90)):
+        dn.rectangle([x0 - 20, y - g_, x1 + 20, y + g_], fill=S.DZELTENS + (int(al * a),))
+    dn.rectangle([x0 - 20, y - 3, x1 + 20, y + 3], fill=S.DZELTENS + (int(255 * a),))
 
 
 def _fj_lim(x):
@@ -4543,7 +4557,7 @@ FJ_EFEKTI = {"1": _fj_ef_mozaika, "2": _fj_ef_skeneris, "3": _fj_ef_ripa, "4": _
 #   C – "flip": apgriežas kā kārts (no šauras), nolaižas – apgriežas atpakaļ rindā
 #   D – "no rindas": izaug no savas rindas tablo un atgriežas tajā (rinda iemirdzas)
 #   E – "drop": iekrīt no augšas ar atsitienu, nolaižas – strauji iekrīt rindā (rinda iemirdzas, kadrs nodreb)
-FJ_ANIM = "A"
+FJ_ANIM = "2"                    # standarts kopš 09.11.2026 – SKENERIS (A = vecā "punch")
 
 
 def _fj_anim(v, k, t, t_dock, bez_tablo, sy_, im):
@@ -4713,6 +4727,8 @@ def aina_fakts_hist(t, c):
         yb = 560 + (1330 - 560) * kp
         d.rounded_rectangle([80, 560, 1000, yb], radius=36, fill=(10, 14, 32, 235))
         dn.rounded_rectangle([80, 560, 1000, yb], radius=36, outline=S.ZILS + (220,), width=4)
+        if kp < 1:
+            _skeneris(N, 80, 1000, yb)
     if kp >= 1:
         bins = H["bins"]
         PX0, PX1, PY1, HMAX = 140, 940, 1210, 500
@@ -4767,6 +4783,8 @@ def aina_fakts_reti(t, c):
         yb = 540 + (1250 - 540) * kp
         d.rounded_rectangle([80, 540, 1000, yb], radius=36, fill=(10, 14, 32, 235))
         ImageDraw.Draw(N).rounded_rectangle([80, 540, 1000, yb], radius=36, outline=S.ZILS + (220,), width=4)
+        if kp < 1:
+            _skeneris(N, 80, 1000, yb)
     if kp >= 1:
         ks = str(c.get("k_skaitlis") or "")
         k1 = min(1.0, max(0.0, (t - 0.75) / 0.25))
@@ -4805,13 +4823,19 @@ def aina_fakts_serijas(t, c):
     rr = c["rindas"][:8]
     RH, GAP, Y0 = (132, 16, 560) if len(rr) <= 5 else (106, 11, 540)   # vairāk rindu – zemākas (ekrāns aizpildīts)
     dt_ = 0.22 if len(rr) <= 5 else 0.15
+    Y_end = Y0 + len(rr) * (RH + GAP)
+    sk_p = min(1.0, max(0.0, (t - 0.6) / (dt_ * len(rr) + 0.3)))      # skeneris iet pa sarakstu uz leju
+    y_sk = Y0 + (Y_end - Y0) * S.ease(sk_p)
+    if 0 < sk_p < 1:
+        _skeneris(N, 80, 1000, y_sk)
     for i, r in enumerate(rr):
-        k = S.ease(min(1.0, max(0.0, (t - 0.6 - i * dt_) / 0.35)))
+        y_r = Y0 + i * (RH + GAP)
+        k = min(1.0, max(0.0, (y_sk - y_r) / RH)) if sk_p < 1 else 1.0
         if k <= 0:
             continue
-        y = Y0 + i * (RH + GAP) + (1 - k) * 60
+        y = y_r
         al = int(235 * k)
-        mans = bool(r.get("video"))
+        mans = bool(r.get("video") or r.get("izcelt"))                # dzeltens rāmis: 10+ sērijas / sausās sērijas / video fakts
         d.rounded_rectangle([80, y, 1000, y + RH], radius=30, fill=(10, 14, 32, al))
         (dn if mans else d).rounded_rectangle([80, y, 1000, y + RH], radius=30, outline=(S.DZELTENS if mans else S.ZILS) + (int(220 * k),),
                                               width=4 if mans else 3)
@@ -4820,7 +4844,7 @@ def aina_fakts_serijas(t, c):
         nm = str(r["vards"]).upper()
         d.text((230, y + 42 * sk_), nm, font=S.ietilpinat(d, nm, "black", int(46 * sk_), 470), fill=S.BALTS + (int(255 * k),), anchor="lm")
         d.text((230, y + 94 * sk_), r["apaksa"], font=S.ietilpinat(d, r["apaksa"], "semi", int(30 * sk_), 470), fill=_NV_LAB + (int(255 * k),), anchor="lm")
-        kr_l = S.DZELTENS if r.get("izcelt", mans or i == 0) else S.BALTS
+        kr_l = S.DZELTENS if r.get("izcelt", bool(r.get("video")) or i == 0) else S.BALTS
         d.text((960, y + 50 * sk_), r["liels"], font=S.ietilpinat(d, r["liels"], "black", int(64 * sk_), 260), fill=kr_l + (int(255 * k),), anchor="rm")
         d.text((960, y + 100 * sk_), r["maz"], font=S.ietilpinat(d, r["maz"], "semi", int(26 * sk_), 260), fill=r.get("maz_kr", _NV_LAB) + (int(255 * k),), anchor="rm")
     L.alpha_composite(_nv_glow(N, 12, 1.3))
@@ -4910,6 +4934,8 @@ def aina_fakts_nak_j(t, c):
         yb = 560 + (1060 - 560) * kp
         d.rounded_rectangle([90, 560, 990, yb], radius=36, fill=(10, 14, 32, 235))
         dn.rounded_rectangle([90, 560, 990, yb], radius=36, outline=S.DZELTENS + (220,), width=4)
+        if kp < 1:
+            _skeneris(N, 90, 990, yb)
     if kp >= 1:
         k = min(1.0, (t - 0.75) / 0.3)
         if k > 0:
