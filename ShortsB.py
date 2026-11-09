@@ -371,7 +371,7 @@ class VideoFons:
 VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "streameri", "fakts", "tiesnesi", "atskats", "visi",
                   "xg", "fakti")
 MEDIJU_VESTURE = "shorts_mediji.json"
-MEDIJI_JSON = "video_info.json"   # katra video mapē: datums, nosaukums, fons, mūzika (ja YouTube Content ID claim – redzams, kura dziesma)
+MEDIJI_JSON = "video_info.json"   # video\ mapē – visu ģenerēto video saraksts: datums, nosaukums, fons, mūzika (Content ID claim gadījumam)
 _IZMANTOTS = {"muzika": None}
 XG_VEIDI = ("speletaji", "komandas", "vartsargi")      # xG video – izmanto speletaji_ failus (ja nav savu komandas_ / vartsargi_)
 
@@ -2596,8 +2596,17 @@ def renderet(s, izvade, kanals="", balss=None):
                 "fons": os.path.basename(fona_fails) if fona_fails else None, "fona_cels": fona_fails,
                 "muzika": os.path.basename(_IZMANTOTS["muzika"]) if _IZMANTOTS["muzika"] else None,
                 "muzikas_cels": _IZMANTOTS["muzika"], "balss": balss if audio else None, "garums_s": round(kopa, 1)}
-        with open(os.path.join(os.path.dirname(os.path.abspath(izvade)), MEDIJI_JSON), "w", encoding="utf-8") as f_:
-            json.dump(info, f_, ensure_ascii=False, indent=1)
+        mape_v = os.path.dirname(os.path.abspath(izvade))
+        info["mape"] = os.path.basename(mape_v)
+        vp = os.path.join(os.path.dirname(mape_v), MEDIJI_JSON)      # kopējais saraksts video\ mapē (paliek, ja video mapi izdzēš)
+        try:
+            vis_ = json.load(open(vp, encoding="utf-8")) if os.path.exists(vp) else []
+            vis_ = vis_ if isinstance(vis_, list) else []
+        except Exception:                                             # noqa: BLE001
+            vis_ = []
+        vis_.append(info)
+        with open(vp, "w", encoding="utf-8") as f_:
+            json.dump(vis_, f_, ensure_ascii=False, indent=1)
     except Exception as ex:                                           # noqa: BLE001
         print(f"  ({MEDIJI_JSON}: {type(ex).__name__}: {ex})")
     return kopa, bool(audio)
