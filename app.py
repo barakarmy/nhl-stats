@@ -2985,7 +2985,7 @@ HTML_ZIME = '<span class="fb">'      # pandas 3 pārvērš str apakšklases par 
 
 
 def ir_html_suna(v):
-    return isinstance(v, HtmlSuna) or (isinstance(v, str) and v.startswith(HTML_ZIME))
+    return isinstance(v, HtmlSuna) or (isinstance(v, str) and (v.startswith(HTML_ZIME) or v.startswith('<span class="fb ')))
 
 
 def forma_bumbas(df, n=5):
