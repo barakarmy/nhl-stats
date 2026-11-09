@@ -521,6 +521,11 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .fb.kv { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; }
 .fb.kv .knm { font-weight: 600; }
 .fb.kv .kss, .fb.kv .ksm { font-size: .74rem; opacity: .8; }
+.fb.kv .kss { display: inline-flex; align-items: center; gap: 7px; opacity: 1; font-weight: 600; }
+.kss .ki { display: inline-flex; align-items: center; gap: 2px; line-height: 1; }
+.kss .ki svg { width: 13px; height: 13px; flex: 0 0 auto; }
+.kss .ki.f3 { color: #ef4444; } .kss .ki.f2 { color: #f59e0b; } .kss .ki.m { color: #3b82f6; } .kss .ki.v { color: #8b5cf6; }
+html.tumss .kss .ki.m { color: #60a5fa; } html.tumss .kss .ki.v { color: #a78bfa; }
 .fb.kf { gap: 8px; }
 .fb.kf .kst { display: inline-flex; align-items: flex-end; gap: 3px; height: 28px; }
 .fb.kf .kst b { display: inline-block; width: 7px; border-radius: 2px; background: #3b82f6; }
@@ -3081,8 +3086,8 @@ def _fmt_v(v, f=None):
 _TABULU_SKAITS = [0]          # tabulu numurs šajā izpildē (stabila atslēga katras tabulas kārtošanas izvēlei)
 
 
-def _tk_set(key, k, dilst):
-    st.session_state[key] = None if k is None else (k, dilst)
+def _tk_set(key, k, dilst, atslegt=False):
+    st.session_state[key] = None if (k is None or atslegt) else (k, dilst)
 
 
 def _kartosanas_izvele(key, opcijas, izv):
@@ -3099,23 +3104,26 @@ def _kartosanas_izvele(key, opcijas, izv):
                 st.markdown('<div class="tbm-lab">Kārtot pēc</div>', unsafe_allow_html=True)
                 with st.container(key=f"tbmk_{key}"):
                     for i, (k, lbl) in enumerate(opcijas.items()):
-                        st.button(lbl, key=f"{key}__k{i}", type="primary" if k == k0 else "secondary", on_click=_tk_set, args=(key, k, d0))
+                        st.button(lbl, key=f"{key}__k{i}", type="primary" if k == k0 else "secondary", on_click=_tk_set,
+                                  args=(key, k, d0, k == k0))              # atkārtots klikšķis uz aktīvās kolonnas – atpakaļ uz noklusējumu
                 st.markdown('<div class="tbm-lab">Secība</div>', unsafe_allow_html=True)
                 with st.container(key=f"tbmd_{key}"):
                     st.button("↓ No lielākā", key=f"{key}__dl", type="primary" if (k0 and d0) else "secondary", on_click=_tk_set, args=(key, k0 or next(iter(opcijas)), True))
                     st.button("↑ No mazākā", key=f"{key}__dm", type="primary" if (k0 and not d0) else "secondary", on_click=_tk_set, args=(key, k0 or next(iter(opcijas)), False))
                     if k0:
-                        st.button("Noklusējums", key=f"{key}__dr", on_click=_tk_set, args=(key, None, True))
+                        st.button("✕ Noklusējums", key=f"{key}__dr", on_click=_tk_set, args=(key, None, True))
 
 
 def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=(), burbuli=None, bur_kol=None, platas=(), indekss=False, kartot=True,
-            atgriezt=False, logo_saites=None, numurs_no=1, vienadiem=None, vienadiem_dati=None):
+            atgriezt=False, logo_saites=None, numurs_no=1, vienadiem=None, vienadiem_dati=None, kart_papildus=None, kart_bez=()):
     """
     Visas lietotnes tabulas: DataFrame kā caurspīdīga HTML tabula ar paskaidrojumiem virsrakstos (uzvedot peli).
     config: Streamlit column_config (None = kolonna paslēpta; image = logotips; progress = josla; format = skaitļa formāts; width='large' = plata teksta kolonna);
     formati/prog/logo_kol/platas: tas pats tieši; burbuli: saraksts (pa vienam katrai rindai) ar HTML burbuli kolonnai bur_kol (spēļu saraksts uz "Sp.").
     vienadiem: {kolonnas virsraksts: [(atslēga, tajā pašā virzienā?)]} – vienādu vērtību secība, kārtojot pēc šīs kolonnas; atslēgas ņem no
     vienadiem_dati (DataFrame ar tādu pašu rindu secību kā df). Bez tā vienādās vērtības paliek noklusējuma secībā (stabila kārtošana).
+    kart_papildus: {kolonna: nosaukums} – papildu kārtošanas izvēles (kolonnai jābūt df, to var paslēpt ar config None), izvēlnē pirmās;
+    kart_bez: kolonnas, kuras izvēlnē nerāda.
     """
     if df is None or df.empty:
         if atgriezt:
@@ -3145,8 +3153,9 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
     if kartot and len(df) >= 4:
         _TABULU_SKAITS[0] += 1
         key = f"tbk{_TABULU_SKAITS[0]}_{zlib.crc32('|'.join(map(str, df.columns)).encode()) % 100000}"
-        opcijas = {c["k"]: str(c["label"]) for c in kol if not c["logo"] and str(c["label"]) not in ("#", "") and not c["wide"]
-                   and not (len(df) and ir_html_suna(df[c["k"]].iloc[0]))}
+        opcijas = {k_: str(l_) for k_, l_ in (kart_papildus or {}).items() if k_ in df.columns}
+        opcijas.update({c["k"]: str(c["label"]) for c in kol if not c["logo"] and str(c["label"]) not in ("#", "") and not c["wide"]
+                        and c["k"] not in kart_bez and not (len(df) and ir_html_suna(df[c["k"]].iloc[0]))})
         izv = st.session_state.get(key)
         if izv and izv[0] not in opcijas:
             izv = None
@@ -5119,22 +5128,37 @@ def lapa_karstie():
 
     with st.expander("Kā tiek noteikts, ka spēlētājs ir karsts?"):
         st.markdown(
-            "- **Kārtot: Karstākie kopā** (noklusējums) – kopējais karstums 0–100: forma logā pret līgas vidējo savā pozīcijā (40 %), "
-            "cik spēlētājs pārspēj savu normu (30 %), sērija (20 %) un vai metieni logā auguši (10 %). Tā augšā ir arī zvaigznes, "
-            "kas visu laiku spēlē augstā līmenī. **Virs savas normas** – tikai karstuma indekss (zemāk).\n"
-            "- **Salīdzina ar gaidāmo.** Aprēķina, cik punktu (vārtu / piespēļu) spēlētājam būtu jāiegūst pēdējās N spēlēs, "
-            "ņemot vērā viņa iepriekšējo vidējo (pievilktu pie līgas vidējā uzbrucējiem vai aizsargiem, ja spēļu ir maz).\n"
-            "- **Karstuma indekss** = (faktiskais − gaidāmais) / √gaidāmais. 0 ir parasts līmenis, 2 un vairāk ir karsts (🔥), 3 un vairāk ir ļoti karsts (🔥🔥). "
-            "Indekss ņem vērā izlases lielumu, tāpēc īss uzliesmojums nedod augstu vērtību.\n"
-            "- **Vienas spēles nepietiek.** Spēlētājam jābūt vismaz izvēlētajam spēļu skaitam logā un rādītājam jābūt vismaz divās dažādās spēlēs.\n"
-            "- **Papildu signāli:** sērija (spēles pēc kārtas ar rādītāju), metienu skaits un šaušanas % (vai rezultāts ir pamatots, vai tā ir veiksme) "
-            "un laiks laukumā (vai loma ir augusi).\n"
-            f"- **Sērija pēc vietas.** Sarakstā tiek iekļauti arī spēlētāji, kas negūst rādītāju katrā spēlē, bet gūst to {da.VIETAS_SERIJAS_SLIEKSNIS} un vairāk "
-            "mājas (🏠) vai viesu (✈️) spēlēs pēc kārtas (skaitot tikai attiecīgās vietas spēles).\n"
-            "- **Sp. logā:** uzvedot peli uz spēļu skaita, redzams, vai spēle bija mājās vai viesos un ko spēlētājs tajā guva (jaunākā spēle augšā).\n"
-            "- **Gaidāmais nākamajā spēlē** = 75% sezonas vidējais + 25% pēdējo spēļu vidējais (abi pievilkti pie līgas vidējā). "
-            "Hokejā karstumam ir neliela noturība: lielu daļu uzliesmojumu veido veiksme, tāpēc prognoze ir piesardzīga.\n"
-            "- Punkti = vārti + piespēles (G+A), tāpēc atsevišķa G+A kolonna nav vajadzīga.")
+            "**Logs.** Vienmēr tiek skatītas spēlētāja pēdējās 5 spēles (ja nospēlēts mazāk – visas). Rādītājs – punkti, vārti vai piespēles "
+            "(punkti = vārti + piespēles). Pozīcijas filtrs atdala uzbrucējus un aizsargus, jo aizsargiem līgas vidējais ir daudz zemāks.\n\n"
+            "**Kārtot: Karstākie kopā** (noklusējums) – kopējais **karstums 0–100** no četrām daļām:\n"
+            "1. **Forma pret līgu – 40 %.** Cik logā iegūts vairāk par līgas vidējo savā pozīcijā (ņemot vērā spēļu skaitu). "
+            "Šī daļa atbild uz jautājumu “vai viņš tagad spēlē augstā līmenī”, tāpēc augšā ir arī zvaigznes (piem., McDavid), kas spēlē labi visu laiku.\n"
+            "2. **Virs savas normas – 30 %.** Indekss z (sk. zemāk): cik spēlētājs pārspēj pats sevi. Ja viņš spēlē zem savas normas, šī daļa nedaudz atņem.\n"
+            "3. **Sērija – 20 %.** Spēles pēc kārtas ar rādītāju; pilnu svaru dod ~10 spēļu sērija (līdz 15 – vēl nedaudz vairāk).\n"
+            "4. **Pamatotība – 10 %.** Vai metienu skaits logā audzis pret sezonas vidējo (līdz ±50 %). Vairāk metienu nozīmē, ka forma nav tikai veiksme. "
+            "Piespēlēm metieni neko nepasaka, tāpēc tur šī daļa visiem ir vienāda.\n\n"
+            "Līmeņi: **70+** ļoti karsts, **50–69** karsts, **30–49** silts, zem 30 – parasti.\n\n"
+            "**Kārtot: Virs savas normas** – tikai indekss **z** = (faktiskais − gaidāmais) / √gaidāmais. Gaidāmais = spēlētāja iepriekšējo spēļu vidējais "
+            "(pirms loga), pievilkts pie līgas vidējā ar 10 spēlēm, lai jaunam vai maz spēlējušam spēlētājam tas būtu tuvu līgas vidējam; reizināts ar spēlēm logā. "
+            "0 = parasts līmenis, **1+** silts, **2+** karsts, **3+** ļoti karsts. Šajā režīmā augšā ir tie, kas pēkšņi spēlē daudz labāk nekā parasti "
+            "(arī vidējie spēlētāji), bet zvaigzne, kas spēlē savā ierastajā augstajā līmenī, ir zemāk.\n\n"
+            "**Kas tiek sarakstā.** Vismaz izvēlētais spēļu skaits logā (slīdnis) un rādītājs vismaz **2 dažādās** spēlēs – viena “uzspridzināta” spēle nepadara karstu. "
+            f"Papildus tiek iekļauti spēlētāji ar rādītāju **{da.VIETAS_SERIJAS_SLIEKSNIS}+ mājas** vai **izbraukuma** spēlēs pēc kārtas "
+            "(skaitot tikai attiecīgās vietas spēles), pat ja kopējā forma nav izcila. Rāda līdz 50 spēlētājiem.\n\n"
+            "**Simboli un kolonnas**\n"
+            "- Zem vārda: divas sarkanas liesmas – ļoti karsts, viena oranža – karsts; zila māja 4 / violeta lidmašīna 5 – rādītājs tik mājas / "
+            "izbraukuma spēlēs pēc kārtas (krāsas kā formas stabiņiem). Uzvedot peli uz ikonas – paskaidrojums.\n"
+            "- **Forma:** 5 stabiņi – katra loga spēle no vecākās (pa kreisi) uz jaunāko; augstums = rādītājs spēlē, zils – mājās, violets – izbraukumā, "
+            "zems pelēks – 0. Uzvedot peli uz stabiņa – datums, pretinieks, G un A. Zīmīte labajā pusē – karstums (vai z režīmā “Virs savas normas”), "
+            "krāsa: sarkana – ļoti karsts, oranža – karsts, dzeltena – silts, pelēka – parasti.\n"
+            "- **Logā:** vārti, piespēles un punkti logā; zem tiem – vidēji spēlē un spēļu skaits.\n"
+            "- **Sērija:** spēles pēc kārtas ar rādītāju (no jaunākās). **Sezonā:** vidēji spēlē visā sezonā.\n"
+            "- **Nāk. sp.:** gaidāmais nākamajā spēlē = 75 % sezonas vidējais + 25 % loga vidējais (abi pievilkti pie līgas vidējā). "
+            "Hokejā forma saglabājas tikai nedaudz – liela daļa uzliesmojumu ir veiksme, tāpēc prognoze ir piesardzīga.\n"
+            "- **Sezona īsumā:** sezonas spēles, G, A, P un metieni. Uzvedot peli (telefonā – pieskaroties) – **“Kāpēc karsts”**: cik iegūts logā, "
+            "sērijas, vai auguši metieni (pamatots) vai ļoti augsts šaušanas % (var būt veiksme), un vai audzis laiks laukumā (+1 min un vairāk).\n\n"
+            "**Ņem vērā.** Sezonas sākumā izlase ir maza, tāpēc vietas var strauji mainīties. Pretinieku stiprums netiek ņemts vērā. "
+            "Tā ir statistikas indikācija, nevis garantija.")
 
     max_gp = int(sk.groupby("playerId").size().max())
     s1, _ = st.columns([1, 2])                              # minimālais spēļu skaits: uzreiz zem skaidrojuma
@@ -5166,15 +5190,30 @@ def lapa_karstie():
     e = _html.escape
     speles_df = da.speletaju_speles(sk[sk["playerId"].isin(res.index)], RAW, logs)
 
-    def _liesmas(r):                                        # statuss pie vārda (B): liesmas + mājas / izbraukuma sērija
-        lv = r.karstums if not norma else (r.z if pd.notna(r.z) else 0) * 100 / 3 * 0.7
-        f_ = "🔥🔥" if lv >= 70 else ("🔥" if lv >= 50 else "")
-        d_ = [f_] if f_ else []
+    def _limenis(r):                                        # 0 parasts · 1 silts · 2 karsts · 3 ļoti karsts
+        if norma:
+            z_ = r.z if pd.notna(r.z) else 0
+            return 3 if z_ >= 3 else (2 if z_ >= 2 else (1 if z_ >= 1 else 0))
+        k_ = r.karstums if pd.notna(r.karstums) else 0
+        return 3 if k_ >= 70 else (2 if k_ >= 50 else (1 if k_ >= 30 else 0))
+
+    _IK = {                                                 # B variants: vienkrāsainas SVG ikonas (krāsa no CSS, kā formas stabiņiem)
+        "f": '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 1s1 3.5-1.5 6.5S8 12 9 15c-2-1-3-3-3-5C3 13 3 22 12 23c6 0 9-4 9-9 0-6-5-8-7.5-13z"/></svg>',
+        "m": '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3 2 12h3v8h5v-6h4v6h5v-8h3z"/></svg>',
+        "v": '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>',
+    }
+    rad_v = {"punkti": "punkts", "vardi": "vārti", "piespeles": "piespēle"}[mkods]
+
+    def _liesmas(r):                                        # statuss zem vārda (B): liesmas + mājas / izbraukuma sērija
+        lv = _limenis(r)
+        d_ = []
+        if lv >= 2:
+            d_.append(f'<span class="ki f{lv}" title="{"ļoti karsts" if lv == 3 else "karsts"}">' + _IK["f"] * (lv - 1) + "</span>")
         if r.ser_majas >= da.VIETAS_SERIJAS_SLIEKSNIS:
-            d_.append(f"🏠{int(r.ser_majas)}")
+            d_.append(f'<span class="ki m" title="{rad_v} {int(r.ser_majas)} mājas spēlēs pēc kārtas">{_IK["m"]}{int(r.ser_majas)}</span>')
         if r.ser_viesos >= da.VIETAS_SERIJAS_SLIEKSNIS:
-            d_.append(f"✈️{int(r.ser_viesos)}")
-        return " ".join(d_)
+            d_.append(f'<span class="ki v" title="{rad_v} {int(r.ser_viesos)} izbraukuma spēlēs pēc kārtas">{_IK["v"]}{int(r.ser_viesos)}</span>')
+        return "".join(d_)
 
     def _forma(pid, r):                                     # 5 stabiņi (vecākā → jaunākā) + karstuma zīmīte
         g = speles_df[speles_df["playerId"] == pid].iloc[::-1]
@@ -5186,17 +5225,15 @@ def lapa_karstie():
             tip = f"{x.datums:%d.%m} · {'mājās' if kl == 'm' else 'izbr.'} vs {x.pretinieks} · {int(x.goals)}G {int(x.assists)}A"
             st_ += f'<b class="{kl}{" n" if v == 0 else ""}" style="height:{h}px" title="{e(tip)}"></b>'
         if norma:
-            val, lab = (f"{r.z:+.1f}" if pd.notna(r.z) else "–"), "virs normas (z)"
-            lv = (r.z if pd.notna(r.z) else 0) / 3 * 70
+            val, lab = (f"{r.z:+.1f}" if pd.notna(r.z) else "–"), "virs savas normas (z): 1+ silts, 2+ karsts, 3+ ļoti karsts"
         else:
-            val, lab = (f"{r.karstums:.0f}" if pd.notna(r.karstums) else "–"), "karstums 0–100"
-            lv = r.karstums if pd.notna(r.karstums) else 0
-        kr = "k3" if lv >= 70 else ("k2" if lv >= 50 else ("k1" if lv >= 30 else "k0"))
+            val, lab = (f"{r.karstums:.0f}" if pd.notna(r.karstums) else "–"), "karstums 0–100: 30+ silts, 50+ karsts, 70+ ļoti karsts"
+        kr = f"k{_limenis(r)}"
         return f'<span class="fb kf"><span class="kst">{st_}</span><span class="kchip {kr}" title="{e(lab)}">{val}</span></span>'
 
     vis = pd.DataFrame({
         "Spēlētājs": [f'<span class="fb kv"><span class="knm">{e(r.Speletajs)}</span>'
-                      + (f'<span class="kss">{e(_liesmas(r))}</span>' if _liesmas(r) else "") + "</span>" for r in res.itertuples()],
+                      + (f'<span class="kss">{_liesmas(r)}</span>' if _liesmas(r) else "") + "</span>" for r in res.itertuples()],
         "Komanda": [da.logo_url(k) for k in res["Komanda"]], "Poz": res["Poz"].values,
         "Forma": [_forma(pid, r) for pid, r in zip(res.index, res.itertuples())],
         "Logā": [f'<span class="fb kv"><span>{int(r.G_w)}G {int(r.A_w)}A · <b>{int(r.P_w)}P</b></span>'
@@ -5209,17 +5246,23 @@ def lapa_karstie():
                          for r, (_, r_) in zip(res.itertuples(), res.iterrows())],
     })
     pask = {
-        "Spēlētājs": f"Zem vārda: 🔥🔥 ļoti karsts, 🔥 karsts; 🏠/✈️ ar skaitli = rādītājs tik mājas / izbraukuma spēlēs pēc kārtas (no {da.VIETAS_SERIJAS_SLIEKSNIS})",
+        "Spēlētājs": f"Zem vārda: divas sarkanas liesmas – ļoti karsts, oranža liesma – karsts; zila māja / violeta lidmašīna ar skaitli – rādītājs tik mājas / izbraukuma spēlēs pēc kārtas (no {da.VIETAS_SERIJAS_SLIEKSNIS})",
         "Forma": f"Stabiņi – {nos} katrā loga spēlē (vecākā → jaunākā; zils = mājās, violets = izbraukumā; uzvedot peli – spēle). "
-                 + ("Zīmīte – indekss virs savas normas (z): 2+ karsts, 3+ ļoti karsts." if norma else
-                    "Zīmīte – kopējais karstums 0–100: forma pret līgu 40 %, virs savas normas 30 %, sērija 20 %, metieni 10 %."),
+                 + ("Zīmīte – indekss virs savas normas (z): 1+ silts, 2+ karsts, 3+ ļoti karsts." if norma else
+                    "Zīmīte – kopējais karstums 0–100 (forma pret līgu 40 %, virs savas normas 30 %, sērija 20 %, metieni 10 %): "
+                    "30+ silts, 50+ karsts, 70+ ļoti karsts."),
         "Logā": f"Vārti, piespēles un punkti pēdējās {logs} spēlēs; zem – {nos} spēlē logā",
         "Sērija": f"Spēles pēc kārtas ar {'punktu' if mkods == 'punkti' else ('vārtiem' if mkods == 'vardi' else 'piespēli')}",
         "Sezonā": f"Vidēji {nos} spēlē visā sezonā",
         "Nāk. sp.": f"Gaidāmie {nos} nākamajā spēlē: 75% sezonas vidējais + 25% pēdējo spēļu vidējais (abi pievilkti pie līgas vidējā)",
         "Sezona īsumā": "Sezonas kopsavilkums. Uzvedot peli (telefonā – pieskaroties): kāpēc spēlētājs ir karsts",
     }
-    df_html(vis, formati={"Sezonā": "{:.2f}", "Nāk. sp.": "{:.2f}"}, paskaidr=pask, logo_kol=("Komanda",))
+    vis["_kar"] = (res["z"] if norma else res["karstums"]).values           # paslēptas kolonnas – tikai kārtošanai
+    vis["_P"], vis["_G"], vis["_A"] = res["P_w"].values, res["G_w"].values, res["A_w"].values
+    df_html(vis, config={"_kar": None, "_P": None, "_G": None, "_A": None},
+            formati={"Sezonā": "{:.2f}", "Nāk. sp.": "{:.2f}"}, paskaidr=pask, logo_kol=("Komanda",),
+            kart_papildus={"_kar": "Virs normas (z)" if norma else "Karstums", "_P": "Punkti logā", "_G": "Vārti logā", "_A": "Piespēles logā"},
+            kart_bez=("Poz",))
     st.caption(("Kārtots pēc kopējā karstuma (forma, sērija, virs savas normas, metieni). " if not norma else
                 "Kārtots pēc tā, cik spēlētājs pārspēj savu līdzšinējo līmeni. ")
                + f"Logs: {logs_t.lower()} (ja spēlētājs nospēlējis mazāk, tiek ņemtas visas viņa spēles). "
