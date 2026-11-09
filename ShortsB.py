@@ -4818,6 +4818,27 @@ def aina_fakts_serijas(t, c):
     return L
 
 
+# Kopsavilkuma ainu balss – vispārīgi (vārdi un skaitļi redzami sarakstā), nejaušs variants (kopš 09.11.2026)
+PS_RUNA_10 = ["Here are the other active point streaks right now.",
+              "The longest point streaks still alive this week. Anything in yellow has reached ten games.",
+              "Point streaks that are still going.",
+              "Who else keeps finding the scoresheet? The longest active point streaks.",
+              "Still rolling: the longest active point streaks in the league right now."]
+PS_RUNA_NAV = ["Nobody else has reached ten straight games yet. These are the closest.",
+               "The longest point streaks still alive right now. Who reaches ten next?",
+               "No one is at ten games yet. Here's who's getting close.",
+               "Still building: the longest active point streaks right now."]
+SS_RUNA = ["All shutout streaks this week, active or ended, and below them, the best save percentages.",
+           "This week's longest shutout streaks, still going or already over. Then, the hottest goalies of the week.",
+           "The goalies who shut the door this week: every streak of two hours or more, plus the best save percentages.",
+           "Brick walls of the week. Shutout streaks on top, the hottest goalies below.",
+           "Minutes without a goal: this week's longest shutout streaks, plus the goalies who were hardest to beat."]
+SS_RUNA_NAV = ["No two-hour shutout streak this week. These goalies were still the hottest.",
+               "Nobody went two hours without allowing a goal this week. Here's who stopped the most.",
+               "No shutout streaks this week, but these goalies were hard to beat.",
+               "The goalies of the week, ranked by save percentage."]
+
+
 def fakti_serijas_ainas(D, m, izv, tv, idx):
     """Divas kopsavilkuma ainas pirms verdikta (ja ir dati): punktu sērijas 10+ un nedēļas sausās sērijas.
     → [(kartīte, balss teksts)]. Video jau atsevišķi pieminētās sērijas rāda, bet balsī nesauc vārdā."""
@@ -4832,16 +4853,7 @@ def fakti_serijas_ainas(D, m, izv, tv, idx):
                        "video": x["veids"] == "ALL" and f"points_serija:{x['pid']}" in mans,
                        "izcelt": x["n"] >= S.PUNKTU_SERIJA_MIN} for x in ps]
             desmit = [x for x in ps if x["n"] >= S.PUNKTU_SERIJA_MIN]
-            citi = [x for x, r in zip(ps, rindas) if r["izcelt"] and not r["video"]][:4]
-            kur = {"ALL": "", "HOME": " at home", "AWAY": " on the road"}
-            if citi:
-                saka = "; ".join(f"{x['vards']}, {x['n']} games{kur[x['veids']]}" for x in citi)
-                runa = ("Other active point streaks" if len(citi) < len(desmit) else "Active point streaks") + \
-                       " of ten games or more: " + saka + "."
-            elif desmit:
-                runa = "No one else has an active point streak of ten games or more. Here's who's closest."
-            else:
-                runa = "No active point streak has reached ten games yet. Here are the longest right now."
+            runa = S.reta_frase(PS_RUNA_10 if desmit else PS_RUNA_NAV, veids="fakts", n=3)   # vispārīgi – vārdi redzami sarakstā
             out.append(({"tips": "fakts_serijas", "ilgums": 4.8, "virsr": [("POINT", S.BALTS), ("STREAKS", S.DZELTENS)],
                          "apaksa": "LONGEST ACTIVE  ·  ALL / HOME / ROAD  ·  10+ IN YELLOW", "rindas": rindas, "_tv": tv, "_tv_idx": idx}, runa))
         # GOALIES OF THE WEEK (kopš 09.11.2026): augšā sausās sērijas ≥ 120 min (dzeltenas), tālāk – nedēļas labākie pēc
@@ -4866,15 +4878,7 @@ def fakti_serijas_ainas(D, m, izv, tv, idx):
                            "maz": "SAVE %", "apaksa": f"{int(r_['gs'])} starts · {int(r_['sv'])} saves, {int(r_['ga'])} goals allowed",
                            "izcelt": False})
         if rindas:
-            if ss:
-                dal = [f"{x['vards']}: {x['sek'] // 60} minutes, {x['atvairiti']} saves" + (", and still going" if x["aktiva"] else "")
-                       for x in ss]
-                runa = ("Shutout streaks this week. " if len(ss) > 1 else "The shutout streak of the week. ") + ". ".join(dal) + "."
-            else:
-                runa = "No shutout streak of two hours this week. Here are the hottest goalies instead."
-                if labakie:
-                    p0, r0 = labakie[0]
-                    runa += f" {r0['vards']} leads with a {r0['pct']:.3f} save percentage.".replace(" 0.", " .")
+            runa = S.reta_frase(SS_RUNA if ss else SS_RUNA_NAV, veids="fakts", n=3)                # vispārīgi – vārdi redzami sarakstā
             out.append(({"tips": "fakts_serijas", "ilgums": 4.8, "virsr": [("GOALIES", S.BALTS), ("OF THE WEEK", S.DZELTENS)],
                          "apaksa": "SHUTOUT STREAKS 120+ MIN IN YELLOW  ·  SAVE %  ·  2+ STARTS", "rindas": rindas,
                          "_tv": tv, "_tv_idx": idx}, runa))
