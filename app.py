@@ -284,7 +284,7 @@ def check_password():
     return False
 
 
-APP_VERSIJA = "v1.1.54"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
+APP_VERSIJA = "v1.1.55"   # formāts v1.1.N: N palielina par 1 ar katru izmaiņu      # palielini, kad augšupielādē jaunu app.py; redzama lapas apakšā
 NAV_REZIMS = "pielagots"   # "pielagots" = augšējā josla ar hover izvēlnēm; "standarta" = Streamlit iebūvētā augšējā navigācija
 
 NAV = [
@@ -324,6 +324,7 @@ def _lazy(funkcijas_nosaukums):
     """Lapas funkcija tiek atrasta pēc nosaukuma izpildes brīdī (funkcijas ir definētas zemāk failā; izpildās tikai pēc pieteikšanās)."""
     def _izsaukt():
         globals()["_TABULU_SKAITS"][0] = 0                # tabulu numerācija katrā lapas izpildē sākas no jauna (stabilas kārtošanas atslēgas)
+        globals()["_TB_KONT"][0] = 0
         globals()[funkcijas_nosaukums]()
     _izsaukt.__name__ = funkcijas_nosaukums
     return _izsaukt
@@ -518,9 +519,21 @@ div[data-testid="stElementContainer"]:has(iframe[height="0"]) { position: absolu
 .tb tbody tr:hover { background: rgba(59,130,246,.07); }
 .tb td.lg { text-align: center; padding: .3rem .5rem; }
 .tb img.tb-logo { display: block; margin: 0 auto; width: 38px !important; height: 38px !important; max-width: none !important; object-fit: contain; }
-.tb .pb { position: relative; min-width: 88px; height: 1.15rem; border-radius: 6px; overflow: hidden; background: rgba(128,128,128,.2); text-align: center; }
-.tb .pb i { position: absolute; inset: 0 auto 0 0; background: rgba(59,130,246,.55); }
-.tb .pb b { position: relative; font-size: .78rem; font-weight: 600; line-height: 1.15rem; }
+/* procentu kolonnas (kopš v1.1.55): skaitlis + plāna josla, krāsa pēc vietas tabulā (zaļa / zila / dzeltena / sarkana) */
+.tb .pb2 { display: inline-flex; align-items: center; justify-content: flex-end; gap: .55rem; }
+.tb .pb2 b { font-weight: 700; min-width: 2.7rem; text-align: right; }
+.tb .pb2 .tr { flex: 0 0 auto; width: 72px; height: 6px; border-radius: 999px; background: rgba(128,128,128,.22); overflow: hidden; }
+.tb .pb2 .tr i { display: block; height: 100%; border-radius: 999px; }
+.pb2.k3 .tr i { background: linear-gradient(90deg, #4ade80, #16a34a); } .pb2.k3 b { color: #15803d; }
+.pb2.k2 .tr i { background: linear-gradient(90deg, #60a5fa, #2563eb); } .pb2.k2 b { color: #1d4ed8; }
+.pb2.k1 .tr i { background: linear-gradient(90deg, #fcd34d, #f59e0b); } .pb2.k1 b { color: #b45309; }
+.pb2.k0 .tr i { background: linear-gradient(90deg, #fca5a5, #ef4444); } .pb2.k0 b { color: #b91c1c; }
+html.tumss .pb2.k3 b { color: #4ade80; } html.tumss .pb2.k2 b { color: #93c5fd; }
+html.tumss .pb2.k1 b { color: #fcd34d; } html.tumss .pb2.k0 b { color: #fca5a5; }
+/* tabulas ar procentu joslām nav izstieptas: platums pēc satura; "Kārtot" poga paliek pie tabulas labās malas */
+.tb.kompakta { width: auto; }
+[class*="st-key-tbc_"] { width: fit-content !important; max-width: 100%; }
+[class*="st-key-tbc_"] > div { width: 100% !important; }
 /* burbuļi: izskats un uzvedība kā Streamlit paskaidrojumiem virsrakstos */
 .tb .spw, .tb .tbh { position: relative; display: inline-block; }
 .tb .spw { cursor: help; border-bottom: 1px dotted rgba(128,128,128,.8); }
@@ -3106,6 +3119,17 @@ def _fmt_v(v, f=None):
 
 
 _TABULU_SKAITS = [0]          # tabulu numurs šajā izpildē (stabila atslēga katras tabulas kārtošanas izvēlei)
+_TB_KONT = [0]                # kompakto tabulu (ar procentu joslām) konteineru numurs šajā izpildē
+PB_KRASU_PASK = ("Krāsa – vieta šajā tabulā: zaļa – labākā ceturtdaļa, zila – virs vidējā, dzeltena – zem vidējā, "
+                 "sarkana – sliktākā ceturtdaļa.")
+
+
+def _pb_limenis(v, sliekšņi):
+    """Procentu joslas krāsa (A + B): k3 zaļa – labākā ceturtdaļa tabulā, k2 zila, k1 dzeltena, k0 sarkana."""
+    if v is None or pd.isna(v) or sliekšņi is None:
+        return "k2"
+    q75, q50, q25 = sliekšņi
+    return "k3" if v >= q75 else ("k2" if v >= q50 else ("k1" if v >= q25 else "k0"))
 
 
 def _tk_set(key, k, dilst, atslegt=False):
@@ -3171,6 +3195,15 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
         kol.append({"k": k, "label": label, "logo": k in logo_kol or t == "image", "prog": prog.get(k) or ((tc.get("min_value", d.get("min_value", 0)), tc.get("max_value", d.get("max_value", 100))) if t == "progress" else None),
                     "fmt": formati.get(k) or tc.get("format") or d.get("format"), "wide": k in platas or d.get("width") == "large",
                     "help": d.get("help") or paskaidr.get(k) or palidziba(k), "teksts": teksts})
+    # tabulas ar procentu joslām ir kompaktas: platums pēc satura, "Kārtot" poga – pie tabulas labās malas (kopīgs konteiners)
+    kompakta = any(c["prog"] is not None for c in kol)
+    konteiners = None
+    if kompakta and not atgriezt:
+        _TB_KONT[0] += 1
+        konteiners = st.container(key=f"tbc_{_TB_KONT[0]}")
+    for c in kol:                                          # paskaidrojumā – ko nozīmē joslas krāsa
+        if c["prog"] is not None and c["help"]:
+            c["help"] = T(c["help"]) + " " + T(PB_KRASU_PASK)
     # kārtošanas izvēlne (tabulām ar vismaz 4 rindām); izvēle tiek saglabāta sesijā katrai tabulai atsevišķi
     if kartot and len(df) >= 4:
         _TABULU_SKAITS[0] += 1
@@ -3182,7 +3215,11 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
         if izv and izv[0] not in opcijas:
             izv = None
         if len(opcijas) >= 2:
-            _kartosanas_izvele(key, opcijas, izv)
+            if konteiners is not None:
+                with konteiners:
+                    _kartosanas_izvele(key, opcijas, izv)
+            else:
+                _kartosanas_izvele(key, opcijas, izv)
         if izv:
             k, dilst = izv
             s = df[k]
@@ -3213,6 +3250,11 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
     for c in kol:
         sad = f'<span class="tbh" tabindex="0">{e(str(c["label"]))}<span class="bubble">{e(c["help"])}</span></span>' if c["help"] and c["label"] != "" else e(str(c["label"]))
         galva += f'<th class="{("l" if (c["teksts"] and not c["logo"]) else "") + c["pl"]}">{sad}</th>'
+    sliek = {}                                             # procentu joslu krāsu sliekšņi (kvartiles šajā tabulā)
+    for c in kol:
+        if c["prog"] is not None:
+            x_ = pd.to_numeric(df[c["k"]], errors="coerce").dropna()
+            sliek[c["k"]] = (x_.quantile(.75), x_.quantile(.5), x_.quantile(.25)) if len(x_) >= 4 and x_.nunique() > 1 else None
     rindas = ""
     for i, (_, r) in enumerate(df.iterrows()):
         rinda = ""
@@ -3229,7 +3271,9 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
             elif c["prog"] is not None:
                 lo, hi = c["prog"]
                 platums = 0 if pd.isna(v) else max(0, min(100, (v - lo) / (hi - lo) * 100))
-                rinda += f'<td><div class="pb"><i style="width:{platums:.0f}%"></i><b>{_fmt_v(v, c["fmt"])}</b></div></td>'
+                txt_ = _fmt_v(v, c["fmt"]) + ("%" if "%" in str(c["label"]) and not pd.isna(v) else "")
+                rinda += (f'<td><div class="pb2 {_pb_limenis(v, sliek.get(k))}"><b>{txt_}</b>'
+                          f'<span class="tr"><i style="width:{platums:.0f}%"></i></span></div></td>')
             elif ir_html_suna(v):
                 rinda += f'<td class="l">{v}</td>'
             elif isinstance(v, bool):
@@ -3248,10 +3292,15 @@ def df_html(df, config=None, formati=None, prog=None, paskaidr=None, logo_kol=()
                 rinda = rinda[:ns] + sun
         rindas += f"<tr>{rinda}</tr>"
     garsa = " garsa" if len(df) > 12 else ""
-    html_ = f'<div class="tb-wrap{garsa}"><table class="tb"><thead><tr>{galva}</tr></thead><tbody>{rindas}</tbody></table></div>'
+    html_ = (f'<div class="tb-wrap{garsa}"><table class="tb{" kompakta" if kompakta else ""}"><thead><tr>{galva}</tr></thead>'
+             f'<tbody>{rindas}</tbody></table></div>')
     if atgriezt:
         return html_
-    st.markdown(html_, unsafe_allow_html=True)
+    if konteiners is not None:
+        with konteiners:
+            st.markdown(html_, unsafe_allow_html=True)
+    else:
+        st.markdown(html_, unsafe_allow_html=True)
 
 
 def lapa_periodi():
