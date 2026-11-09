@@ -755,8 +755,17 @@ def karstie_speletaji(sk, metrika="punkti", logs=5, min_speles=3, k=10, min_spel
     return out.sort_values(["karstums", "z"], ascending=[False, False], na_position="last")
 
 
+def _T(s):
+    """Teksts lietotāja valodā (i18n.py); bez tā – nemainīts."""
+    try:
+        from i18n import T
+        return T(s)
+    except Exception:
+        return s
+
+
 def karstuma_teksts(r, metrika="punkti"):
-    """Īss paskaidrojums, kāpēc spēlētājs tiek uzskatīts par karstu (viena rinda no karstie_speletaji)."""
+    """Īss paskaidrojums, kāpēc spēlētājs tiek uzskatīts par karstu (viena rinda no karstie_speletaji). Katra daļa – lietotāja valodā."""
     nos = {"punkti": "punkti", "vardi": "vārti", "piespeles": "piespēles"}[metrika]
     daudz = f"{int(r['m_w'])} {nos} {int(r['n_w'])} spēlēs ({r['vid_w']:.2f} spēlē; sezonā {r['vid_sez']:.2f})"
     daļas = [daudz]
@@ -776,7 +785,7 @@ def karstuma_teksts(r, metrika="punkti"):
                 daļas.append("šaušanas % ļoti augsts, daļa var būt veiksme")
         if pd.notna(r["toi_w"]) and pd.notna(r["toi_sez"]) and r["toi_w"] - r["toi_sez"] >= 1.0:
             daļas.append(f"laiks laukumā +{r['toi_w'] - r['toi_sez']:.1f} min")
-    return "; ".join(daļas)
+    return "; ".join(_T(d) for d in daļas)
 
 
 def speletaju_speles(sk, raw, logs=5):
