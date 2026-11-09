@@ -2628,11 +2628,19 @@ def testa_mape():
 
 
 def ieslegt():
-    global JAUNS_FANTASY, NOSL_AKIS
+    global JAUNS_FANTASY, NOSL_AKIS, FJ_ANIM
     if "--bez-noslepuma" in sys.argv:                                 # vecais āķis (ar skaitli), noslēpuma vietā
         sys.argv.remove("--bez-noslepuma")
         NOSL_AKIS = False
         print("ĀĶIS: bez noslēpuma (--bez-noslepuma)")
+    if "--anim" in sys.argv:                                          # faktu TOP N animācija testam: --anim B (A–E)
+        i_ = sys.argv.index("--anim")
+        if i_ + 1 < len(sys.argv) and sys.argv[i_ + 1].upper() in ("A", "B", "C", "D", "E", "1", "2", "3", "4", "5"):
+            FJ_ANIM = sys.argv[i_ + 1].upper()
+            print(f"FAKTU ANIMĀCIJA: {FJ_ANIM}")
+            del sys.argv[i_:i_ + 2]
+        else:
+            del sys.argv[i_]
     if "--vecais" in sys.argv:                                        # vecais izskats (rezerve, ja jaunajā kāda kļūda)
         sys.argv.remove("--vecais")
         JAUNS_FANTASY = False
@@ -4274,12 +4282,12 @@ def aina_fakts_tablo(t, c):
         if kp >= 1:
             for rw in fakti:                                          # (ne f_ – tas ir pašreizējais fakts)
                 y = y0 + 20 + (rw["nr"] - 1) * 76
-                atv = rw["nr"] in docked or (rw["nr"] == nr and t >= t_dock + 0.45)
+                atv = rw["nr"] in docked or (rw["nr"] == nr and t >= t_dock + (FJ_NOL - 0.05 if FJ_ANIM in FJ_EFEKTI else 0.45))
                 kr = tuple(rw["kr"])
                 d.rounded_rectangle([110, y, 970, y + 64], radius=18, fill=(255, 255, 255, 26 if atv else 14))
                 d.text((140, y + 32), f"#{rw['nr']}", font=F("black", 40), fill=(kr if atv else _NV_LAB), anchor="lm")
                 if atv:
-                    ka = 1.0 if rw["nr"] in docked else min(1.0, (t - t_dock - 0.45) / 0.25)
+                    ka = 1.0 if rw["nr"] in docked else min(1.0, (t - t_dock - (FJ_NOL - 0.05 if FJ_ANIM in FJ_EFEKTI else 0.45)) / 0.25)
                     if rw.get("badge"):
                         _fj_ripa(d, 250, y + 32, 24, rw["badge"], int(255 * ka))
                     vv = str(rw.get("vards") or "").upper()
@@ -4330,18 +4338,235 @@ def aina_fakts_tablo(t, c):
                 dch.text((340, 35), str(kont).upper(), font=S.ietilpinat(dch, str(kont).upper(), "black", 32, 640), fill=S.MELNS, anchor="mm")
                 _nv_put(L, ch, 540, 510 + y_k + 35, 1 + 0.35 * (1 - ease_back(min(1.0, kk))), min(1.0, kk * 2.5))
     elif k > 0:
-        if k < 0.32:
-            sc, a, cy = 1.4 - 0.4 * ease_back(min(1.0, k / 0.32)), min(1.0, k / 0.15), 730
-        elif bez_tablo or t < t_dock:
-            sc, a, cy = 1.0, 1.0, 730
-        else:
-            q = S.ease(min(1.0, (t - t_dock) / 0.45))
-            sy = 1010 + 20 + (nr - 1) * 76 + 32
-            sc, a, cy = 1 - 0.85 * q, 1 - q, 730 + (sy - 730) * q
-        if a > 0.01:
-            _nv_put(L, im, 540, cy, sc, a)
+        sy_ = 1010 + 20 + (nr - 1) * 76 + 32                          # savas rindas centrs tablo
+        if FJ_ANIM in FJ_EFEKTI:                                      # jaunie efekti (1–5) – zīmē paši
+            FJ_EFEKTI[FJ_ANIM](L, N, im, k, t, t_dock, bez_tablo, sy_, tuple(f_["kr"]), nr)
+            L.alpha_composite(_nv_glow(N, 12, 1.2))
+            return L
+        cx, cy, sx, sy, a = _fj_anim(FJ_ANIM, k, t, t_dock, bez_tablo, sy_, im)
+        if a > 0.01 and sx > 0.01 and sy > 0.01:
+            im2 = im if (sx, sy) == (1.0, 1.0) else im.resize((max(1, int(im.width * sx)), max(1, int(im.height * sy))), Image.BICUBIC)
+            _nv_put(L, im2, cx, cy, 1.0, a)
+        if FJ_ANIM in ("D", "E") and not bez_tablo and t >= t_dock:  # rinda iemirdzas, kad kartīte tajā "ielec"
+            g_ = 1 - min(1.0, max(0.0, (t - t_dock - 0.4) / 0.5))
+            if g_ > 0 and t >= t_dock + 0.3:
+                dn.rounded_rectangle([110, sy_ - 32, 970, sy_ + 32], radius=18, outline=tuple(f_["kr"]) + (int(255 * g_),), width=5)
     L.alpha_composite(_nv_glow(N, 12, 1.2))
+    if FJ_ANIM == "E" and not bez_tablo and not plus:
+        L = _nv_kratit(L, t, t_dock + 0.38, amp=10, dur=0.2)
     return L
+
+
+# ---- TOP N kartītes efekti 1–5 (kopš 09.11.2026): katrs – sava uzrašanās un iekrišana atpakaļ sarakstā
+#   1 – MOZAĪKA:  kartīte salido no 40 flīzēm; atpakaļ – flīzes pa vienai "ieber" savā rindā
+#   2 – SKENERIS: dzeltena skenera līnija "uzzīmē" kartīti no augšas; atpakaļ – saplok gaismas strīpā, kas ielido rindā
+#   3 – RIPA:     ripa ielido, trieciens ar zibsni un dzirkstelēm, kartīte izlec griežoties; atpakaļ – griežas kā metiens rindā
+#   4 – PRINTERIS: rinda atveras, kartīte izslīd no tās uz augšu kā čeks; atpakaļ – ieslīd rindā un tā aizveras
+#   5 – GLITCH:   kartīte "teleportējas" sagriezta joslās ar RGB nobīdi; atpakaļ – izjūk joslās un sabrūk rindā
+FJ_IEN, FJ_NOL = 0.6, 0.6        # s – uzrašanās / iekrišana
+
+
+def _fj_lim(x):
+    return min(1.0, max(0.0, x))
+
+
+def _fj_rinda_zib(N, sy_, kr, t, t_dock):
+    """Rinda iemirdzas, kad kartīte tajā "ielec"."""
+    g = 1 - _fj_lim((t - t_dock - FJ_NOL + 0.05) / 0.5)
+    if t >= t_dock + FJ_NOL - 0.1 and g > 0:
+        ImageDraw.Draw(N).rounded_rectangle([110, sy_ - 32, 970, sy_ + 32], radius=18, outline=kr + (int(255 * g),), width=5)
+
+
+def _fj_ef_mozaika(L, N, im, k, t, t_dock, bez_tablo, sy_, kr, nr):
+    C, R = 8, 5
+    tw, th = im.width / C, im.height / R
+    x0, y0 = 540 - im.width / 2, 730 - im.height / 2
+    nol = not bez_tablo and t >= t_dock
+    for j in range(R):
+        for i in range(C):
+            rnd = random.Random(nr * 1000 + j * C + i)
+            box = (int(i * tw), int(j * th), int((i + 1) * tw), int((j + 1) * th))
+            tile = im.crop(box)
+            tx, ty = x0 + box[0] + tw / 2, y0 + box[1] + th / 2
+            d_ = (i + j) * 0.022
+            if nol:
+                q = S.ease(_fj_lim((t - t_dock - d_ * 0.8) / 0.32))
+                gx, gy = 120 + (i + 0.5) / C * 840, sy_
+                cx, cy = tx + (gx - tx) * q, ty + (gy - ty) * q - math.sin(math.pi * q) * 120
+                sc, rot, a = 1 - 0.85 * q, 0, 1 - _fj_lim((q - 0.7) / 0.3)
+            else:
+                p = _fj_lim((k - d_) / 0.38)
+                if p <= 0:
+                    continue
+                e = ease_back(p, 1.2)
+                ox, oy, orot = rnd.uniform(-700, 700), rnd.uniform(-900, 900), rnd.uniform(-160, 160)
+                cx, cy = tx + ox * (1 - e), ty + oy * (1 - e)
+                sc, rot, a = 0.4 + 0.6 * e, orot * (1 - p), _fj_lim(p * 2.5)
+            if a > 0.01:
+                _nv_put(L, tile, cx, cy, sc, a, rot)
+    if nol:
+        _fj_rinda_zib(N, sy_, kr, t, t_dock)
+
+
+def _fj_ef_skeneris(L, N, im, k, t, t_dock, bez_tablo, sy_, kr, nr):
+    W, H = im.width, im.height
+    x0, y0 = int(540 - W / 2), int(730 - H / 2)
+    dn = ImageDraw.Draw(N)
+    if not bez_tablo and t >= t_dock:
+        q = _fj_lim((t - t_dock) / FJ_NOL)
+        if q < 0.45:                                                  # saplok strīpā
+            sy = max(0.02, 1 - S.ease(q / 0.45))
+            sm = im.resize((W, max(2, int(H * sy))), Image.BICUBIC)
+            _nv_put(L, sm, 540, 730, 1, 1)
+            dn.rounded_rectangle([x0, 730 - 4, x0 + W, 730 + 4], radius=4, fill=S.DZELTENS + (int(255 * S.ease(q / 0.45)),))
+        else:                                                         # strīpa ielido rindā un izplešas
+            qq = S.ease((q - 0.45) / 0.55)
+            yy = 730 + (sy_ - 730) * qq
+            hw = W / 2 + (430 - W / 2) * qq
+            a = 1 - _fj_lim((qq - 0.75) / 0.25)
+            dn.rounded_rectangle([540 - hw, yy - 4 - 28 * qq, 540 + hw, yy + 4 + 28 * qq], radius=14,
+                                 outline=S.DZELTENS + (int(255 * a),), width=6)
+        _fj_rinda_zib(N, sy_, kr, t, t_dock)
+        return
+    p = _fj_lim(k / FJ_IEN)
+    h = int(H * S.ease(p))
+    if h > 2:
+        fl = 0.85 + 0.15 * math.sin(t * 60) if p < 1 else 1.0
+        L.alpha_composite(_ar_alfu(im.crop((0, 0, W, h)), fl) if fl < 1 else im.crop((0, 0, W, h)), (x0, y0))
+        if p < 1:
+            yl = y0 + h
+            dn.rectangle([x0 - 30, yl - 3, x0 + W + 30, yl + 3], fill=S.DZELTENS + (255,))
+            for g_, al in ((14, 50), (8, 90)):
+                dn.rectangle([x0 - 30, yl - g_, x0 + W + 30, yl + g_], fill=S.DZELTENS + (al,))
+
+
+def _fj_ef_ripa(L, N, im, k, t, t_dock, bez_tablo, sy_, kr, nr):
+    dn = ImageDraw.Draw(N)
+    if not bez_tablo and t >= t_dock:
+        q = _fj_lim((t - t_dock) / FJ_NOL)
+        for g_ in (0.12, 0.06, 0.0):                                  # pēdas (motion trail)
+            qq = S.ease(_fj_lim(q - g_))
+            cx, cy = 540 + math.sin(qq * math.pi) * 220, 730 + (sy_ - 730) * qq
+            _nv_put(L, im, cx, cy, max(0.02, 1 - 0.9 * qq), (1 - qq) * (0.35 if g_ else 1), 540 * qq)
+        _fj_rinda_zib(N, sy_, kr, t, t_dock)
+        return
+    if k < 0.18:                                                      # ripa lido
+        p = k / 0.18
+        x = -80 + (540 + 80) * p
+        for i in range(6):
+            dn.line([(x - 40 - i * 30, 730), (x - 60 - i * 30, 730)], fill=(255, 255, 255, 120 - i * 18), width=10 - i)
+        ImageDraw.Draw(L).ellipse([x - 26, 714, x + 26, 746], fill=(20, 20, 24, 255), outline=(90, 90, 100, 255), width=3)
+        return
+    p = _fj_lim((k - 0.18) / 0.42)
+    if p < 0.35:                                                      # trieciens: zibsnis + dzirksteles
+        z = 1 - p / 0.35
+        dn.ellipse([540 - 300 * (1 - z) - 40, 730 - 300 * (1 - z) - 40, 540 + 300 * (1 - z) + 40, 730 + 300 * (1 - z) + 40],
+                   outline=(255, 255, 255, int(220 * z)), width=8)
+        rnd = random.Random(nr)
+        for i in range(14):
+            an = rnd.uniform(0, 2 * math.pi); r0, r1 = 60 + 500 * (1 - z), 120 + 620 * (1 - z)
+            dn.line([(540 + math.cos(an) * r0, 730 + math.sin(an) * r0), (540 + math.cos(an) * r1, 730 + math.sin(an) * r1)],
+                    fill=S.DZELTENS + (int(255 * z),), width=5)
+    e = ease_back(p, 1.8)
+    _nv_put(L, im, 540, 730, max(0.05, e), _fj_lim(p * 3), 25 * (1 - p))
+
+
+def _fj_ef_printeris(L, N, im, k, t, t_dock, bez_tablo, sy_, kr, nr):
+    W, H = im.width, im.height
+    dn = ImageDraw.Draw(N)
+    sl = sy_ - 32 if not bez_tablo else 730 + H / 2                   # "sprauga" – rindas augšmala
+    nol = not bez_tablo and t >= t_dock
+    q = S.ease(_fj_lim((t - t_dock) / FJ_NOL)) if nol else 1 - S.ease(_fj_lim(k / FJ_IEN))
+    cy = 730 + (sl + H / 2 - 730) * q                                 # q=0 – augšā, q=1 – pilnībā spraugā
+    top = int(cy - H / 2)
+    vis = int(min(H, sl - top))
+    if vis > 2:
+        L.alpha_composite(im.crop((0, 0, W, vis)), (int(540 - W / 2), top))
+    if 0 < q < 1 or (nol and q < 1):                                  # sprauga mirdz, kamēr kartīte iet cauri
+        dn.rounded_rectangle([540 - W / 2 - 20, sl - 5, 540 + W / 2 + 20, sl + 5], radius=5, fill=kr + (230,))
+    if nol:
+        _fj_rinda_zib(N, sy_, kr, t, t_dock)
+
+
+def _fj_ef_glitch(L, N, im, k, t, t_dock, bez_tablo, sy_, kr, nr):
+    W, H = im.width, im.height
+    nol = not bez_tablo and t >= t_dock
+    if nol:
+        q = _fj_lim((t - t_dock) / FJ_NOL)
+        sila, cy, sx, sy = q, 730 + (sy_ - 730) * S.ease(q), 1 + (860 / W - 1) * S.ease(q), 1 + (64 / H - 1) * S.ease(q)
+        a = 1 - _fj_lim((q - 0.8) / 0.2)
+    else:
+        p = _fj_lim(k / FJ_IEN)
+        sila, cy, sx, sy, a = 1 - p, 730, 1.0, 1.0, _fj_lim(p * 3)
+    if a <= 0.01:
+        if nol:
+            _fj_rinda_zib(N, sy_, kr, t, t_dock)
+        return
+    src = im if (sx, sy) == (1.0, 1.0) else im.resize((max(1, int(W * sx)), max(1, int(H * sy))), Image.BICUBIC)
+    w2, h2 = src.size
+    rnd = random.Random(int(t * 30))
+    n_ = 10
+    for i in range(n_):
+        y1, y2 = int(i * h2 / n_), int((i + 1) * h2 / n_)
+        if y2 <= y1:
+            continue
+        sl_ = src.crop((0, y1, w2, y2))
+        dx = rnd.uniform(-1, 1) * 260 * sila ** 1.5
+        x = 540 - w2 / 2 + dx
+        y = cy - h2 / 2 + y1
+        if sila > 0.05:                                               # RGB nobīde
+            r_, g_, b_, a_ = sl_.split()
+            sar = Image.merge("RGBA", (r_, Image.new("L", sl_.size, 0), Image.new("L", sl_.size, 0), a_.point(lambda v: int(v * 0.6 * a))))
+            zil = Image.merge("RGBA", (Image.new("L", sl_.size, 0), g_, b_, a_.point(lambda v: int(v * 0.6 * a))))
+            L.alpha_composite(sar, (int(x - 18 * sila), int(y)))
+            L.alpha_composite(zil, (int(x + 18 * sila), int(y)))
+        L.alpha_composite(_ar_alfu(sl_, a * (0.55 + 0.45 * (1 - sila))), (int(x), int(y)))
+    if nol:
+        _fj_rinda_zib(N, sy_, kr, t, t_dock)
+
+
+FJ_EFEKTI = {"1": _fj_ef_mozaika, "2": _fj_ef_skeneris, "3": _fj_ef_ripa, "4": _fj_ef_printeris, "5": _fj_ef_glitch}
+
+
+# TOP N faktu kartītes animācija (kopš 09.11.2026 – 5 varianti; izvēle FJ_ANIM):
+#   A – "punch": ielido no lielāka (kā līdz 09.11.), nolaižas – sarūk savā rindā
+#   B – "slide": ieslīd no labās, nolaižas – pārvēršas rindā (saplacinās līdz rindas augstumam)
+#   C – "flip": apgriežas kā kārts (no šauras), nolaižas – apgriežas atpakaļ rindā
+#   D – "no rindas": izaug no savas rindas tablo un atgriežas tajā (rinda iemirdzas)
+#   E – "drop": iekrīt no augšas ar atsitienu, nolaižas – strauji iekrīt rindā (rinda iemirdzas, kadrs nodreb)
+FJ_ANIM = "A"
+
+
+def _fj_anim(v, k, t, t_dock, bez_tablo, sy_, im):
+    """→ (cx, cy, x mērogs, y mērogs, caurspīdīgums) lielajai kartītei (ielidošana / stāvēšana / nolaišanās)."""
+    ease, eb = S.ease, ease_back
+    W0, H0 = im.width, im.height
+    rx, ry = 860 / W0, 64 / H0                                        # rindas izmērs pret kartīti
+    ien = 0.45 if v in ("B", "D", "E") else 0.32
+    if k < ien:                                                       # --- ielidošana
+        p = min(1.0, k / ien)
+        if v == "B":
+            return 540 + (1 - eb(p)) * 900, 730, 1.0, 1.0, min(1.0, p * 3)
+        if v == "C":
+            return 540, 730, max(0.02, ease(p)), 1.0, min(1.0, p * 4)
+        if v == "D" and not bez_tablo:
+            q = eb(p, 1.4)
+            return 540, sy_ + (730 - sy_) * q, rx + (1 - rx) * q, ry + (1 - ry) * q, min(1.0, p * 4)
+        if v == "E":
+            return 540, -300 + (730 + 300) * eb(p, 2.4), 1.0, 1.0, 1.0
+        sc = 1.4 - 0.4 * eb(p)
+        return 540, 730, sc, sc, min(1.0, k / 0.15)
+    if bez_tablo or t < t_dock:
+        return 540, 730, 1.0, 1.0, 1.0
+    q = ease(min(1.0, (t - t_dock) / 0.45))                           # --- nolaišanās savā rindā
+    if v in ("B", "D"):
+        return 540, 730 + (sy_ - 730) * q, 1 + (rx - 1) * q, 1 + (ry - 1) * q, 1 - max(0.0, (q - 0.75) / 0.25)
+    if v == "C":
+        return 540, 730 + (sy_ - 730) * q, 1 + (rx - 1) * q, max(0.02, 1 - q), 1.0 if q < 0.9 else (1 - q) * 10
+    if v == "E":
+        qq = min(1.0, (t - t_dock) / 0.38) ** 2
+        return 540, 730 + (sy_ - 730) * qq, 1 + (rx - 1) * qq, 1 + (ry - 1) * qq, 1.0 if qq < 1 else 0.0
+    return 540, 730 + (sy_ - 730) * q, 1 - 0.85 * q, 1 - 0.85 * q, 1 - q
 
 
 def _fj_laukums(d, x0, y0, w, h):
