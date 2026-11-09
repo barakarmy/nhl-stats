@@ -667,7 +667,8 @@ def _trailing_serija(vertibas):
     return n
 
 
-def karstie_speletaji(sk, metrika="punkti", logs=5, min_speles=3, k=10, min_speles_ar_raditaju=2, vietas_serija=VIETAS_SERIJAS_SLIEKSNIS):
+def karstie_speletaji(sk, metrika="punkti", logs=5, min_speles=3, k=10, min_speles_ar_raditaju=2, vietas_serija=VIETAS_SERIJAS_SLIEKSNIS,
+                      kartot="kopa"):
     """
     Spēlētāju "karstuma" novērtējums pēc pēdējo `logs` spēļu rezultātiem (no speletaji.csv).
 
@@ -684,7 +685,11 @@ def karstie_speletaji(sk, metrika="punkti", logs=5, min_speles=3, k=10, min_spel
          Hokejā "karstumam" ir neliela noturība, tāpēc svars ir mazs.
       6. Papildu atlase: spēlētājs tiek iekļauts arī tad, ja viņš negūst rādītāju katrā spēlē, bet gūst to vismaz `vietas_serija` mājas
          (vai izbraukuma) spēlēs pēc kārtas (skaitot tikai attiecīgās vietas spēles, piem., 4 mājas spēles pēc kārtas). Kolonna tr_serija.
-    Atgriež DataFrame (viena rinda uz spēlētāju), kārtotu pēc karstuma indeksa (dilstoši).
+      7. KOPĒJAIS KARSTUMS 0–100 (kopš 09.11.2026, noklusējums): forma pret līgas vidējo savā pozīcijā (40 %) + virs savas
+         normas – indekss z (30 %) + sērija (20 %) + pamatotība – metieni logā pret sezonu (10 %). Tā augšā ir arī zvaigznes,
+         kas visu laiku spēlē augstā līmenī (piem., McDavid), ne tikai tie, kas pārspēj paši sevi.
+    kartot: "kopa" – pēc kopējā karstuma; "norma" – pēc indeksa z (virs savas normas).
+    Atgriež DataFrame (viena rinda uz spēlētāju), kārtotu dilstoši.
     """
     if sk is None or sk.empty:
         return pd.DataFrame()
@@ -735,7 +740,19 @@ def karstie_speletaji(sk, metrika="punkti", logs=5, min_speles=3, k=10, min_spel
     out["z"] = out["z"].where(derigi)                                           # nederīgiem indekss nav aprēķināts
     out = out[(out["n_w"] >= min_speles) | out["tr_serija"]].copy()
     out["_serija_maks"] = out[["ser_majas", "ser_viesos"]].max(axis=1)
-    return out.sort_values(["z", "_serija_maks"], ascending=[False, False], na_position="last")
+    # ---- KOPĒJAIS KARSTUMS (0–100): forma pret līgu 40 % + virs savas normas 30 % + sērija 20 % + pamatotība (metieni) 10 %
+    liga_w = out["grupa"].map(liga) * out["n_w"]
+    out["forma_z"] = (out["m_w"] - liga_w) / np.sqrt(np.maximum(liga_w, 0.5))   # cik logā virs līgas vidējā savā pozīcijā
+    sog_w = out["SOG_w"] / out["n_w"].where(out["n_w"] > 0)
+    sog_s = out["SOG_sez"] / out["GP"].where(out["GP"] > 0)
+    out["pamat"] = ((sog_w / sog_s.where(sog_s > 0)) - 1).clip(-0.5, 0.5).fillna(0) if metrika != "piespeles" else 0.0
+    k_ = (0.40 * (out["forma_z"] / 4).clip(0, 2) + 0.30 * (out["z"].fillna(0) / 3).clip(-0.5, 1.5)
+          + 0.20 * (out["serija"] / 10).clip(0, 1.5) + 0.10 * (out["pamat"] + 0.5))
+    out["karstums"] = (100 * k_ / 1.6).clip(0, 100).round(0)
+    out.loc[out["n_w"] < min_speles, "karstums"] = np.nan
+    if kartot == "norma":                                                     # tikai virs savas normas (kā līdz 09.11.2026)
+        return out.sort_values(["z", "_serija_maks"], ascending=[False, False], na_position="last")
+    return out.sort_values(["karstums", "z"], ascending=[False, False], na_position="last")
 
 
 def karstuma_teksts(r, metrika="punkti"):
