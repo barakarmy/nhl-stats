@@ -2222,4 +2222,16 @@ EN = {
         'Pos',
     'pretinieki {}':
         'opponents {}',
+    'Sp.':
+        'GP',
+    'GSAx/sp':
+        'GSAx/gm',
+    'ixG/sp':
+        'ixG/gm',
+    'xG ±/sp':
+        'xG ±/gm',
+    'xG/sp':
+        'xG/gm',
+    'Krāsa – vieta šajā tabulā: zaļa – labākā ceturtdaļa, zila – virs vidējā, dzeltena – zem vidējā, sarkana – sliktākā ceturtdaļa.':
+        'Color – rank in this table: green – top quarter, blue – above the middle, yellow – below the middle, red – bottom quarter.',
 }
