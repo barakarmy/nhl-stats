@@ -32,9 +32,10 @@ SERIJAS = {                                                           # veids: (
     "streameri": ((167, 139, 250), "streameri"),
     "fan_atsk": ((244, 114, 182), "fantasy atskats"),
     "fakti": ((251, 146, 60), "fakti"),
+    "serijas": ((45, 212, 191), "streak watch"),
 }
 SECIBA = {"xg_sp": "BDEA", "xg_va": "BEDA", "xg_kom": "EA", "fantasy": "BFA", "streameri": "BFA",
-          "fakti": "FDBA", "xg_atsk": "KEA", "fan_atsk": "KEA"}
+          "fakti": "FDBA", "xg_atsk": "KEA", "fan_atsk": "KEA", "serijas": "BA"}
 NOSAUKUMI = {"0": "vecais", "A": "serijas_krasa", "B": "komandas_krekls", "D": "laukums", "E": "divas_puses",
              "F": "grafiks", "J": "teksts", "K": "ceks"}
 J_PEC = 6                                                             # J – ne biežāk kā reizi 6 video (kanālā kopā)
@@ -53,7 +54,7 @@ def _veids(tag):
     t = str(tag).upper()
     for atsl, v in (("FOLLOW-UP", "xg_atsk"), ("GOALIE", "xg_va"), ("TEAM LUCK", "xg_kom"), ("LUCK REPORT", "xg_sp"),
                     ("RECAP", "fan_atsk"), ("STREAMER", "streameri"), ("WAIVER", "fantasy"), ("FANTASY", "fantasy"),
-                    ("WEEK IN NUMBERS", "fakti")):
+                    ("WEEK IN NUMBERS", "fakti"), ("STREAK WATCH", "serijas")):
         if atsl in t:
             return v
     return None                                                       # tiesneši u.c. – vecais sīktēls
@@ -209,7 +210,7 @@ def _varonis(s, krekli):
     if not krekli:
         return None
     kom, v = krekli[0]
-    kart = [c for c in s.get("kartes", []) if c.get("tips") == "fantasy" and c.get("badge")]
+    kart = [c for c in (s.get("_kartes_pilnas") or s.get("kartes", [])) if c.get("tips") == "fantasy" and c.get("badge")]
     for c in kart:
         if c.get("badge") == kom and v and str(c.get("v2", "")).upper() == str(v).upper():
             return c
@@ -228,11 +229,11 @@ def _spec(c, tips):
 
 
 def _kartes_tips(s, tips):
-    return next((c for c in s.get("kartes", []) if c.get("tips") == tips), None)
+    return next((c for c in (s.get("_kartes_pilnas") or s.get("kartes", [])) if c.get("tips") == tips), None)
 
 
 def _atskata_kartes(s):
-    return [c for c in s.get("kartes", []) if c.get("tips") == "fantasy" and c.get("badge")]
+    return [c for c in (s.get("_kartes_pilnas") or s.get("kartes", [])) if c.get("tips") == "fantasy" and c.get("badge")]
 
 
 def _zime(d, x, y, r, veids, kr, w=None):
