@@ -373,6 +373,7 @@ VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "streameri", 
 MEDIJU_VESTURE = "shorts_mediji.json"
 MEDIJI_JSON = "video_info.json"   # video\ mapē – visu ģenerēto video saraksts: datums, nosaukums, fons, mūzika (Content ID claim gadījumam)
 _IZMANTOTS = {"muzika": None}
+SIKTS = {"kods": None}            # --sikts A/B/D/E/F/J/K (0 = vecais) – sīktēla izkārtojums ar roku; citādi sikteli.py izvēlas pats
 XG_VEIDI = ("speletaji", "komandas", "vartsargi")      # xG video – izmanto speletaji_ failus (ja nav savu komandas_ / vartsargi_)
 
 
@@ -2325,6 +2326,17 @@ def thumbnail_kadrs(aina, s, fona_fails, atr, fn_map):
 def zimet_thumbnail_b(th, fails):
     if _THUMB.get("im") is not None:
         _THUMB["im"].save(fails)
+        alt = _THUMB.get("alt") or {}
+        if len(alt) > 1:                                              # visi varianti → sikteli\\ (ja gribas citu – augšupielādē to)
+            try:
+                import sikteli
+                m_ = os.path.join(os.path.dirname(fails), "sikteli")
+                os.makedirs(m_, exist_ok=True)
+                for k_, im_ in alt.items():
+                    piez = "_IZVELETS" if k_ == _THUMB.get("kods") else ""
+                    im_.save(os.path.join(m_, f"{k_}_{sikteli.NOSAUKUMI.get(k_, k_)}{piez}.png"))
+            except Exception as ex:                                   # noqa: BLE001
+                print(f"  (sikteli\\: {type(ex).__name__}: {ex})")
     else:
         _orig["thumbnail"](th, fails)
 
@@ -2585,6 +2597,17 @@ def renderet(s, izvade, kanals="", balss=None):
     except Exception as ex:                                           # noqa: BLE001
         print(f"SĪKTĒLS: neizdevās no āķa ({type(ex).__name__}: {ex}) – vecais variants")
         _THUMB["im"] = None
+    _THUMB.update(alt={}, kods=None, veids=None)
+    if _THUMB["im"] is not None and SIKTS["kods"] != "0":            # sīktēlu dažādošana (sikteli.py) – A/B/D/E/F/J/K pēc kārtas
+        try:
+            import sikteli
+            vp_ = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(izvade))), MEDIJI_JSON)
+            r_ = sikteli.izveidot(sys.modules[__name__], s, vp_, SIKTS["kods"])
+            if r_:
+                kods_, im_, alt_, veids_ = r_
+                _THUMB.update(alt=dict(alt_, **{"0": _THUMB["im"]}), im=im_, kods=kods_, veids=veids_)
+        except Exception as ex:                                       # noqa: BLE001
+            print(f"SĪKTĒLS: sikteli.py kļūda ({type(ex).__name__}: {ex}) – vecais variants")
     _IZMANTOTS["muzika"] = None
     miksets(video_tmp, izvade, audio, ainas, kopa, tmp)
     shutil.rmtree(tmp, ignore_errors=True)
@@ -2595,7 +2618,8 @@ def renderet(s, izvade, kanals="", balss=None):
                 "komanda": "python ShortsB.py " + " ".join(sys.argv[1:]),
                 "fons": os.path.basename(fona_fails) if fona_fails else None, "fona_cels": fona_fails,
                 "muzika": os.path.basename(_IZMANTOTS["muzika"]) if _IZMANTOTS["muzika"] else None,
-                "muzikas_cels": _IZMANTOTS["muzika"], "balss": balss if audio else None, "garums_s": round(kopa, 1)}
+                "muzikas_cels": _IZMANTOTS["muzika"], "balss": balss if audio else None, "garums_s": round(kopa, 1),
+                "sikts": _THUMB.get("kods") or "0", "sikts_veids": _THUMB.get("veids")}   # sīktēla izkārtojums (rotācijai)
         mape_v = os.path.dirname(os.path.abspath(izvade))
         info["mape"] = os.path.basename(mape_v)
         vp = os.path.join(os.path.dirname(mape_v), MEDIJI_JSON)      # kopējais saraksts video\ mapē (paliek, ja video mapi izdzēš)
@@ -2614,7 +2638,7 @@ def renderet(s, izvade, kanals="", balss=None):
 
 TESTA_MAPE = "video_test"
 VESTURES_FAILI = ("fakti_vesture.json", "frazes_vesture.json", "tiesnesi_vesture.json", "fantasy_rezultati.json",
-                  "shorts_mediji.json")
+                  "shorts_mediji.json", MEDIJI_JSON)                  # video_info.json – arī sīktēlu kārtai
 
 
 def testa_mape():
@@ -2642,6 +2666,15 @@ def ieslegt():
         sys.argv.remove("--bez-noslepuma")
         NOSL_AKIS = False
         print("ĀĶIS: bez noslēpuma (--bez-noslepuma)")
+    if "--sikts" in sys.argv:                                         # sīktēla izkārtojums ar roku: --sikts D  (0 = vecais)
+        i_ = sys.argv.index("--sikts")
+        if i_ + 1 < len(sys.argv) and sys.argv[i_ + 1].upper() in ("0", "A", "B", "D", "E", "F", "J", "K"):
+            SIKTS["kods"] = sys.argv[i_ + 1].upper()
+            print(f"SĪKTĒLS: ar roku – {SIKTS['kods']}")
+            del sys.argv[i_:i_ + 2]
+        else:
+            print("SĪKTĒLS: --sikts vajag burtu A/B/D/E/F/J/K vai 0 – izvēlos pats")
+            del sys.argv[i_]
     if "--anim" in sys.argv:                                          # faktu TOP N animācija testam: --anim B (A–E)
         i_ = sys.argv.index("--anim")
         if i_ + 1 < len(sys.argv) and sys.argv[i_ + 1].upper() in ("A", "B", "C", "D", "E", "1", "2", "3", "4", "5"):
