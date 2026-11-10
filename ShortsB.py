@@ -585,6 +585,9 @@ def sfx_notikumi(ainas):
             ev.append((t0 + 1.3, "boom", 0.6))
         elif tips == "xg_karte":                                     # līgas karte: tick katram izceltajam
             ev += [(t0 + 1.95 + 0.22 * j, "tick", 0.7) for j in range(len(c.get("izcelti", [])))]
+        elif tips == "fantasy_divi":                                  # īsā versija: 2 DROP kartītes – ielido (swoosh), zīmogs (boom)
+            _ti, _ts = _nv_divi_laiki(c)
+            ev += [(t0 + x_, "swoosh", 0.4) for x_ in _ti] + [(t0 + x_ + 0.24, "boom", 0.6) for x_ in _ts]
         elif tips == "fantasy_kartis":                                # kārtis: izdala → katra apgriežas (tick) → čips
             _dl, _fl, _cp = _nv_kartis_laiki(c)
             ev.append((t0 + _dl[0], "swoosh", 0.45))
@@ -2506,7 +2509,7 @@ def renderet(s, izvade, kanals="", balss=None):
               "fantasy_intro": lambda t_, c_: aina_intro(t_, c_["intro"]), "fantasy_kartis": aina_kartis, "xg_karte": aina_xg_karte,
               "fakts_tablo": aina_fakts_tablo, "fakts_ripa": aina_fakts_ripa, "fakts_hist": aina_fakts_hist,
               "fakts_reti": aina_fakts_reti, "fakts_serijas": aina_fakts_serijas,
-              "fakts_nak_j": aina_fakts_nak_j}
+              "fakts_nak_j": aina_fakts_nak_j, "fantasy_divi": aina_fantasy_divi}
     _DAL["fons"] = bool(JAUNS_FANTASY and s.get("_bez_zimoga"))       # jaunais izskats: burbuļi fonā (ne āķī)
     # cilpai: āķa (1. ainas) sākuma kadrs – beigās video pāriet atpakaļ uz to
     v0, c0, _ = ainas[0]
@@ -6617,9 +6620,8 @@ def _iss_drop(drops, k2):
         kartis.append({"kom": str(c.get("badge", "")), "poz": v.get("poz", ""), "akc": tuple(c["akc"]),
                        "liels": f"{p_} PT{'' if p_ == 1 else 'S'}", "maz": f"IN {g_} GP" if g_ else "LAST 14 DAYS",
                        "lab": str(c.get("liels", "DROP"))})
-    aina = {"tips": "fantasy_kartis", "ilgums": 3.2, "tag": k2.get("tag", ""), "_tv": k2.get("_tv"),
-            "virsr": S.reta_frase(ISS_DROP_VIRSR, veids="fantasy", n=1), "apaksa": "POINTS  ·  LAST 14 DAYS",
-            "kartis": kartis, "n_pick": len(kartis), "rek": None}
+    aina = {"tips": "fantasy_divi", "ilgums": 3.6, "tag": k2.get("tag", ""), "_tv": k2.get("_tv"),
+            "virsr": S.reta_frase(ISS_DROP_VIRSR, veids="fantasy", n=1), "kartites": list(drops)}
     vardi = [f"{c.get('v1', '')} {c.get('v2', '')}".strip() for c in drops]
     if len(vardi) == 1:
         t_ = S.reta_frase(ISS_DROP_VIENS, veids="fantasy", n=1).format(a=vardi[0])
@@ -6631,6 +6633,122 @@ def _iss_drop(drops, k2):
     else:
         t_ += " Their schedules turn next week." if len(drops) > 1 else " His schedule turns next week."
     return aina, t_
+
+
+# ---------------------------------------------------------------- īsā versija: divi DROP spēlētāji vienā ainā (mazākas kartītes)
+def _nv_divi_laiki(c):
+    """(parādīšanās[], zīmogs[]) – kartīte parādās, kad balss nosauc uzvārdu (bez balss – pēc kārtas)."""
+    K = c.get("kartites") or []
+    ilg, vardi = c.get("_ilg", c.get("ilgums", 3.6)), c.get("_vardi") or []
+    def laiks(txt):
+        w_ = [re.sub(r"[^a-z0-9]", "", w.lower()) for w in str(txt or "").split()]
+        w_ = [x for x in w_ if x]
+        return (_nv_vards_laiks(vardi, *w_) or _nv_vards_laiks(vardi, w_[-1])) if w_ else None
+    t_in, t_st = [], []
+    for i, k in enumerate(K):
+        tv1, tv2 = laiks(k.get("v1")), laiks(k.get("v2"))
+        if i == 0:
+            a_ = 0.35                                                 # pirmā – uzreiz
+        else:
+            a_ = max(t_in[-1] + 0.45, ((tv1 or tv2) - 0.3) if (tv1 or tv2) else 1.0)
+        t_in.append(a_)
+        t_st.append(max(a_ + 0.5, ((tv2 or tv1) + 0.35) if (tv2 or tv1) else a_ + 0.6))
+    lim = max(1.2, ilg - 0.6)
+    return [min(x, lim - 0.6) for x in t_in], [min(x, lim) for x in t_st]
+
+
+def _nv_divi_karte(k, W, H):
+    """Viena mazākā kartīte (tas pats stils, kas lielajai): vārds, PTS, rostered, nākamā nedēļa, iemesls."""
+    v = k.get("viz") or {}
+    prim, sek = kom_krasas(k.get("badge"))
+    F = S.fonts
+    pad = 26
+    im = Image.new("RGBA", (W + 2 * pad, H + 2 * pad), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    box = (pad, pad, pad + W, pad + H)
+    for p_, al_ in ((12, 22), (7, 45), (3, 80)):                       # mīksts spīdums ap rāmi (kā lielajai kartītei)
+        d.rounded_rectangle((box[0] - p_, box[1] - p_, box[2] + p_, box[3] + p_), radius=34 + p_, outline=prim + (al_,), width=p_ + 2)
+    d.rounded_rectangle(box, radius=34, fill=(10, 14, 32, 240))
+    wm = _nv_timg(str(k.get("badge", "")), F("black", 230), prim + (55,))
+    im.alpha_composite(wm, (int(box[2] - wm.width - 10), int(box[1] + 4)))
+    x0, y0 = box[0] + 34, box[1]
+    v1 = str(k.get("v1") or "").upper()
+    f1 = F("semi", 40)
+    if v1:
+        d.text((x0, y0 + 30), v1, font=f1, fill=(255, 255, 255, 225))
+    d.text((x0 + (d.textlength(v1, font=f1) + 22 if v1 else 0), y0 + 36), f"{v.get('poz', '')}  ·  {k.get('badge', '')}",
+           font=F("black", 30), fill=_NV_LAB)
+    vards = str(k.get("v2", "")).upper()
+    fv = S.ietilpinat(d, vards, "black", 112, W - 400)                 # labajā pusē – vieta zīmogam
+    d.text((x0, y0 + 168), vards, font=fv, fill=S.BALTS, anchor="ls")
+    yp, xe = y0 + 186, box[2] - 34
+    xs = x0 + (xe - x0) * 0.6
+    d.polygon([(x0, yp), (xs + 8, yp), (xs - 4, yp + 11), (x0, yp + 11)], fill=prim)
+    d.polygon([(xs + 20, yp), (xe, yp), (xe, yp + 11), (xs + 8, yp + 11)], fill=sek)
+    gp = _gp(k)
+    rost = v.get("rost")
+    ned = v.get("ned") or []
+    gr = sum(1 for n_ in ned if n_.get("o") and tuple(n_.get("kr") or ()) == tuple(S.SARKANS))
+    fl = [("PTS", str(v.get("pts", "–")), f"IN {gp} GP" if gp else "LAST 14 DAYS"),
+          ("ROSTERED", f"{rost:.0f}%" if isinstance(rost, (int, float)) else "–", "ESPN"),
+          ("NEXT WEEK", f"{v.get('sp_nak', '–')} GP", f"{gr} TOUGH" if gr else "GAMES")]
+    gap = 16
+    tw = (W - 68 - 2 * gap) / 3
+    ty0, ty1 = y0 + 214, y0 + 214 + 132
+    for i, (lab, val, sub) in enumerate(fl):
+        tx = x0 + i * (tw + gap)
+        d.rounded_rectangle([tx, ty0, tx + tw, ty1], radius=22, fill=_NV_TILE + (255,))
+        d.text((tx + 18, ty0 + 12), lab, font=F("semi", 26), fill=_NV_LAB)
+        d.text((tx + 18, ty0 + 42), val, font=S.ietilpinat(d, val, "black", 54, tw - 36), fill=S.BALTS)
+        d.text((tx + 18, ty1 - 12), sub, font=F("semi", 22), fill=_NV_LAB, anchor="ls")
+    ie = str(k.get("apaksa") or "")
+    if ie:
+        d.text((x0, ty1 + 52), ie, font=S.ietilpinat(d, ie, "semi", 32, W - 68), fill=(203, 213, 225, 255), anchor="ls")
+    d.rounded_rectangle(box, radius=34, outline=prim + (230,), width=5)
+    return im
+
+
+def aina_fantasy_divi(t, c):
+    """Īsā versija: DROP spēlētāji vienā ainā – divas mazākas kartītes ar vārdiem; katra ieslīd, kad balss nosauc
+    uzvārdu, pēc mirkļa – DROP zīmogs."""
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    _nv_dalinas(L, t)
+    if c.get("_tv"):
+        _nv_tablo_virs(L, N, t, c["_tv"])
+    _fj_virsr(L, t, c["virsr"], 400, 120)
+    K = c.get("kartites") or []
+    n = len(K)
+    W, H = 940, (430 if n > 1 else 470)
+    ys = [500 + i * (H + 34) for i in range(n)] if n > 1 else [600]
+    t_in, t_st = _nv_divi_laiki(c)
+    kesa = c.setdefault("_kesa_divi", {})
+    flash = None
+    for i, k in enumerate(K):
+        e = S.ease(min(1.0, max(0.0, (t - t_in[i]) / 0.38)))
+        if e <= 0:
+            continue
+        if i not in kesa:
+            kesa[i] = _nv_divi_karte(k, W, H)
+        im = kesa[i]
+        x = 540 - im.width / 2 + (1 - e) * 260
+        _nv_put(L, im, x, ys[i] + H / 2, 1.0, e, 0, "l")
+        ks = (t - t_st[i]) / 0.24
+        if ks > 0:                                                    # DROP / BENCH zīmogs (kā lielajai kartītei, mazāks)
+            akc = tuple(k.get("akc") or S.SARKANS)
+            txt = str(k.get("liels", "DROP"))
+            st = Image.new("RGBA", (360, 120), (0, 0, 0, 0)); ds = ImageDraw.Draw(st)
+            ds.rounded_rectangle([6, 6, 354, 114], radius=20, fill=(10, 14, 32, 215), outline=akc, width=9)
+            ds.text((180, 60), txt, font=S.ietilpinat(ds, txt, "black", 74, 320), fill=akc, anchor="mm")
+            _nv_put(N, st, 830, ys[i] + 118, 1 + 1.4 * (1 - S.ease(min(1.0, ks))), min(1.0, ks * 3), 8)
+            if 1.0 <= ks < 2.0:
+                flash = t_st[i]
+    out = _nv_glow(N, 18, 1.0)
+    out.alpha_composite(L)
+    out.alpha_composite(N)
+    if flash is not None:
+        _nv_zibsnis(out, t, flash + 0.24, 0.08)
+        out = _nv_kratit(out, t, flash + 0.24, 8)
+    return out
 
 
 def _iss_fantasy(s, veids):
