@@ -6657,59 +6657,101 @@ def _nv_divi_laiki(c):
     return [min(x, lim - 0.6) for x in t_in], [min(x, lim) for x in t_st]
 
 
-def _nv_divi_karte(k, W, H):
-    """Viena mazākā kartīte (tas pats stils, kas lielajai): vārds, PTS, rostered, nākamā nedēļa, iemesls."""
+def _spec_x(k, lab):
+    for it in (k.get("viz") or {}).get("spec") or []:
+        for x in it[1:]:
+            if isinstance(x, dict) and str(x.get("lab", "")).upper() == lab:
+                return x
+    return None
+
+
+def _mk_flizes(k, veids):
+    """3 flīzes mazajai kartītei: [(virsraksts, vērtība, apakšā)]."""
+    v = k.get("viz") or {}
+    gp = _gp(k)
+    if veids in XG_VEIDI:
+        b = k.get("bars") or []
+        A = float(b[0][1]) if len(b) > 0 else None
+        B_ = float(b[1][1]) if len(b) > 1 else None
+        liels = str((v.get("kart") or {}).get("liels") or "–")
+        if veids == "speletaji":
+            sh = _spec_x(k, "SHOOTING %") or {}
+            return [("GOALS", f"{int(A)}" if A is not None else "–", f"IN {gp} GP" if gp else ""),
+                    ("EXPECTED", f"{B_:.1f}" if B_ is not None else "–", "xG"),
+                    ("SHOOTING %", str(sh.get("val") or "–"), str(sh.get("sub") or "").upper())]
+        if veids == "vartsargi":
+            sv = _spec_x(k, "SAVE %") or {}
+            return [("GSAx", liels, "VS EXPECTED"),
+                    ("ALLOWED", f"{int(A)}" if A is not None else "–", f"ON {B_:.1f} EXPECTED" if B_ is not None else ""),
+                    ("SAVE %", str(sv.get("val") or "–"), str(sv.get("sub") or "").upper())]
+        j = next((x for it in v.get("spec") or [] for x in it[1:] if isinstance(x, dict) and x.get("tips") == "joslas"), None)
+        rind = (j or {}).get("rind") or []
+        rec = _spec_x(k, "RECORD") or {}
+        return [("PDO", liels, "AVERAGE 100"),
+                ("GOAL DIFF", str(rind[0][2]) if rind else "–", f"xGD {rind[1][2]}" if len(rind) > 1 else ""),
+                ("RECORD", str(rec.get("val") or v.get("poz") or "–"), str(rec.get("sub") or "").upper())]
+    rost = v.get("rost")
+    ned = v.get("ned") or []
+    gr = sum(1 for n_ in ned if n_.get("o") and tuple(n_.get("kr") or ()) == tuple(S.SARKANS))
+    return [("PTS", str(v.get("pts", "–")), f"IN {gp} GP" if gp else "LAST 14 DAYS"),
+            ("ROSTERED", f"{rost:.0f}%" if isinstance(rost, (int, float)) else "–", "ESPN"),
+            ("NEXT WEEK", f"{v.get('sp_nak', '–')} GP", f"{gr} TOUGH" if gr else "GAMES")]
+
+
+def _nv_divi_karte(k, W, H, veids="fantasy"):
+    """Viena mazākā kartīte (tas pats stils, kas lielajai): vārds, 3 flīzes, (ja vieta) iemesls. H < 400 – kompakta."""
     v = k.get("viz") or {}
     prim, sek = kom_krasas(k.get("badge"))
     F = S.fonts
+    liela = H >= 400
     pad = 26
     im = Image.new("RGBA", (W + 2 * pad, H + 2 * pad), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
     box = (pad, pad, pad + W, pad + H)
     for p_, al_ in ((12, 22), (7, 45), (3, 80)):                       # mīksts spīdums ap rāmi (kā lielajai kartītei)
         d.rounded_rectangle((box[0] - p_, box[1] - p_, box[2] + p_, box[3] + p_), radius=34 + p_, outline=prim + (al_,), width=p_ + 2)
     d.rounded_rectangle(box, radius=34, fill=(10, 14, 32, 240))
-    wm = _nv_timg(str(k.get("badge", "")), F("black", 230), prim + (55,))
+    wm = _nv_timg(str(k.get("badge", "")), F("black", 230 if liela else 170), prim + (55,))
     im.alpha_composite(wm, (int(box[2] - wm.width - 10), int(box[1] + 4)))
     x0, y0 = box[0] + 34, box[1]
     v1 = str(k.get("v1") or "").upper()
-    f1 = F("semi", 40)
+    f1 = F("semi", 40 if liela else 32)
+    ya = 30 if liela else 18
     if v1:
-        d.text((x0, y0 + 30), v1, font=f1, fill=(255, 255, 255, 225))
-    d.text((x0 + (d.textlength(v1, font=f1) + 22 if v1 else 0), y0 + 36), f"{v.get('poz', '')}  ·  {k.get('badge', '')}",
-           font=F("black", 30), fill=_NV_LAB)
+        d.text((x0, y0 + ya), v1, font=f1, fill=(255, 255, 255, 225))
+    lab_ = str(k.get("badge", "")) if veids == "komandas" else f"{v.get('poz', '')}  ·  {k.get('badge', '')}"
+    d.text((x0 + (d.textlength(v1, font=f1) + 22 if v1 else 0), y0 + ya + (6 if liela else 4)), lab_,
+           font=F("black", 30 if liela else 26), fill=_NV_LAB)
     vards = str(k.get("v2", "")).upper()
-    fv = S.ietilpinat(d, vards, "black", 112, W - 400)                 # labajā pusē – vieta zīmogam
-    d.text((x0, y0 + 168), vards, font=fv, fill=S.BALTS, anchor="ls")
-    yp, xe = y0 + 186, box[2] - 34
+    fv = S.ietilpinat(d, vards, "black", 112 if liela else 84, W - 450)   # labajā pusē – vieta zīmogam
+    yv = 168 if liela else 124
+    d.text((x0, y0 + yv), vards, font=fv, fill=S.BALTS, anchor="ls")
+    yp, xe = y0 + yv + 18, box[2] - 34
     xs = x0 + (xe - x0) * 0.6
     d.polygon([(x0, yp), (xs + 8, yp), (xs - 4, yp + 11), (x0, yp + 11)], fill=prim)
     d.polygon([(xs + 20, yp), (xe, yp), (xe, yp + 11), (xs + 8, yp + 11)], fill=sek)
-    gp = _gp(k)
-    rost = v.get("rost")
-    ned = v.get("ned") or []
-    gr = sum(1 for n_ in ned if n_.get("o") and tuple(n_.get("kr") or ()) == tuple(S.SARKANS))
-    fl = [("PTS", str(v.get("pts", "–")), f"IN {gp} GP" if gp else "LAST 14 DAYS"),
-          ("ROSTERED", f"{rost:.0f}%" if isinstance(rost, (int, float)) else "–", "ESPN"),
-          ("NEXT WEEK", f"{v.get('sp_nak', '–')} GP", f"{gr} TOUGH" if gr else "GAMES")]
+    fl = _mk_flizes(k, veids)
     gap = 16
     tw = (W - 68 - 2 * gap) / 3
-    ty0, ty1 = y0 + 214, y0 + 214 + 132
+    ty0 = y0 + (214 if liela else 158)
+    ty1 = ty0 + (132 if liela else 108)
     for i, (lab, val, sub) in enumerate(fl):
         tx = x0 + i * (tw + gap)
         d.rounded_rectangle([tx, ty0, tx + tw, ty1], radius=22, fill=_NV_TILE + (255,))
-        d.text((tx + 18, ty0 + 12), lab, font=F("semi", 26), fill=_NV_LAB)
-        d.text((tx + 18, ty0 + 42), val, font=S.ietilpinat(d, val, "black", 54, tw - 36), fill=S.BALTS)
-        d.text((tx + 18, ty1 - 12), sub, font=F("semi", 22), fill=_NV_LAB, anchor="ls")
+        d.text((tx + 18, ty0 + (12 if liela else 8)), lab, font=F("semi", 26 if liela else 22), fill=_NV_LAB)
+        d.text((tx + 18, ty0 + (42 if liela else 34)), val, font=S.ietilpinat(d, val, "black", 54 if liela else 46, tw - 36), fill=S.BALTS)
+        if sub:
+            d.text((tx + 18, ty1 - (12 if liela else 9)), sub, font=S.ietilpinat(d, sub, "semi", 22 if liela else 19, tw - 36),
+                   fill=_NV_LAB, anchor="ls")
     ie = str(k.get("apaksa") or "")
-    if ie:
+    if ie and liela:
         d.text((x0, ty1 + 52), ie, font=S.ietilpinat(d, ie, "semi", 32, W - 68), fill=(203, 213, 225, 255), anchor="ls")
     d.rounded_rectangle(box, radius=34, outline=prim + (230,), width=5)
     return im
 
 
 def aina_fantasy_divi(t, c):
-    """Īsā versija: DROP spēlētāji vienā ainā – divas mazākas kartītes ar vārdiem; katra ieslīd, kad balss nosauc
-    uzvārdu, pēc mirkļa – DROP zīmogs."""
+    """Īsā versija: 1–3 mazākas kartītes ar vārdiem vienā ainā (fantasy DROP; xG – otra grupa un varoņa grupas #3, #2);
+    katra ieslīd, kad balss nosauc uzvārdu, pēc mirkļa – zīmogs (DROP / LUCKY / UNLUCKY / STEALING / COSTING)."""
     L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
     N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
     _nv_dalinas(L, t)
@@ -6718,8 +6760,13 @@ def aina_fantasy_divi(t, c):
     _fj_virsr(L, t, c["virsr"], 400, 120)
     K = c.get("kartites") or []
     n = len(K)
-    W, H = 940, (430 if n > 1 else 470)
-    ys = [500 + i * (H + 34) for i in range(n)] if n > 1 else [600]
+    veids_k = c.get("veids_k", "fantasy")
+    W = 940
+    if n >= 3:                                                        # trīs – kompaktas (bez iemesla rindas)
+        H, gap_k = 290, 22
+    else:
+        H, gap_k = (430 if n == 2 else 470), 34
+    ys = [500 + i * (H + gap_k) for i in range(n)] if n > 1 else [600]
     t_in, t_st = _nv_divi_laiki(c)
     kesa = c.setdefault("_kesa_divi", {})
     flash = None
@@ -6728,7 +6775,7 @@ def aina_fantasy_divi(t, c):
         if e <= 0:
             continue
         if i not in kesa:
-            kesa[i] = _nv_divi_karte(k, W, H)
+            kesa[i] = _nv_divi_karte(k, W, H, veids_k)
         im = kesa[i]
         x = 540 - im.width / 2 + (1 - e) * 260
         _nv_put(L, im, x, ys[i] + H / 2, 1.0, e, 0, "l")
@@ -6739,7 +6786,8 @@ def aina_fantasy_divi(t, c):
             st = Image.new("RGBA", (360, 120), (0, 0, 0, 0)); ds = ImageDraw.Draw(st)
             ds.rounded_rectangle([6, 6, 354, 114], radius=20, fill=(10, 14, 32, 215), outline=akc, width=9)
             ds.text((180, 60), txt, font=S.ietilpinat(ds, txt, "black", 74, 320), fill=akc, anchor="mm")
-            _nv_put(N, st, 830, ys[i] + 118, 1 + 1.4 * (1 - S.ease(min(1.0, ks))), min(1.0, ks * 3), 8)
+            _nv_put(N, st, 850, ys[i] + (118 if H >= 400 else 84), (0.88 if H >= 400 else 0.78) * (1 + 1.4 * (1 - S.ease(min(1.0, ks)))),
+                    min(1.0, ks * 3), 8)
             if 1.0 <= ks < 2.0:
                 flash = t_st[i]
     out = _nv_glow(N, 18, 1.0)
@@ -6828,7 +6876,8 @@ def _iss_xg(s, veids):
             else:
                 teik += f" {int(G)} allowed on {S.xgv(X)} expected, combined."
                 apaksa = f"{int(G)} ALLOWED ON {X:.1f} EXPECTED  ·  COMBINED"
-        kartes.append(_iss_xg_grupa(other, veids, k2, virsr, apaksa))
+        kartes.append({"tips": "fantasy_divi", "veids_k": veids, "ilgums": 3.6, "_tv": k2.get("_tv"), "virsr": virsr,
+                       "kartites": list(other)})
         runa.append(teik)
     if mine:
         virsr, _ = ISS_XG_GRUPA[(veids, hg)]
@@ -6844,8 +6893,8 @@ def _iss_xg(s, veids):
                              else f"{c.get('v2', '')}: {S.xgv(gs)}.")
             else:
                 dalas.append(f"The {c.get('v2', '')}: PDO {c['viz']['kart']['liels']}.")
-        kartes.append(_iss_xg_grupa(mine, veids, k2, virsr, "PDO  ·  AVERAGE 100" if veids == "komandas"
-                                    else "  ·  ".join(str(c["viz"]["kart"]["maz"]) for c in mine)))
+        kartes.append({"tips": "fantasy_divi", "veids_k": veids, "ilgums": 3.6, "_tv": k2.get("_tv"), "virsr": virsr,
+                       "kartites": list(mine)})
         runa.append(" ".join(dalas))
     kartes.append(hero)
     runa.append(rr[-2])
