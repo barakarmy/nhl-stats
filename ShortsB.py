@@ -368,7 +368,7 @@ class VideoFons:
             pass
 
 
-VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "streameri", "fakts", "tiesnesi", "atskats", "visi",
+VEIDI_PREFIKSI = ("speletaji", "komandas", "vartsargi", "fantasy", "streameri", "fakts", "tiesnesi", "atskats", "visi", "serijas",
                   "xg", "fakti")
 MEDIJU_VESTURE = "shorts_mediji.json"
 MEDIJI_JSON = "video_info.json"   # video\ mapē – visu ģenerēto video saraksts: datums, nosaukums, fons, mūzika (Content ID claim gadījumam)
@@ -389,6 +389,8 @@ def _parastas_atslegas(veids):
         return [veids, "fantasy", "visi"]
     if veids == "fakts":                                              # fakti_ (kā mūzikai) vai vecais fakts_
         return ["fakti", "fakts", "visi"]
+    if veids == "serijas":                                            # Streak watch – savi serijas_, citādi kā faktiem
+        return ["serijas", "fakti", "fakts", "visi"]
     return [veids, "visi"]
 
 
@@ -539,7 +541,7 @@ def sfx_notikumi(ainas):
     """[(laiks_s, efekts, skaļums)] – pēc tā, kas notiek katrā ainā."""
     ev, t0 = [], 0.0
     for nr, (veids, c, ilg) in enumerate(ainas):
-        if nr > 0 and not (nr == 1 and _NS_SFX.get("ev")):             # pēc noslēpuma āķa – swoosh jau ir āķa beigās
+        if nr > 0 and not (nr == 1 and _NS_SFX.get("ev")) and not (veids == "outro" and c and c.get("iss")):   # pēc āķa – swoosh jau ir
             ev.append((max(0, t0 - 0.12), "swoosh", 0.8))
         tips = c.get("tips") if c else veids
         if veids == "outro" and c and c.get("verdikts"):               # THE FINAL VERDICT: boom + tick katrai kartītei
@@ -653,7 +655,7 @@ def _izvelets(tips, mape):
 #      tiesnesi_ tiesnešu pārskats
 #      visi_ (vai bez priedēkļa) – rezerve, ja grupai nav neviena faila
 MUZIKAS_GRUPA = {"speletaji": "xg", "komandas": "xg", "vartsargi": "xg", "fantasy": "fantasy", "streameri": "fantasy",
-                 "fakts": "fakti", "tiesnesi": "tiesnesi"}
+                 "fakts": "fakti", "tiesnesi": "tiesnesi", "serijas": "fakti"}
 MUZIKAS_VECIE = {"xg": ("speletaji", "komandas", "vartsargi"), "fakti": ("fakts",)}   # vecie nosaukumi – arī der
 
 
@@ -1303,6 +1305,10 @@ def _kategorija(c):
     return {"liela_duo": "liela"}.get(k_, k_)
 
 
+FAKTI_TOPN_IEVADS = ["The NHL week in numbers: {n} stats that stood out.", "{N} numbers from this NHL week.",
+                     "This week's {n} wildest NHL stats.", "The NHL week, in {n} numbers."]
+
+
 def veids_fakti_b(m, a):
     D = S.fakti_dati(a.lidz)
     kand = S.fakti_kandidati(D, a.mape)
@@ -1333,8 +1339,8 @@ def veids_fakti_b(m, a):
                          "skaitlis": str(hero.get("aki_skaitlis") or hero.get("k_skaitlis") or hero.get("skaitlis")),
                          "apaksa": hero.get("aki_apaksa") or hero.get("skaitlis_apaksa", "")},
              "uzlime": S.reta_frase(S.UZLIME_NR1) if n > 1 else jaut.upper()}
-    runa.append((f"The NHL week in numbers: {skaits_v} stats that stood out. Number one: {hook_runa}. {jaut}" if n > 1
-                 else f"{hook_runa}. {jaut}"))
+    runa.append((S.reta_frase(FAKTI_TOPN_IEVADS, veids="fakts", n=2).format(n=skaits_v, N=skaits_v.capitalize())
+                  + f" Number one: {hook_runa}. {jaut}" if n > 1 else f"{hook_runa}. {jaut}"))
     # #n → #2: viena aina katram
     mini_runa = []
     for nr, c in zip(range(n, 1, -1), citi[::-1]):
@@ -2424,9 +2430,13 @@ def renderet(s, izvade, kanals="", balss=None):
         raise SystemExit("Nav ffmpeg (Windows: winget install ffmpeg, tad jauns terminālis).")
     if s["outro"].get("verdikts") and "verd_apaksa" not in s["outro"]:
         s["outro"]["verd_apaksa"] = S.reta_frase(S.VERDIKTA_APAKSA)
+    iss_o = bool(s["outro"].get("iss") and s["kartes"])               # īsā versija: beigās – cilpas aina
+    if iss_o:
+        s["kartes"][-1]["_bez_izejas"] = True
     ainas = ([("intro", None, s["intro"].get("ilgums", 3.2))] if s.get("intro") else []) + [("karte", c, c.get("ilgums", 3.6)) for c in s["kartes"]] \
-        + [("outro", s["outro"] if _jauna_beigu_aina(s["outro"]) else None,
-            VERDIKTS_ILGUMS if _jauna_beigu_aina(s["outro"]) else (4.5 if s["outro"].get("cta") else 3.6))]
+        + ([("outro", s["outro"], ISS_CILPA_ILG)] if iss_o else
+           [("outro", s["outro"] if _jauna_beigu_aina(s["outro"]) else None,
+             VERDIKTS_ILGUMS if _jauna_beigu_aina(s["outro"]) else (4.5 if s["outro"].get("cta") else 3.6))])
     tmp = tempfile.mkdtemp(prefix="shorts_")
     audio = S.ierunat(s["runa"], balss, tmp) if balss else None
     if audio and len(audio) == len(ainas) and all(dur > 0 for _, dur in audio):
@@ -2517,7 +2527,11 @@ def renderet(s, izvade, kanals="", balss=None):
             if nsl and veids == "intro":                              # noslēpuma āķis: pilns kadrs ar savu fonu
                 kadrs = aina_noslepums(t, nsl, ilg)
             else:
-                if veids == "intro":
+                iss_c = veids == "outro" and isinstance(c, dict) and c.get("iss") and nr > 0
+                if iss_c:                                             # īsā versija: iepriekšējā kartīte turpinās
+                    _pv, pc_, pilg_ = ainas[nr - 1]
+                    sl = fn_map.get(pc_.get("tips"), aina_karte)(pilg_ + t, pc_)
+                elif veids == "intro":
                     sl = aina_intro(t, s["intro"])
                 elif veids == "outro":
                     sl = aina_outro(t, s["outro"], kanals)
@@ -2549,7 +2563,10 @@ def renderet(s, izvade, kanals="", balss=None):
                 else:
                     alfa, dy = 1, 0
                 zm_ = 0.0 if (isinstance(c, dict) and c.get("_bez_tuv")) else (0.04 if nr == 0 else TUVINAJUMS)   # TOP N tablo – bez lēcieniem
-                sl = _zona(sl, zm_ * S.ease(t / ilg))                     # drošā zona + lēna tuvināšana
+                if iss_c:                                             # tuvinājums – kā iepriekšējās ainas beigās
+                    sl = _zona(sl, 0.0 if pc_.get("_bez_tuv") else TUVINAJUMS)
+                else:
+                    sl = _zona(sl, zm_ * S.ease(t / ilg))                 # drošā zona + lēna tuvināšana
                 if veids == "outro" and cilpa_sl is not None and t > ilg - CILPA:      # cilpa: atpakaļ uz āķi
                     sl = Image.blend(sl, cilpa_sl, S.ease((t - (ilg - CILPA)) / CILPA))
                 kadrs = fons.kadrs(t0 + t)
@@ -2619,7 +2636,8 @@ def renderet(s, izvade, kanals="", balss=None):
                 "fons": os.path.basename(fona_fails) if fona_fails else None, "fona_cels": fona_fails,
                 "muzika": os.path.basename(_IZMANTOTS["muzika"]) if _IZMANTOTS["muzika"] else None,
                 "muzikas_cels": _IZMANTOTS["muzika"], "balss": balss if audio else None, "garums_s": round(kopa, 1),
-                "sikts": _THUMB.get("kods") or "0", "sikts_veids": _THUMB.get("veids")}   # sīktēla izkārtojums (rotācijai)
+                "sikts": _THUMB.get("kods") or "0", "sikts_veids": _THUMB.get("veids"),   # sīktēla izkārtojums (rotācijai)
+                "iss": bool(s.get("_iss"))}
         mape_v = os.path.dirname(os.path.abspath(izvade))
         info["mape"] = os.path.basename(mape_v)
         vp = os.path.join(os.path.dirname(mape_v), MEDIJI_JSON)      # kopējais saraksts video\ mapē (paliek, ja video mapi izdzēš)
@@ -2666,6 +2684,11 @@ def ieslegt():
         sys.argv.remove("--bez-noslepuma")
         NOSL_AKIS = False
         print("ĀĶIS: bez noslēpuma (--bez-noslepuma)")
+    if "--iss" in sys.argv:                                           # īsā versija (~30–45 s): xG, fantasy, streameri, fakti, atskati
+        sys.argv.remove("--iss")
+        ISS["on"] = True
+        S.ISS = True
+        print("ĪSĀ VERSIJA: --iss (bez jautājuma 1, verdikta un CTA balsī; beigās cilpa uz āķi)")
     if "--sikts" in sys.argv:                                         # sīktēla izkārtojums ar roku: --sikts D  (0 = vecais)
         i_ = sys.argv.index("--sikts")
         if i_ + 1 < len(sys.argv) and sys.argv[i_ + 1].upper() in ("0", "A", "B", "D", "E", "F", "J", "K"):
@@ -2709,9 +2732,16 @@ def ieslegt():
         return s_
     S.atskats = atskats_ar_aki
     S.VEIDI["fakts"] = veids_fakti_b
+    S.VEIDI["serijas"] = veids_serijas_b                              # Streak watch (kopš 10.11.2026)
     for v_ in ("fantasy", "streameri"):                               # jaunais āķis fantasy / streameru video
         if v_ in S.VEIDI:
             S.VEIDI[v_] = (lambda f_: (lambda m, a: fantasy_aki(f_(m, a))))(S.VEIDI[v_])
+    if ISS["on"]:                                                     # īsā versija – pēc visiem pārveidojumiem
+        for v_ in ("speletaji", "komandas", "vartsargi", "fantasy", "streameri", "fakts"):
+            if v_ in S.VEIDI:
+                S.VEIDI[v_] = (lambda f_, vv: (lambda m, a: iss_parveidot(f_(m, _iss_args(a, vv)), vv)))(S.VEIDI[v_], v_)
+        orig_ats_iss = S.atskats
+        S.atskats = lambda fails, m, a: iss_parveidot(orig_ats_iss(fails, m, a), "atskats")
     for arg, k in (("--muzika", "muzika"), ("--fons", "fons")):     # konkrēts fails testam:  --muzika dziesma.mp3
         if arg in sys.argv:
             i_ = sys.argv.index(arg)
@@ -2967,6 +2997,7 @@ def fantasy_aki(s):
     return _ns_fantasy(s)                                             # noslēpuma āķis (ja ieslēgts)
 
 
+XG_VIRSR_PAPILDU = {"speletaji": [[("LUCKY", S.BALTS), ("OR", S.BALTS), ("DUE?", S.DZELTENS)]]}   # pamīšus ar XG_VIRSR
 XG_VIRSR = {"speletaji": [("WHO'S", S.BALTS), ("RUNNING", S.BALTS), ("ON LUCK?", S.DZELTENS)],
             "vartsargi": [("WHO'S", S.BALTS), ("STEALING", S.BALTS), ("GAMES?", S.DZELTENS)],
             "komandas": [("WHO'S", S.BALTS), ("LIVING", S.BALTS), ("ON LUCK?", S.DZELTENS)]}
@@ -2997,16 +3028,17 @@ def xg_jauns(s, veids):
         kr_rad = [tuple(c["akc"]) for c in kar]
         lab_, liels_ = XG_TV[veids]
         tv = {"lab": lab_, "liels": liels_, "kr": kr_rad, "labaja": per}
+        virsr_ = S.reta_frase([XG_VIRSR[veids]] + XG_VIRSR_PAPILDU.get(veids, []), veids=veids, n=1)
         ha = dict(hero["viz"]["aki"])
         ha.update({"vards": str(hero.get("v2", "")).upper(), "kom": hero.get("badge"), "tag": s["intro"].get("tag", ""), "kart_txt": "#1"})
         orig = sorted(kar, key=lambda c: (0 if c["viz"]["grupa"] == "laim" else 1, c.get("nr", 0)))
         kartis = [{"kom": str(c.get("badge", "")), "poz": c["viz"].get("poz", ""), "akc": tuple(c["akc"]),
                    "liels": c["viz"]["kart"]["liels"], "maz": c["viz"]["kart"]["maz"], "lab": c["viz"]["zimogs"]} for c in orig]
-        k2 = {"tips": "fantasy_kartis", "ilgums": 6.0, "tag": s["intro"].get("tag", ""), "_tv": tv, "virsr": XG_VIRSR[veids],
+        k2 = {"tips": "fantasy_kartis", "ilgums": 6.0, "tag": s["intro"].get("tag", ""), "_tv": tv, "virsr": virsr_,
               "apaksa": "  ·  ".join(x for x in (per, XG_APAKSA[veids]) if x), "kartis": kartis,
               "n_pick": sum(1 for c in orig if c["viz"]["grupa"] == "laim"), "rek": None}
         if s.get("xg_karte") and all(c["viz"].get("xy") for c in orig):          # līgas karte (neko nepasaka priekšā)
-            k2 = {"tips": "xg_karte", "ilgums": 5.5, "_tv": tv, "virsr": XG_VIRSR[veids], "karte": s["xg_karte"],
+            k2 = {"tips": "xg_karte", "ilgums": 5.5, "_tv": tv, "virsr": virsr_, "karte": s["xg_karte"],
                   "apaksa": "  ·  ".join(x for x in (per, XG_APAKSA[veids]) if x),
                   "izcelti": [(float(c["viz"]["xy"][0]), float(c["viz"]["xy"][1]), tuple(c["akc"]), f"#{c.get('nr', '')}") for c in orig]}
         jaunas = [k2]
@@ -3094,7 +3126,8 @@ def fantasy_atskats_jauns(s):
                            "lab": str(c.get("liels", ""))})
         tv = {"lab": "NHL · FANTASY", "liels": "RECAP", "kr": kr_rez, "labaja": f"WEEK OF {ned}"}
         k2 = {"tips": "fantasy_kartis", "ilgums": 6.0, "tag": vecais.get("tag", ""), "_tv": tv,
-              "virsr": [("LAST", S.BALTS), ("WEEK'S", S.BALTS), ("CALLS", S.DZELTENS)],
+              "virsr": S.reta_frase([[("LAST", S.BALTS), ("WEEK'S", S.BALTS), ("CALLS", S.DZELTENS)],
+                                     [("CHECKING", S.BALTS), ("OUR", S.BALTS), ("CALLS", S.DZELTENS)]], veids="atskats_fantasy", n=1),
               "apaksa": f"{ned}  ·  VS A TYPICAL PLAYER IN THE SAME POOL",
               "kartis": kartis, "n_pick": n_add, "rek": tuple(s["atskats_rek"]) if s.get("atskats_rek") else None}
         jaunas, nr_ = [k2], {}
@@ -3312,7 +3345,8 @@ def _nv_kartis_dati(s, vecais):
     stream = "STREAM" in str((vecais or {}).get("tag", "")).upper()
     return {"tips": "fantasy_kartis", "ilgums": 6.0, "tag": (vecais or {}).get("tag", "NHL  ·  FANTASY WAIVER WIRE"),
             "virsr": [("THIS", S.BALTS), ("WEEK'S", S.BALTS), ("STREAMS", S.DZELTENS)] if stream else
-                     [("NEXT", S.BALTS), ("WEEK'S", S.BALTS), ("MOVES", S.DZELTENS)],
+                     S.reta_frase([[("NEXT", S.BALTS), ("WEEK'S", S.BALTS), ("MOVES", S.DZELTENS)],
+                                   [("WAIVER", S.BALTS), ("WIRE", S.BALTS), ("PICKS", S.DZELTENS)]], veids="fantasy", n=1),
             "apaksa": "  ·  ".join(x for x in (ned, f"PICKUPS UNDER {mr[1]}% ROSTERED" if mr else "") if x),
             "kartis": kartis, "n_pick": len(pk), "rek": (int(rr[1]), int(rr[2])) if rr else None}
 
@@ -4905,7 +4939,7 @@ SS_RUNA_NAV = ["No two-hour shutout streak this week. These goalies were still t
                "The goalies of the week, ranked by save percentage."]
 
 
-def fakti_serijas_ainas(D, m, izv, tv, idx):
+def fakti_serijas_ainas(D, m, izv, tv, idx, solo=False):
     """Divas kopsavilkuma ainas pirms verdikta (ja ir dati): punktu sērijas 10+ un nedēļas sausās sērijas.
     → [(kartīte, balss teksts)]. Video jau atsevišķi pieminētās sērijas rāda, bet balsī nesauc vārdā."""
     out = []
@@ -4919,7 +4953,8 @@ def fakti_serijas_ainas(D, m, izv, tv, idx):
                        "video": x["veids"] == "ALL" and f"points_serija:{x['pid']}" in mans,
                        "izcelt": x["n"] >= S.PUNKTU_SERIJA_MIN} for x in ps]
             desmit = [x for x in ps if x["n"] >= S.PUNKTU_SERIJA_MIN]
-            runa = S.reta_frase(PS_RUNA_10 if desmit else PS_RUNA_NAV, veids="fakts", n=3)   # vispārīgi – vārdi redzami sarakstā
+            runa = (S.reta_frase(PS_SOLO if desmit else PS_SOLO_NAV, veids="serijas", n=2) if solo else
+                    S.reta_frase(PS_RUNA_10 if desmit else PS_RUNA_NAV, veids="fakts", n=3))   # vispārīgi – vārdi redzami sarakstā
             out.append(({"tips": "fakts_serijas", "ilgums": 4.8, "virsr": [("POINT", S.BALTS), ("STREAKS", S.DZELTENS)],
                          "apaksa": "LONGEST ACTIVE  ·  ALL / HOME / ROAD  ·  10+ IN YELLOW", "rindas": rindas, "_tv": tv, "_tv_idx": idx}, runa))
         # GOALIES OF THE WEEK (kopš 09.11.2026): augšā sausās sērijas ≥ 120 min (dzeltenas), tālāk – nedēļas labākie pēc
@@ -4944,7 +4979,7 @@ def fakti_serijas_ainas(D, m, izv, tv, idx):
                            "maz": "SAVE %", "apaksa": f"{int(r_['gs'])} starts · {int(r_['sv'])} saves, {int(r_['ga'])} goals allowed",
                            "izcelt": False})
         if rindas:
-            runa = S.reta_frase(SS_RUNA if ss else SS_RUNA_NAV, veids="fakts", n=3)                # vispārīgi – vārdi redzami sarakstā
+            runa = S.reta_frase(SS_RUNA if ss else SS_RUNA_NAV, veids="serijas" if solo else "fakts", n=3)   # vārdi – sarakstā
             out.append(({"tips": "fakts_serijas", "ilgums": 4.8, "virsr": [("GOALIES", S.BALTS), ("OF THE WEEK", S.DZELTENS)],
                          "apaksa": "SHUTOUT STREAKS 120+ MIN IN YELLOW  ·  SAVE %  ·  2+ STARTS", "rindas": rindas,
                          "_tv": tv, "_tv_idx": idx}, runa))
@@ -5417,17 +5452,23 @@ _NS_SFX = {"ev": None}
 
 NOSL_Q1 = {
     "speletajs": [(("WHO IS", "THIS?"), "Who is this?"), (("GUESS", "WHO?"), "Guess who."),
-                  (("KNOW", "THIS GUY?"), "Do you know this guy?")],
+                  (("KNOW", "THIS GUY?"), "Do you know this guy?"), (("CAN YOU", "NAME HIM?"), "Can you name him?"),
+                  (("RECOGNIZE", "THIS JERSEY?"), "Recognize this jersey?"), (("ANY", "GUESSES?"), "Any guesses?")],
     "vartsargs": [(("WHO IS", "THIS?"), "Who is this?"), (("GUESS THE", "GOALIE"), "Guess the goalie."),
-                  (("KNOW THIS", "GOALIE?"), "Do you know this goalie?")],
+                  (("KNOW THIS", "GOALIE?"), "Do you know this goalie?"), (("NAME", "THIS GOALIE"), "Name this goalie."),
+                  (("RECOGNIZE", "THIS JERSEY?"), "Recognize this jersey?"), (("ANY", "GUESSES?"), "Any guesses?")],
     "komanda": [(("WHICH TEAM", "IS THIS?"), "Which team is this?"), (("GUESS THE", "TEAM"), "Guess the team."),
-                (("NAME THIS", "TEAM"), "Can you name this team?")],
+                (("NAME THIS", "TEAM"), "Can you name this team?"), (("RECOGNIZE", "THESE COLORS?"), "Recognize these colors?"),
+                (("WHO", "WEARS THIS?"), "Who wears this?"), (("ANY", "GUESSES?"), "Any guesses?")],
     "duo": [(("WHO ARE", "THESE TWO?"), "Who are these two?"), (("GUESS", "THE DUO"), "Guess the duo."),
-            (("KNOW", "THESE TWO?"), "Do you know these two?")],
+            (("KNOW", "THESE TWO?"), "Do you know these two?"), (("NAME", "THE PAIR"), "Name the pair."),
+            (("RECOGNIZE", "THESE TWO?"), "Recognize these two?"), (("ANY", "GUESSES?"), "Any guesses?")],
     "atskats_f": [(("OUR PICKS", "LAST WEEK"), "Our picks from last week."), (("REMEMBER", "THESE GUYS?"), "Remember these guys?"),
-                  (("LAST WEEK", "WE SAID…"), "Last week, we said…")],
+                  (("LAST WEEK", "WE SAID…"), "Last week, we said…"), (("REMEMBER", "OUR PICKS?"), "Remember our picks?"),
+                  (("LAST WEEK'S", "CALLS"), "Last week's calls."), (("THE PICKS", "WE MADE"), "The picks we made.")],
     "atskats_xg": [(("WE FLAGGED", "THESE {X}"), "We flagged these {x}."), (("REMEMBER", "THESE {X}?"), "Remember these {x}?"),
-                   (("xG FLAGGED", "THESE {X}"), "The numbers flagged these {x}.")],
+                   (("xG FLAGGED", "THESE {X}"), "The numbers flagged these {x}."), (("REMEMBER", "OUR LIST?"), "Remember our list?"),
+                   (("THE {X}", "WE FLAGGED"), "The {x} we flagged."), (("BACK TO", "OUR LIST"), "Back to our list.")],
 }
 NOSL_ATKL = {     # kad noslēpuma spēlētāja / komandas kartīte parādās – balss sākumā (atklāšana)
     "speletajs": ["Mystery solved.", "Remember the jersey?", "Did you guess right?", "Time for the reveal.", "Here's our mystery man."],
@@ -5506,12 +5547,20 @@ NOSL_Q2 = {
                   (("WERE WE", "RIGHT?"), "Were we right?"),
                   (("HIT", "OR", "MISS?"), "Hit, or miss?"),
                   (("DID WE", "NAIL IT?"), "Did we nail it?"),
-                  (("TIME TO", "CHECK THE", "RECEIPTS"), "Time to check the receipts.")],
+                  (("TIME TO", "CHECK THE", "RECEIPTS"), "Time to check the receipts."),
+                  (("DID THEY", "PAY", "OFF?"), "Did they pay off?"),
+                  (("GOOD ADDS", "OR", "BAD ADDS?"), "Good adds, or bad adds?"),
+                  (("WORTH", "THE", "PICKUP?"), "Were they worth the pickup?"),
+                  (("DID WE", "HELP YOUR", "TEAM?"), "Did we help your team?")],
     "atskats_xg": [(("WAS xG", "RIGHT?"), "Were the numbers right?"),
                    (("CALLED IT", "OR", "BLEW IT?"), "Called it, or blew it?"),
                    (("HIT", "OR", "MISS?"), "Hit, or miss?"),
                    (("WERE WE", "RIGHT?"), "Were we right?"),
-                   (("LET'S CHECK", "THE", "RECEIPTS"), "Let's check the receipts.")],
+                   (("LET'S CHECK", "THE", "RECEIPTS"), "Let's check the receipts."),
+                   (("DID THE", "NUMBERS", "HOLD?"), "Did the numbers hold?"),
+                   (("LUCK", "OR", "SKILL?"), "Luck, or skill?"),
+                   (("DID xG", "SEE IT", "COMING?"), "Did the numbers see it coming?"),
+                   (("RIGHT", "OR", "WRONG?"), "Right, or wrong?")],
 }
 
 
@@ -5955,6 +6004,18 @@ def _ns_laiki(nsl, vardi=None, ilg=None):
     """Notikumu laiki āķa ainā (s): rindu parādīšanās pēc balss vārdiem (vardi – jau ar +0,15 s nobīdi), glitch,
     sirdspuksti, izeja. Bez balss – noklusējums."""
     q1, q2 = nsl["q1"][0], nsl["q2"][0]
+    if not q1:                                                        # īsā versija: jautājums 2 jau pirmajā kadrā
+        ok = bool(vardi)
+        a2, b2 = (vardi[0][0], vardi[-1][1]) if ok else (0.15, 1.0)
+        vv, t2, c = [len(r.split()) for r in q2], [], 0
+        for x in vv:
+            t2.append(vardi[min(int(round(c * len(vardi) / max(1, sum(vv)))), len(vardi) - 1)][0] if ok
+                      else a2 + (b2 - a2) * c / max(1, sum(vv)))
+            c += x
+        t2[0] = 0.0
+        beigas = max(float(ilg or 0), b2 + 1.0)
+        return {"q1": [], "q2": t2, "q2_beigas": b2, "glitch": [min(b2 + 0.4, beigas - 0.7)], "glitch_liels": (-1.0, -1.0),
+                "sirds": b2 + 0.2, "izeja": beigas - 0.45, "beigas": beigas}
     a1, b1, a2, b2 = 0.15, 0.85, 1.30, 2.10
     n1 = len(S.balsij(nsl["q1"][1]).split())
     ok = bool(vardi) and len(vardi) > n1
@@ -5988,9 +6049,9 @@ def _ns_laiki(nsl, vardi=None, ilg=None):
 
 def _ns_sfx_ev(L_):
     """Āķa skaņu efekti (laiks no ainas sākuma)."""
-    ev = [(0.0, "riser", 0.5), (L_["q1"][-1], "klik", 0.6)]
+    ev = [(0.0, "riser", 0.5)] + ([(L_["q1"][-1], "klik", 0.6)] if L_["q1"] else [])
     ev += [(x, "glitch_mazs", 0.45) for x in L_["glitch"]]
-    ev += [(L_["glitch_liels"][0], "glitch", 0.8)]
+    ev += [(L_["glitch_liels"][0], "glitch", 0.8)] if L_["glitch_liels"][0] >= 0 else []
     ev += [(x, "klik", 0.6) for x in L_["q2"][1:-1]]
     ev += [(L_["q2"][0], "trieciens", 0.5), (L_["q2"][-1], "trieciens", 0.95), (L_["sirds"], "sirds", 0.9),
            (L_["izeja"] - 0.05, "swoosh", 0.8)]
@@ -6154,28 +6215,32 @@ def _sfx_klik():
 
 
 # ---------------------------------------------------------------- dati katram video veidam
-def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None, atcere=None, atkl=None):
+def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None, atcere=None, atkl=None, bez_q1=False):
     """Ieliek āķī noslēpumu: krekli [(komanda, uzvārds)], jautājums 1 / 2 (neatkārtojas pēdējos video), balss.
     runa_pec – vecā āķa teikums (atskatiem – rezultāts) → 2. ainas balss sākumā."""
     if not (NOSL_AKIS and JAUNS_FANTASY) or not s or not s.get("intro") or not krekli or len(s.get("runa") or []) < 2:
         return s
     try:                                                              # viss vispirms uz kopijas – kļūdas gadījumā video
-        a = S.reta_frase(q1, veids=veids_v, n=2)                      # paliek pilnībā ar parasto āķi (ne pa pusei mainīts)
-        b = S.reta_frase(q2, veids=veids_v, n=4)
-        if x_vards:
+        bez_q1 = bez_q1 or ISS["on"]                                  # īsā versija: tikai jautājums 2
+        a = ((), "") if bez_q1 else S.reta_frase(q1, veids=veids_v, n=3)   # paliek pilnībā ar parasto āķi
+        q2_ = [x for x in q2 if repr(x) not in S.Frazes.vesture] or q2  # ne tas pats, kas citā video tikko (atskati u.c.)
+        b = S.reta_frase(q2_, veids=veids_v, n=4)
+        if x_vards and a[0]:
             a = (tuple(r.replace("{X}", x_vards.upper()) for r in a[0]), a[1].replace("{x}", x_vards.lower()))
         nsl = {"krekli": [(str(k or ""), str(v or "").upper()) for k, v in krekli][:8], "q1": a, "q2": b}
         runa = [str(r) for r in s["runa"]]
         if runa_pec:
             runa[1] = (str(runa_pec).strip() + " " + runa[1]).strip()
-        runa[0] = f"{a[1]} {b[1]}"
+        runa[0] = f"{a[1]} {b[1]}".strip()
         if atkl and 0 < atkl[0] < len(runa) - 1:                      # varoņa kartīte: "Mystery solved. Olen Zellweger, …"
             fr_ = S.reta_frase(NOSL_ATKL[atkl[1]], veids=veids_v, n=3)
+            nsl["atkl_fr"] = fr_                                      # īsajai versijai
             t_ = runa[atkl[0]]
             runa[atkl[0]] = ("Number one. " + fr_ + " " + t_[len("Number one. "):]) if t_.startswith("Number one. ") \
                 else (fr_ + " " + t_)
         if atcere:                                                    # cilpa: "…and remember: 7 goals." → "…and remember the name."
             runa[-1] = re.sub(r"and remember:\s*[^.?!]*\d[^.?!]*[.?!]?\s*$", f"and remember {atcere}.", runa[-1])
+            runa[-1] = _ns_beigas(runa[-1], veids_v, atcere)            # beigu teikuma varianti (NOSL_BEIGAS)
         s["runa"][:] = runa
         s["intro"]["noslepums"] = nsl
         s["intro"]["ilgums"] = 3.3
@@ -6184,6 +6249,62 @@ def noslepuma_aki(s, krekli, q1, q2, veids_v, x_vards=None, runa_pec=None, atcer
         print(f"  (noslēpuma āķis: {type(ex).__name__}: {ex} – parastais āķis)")
         (s.get("intro") or {}).pop("noslepums", None)
     return s
+
+
+# beigu teikums noslēpuma video (pēdējais "Follow…" teikums; pirmais variants – līdzšinējais teksts)
+NOSL_BEIGAS = {
+    "speletajs": ["Follow, and remember {atcere}.", "Follow, and keep an eye on him.", "Follow, and remember this jersey.",
+                  "Follow, and we'll see who was right."],
+    "vartsargs_labs": ["Follow, and remember: this goalie is stealing games.", "Follow, and keep an eye on this goalie.",
+                       "Follow, and remember this jersey.", "Follow, and we'll see if the wall holds."],
+    "vartsargs_slikts": ["Follow, and remember: this goalie is costing games.", "Follow, and keep an eye on this goalie.",
+                         "Follow, and remember this jersey.", "Follow, and we'll see if he turns it around."],
+    "komanda_laim": ["Follow, and remember: this team is winning on luck.", "Follow, and keep an eye on this team.",
+                     "Follow, and remember these colors.", "Follow, and we'll see who was right."],
+    "komanda_nelaim": ["Follow, and remember: this team is better than its record.", "Follow, and keep an eye on this team.",
+                       "Follow, and remember these colors.", "Follow, and we'll see who was right."],
+    "fakti": ["Follow for the NHL week in numbers, and remember {atcere}.", "New numbers every Friday. Follow, and remember {atcere}.",
+              "That's the week in numbers. Follow, and remember {atcere}.", "Follow for next week's numbers, and remember {atcere}."],
+}
+
+
+def _ns_beigas(teik, veids_v, atcere):
+    """Pēdējā "Follow…, and remember…" teikuma vietā – variants no NOSL_BEIGAS (šī veida pēdējos 2 video neatkārtojas)."""
+    try:
+        i = teik.rfind("Follow")
+        if i < 0 or "remember" not in teik[i:]:
+            return teik
+        aste = teik[i:]
+        if veids_v == "fakts":
+            k = "fakti"
+        elif veids_v == "vartsargi":
+            k = "vartsargs_slikts" if "costing" in aste else "vartsargs_labs"
+        elif veids_v == "komandas":
+            k = "komanda_nelaim" if "better than" in aste else "komanda_laim"
+        elif veids_v == "speletaji":
+            k = "speletajs"
+        else:
+            return teik
+        return teik[:i] + S.reta_frase(NOSL_BEIGAS[k], veids=veids_v, n=2).format(atcere=atcere)
+    except Exception:                                                 # noqa: BLE001
+        return teik
+
+
+def _virsr_izvele(saraksts, veids, lauki):
+    """YouTube virsraksts no saraksta: tikai tie, kuriem ir visi dati; šī veida pēdējos 4 video neatkārtojas."""
+    lauki = {k: v for k, v in lauki.items() if v not in (None, "")}
+    der = []
+    for x in saraksts:
+        try:
+            x.format(**lauki)
+            der.append(x)
+        except (KeyError, IndexError, ValueError):
+            pass
+    x = S.reta_frase(der or saraksts[:1], veids=veids, n=4 if len(der) > 4 else max(1, len(der) - 1))
+    try:
+        return x.format(**lauki)
+    except (KeyError, IndexError, ValueError):
+        return None
 
 
 def _ns_virsraksts(s, vards, komanda=False):
@@ -6225,21 +6346,64 @@ def _ns_vards_apraksta(s, nos):
 
 # xG virsraksts noslēpuma video – pēc VAROŅA (kartīte, par kuru āķis), ne pēc saraksta #1:
 # līdz 04.11. nelaimīga varoņa video virsrakstā palika laimīgākā vārds ("Alexis Lafrenière is running HOT…").
+# (kopš 10.11.2026 – saraksti; pirmais – līdzšinējais). {G} "9 goals", {xG} "3.6", {gs} "10.0", {pdo} "107.9"
 NOSL_XG_VIRSR = {
-    ("speletaji", True): "Guess who's running HOT… but xG says it won't last 🏒",
-    ("speletaji", False): "Guess who's due for goals – xG says they're coming 🏒",
-    ("vartsargi", True): "Guess who's STEALING games – the numbers 🥅",
-    ("vartsargi", False): "Guess which goalie is COSTING games – the numbers 🥅",
-    ("komandas", True): "Guess which team is winning on LUCK – here's the proof 🏒",
-    ("komandas", False): "Guess which team is better than its record – here's the proof 🏒",
+    ("speletaji", True): ["Guess who's running HOT… but xG says it won't last 🏒",
+                          "Guess who's scoring way above his chances – can it last?",
+                          "{G} on {xG} expected – guess who's living on luck",
+                          "Guess who's the luckiest scorer in the NHL right now",
+                          "Hot streak or pure luck? Guess who xG is worried about",
+                          "Guess who's finishing everything – xG says it's luck"],
+    ("speletaji", False): ["Guess who's due for goals – xG says they're coming 🏒",
+                           "{G} on {xG} expected – guess who's due",
+                           "Guess who's the unluckiest scorer in the NHL right now",
+                           "Guess who xG says is about to break out",
+                           "Bad luck, not bad play – guess who's due for goals",
+                           "Guess who's a buy-low – the numbers behind the slump"],
+    ("vartsargi", True): ["Guess who's STEALING games – the numbers 🥅",
+                          "Guess which goalie is saving {gs} goals above expected",
+                          "Guess the hottest goalie in the NHL – by the numbers",
+                          "Brick wall or luck? Guess which goalie the numbers love",
+                          "Guess which goalie is carrying his team right now"],
+    ("vartsargi", False): ["Guess which goalie is COSTING games – the numbers 🥅",
+                           "Guess which goalie is {gs} goals worse than expected",
+                           "Bad luck or bad goalie? Guess who the numbers say",
+                           "Guess which goalie needs a turnaround – fast"],
+    ("komandas", True): ["Guess which team is winning on LUCK – here's the proof 🏒",
+                         "Guess which team's record is too good to be true",
+                         "PDO {pdo}: guess which team is riding the bounces",
+                         "Good or lucky? Guess which team the numbers doubt"],
+    ("komandas", False): ["Guess which team is better than its record – here's the proof 🏒",
+                          "Guess which team the bounces keep beating",
+                          "PDO {pdo}: guess which team is due for a turnaround",
+                          "Guess the unluckiest team in the NHL right now"],
 }
 
 
-def _ns_xg_virsraksts(s, veids, laim, vards):
+def _xg_lauki(hero):
+    """Skaitļi virsrakstam no varoņa kartītes."""
+    out = {}
+    try:
+        kl = str(((hero.get("viz") or {}).get("kart") or {}).get("liels") or "")
+        j = next((x for it in (hero.get("viz") or {}).get("spec") or [] for x in it[1:]
+                  if isinstance(x, dict) and x.get("tips") == "joslas"), None)
+        if j and len(j.get("rind") or []) >= 2 and str(j["rind"][0][0]).upper() == "GOALS":
+            G = int(round(float(j["rind"][0][1])))
+            out["G"], out["xG"] = f"{G} goal{'' if G == 1 else 's'}", str(j["rind"][1][2])
+        v = _parsk(kl)
+        if v is not None:
+            out["gs"], out["pdo"] = f"{abs(v):.1f}", f"{v:.1f}"
+    except Exception:                                                 # noqa: BLE001
+        pass
+    return out
+
+
+def _ns_xg_virsraksts(s, veids, laim, vards, hero=None):
     if not (NOSL_VIRSRAKSTS and s and vards and (s.get("intro") or {}).get("noslepums")):
         return
     v_ = veids if veids in ("vartsargi", "komandas") else "speletaji"
-    s["virsraksts"] = NOSL_XG_VIRSR[(v_, bool(laim))]
+    sar = NOSL_XG_VIRSR[(v_, bool(laim))]
+    s["virsraksts"] = _virsr_izvele(sar, v_, _xg_lauki(hero or {})) or sar[0]
     _ns_vards_apraksta(s, vards)
 
 
@@ -6251,8 +6415,43 @@ def _ns_fantasy(s):
               next((j for j, c in enumerate(kk) if c.get("tips") == "fantasy"), None))
     noslepuma_aki(s, [(af.get("kom"), af.get("vards"))], NOSL_Q1["speletajs"], NOSL_Q2["streameri" if stream else "fantasy"],
                   "streameri" if stream else "fantasy", atkl=(k1 + 1, "speletajs") if k1 is not None else None)
+    v0 = str(s.get("virsraksts") or "")
     _ns_virsraksts(s, af.get("vards"))
+    if str(s.get("virsraksts") or "") != v0:                          # "guess who" izdevās → viens no variantiem
+        try:
+            m_ = re.match(r"(\d+) fantasy hockey (?:pickups?|streamers)(?: & (\d+) drops?)?", v0)
+            mg = re.search(r"has (\d+) games? left", v0)
+            viz = (kk[k1].get("viz") or {}) if k1 is not None else {}
+            rost = viz.get("rost")
+            n_, d_ = (int(m_.group(1)), int(m_.group(2) or 0)) if m_ else (None, 0)
+            g_ = int(mg.group(1)) if mg else viz.get("sp_nak")
+            lauki = {"n": n_, "pickups": "pickup" if n_ == 1 else "pickups", "adds": "add" if n_ == 1 else "adds",
+                     "D_amp": f" & {d_} drop{'' if d_ == 1 else 's'} " if d_ else " ",
+                     "D_comma": f", {d_} drop{'' if d_ == 1 else 's'} " if d_ else " ",
+                     "r": (f"{rost:.0f}" if rost >= 1 else "under 1") if isinstance(rost, (int, float)) else None,
+                     "g": g_}
+            jauns = _virsr_izvele(NOSL_FANTASY_VIRSR["streameri" if stream else "fantasy"],
+                                  "streameri" if stream else "fantasy", lauki)
+            if jauns:
+                s["virsraksts"] = re.sub(r"\s+", " ", jauns).strip()
+        except Exception:                                             # noqa: BLE001
+            pass
     return s
+
+
+NOSL_FANTASY_VIRSR = {   # {D_amp} " & 2 drops" / " ", {D_comma} ", 2 drops" / " "; pirmais – līdzšinējais
+    "fantasy": ["{n} fantasy hockey {pickups}{D_amp}for next week – guess who's a must-add 🏒",
+                "Guess who's still on waivers – {n} fantasy {pickups} for next week",
+                "Fantasy hockey waiver wire: {n} {adds}{D_comma}– guess the steal of the week",
+                "Guess who's rostered in just {r}% of leagues – next week's fantasy pickups",
+                "{n} fantasy hockey {adds} before your league wakes up – guess who's #1",
+                "Next week's fantasy hockey moves: {n} {adds}{D_comma}– guess who"],
+    "streameri": ["{n} fantasy hockey streamers for the rest of the week – guess who has {g} games left 🏒",
+                  "Guess the best stream before Sunday – {n} fantasy hockey streamers",
+                  "{n} quick fantasy hockey adds for the rest of the week – guess who's #1",
+                  "Need games before Sunday? Guess our top fantasy streamer",
+                  "Guess who's just {r}% rostered with {g} games left – fantasy streamers"],
+}
 
 
 def _ns_xg(s, veids, hero):
@@ -6261,13 +6460,13 @@ def _ns_xg(s, veids, hero):
         noslepuma_aki(s, [(hero.get("badge"), "")], NOSL_Q1["komanda"], NOSL_Q2["kom_laim" if laim else "kom_nelaim"], veids,
                       atcere="this team", atkl=(len(s["runa"]) - 2, "komanda"))
         k_ = S.KOMANDAS.get(str(hero.get("badge") or ""))
-        _ns_xg_virsraksts(s, veids, laim, f"{k_[0]} {k_[1]}" if k_ else hero.get("v2"))
+        _ns_xg_virsraksts(s, veids, laim, f"{k_[0]} {k_[1]}" if k_ else hero.get("v2"), hero)
     else:
         q1 = NOSL_Q1["vartsargs" if veids == "vartsargi" else "speletajs"]
         q2 = NOSL_Q2[("va_labs" if laim else "va_slikts") if veids == "vartsargi" else ("sp_laim" if laim else "sp_nelaim")]
         noslepuma_aki(s, [(hero.get("badge"), hero.get("v2"))], q1, q2, veids, atcere="the name",
                       atkl=(len(s["runa"]) - 2, "vartsargs" if veids == "vartsargi" else "speletajs"))
-        _ns_xg_virsraksts(s, veids, laim, " ".join(str(x) for x in (hero.get("v1"), hero.get("v2")) if x))
+        _ns_xg_virsraksts(s, veids, laim, " ".join(str(x) for x in (hero.get("v1"), hero.get("v2")) if x), hero)
     return s
 
 
@@ -6300,6 +6499,402 @@ def _ns_fakti(rez, hero):
         elif not atsl.startswith("liela_duo"):
             _ns_virsraksts(rez, v)
     return rez
+
+
+# ================================================================ ĪSĀ VERSIJA (--iss, kopš 10.11.2026)
+# Āķis tikai ar jautājumu 2 → saīsinātas ainas → beigās varoņa kartīte paliek, balss saka cilpas teikumu ("So… why is he
+# still free?") un video pāriet atpakaļ uz āķi. Bez THE FINAL VERDICT un bez SHEET piedāvājuma balsī (aprakstā – paliek).
+# Fantasy ~45 s, streameri ~35 s, xG ~40 s, fakti ~30 s, atskati ~30 s.  Palaišana:  python ShortsB.py --veids fantasy --iss
+ISS = {"on": False}
+ISS_CILPA_ILG = 1.6              # beigu ainas minimums (ar balsi – cilpas teikuma garums + 0,45 s)
+ISS_CILPA_Q = ["So… {q}", "Your call: {q}", "{Q}", "One more time: {q}"]          # jautājums 2 – jautājums
+ISS_CILPA_APG = ["{Q}", "Like we said: {q}"]                                        # jautājums 2 – apgalvojums
+_VARDIEM = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+
+ISS_FAN_IEVADS = {
+    False: ["{N} pickups for next week, all {rost}. Green games mean soft defenses.",
+            "{N} adds for next week, all {rost}. Green means an easy matchup.",
+            "Next week's waiver wire: {n} adds, all {rost}. Green games are the soft ones."],
+    True: ["{N} streamers for the rest of the week, all {rost}. Green games mean soft defenses.",
+           "{N} quick adds before Sunday, all {rost}. Green means an easy matchup.",
+           "Need games before Sunday? {N} streamers, all {rost}. Green games are the soft ones."]}
+ISS_FAN_ROST = ["Only {r} percent of leagues have him.", "Just {r} percent rostered.", "{a} percent of leagues still don't have him."]
+ISS_DROP_VIRSR = [[("WHO", S.BALTS), ("TO", S.BALTS), ("CUT", S.DZELTENS)],
+                  [("TIME", S.BALTS), ("TO", S.BALTS), ("CUT", S.DZELTENS)]]
+ISS_DROP_VIENS = ["Cut {a}.", "Time to cut {a}.", "Drop {a}."]
+ISS_DROP_DIVI = ["Cut {a} and {b}.", "Time to move on from {a} and {b}.", "On the way out: {a} and {b}."]
+
+ISS_XG_KARTE = {   # (līgas karte, ja kartes nav – kārtis)
+    "speletaji": (["Goals versus expected goals since {no}. Above the line: lucky. Below it: due.",
+                   "Every NHL scorer since {no}. Above the line is luck. Below it, goals are coming.",
+                   "Goals against the chances, since {no}. The further from the line, the bigger the luck."],
+                  ["Goals versus expected goals since {no}: three lucky, three due.",
+                   "Since {no}: three scorers riding luck, three still waiting."]),
+    "vartsargi": (["Goals allowed versus expected since {no}. Below the line: stealing games. Above it: costing them.",
+                   "Every NHL goalie since {no}. Below the line, he's stealing games.",
+                   "Goals allowed against the chances, since {no}. The further from the line, the bigger the story."],
+                  ["Goals saved above expected since {no}: three stealing games, three costing them."]),
+    "komandas": (["Every NHL team's PDO since {no}. Above the line: lucky. Below it: unlucky.",
+                  "PDO since {no}: shooting plus save percentage. Above the line, the bounces go their way.",
+                  "Shooting and save percentage since {no}. One hundred is normal. Above it is luck."],
+                 ["PDO since {no}: three lucky teams, three unlucky."]),
+}
+ISS_XG_GRUPA = {   # (virsraksts kāršu ainā, balss sākums)
+    ("speletaji", "laim"): ([("RUNNING", S.BALTS), ("HOT", S.DZELTENS)],
+                            ["Running hot: {names}.", "Riding the luck: {names}.", "Scoring above their chances: {names}."]),
+    ("speletaji", "nelaim"): ([("DUE", S.BALTS), ("FOR", S.BALTS), ("GOALS", S.DZELTENS)],
+                              ["Due for goals: {names}.", "Still waiting on goals: {names}.", "Getting robbed: {names}."]),
+    ("vartsargi", "laim"): ([("STEALING", S.BALTS), ("GAMES", S.DZELTENS)],
+                            ["Stealing games: {names}.", "Hard to beat right now: {names}."]),
+    ("vartsargi", "nelaim"): ([("COSTING", S.BALTS), ("GAMES", S.DZELTENS)],
+                              ["Costing games: {names}.", "Struggling in net: {names}."]),
+    ("komandas", "laim"): ([("LIVING", S.BALTS), ("ON", S.BALTS), ("LUCK", S.DZELTENS)],
+                           ["Living on luck: {names}.", "Riding the bounces: {names}."]),
+    ("komandas", "nelaim"): ([("OWED", S.BALTS), ("BOUNCES", S.DZELTENS)],
+                             ["Better than their record: {names}.", "Still waiting on the bounces: {names}."]),
+}
+ISS_XGATS_IEVADS = ["On {d}, we flagged {n} {X}.", "Our list from {d}: {n} {X}.", "{N} {X}, flagged on {d}."]
+ISS_FANATS_IEVADS = ["Our picks for the week of {no} to {lidz}.", "Last week's calls, {no} to {lidz}.",
+                     "Here's how last week's picks did."]
+ISS_ATS_PIRMS = ["Every call, on the record.", "No edits, no excuses.", "Hits and misses, all on the record."]
+
+
+def _iss_args(a, veids):
+    """Īsajā faktu video – viens fakts (TOP N → #1)."""
+    if veids == "fakts" and getattr(a, "fakts", None):
+        f0 = str(a.fakts).replace("!", "").split(",")[0].strip().lower()
+        if f0.startswith("top"):
+            f0 = "1"
+        if f0 != str(a.fakts):
+            print(f"ĪSĀ VERSIJA: faktu video – tikai viens fakts (--fakts {f0})")
+        a.fakts = f0
+    return a
+
+
+def _vardu_saraksts(v):
+    v = [x for x in v if x]
+    return v[0] if len(v) == 1 else (", ".join(v[:-1]) + " and " + v[-1] if v else "")
+
+
+def _iss_cilpa(s, veids_v, pirms=""):
+    """Cilpas teikums: (pirms) + jautājums 2 – video beigas ved atpakaļ uz āķi."""
+    nsl = (s.get("intro") or {}).get("noslepums") or {}
+    q = str((nsl.get("q2") or (None, ""))[1] or "").strip()
+    if not q:
+        return (str(pirms) + " Follow for more.").strip()
+    x = S.reta_frase(ISS_CILPA_Q if q.endswith("?") else ISS_CILPA_APG, veids=veids_v, n=2)
+    ql = q if q.startswith(("I ", "xG")) else q[0].lower() + q[1:]
+    return (str(pirms) + " " + x.format(q=ql, Q=q)).strip()
+
+
+def _iss_outro(s):
+    s["outro"] = {"iss": True, "_bez_ieejas": True, "rindas": [], "info": []}
+
+
+def _gp(c):
+    m_ = re.search(r"(\d+) GP", str(c.get("info", "")))
+    return int(m_.group(1)) if m_ else None
+
+
+def _iss_fan_teik(c, stream):
+    v = c.get("viz") or {}
+    P, gp, sp = v.get("pts"), _gp(c), v.get("sp_nak")
+    t_ = [f"{c.get('v1', '')} {c.get('v2', '')}".strip() + f", {S.kom_nos(c.get('badge'))}."]
+    if P is not None and gp:
+        t_.append(f"{P} point{'' if P == 1 else 's'} in {gp} games"
+                  + (f", and {sp} game{'' if sp == 1 else 's'} {'left this week' if stream else 'next week'}." if sp else "."))
+    if c.get("_zim_frase"):
+        t_.append(str(c["_zim_frase"]))
+    return " ".join(t_)
+
+
+def _iss_drop(drops, k2):
+    kartis, P, GP = [], 0, 0
+    for c in drops:
+        v = c.get("viz") or {}
+        p_, g_ = int(v.get("pts") or 0), _gp(c)
+        P, GP = P + p_, GP + (g_ or 0)
+        kartis.append({"kom": str(c.get("badge", "")), "poz": v.get("poz", ""), "akc": tuple(c["akc"]),
+                       "liels": f"{p_} PT{'' if p_ == 1 else 'S'}", "maz": f"IN {g_} GP" if g_ else "LAST 14 DAYS",
+                       "lab": str(c.get("liels", "DROP"))})
+    aina = {"tips": "fantasy_kartis", "ilgums": 3.2, "tag": k2.get("tag", ""), "_tv": k2.get("_tv"),
+            "virsr": S.reta_frase(ISS_DROP_VIRSR, veids="fantasy", n=1), "apaksa": "POINTS  ·  LAST 14 DAYS",
+            "kartis": kartis, "n_pick": len(kartis), "rek": None}
+    vardi = [f"{c.get('v1', '')} {c.get('v2', '')}".strip() for c in drops]
+    if len(vardi) == 1:
+        t_ = S.reta_frase(ISS_DROP_VIENS, veids="fantasy", n=1).format(a=vardi[0])
+    else:
+        t_ = S.reta_frase(ISS_DROP_DIVI, veids="fantasy", n=1).format(a=", ".join(vardi[:-1]), b=vardi[-1])
+    pt = "No points" if P == 0 else ("One point" if P == 1 else f"{P} points")
+    if GP and P / GP < 0.5:
+        t_ += f" {pt} between them in their last {GP} games." if len(drops) > 1 else f" {pt} in his last {GP} games."
+    else:
+        t_ += " Their schedules turn next week." if len(drops) > 1 else " His schedule turns next week."
+    return aina, t_
+
+
+def _iss_fantasy(s, veids):
+    kk, rr = s["kartes"], s["runa"]
+    if len(rr) != len(kk) + 2:
+        return None
+    stream = veids == "streameri"
+    k2 = next((c for c in kk if c.get("tips") == "fantasy_kartis"), None)
+    adds = [c for c in kk if c.get("tips") == "fantasy" and c.get("liels") in ("ADD", "STREAM")]
+    drops = [c for c in kk if c.get("tips") == "fantasy" and c.get("liels") in ("DROP", "BENCH")]
+    if not k2 or not adds:
+        return None
+    hero = next((c for c in adds if c.get("nr") == 1), adds[-1])
+    citi = [c for c in adds if c is not hero]
+    nsl = (s.get("intro") or {}).get("noslepums") or {}
+    mr = re.search(r"UNDER (\d+)%", str(k2.get("apaksa", "")))
+    rost = f"under {mr.group(1)}% rostered" if mr else "barely rostered"
+    n_ = _VARDIEM.get(len(adds), str(len(adds)))
+    kartes = [dict(k2, ilgums=3.5)]
+    runa = [rr[0], S.reta_frase(ISS_FAN_IEVADS[stream], veids=veids, n=2).format(N=n_.capitalize(), n=n_, rost=rost)]
+    for c in citi:
+        kartes.append(c)
+        runa.append(_iss_fan_teik(c, stream))
+    if drops and not stream:
+        d_aina, d_teik = _iss_drop(drops, k2)
+        kartes.append(d_aina)
+        runa.append(d_teik)
+    kartes.append(hero)
+    runa.append((str(nsl.get("atkl_fr") or "") + " " + _iss_fan_teik(hero, stream)).strip())
+    r_ = (hero.get("viz") or {}).get("rost")
+    pirms = ""
+    if isinstance(r_, (int, float)):
+        pirms = (S.reta_frase(ISS_FAN_ROST, veids=veids, n=1).format(r=f"{r_:.0f}", a=f"{100 - r_:.0f}") if r_ >= 1
+                 else "Almost nobody has him.")
+    runa.append(_iss_cilpa(s, veids, pirms))
+    return kartes, runa
+
+
+def _xg_skaitli(c):
+    b = c.get("bars") or []
+    return (float(b[0][1]), float(b[1][1])) if len(b) >= 2 else (None, None)
+
+
+def _iss_xg_grupa(cards, veids, k2, virsr, apaksa):
+    kartis = [{"kom": str(c.get("badge", "")), "poz": (c.get("viz") or {}).get("poz", ""), "akc": tuple(c["akc"]),
+               "liels": c["viz"]["kart"]["liels"], "maz": c["viz"]["kart"]["maz"], "lab": c["viz"]["zimogs"]} for c in cards]
+    return {"tips": "fantasy_kartis", "ilgums": 3.2, "tag": k2.get("tag", ""), "_tv": k2.get("_tv"), "virsr": virsr,
+            "apaksa": apaksa, "kartis": kartis, "n_pick": len(kartis), "rek": None}
+
+
+def _iss_xg(s, veids):
+    kk, rr = s["kartes"], s["runa"]
+    if len(rr) != len(kk) + 2 or len(kk) < 3 or kk[0].get("tips") not in ("xg_karte", "fantasy_kartis"):
+        return None
+    k2, cards = kk[0], kk[1:]
+    hero = cards[-1]
+    hg = hero["viz"]["grupa"]
+    other = [c for c in cards if c["viz"]["grupa"] != hg]
+    mine = [c for c in cards[:-1] if c["viz"]["grupa"] == hg]
+    m_ = re.search(r"([A-Z][a-z]{2} \d+)", str(s.get("periods", "")))
+    karte_l, kartis_l = ISS_XG_KARTE[veids]
+    runa = [rr[0], S.reta_frase(karte_l if k2.get("tips") == "xg_karte" else kartis_l, veids=veids, n=2)
+            .format(no=m_.group(1) if m_ else "the start of the season")]
+    kartes = [dict(k2, ilgums=3.5)]
+    if other:
+        og = other[0]["viz"]["grupa"]
+        virsr, sak = ISS_XG_GRUPA[(veids, og)]
+        vardi = [("the " if veids == "komandas" else "") * (i == 0) + str(c.get("v2", "")) for i, c in enumerate(other)]
+        teik = S.reta_frase(sak, veids=veids, n=1).format(names=_vardu_saraksts(vardi))
+        apaksa = "PDO  ·  AVERAGE 100"
+        if veids in ("speletaji", "vartsargi"):
+            G = sum(_xg_skaitli(c)[0] or 0 for c in other)
+            X = sum(_xg_skaitli(c)[1] or 0 for c in other)
+            if veids == "speletaji":
+                teik += f" {int(G)} goal{'' if int(G) == 1 else 's'} on {S.xgv(X)} expected, combined."
+                apaksa = f"{int(G)} GOALS ON {X:.1f} xG  ·  COMBINED"
+            else:
+                teik += f" {int(G)} allowed on {S.xgv(X)} expected, combined."
+                apaksa = f"{int(G)} ALLOWED ON {X:.1f} EXPECTED  ·  COMBINED"
+        kartes.append(_iss_xg_grupa(other, veids, k2, virsr, apaksa))
+        runa.append(teik)
+    if mine:
+        virsr, _ = ISS_XG_GRUPA[(veids, hg)]
+        dalas = []
+        for i, c in enumerate(mine):
+            if veids == "speletaji":
+                G, X = _xg_skaitli(c)
+                dalas.append(f"{c.get('v2', '')}: {int(G)} goal{'' if int(G) == 1 else 's'} on {S.xgv(X)} expected." if i == 0
+                             else f"{c.get('v2', '')}: {int(G)} on {S.xgv(X)}.")
+            elif veids == "vartsargi":
+                gs = abs(_parsk(c["viz"]["kart"]["liels"]) or 0)
+                dalas.append(f"{c.get('v2', '')}: {S.xgv(gs)} {'saved above' if hg == 'laim' else 'worse than'} expected." if i == 0
+                             else f"{c.get('v2', '')}: {S.xgv(gs)}.")
+            else:
+                dalas.append(f"The {c.get('v2', '')}: PDO {c['viz']['kart']['liels']}.")
+        kartes.append(_iss_xg_grupa(mine, veids, k2, virsr, "PDO  ·  AVERAGE 100" if veids == "komandas"
+                                    else "  ·  ".join(str(c["viz"]["kart"]["maz"]) for c in mine)))
+        runa.append(" ".join(dalas))
+    kartes.append(hero)
+    runa.append(rr[-2])
+    runa.append(_iss_cilpa(s, veids, S.atskata_teksts()))
+    return kartes, runa
+
+
+def _iss_fakti(s):
+    kk, rr = s["kartes"], s["runa"]
+    if len(rr) != len(kk) + 2:
+        return None
+    keep = [i for i, c in enumerate(kk) if c.get("tips") != "fakts_serijas"]
+    kartes = [kk[i] for i in keep]
+    runa = [rr[0]] + [rr[i + 1] for i in keep]
+    for c in kartes:
+        if c.get("tips") == "fakts_ripa":                             # īsāka pauze ripu ainas beigās
+            c["ilgums"] = max(4.5, 1.25 + 0.1 * len(c["ripa"]["punkti"]) + 1.0)
+    runa.append(_iss_cilpa(s, "fakts"))
+    return kartes, runa
+
+
+def _akc_tips(c):
+    a = tuple(c.get("akc") or (0, 0, 0))
+    return "v" if a[1] > a[0] + 40 else ("x" if a[0] > a[1] + 40 else "-")
+
+
+def _iss_atskats(s):
+    kk, rr = s["kartes"], s["runa"]
+    if len(rr) != len(kk) + 2 or len(kk) < 2 or kk[0].get("tips") != "fantasy_kartis":
+        return None
+    tag = str((s.get("intro") or {}).get("tag", "")).upper()
+    xg = "FOLLOW-UP" in tag
+    k2, cards = kk[0], kk[1:]
+    zal = [c for c in cards if _akc_tips(c) == "v"]
+    sar = [c for c in cards if _akc_tips(c) == "x"]
+    pel = [c for c in cards if _akc_tips(c) == "-"]
+    izv = ([zal[0]] if zal else pel[:1]) + (sar[:1] if sar else zal[1:2])
+    if not izv:
+        izv = cards[:1]
+    veids_v = "atskats_fantasy"
+    if xg:
+        veids_j = "vartsargi" if "GOALIE" in tag else ("komandas" if "TEAM" in tag else "speletaji")
+        veids_v = f"atskats_{veids_j}"
+        ap = (s.get("_intro_vecais") or {}).get("apaksa") or [""]
+        m_ = re.search(r"([A-Z][a-z]{2} \d+)", str(ap[0]))
+        X = {"speletaji": "scorers", "vartsargi": "goalies", "komandas": "teams"}[veids_j]
+        n_ = _VARDIEM.get(len(cards), str(len(cards)))
+        ievads = S.reta_frase(ISS_XGATS_IEVADS, veids=veids_v, n=2).format(d=m_.group(1) if m_ else "our last list", n=n_,
+                                                                           N=n_.capitalize(), X=X)
+    else:
+        d_ = re.findall(r"([A-Z][a-z]{2} \d+)", str(s.get("periods", "")))
+        ievads = S.reta_frase(ISS_FANATS_IEVADS[:2] if len(d_) >= 2 else ISS_FANATS_IEVADS[2:], veids=veids_v, n=1).format(
+            no=d_[0] if d_ else "", lidz=d_[1] if len(d_) > 1 else "")
+    kartes = [dict(k2, ilgums=3.5)] + izv
+    runa = [rr[0], (str(s.get("aki_runa") or "") + " " + ievads).strip()] + [rr[1 + kk.index(c)] for c in izv]
+    runa.append(_iss_cilpa(s, veids_v, S.reta_frase(ISS_ATS_PIRMS, veids=veids_v, n=1)))
+    return kartes, runa
+
+
+def iss_parveidot(s, veids):
+    """Īsā versija no gatava (jaunā izskata) scenārija; kļūdas gadījumā – parastā versija."""
+    if not s or not ISS["on"] or not s.get("kartes"):
+        return s
+    try:
+        if veids in ("fantasy", "streameri"):
+            r_ = _iss_fantasy(s, veids)
+        elif veids in XG_VEIDI:
+            r_ = _iss_xg(s, veids)
+        elif veids == "fakts":
+            r_ = _iss_fakti(s)
+        elif veids == "atskats":
+            r_ = _iss_atskats(s)
+        else:
+            r_ = None
+        if not r_:
+            print(f"ĪSĀ VERSIJA: {veids} – nav piemērota scenārija, parastā versija")
+            return s
+        s["_kartes_pilnas"] = s["kartes"]
+        s["kartes"], s["runa"] = r_
+        _iss_outro(s)
+        s["_iss"] = True
+        s["nosaukums"] = (s.get("nosaukums") or f"xg_{veids}_{s.get('lidz', '')}") + "_iss"
+        print(f"ĪSĀ VERSIJA: {len(s['kartes'])} ainas + āķis + cilpa, ~{sum(len(str(x).split()) for x in s['runa'])} vārdi")
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"ĪSĀ VERSIJA: {type(ex).__name__}: {ex} – parastā versija")
+    return s
+
+
+# ================================================================ STREAK WATCH (--veids serijas, kopš 10.11.2026)
+# Atsevišķs ~25 s video: noslēpuma āķis (garākās aktīvās punktu sērijas līderis) → POINT STREAKS → GOALIES OF THE WEEK
+# → cilpa. Ainas – tās pašas, kas faktu video beigās (fakti_serijas_ainas).   python ShortsB.py --veids serijas
+PS_SOLO = ["The longest active point streaks in the NHL right now. Anything in yellow has reached ten games.",
+           "Streak watch: the longest point streaks still alive.",
+           "Still rolling: the longest active point streaks in the league.",
+           "Who keeps finding the scoresheet? The longest active point streaks."]
+PS_SOLO_NAV = ["No one has reached ten straight games yet. These are the longest active point streaks.",
+               "The longest point streaks still alive. Who reaches ten first?"]
+NOSL_Q2["serijas"] = [(("WHO'S", "STILL", "ROLLING?"), "Who's still rolling?"),
+                      (("THE LONGEST", "STREAK", "RIGHT NOW?"), "The longest streak right now?"),
+                      (("CAN ANYONE", "CATCH", "HIM?"), "Can anyone catch him?"),
+                      (("WHO CAN'T", "STOP", "SCORING?"), "Who can't stop scoring?"),
+                      (("STREAK", "WATCH:", "WHO'S #1?"), "Streak watch: who's number one?")]
+NOSL_Q2["serijas_va"] = [(("WHO", "SHUT THE", "DOOR?"), "Who shut the door?"),
+                         (("THE HOTTEST", "GOALIE", "THIS WEEK?"), "The hottest goalie this week?"),
+                         (("CAN ANYONE", "BEAT", "HIM?"), "Can anyone beat him?")]
+VIRSR_SERIJAS = ["NHL streak watch: guess who has a point in {n} straight games",
+                 "Guess who has the longest active point streak in the NHL",
+                 "Streak watch: who's still rolling? Guess the leader",
+                 "The longest NHL point streaks right now – guess who's #1"]
+VIRSR_SERIJAS_VA = ["NHL streak watch: guess the hottest goalie of the week",
+                    "Goalies of the week – guess who shut the door"]
+
+
+def veids_serijas_b(m, a):
+    D = S.fakti_dati(a.lidz)
+    lidz = D["lidz"]
+    tv = {"lab": "NHL · STREAK", "liels": "WATCH", "kr": [S.DZELTENS, S.ZILS], "labaja": f"STATS THRU {S.dat(lidz).upper()}"}
+    ainas = fakti_serijas_ainas(D, m, [], tv, 0, solo=True)
+    if not ainas:
+        print("Streak watch: nav ne punktu sēriju, ne vārtsargu datu.")
+        return None
+    kartes = [k_ for k_, _ in ainas]
+    for i, k_ in enumerate(kartes):
+        k_["_tv_idx"] = i
+    r0 = kartes[0]["rindas"][0]
+    ps = kartes[0]["virsr"][0][0] == "POINT"
+    vards, team = str(r0["vards"]), str(r0["team"])
+    if ps:
+        kur = {"STRAIGHT HOME GAMES": " at home", "STRAIGHT ROAD GAMES": " on the road"}.get(r0["maz"], "")
+        atkl = f"{vards} leads with {r0['liels']} straight games{kur}."
+    elif r0.get("maz") == "SAVE %":
+        atkl = f"{vards} leads with a {r0['liels']} save percentage."
+    else:
+        atkl = f"{vards}: {r0['liels']} without allowing a goal."
+    runa = ["", f"{atkl} {ainas[0][1]}"] + [r_ for _, r_ in ainas[1:]] + [""]
+    saraksts = []
+    for k_ in kartes:
+        saraksts.append(("Longest active point streaks:" if k_["virsr"][0][0] == "POINT" else "Goalies of the week:"))
+        saraksts += [f"{r_['vards']} ({r_['team']}): {r_['liels']} {str(r_['maz']).lower()}" for r_ in k_["rindas"]]
+    n_ = r0["liels"] if ps else ""
+    s = {"intro": {"aki": True, "tag": "NHL  ·  STREAK WATCH", "ilgums": 2.6, "_tv": tv}, "kartes": kartes,
+         "outro": {"rindas": [], "info": []}, "runa": runa, "lidz": lidz, "zimogs": f"STATS THROUGH {S.dat(lidz, True).upper()}",
+         "periods": f"through {S.dat(lidz, True)}", "_bez_zimoga": True, "nosaukums": f"serijas_{lidz}",
+         "virsraksts": f"NHL streak watch: {vards} has a point in {n_} straight games" if ps else f"NHL goalies of the week: {vards}",
+         "apraksts": "The longest active NHL point streaks and the goalies of the week.", "saraksts": saraksts,
+         "piezime": "Point streaks: active, 3+ games (all / home / road). Goalies: shutout streaks of 120+ minutes this week, "
+                    "then the best save % (2+ starts).",
+         "tagi": "#NHL #hockey #NHLstats #StreakWatch #Shorts",
+         "thumb": {"tag": "NHL  ·  STREAK WATCH", "hook": ["STREAK", "WATCH"], "vards": vards.split()[-1].upper(), "badge": team,
+                   "skaitlis": f"{n_} GAMES" if ps else str(r0["liels"]), "kr": S.DZELTENS,
+                   "apaksa": "in a row with a point · longest active" if ps else "goalie of the week", "datums": lidz}}
+    noslepuma_aki(s, [(team, vards.split()[-1])], NOSL_Q1["speletajs" if ps else "vartsargs"],
+                  NOSL_Q2["serijas" if ps else "serijas_va"], "serijas", atkl=(1, "speletajs" if ps else "vartsargs"), bez_q1=True)
+    nsl = (s.get("intro") or {}).get("noslepums")
+    if nsl:
+        if NOSL_VIRSRAKSTS:
+            s["virsraksts"] = _virsr_izvele(VIRSR_SERIJAS if ps else VIRSR_SERIJAS_VA, "serijas", {"n": n_}) or s["virsraksts"]
+            _ns_vards_apraksta(s, vards)
+        s["thumb"]["hook"] = list(nsl["q2"][0])
+    else:                                                             # bez noslēpuma (--bez-noslepuma) – sākas ar sarakstu
+        s["intro"] = None
+        s["runa"] = s["runa"][1:]
+        s["runa"][0] = f"Streak watch. {atkl} {ainas[0][1]}"
+    s["runa"][-1] = _iss_cilpa(s, "serijas", "Follow for next week's streak watch.")
+    _iss_outro(s)
+    s["_iss"] = True
+    return s
 
 
 if __name__ == "__main__":
