@@ -7314,6 +7314,15 @@ ISS_FAN_IEVADS = {
     True: ["{N} streamers for the rest of the week, all {rost}. Green games mean soft defenses.",
            "{N} quick adds before Sunday, all {rost}. Green means an easy matchup.",
            "Need games before Sunday? {N} streamers, all {rost}. Green games are the soft ones."]}
+# Beigas īsajai versijai (kopš 11.11.2026): āķa jautājums vēlreiz bija neloģisks ("Your call: nobody wants him?" – atbilde
+# jau bija video), tāpēc – aicinājums rīkoties / ko sagaidīt tālāk; pēc tam video tāpat pāriet uz āķi (cilpa).
+ISS_FAN_BEIGAS = {
+    False: ["Add him before your league does.", "Beat your league to him.", "Grab him before Monday.",
+            "Make the move before the week starts."],
+    True: ["Stream him before Sunday.", "Plug him in while the schedule is soft.", "Free points, while they last.",
+           "Grab him before your league does."]}
+ISS_XG_BEIGAS = ["Follow to see if the numbers were right.", "Follow, and we'll see who was right.",
+                 "Follow so you don't miss the follow-up.", "Lucky or not, follow to find out."]
 ISS_FAN_ROST = ["Only {r} percent of leagues have him.", "Just {r} percent rostered.", "{a} percent of leagues still don't have him."]
 ISS_DROP_VIRSR = [[("WHO", S.BALTS), ("TO", S.BALTS), ("CUT", S.DZELTENS)],
                   [("TIME", S.BALTS), ("TO", S.BALTS), ("CUT", S.DZELTENS)]]
@@ -8179,7 +8188,9 @@ def _iss_fantasy(s, veids):
     if isinstance(r_, (int, float)):
         pirms = (S.reta_frase(ISS_FAN_ROST, veids=veids, n=1).format(r=f"{r_:.0f}", a=f"{100 - r_:.0f}") if r_ >= 1
                  else "Almost nobody has him.")
-    runa.append(_iss_cilpa(s, veids, pirms))
+    iepr_ = str(runa[-1]).lower()                                     # neatkārto varoņa teikuma sākumu ("Plug him in…")
+    bv_ = [x for x in ISS_FAN_BEIGAS[stream] if x.lower()[:12] not in iepr_] or ISS_FAN_BEIGAS[stream]
+    runa.append((pirms + " " + S.reta_frase(bv_, veids=veids, n=min(2, len(bv_) - 1))).strip())   # ne āķa jautājums
     return kartes, runa
 
 
@@ -8246,7 +8257,7 @@ def _iss_xg(s, veids):
         runa.append(" ".join(dalas))
     kartes.append(hero)
     runa.append(rr[-2])
-    runa.append(_iss_cilpa(s, veids, S.atskata_teksts()))
+    runa.append(S.atskata_teksts() + " " + S.reta_frase(ISS_XG_BEIGAS, veids=veids, n=2))       # ne āķa jautājums
     return kartes, runa
 
 
