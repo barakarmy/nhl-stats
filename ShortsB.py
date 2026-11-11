@@ -6463,8 +6463,13 @@ def _ns_fantasy(s):
     kk = s.get("kartes") or []                                        # #1 kartīte (streameriem – pēdējā, secība #3 → #1)
     k1 = next((j for j, c in enumerate(kk) if c.get("tips") == "fantasy" and c.get("nr") == 1 and c.get("liels") in ("ADD", "STREAM")),
               next((j for j, c in enumerate(kk) if c.get("tips") == "fantasy"), None))
-    noslepuma_aki(s, [(af.get("kom"), af.get("vards"))], NOSL_Q1["speletajs"], NOSL_Q2["streameri" if stream else "fantasy"],
-                  "streameri" if stream else "fantasy", atkl=(k1 + 1, "speletajs") if k1 is not None else None)
+    if stream:                                                        # streameri (kopš 11.11.2026): #1 netiek slēpts – āķī tikai
+        noslepuma_aki(s, [(af.get("kom"), af.get("vards"))], NOSL_Q1["speletajs"], NOSL_Q2["streameri"], "streameri",
+                      bez_q1=True)                                    # jautājums 2, bez "Mystery solved", vārds virsrakstā
+        _ns_stream_virsraksts(s, kk[k1] if k1 is not None else {})
+        return s
+    noslepuma_aki(s, [(af.get("kom"), af.get("vards"))], NOSL_Q1["speletajs"], NOSL_Q2["fantasy"],
+                  "fantasy", atkl=(k1 + 1, "speletajs") if k1 is not None else None)
     v0 = str(s.get("virsraksts") or "")
     _ns_virsraksts(s, af.get("vards"))
     if str(s.get("virsraksts") or "") != v0:                          # "guess who" izdevās → viens no variantiem
@@ -6487,6 +6492,34 @@ def _ns_fantasy(s):
         except Exception:                                             # noqa: BLE001
             pass
     return s
+
+
+# streameri (kopš 11.11.2026) – #1 netiek slēpts: vārds virsrakstā (palīdz meklēšanā); pirmais – shorts.py virsraksts
+VIRSR_STREAM = ["{n} fantasy hockey streamers for the rest of the week – {vards} has {gs} left 🏒",
+                "Stream {vards}? {n} fantasy hockey streamers before Sunday",
+                "{vards} is just {r}% rostered with {gs} left – fantasy hockey streamers",
+                "Need games before Sunday? {n} fantasy hockey streamers, led by {vards}",
+                "{gs} left: why {vards} is our top fantasy hockey streamer"]   # {gs} – "4 games" / "1 game"
+
+
+def _ns_stream_virsraksts(s, c1):
+    """Streameru virsraksts ar #1 vārdu (bez "guess who") – viens no VIRSR_STREAM; ja kaut kā trūkst – shorts.py virsraksts."""
+    try:
+        v0 = str(s.get("virsraksts") or "")
+        m_ = re.match(r"(\d+) fantasy hockey streamers", v0)
+        mg = re.search(r"– (.+?) has (\d+) games? left", v0)
+        viz = c1.get("viz") or {}
+        vards = f"{c1.get('v1', '')} {c1.get('v2', '')}".strip() or (mg.group(1) if mg else None)
+        rost = viz.get("rost")
+        g = viz.get("sp_nak") if viz.get("sp_nak") is not None else (int(mg.group(2)) if mg else None)
+        gs = f"{int(g)} game{'' if int(g) == 1 else 's'}" if g is not None else None
+        lauki = {"n": int(m_.group(1)) if m_ else None, "vards": vards, "gs": gs,
+                 "r": (f"{rost:.0f}" if rost >= 1 else "under 1") if isinstance(rost, (int, float)) else None}
+        jauns = _virsr_izvele(VIRSR_STREAM, "streameri", lauki)
+        if jauns:
+            s["virsraksts"] = re.sub(r"\s+", " ", jauns).strip()
+    except Exception:                                                 # noqa: BLE001
+        pass
 
 
 NOSL_FANTASY_VIRSR = {   # {D_amp} " & 2 drops" / " ", {D_comma} ", 2 drops" / " "; pirmais – līdzšinējais
@@ -6865,7 +6898,7 @@ def _iss_s2_aina(k2, pl, dl, hero, stream):
     """2. aina īsajai versijai: fantasy – saraksts kā lietotnē (+ / −), streameri – nedēļas kalendārs (MON–SUN)."""
     if not pl or not all((c.get("viz") or {}).get("ned") for c in pl + dl):
         return None
-    sp = [_iss_spel(c, c is hero) for c in sorted(pl, key=lambda c: c.get("nr") or 9)] + \
+    sp = [_iss_spel(c, c is hero and not stream) for c in sorted(pl, key=lambda c: c.get("nr") or 9)] + \
          [_iss_spel(c) for c in sorted(dl, key=lambda c: c.get("nr") or 9)]
     nl = str((hero.get("viz") or {}).get("ned_lab", "")).split("·")[0].strip() or ("THIS WEEK" if stream else "NEXT WEEK")
     return {"tips": "fantasy_kalendars" if stream else "fantasy_saraksts", "ilgums": 3.5, "tag": k2.get("tag", ""),
@@ -7077,7 +7110,13 @@ def _iss_kal_etikete(p, LW, rh):
     d.text((14 + tw / 2, 36), p["kom"], font=f1, fill=S.MELNS if sum(prim) > 450 else S.BALTS, anchor="mm")
     d.text((26 + tw, 36), p["poz"], font=f1, fill=S.BALTS, anchor="lm")
     nm = "???" if p["hero"] else p["v2"].upper()
-    d.text((16, rh - 18), nm, font=S.ietilpinat(d, nm, "black", 30, LW - 32), fill=S.DZELTENS if p["hero"] else (226, 232, 240), anchor="ls")
+    pre = f"#{p['nr']} " if (p.get("nr") and not p["drop"]) else ""    # vieta sarakstā (#1 – augšā)
+    f_ = S.ietilpinat(d, pre + nm, "black", 30, LW - 32)
+    x_ = 16
+    if pre:
+        d.text((x_, rh - 18), pre, font=f_, fill=S.DZELTENS, anchor="ls")
+        x_ += d.textlength(pre, font=f_)
+    d.text((x_, rh - 18), nm, font=f_, fill=S.DZELTENS if p["hero"] else (226, 232, 240), anchor="ls")
     return im
 
 
