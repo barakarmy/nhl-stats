@@ -1342,6 +1342,9 @@ def veids_fakti_b(m, a):
         S.fakti_saraksts(kand)
         print("\n(--fakts nav norādīts → izmantoju #1. Vairāki: --fakts 1,3,5 vai --fakts top5)")
     izv = _fakti_izvele(a.fakts, kand)
+    if ISS["on"] and len(izv) > ISS_FAKTI_N:                          # īsā versija – TOP 3: #3, #2 īsi, #1 – pilnais stāsts
+        print(f"ĪSĀ VERSIJA: faktu video – TOP {ISS_FAKTI_N} no {len(izv)} (garā ar visiem – --long)")
+        izv = izv[:ISS_FAKTI_N]
     if not izv:
         S.fakti_saraksts(kand)
         print(f"\nNav faktu ar numuru {a.fakts}. Piem.: --fakts 3  vai  --fakts 1,4,6  vai  --fakts top5")
@@ -2719,7 +2722,7 @@ def ieslegt():
         sys.argv.remove("--bez-noslepuma")
         NOSL_AKIS = False
         print("ĀĶIS: bez noslēpuma (--bez-noslepuma)")
-    rez_ = None                                                       # garums: xG (3 veidi), fantasy, streameri – īsā versija
+    rez_ = None                                                       # garums: xG (3 veidi), fantasy, streameri, fakti – īsā versija
     if "--iss" in sys.argv:                                           # pēc noklusējuma (kopš 10.11.2026); --long – garā;
         sys.argv.remove("--iss")                                      # --iss – īsā arī faktiem un atskatiem
         rez_ = "iss"
@@ -4392,7 +4395,7 @@ def aina_fakts_tablo(t, c):
     bez_tablo = c.get("bez_tablo") or n < 2
     docked = set(c.get("docked") or [])
     f_ = next(x for x in fakti if x["nr"] == nr)
-    plus = bool(f_.get("plus")) and not bez_tablo and nr != 1
+    plus = bool(f_.get("plus")) and not bez_tablo and nr != 1 and not c.get("bez_plus")   # bez_plus – īsā versija
     k_exp = 0.0
     if plus:                                                          # izvēršas, kamēr runā balss; pirms nolaišanās – sakļaujas
         k_exp = S.ease(min(1.0, max(0.0, (t - 0.8) / 0.6))) * (1 - S.ease(min(1.0, max(0.0, (t - (t_dock - 0.55)) / 0.45))))
@@ -6589,7 +6592,8 @@ def _ns_fakti(rez, hero):
 # still free?") un video pāriet atpakaļ uz āķi. Bez THE FINAL VERDICT un bez SHEET piedāvājuma balsī (aprakstā – paliek).
 # Fantasy ~45 s, streameri ~35 s, xG ~40 s, fakti ~30 s, atskati ~30 s.  Palaišana:  python ShortsB.py --veids fantasy --iss
 ISS = {"on": False}
-ISS_NOKLUSETS = ("speletaji", "vartsargi", "komandas", "fantasy", "streameri")   # īsā versija pēc noklusējuma (--long – garā)
+ISS_NOKLUSETS = ("speletaji", "vartsargi", "komandas", "fantasy", "streameri", "fakts")   # īsā pēc noklusējuma (--long – garā)
+ISS_FAKTI_N = 3                  # īsajā faktu video – TOP 3 (#3 un #2 – viens teikums, #1 – ripa, HOW RARE, NEXT UP)
 ISS_CILPA_ILG = 1.6              # beigu ainas minimums (ar balsi – cilpas teikuma garums + 0,45 s)
 ISS_CILPA_Q = ["So… {q}", "Your call: {q}", "{Q}", "One more time: {q}"]          # jautājums 2 – jautājums
 ISS_CILPA_APG = ["{Q}", "Like we said: {q}"]                                        # jautājums 2 – apgalvojums
@@ -6644,14 +6648,8 @@ ISS_ATS_PIRMS = ["Every call, on the record.", "No edits, no excuses.", "Hits an
 
 
 def _iss_args(a, veids):
-    """Īsajā faktu video – viens fakts (TOP N → #1)."""
-    if veids == "fakts" and getattr(a, "fakts", None):
-        f0 = str(a.fakts).replace("!", "").split(",")[0].strip().lower()
-        if f0.startswith("top"):
-            f0 = "1"
-        if f0 != str(a.fakts):
-            print(f"ĪSĀ VERSIJA: faktu video – tikai viens fakts (--fakts {f0})")
-        a.fakts = f0
+    """Īsās versijas argumenti. Fakti (kopš 11.11.2026): --fakts top5 / 1,3,5 → TOP 3 (veids_fakti_b paņem 3 augstāk
+    vērtētos), --fakts 3 / auto → viens fakts. (Līdz 11.11. īsajā versijā vienmēr palika tikai viens fakts.)"""
     return a
 
 
@@ -7551,6 +7549,15 @@ def _iss_fakti(s):
     keep = [i for i, c in enumerate(kk) if c.get("tips") != "fakts_serijas"]
     kartes = [kk[i] for i in keep]
     runa = [rr[0]] + [rr[i + 1] for i in keep]
+    for j, c in enumerate(kartes):                                    # TOP 3: #3 un #2 – tikai galvenais teikums
+        if c.get("tips") != "fakts_tablo" or (c.get("nr") or 1) <= 1:
+            continue
+        row = next((x for x in c.get("fakti") or [] if x.get("nr") == c["nr"]), {})
+        pre = str((row.get("plus") or {}).get("runa_pre") or "").strip()
+        if pre:                                                       # "Number 3. Connor McDavid has …" (bez konteksta teikuma)
+            m_ = re.match(r"(The NHL week in numbers[^.]*\.)\s*", runa[j + 1])
+            runa[j + 1] = ((m_.group(1) + " ") if m_ else "") + pre
+        kartes[j] = dict(c, ilgums=3.4, bez_plus=True)                # kartīte bez izvēršanās – parādās un nolaižas rindā
     for c in kartes:
         if c.get("tips") == "fakts_ripa":                             # īsāka pauze ripu ainas beigās
             c["ilgums"] = max(4.5, 1.25 + 0.1 * len(c["ripa"]["punkti"]) + 1.0)
