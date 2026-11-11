@@ -1310,19 +1310,34 @@ def _fakti_izvele(arg, kand):
             if x.isdigit() and 1 <= int(x) <= len(kand) and int(x) - 1 not in idx:
                 idx.append(int(x) - 1)
         idx = idx[:5]
-    if arg.startswith("top"):                                         # topN: katrs faktu veids TIKAI VIENREIZ (kopš 11.11.2026 –
-        izv, kat = [], set()                                          # ne divi vārtsargi; ja veidu mazāk – mazāk faktu)
-        for solis in (1, 2):           # 1) ne-ikdienišķie  2) arī ikdienišķie (ja dažādu veidu vēl trūkst)
+    if arg.startswith("top"):                                         # topN: vispirms katrs faktu veids vienreiz; ja nepietiek –
+        izv, kat = [], {}                                             # otrs tā paša veida (kopš 11.11.2026, sk. FAKTI_DUBULTI)
+        soli = [(False, False), (True, False), (False, True), (True, True)] if FAKTI_DUBULTI_PIRMS_BIEZIEM else \
+            [(False, False), (False, True), (True, False), (True, True)]  # (otrs tā paša veida?, arī ikdienišķie?)
+        for dub, biezi_ in soli:
             for c in kand:
                 if len(izv) >= len(idx) or c in izv:
                     continue
                 k_ = _kategorija(c)
-                if k_ in kat or (solis == 1 and c.get("biezi")):
+                if c.get("biezi") and not biezi_:
                     continue
-                kat.add(k_)
+                jau = kat.get(k_, [])
+                if not dub and jau:
+                    continue
+                if dub and (len(jau) >= FAKTI_DUBULTI or k_ in FAKTI_BEZ_DUBULTA
+                            or str(c.get("badge") or "") in {str(x.get("badge") or "") for x in jau}):
+                    continue                                          # ne otrs vārtsargs, ne otrs no tās pašas komandas
+                kat.setdefault(k_, []).append(c)
                 izv.append(c)
+        dub_ = [FAKTU_VEIDI.get(k_, k_) for k_, cc in kat.items() if len(cc) > 1]
+        if dub_:
+            print(f"TOP {len(idx)}: dažādu faktu veidu nepietika – divreiz: " + "; ".join(dub_) + " (dažādas komandas)")
         if len(izv) < len(idx):
-            print(f"TOP {len(idx)}: tikai {len(izv)} dažādi faktu veidi – video ar {len(izv)} faktiem (katrs veids – vienreiz)")
+            print(f"TOP {len(idx)}: šonedēļ tikai {len(izv)} derīgi fakti – video ar {len(izv)} faktiem "
+                  f"(veids – līdz {FAKTI_DUBULTI} reizēm, vārtsargs – 1, otrs tā paša veida – no citas komandas)")
+            nav_ = [v_ for k_, v_ in FAKTU_VEIDI.items() if k_ not in kat]
+            if nav_:
+                print("   Šonedēļ nebija: " + "; ".join(nav_) + "  (sērijas – sestdienas Streak watch video)")
     else:
         izv = [kand[i] for i in idx if i < len(kand)]
     if manuali:
@@ -1336,6 +1351,15 @@ def _fakti_izvele(arg, kand):
             for i, c in zip(poz, sak):
                 izv[i] = c
     return izv
+
+
+FAKTI_DUBULTI = 2                # TOP N: viena veida fakts – līdz 2 reizēm (otrais – tikai, ja dažādu veidu nepietiek)
+FAKTI_BEZ_DUBULTA = ("vartsargs",)   # šie – tikai vienreiz (ne divi vārtsargi)
+FAKTI_DUBULTI_PIRMS_BIEZIEM = True   # True: retāks otrs tā paša veida fakts pirms ikdienišķa ("bieži") jauna veida fakta
+FAKTU_VEIDI = {                  # faktu veidi bez sērijām (konsoles paskaidrojumam, ja TOP N sanāk mazāk faktu)
+    "liela": "liela spēle (hat trick / 4+ punkti, arī duets)", "vartsargs": "vārtsargs (sausā ar 20+ / 45+ atvairīti)",
+    "comeback": "uzvara pēc −3", "periods": "4+ vārti vienā periodā", "atri": "2 vārti 15 s laikā",
+    "metieni": "uzvara, pārmesti par 15+"}
 
 
 def _kategorija(c):
@@ -2803,6 +2827,7 @@ def ieslegt():
     S.atskats = atskats_ar_aki
     S.VEIDI["fakts"] = veids_fakti_b
     if FAKTI_BEZ_SERIJAM and not getattr(S.fakti_kandidati, "_bez_serijam", False):   # sērijas – Streak watch video
+        S.FAKTI_SERIJAS = False                                       # detektori netiek palaisti (pirms "viens spēlētājs – viens fakts")
         _orig_kand = S.fakti_kandidati
 
         def _kand_bez_serijam(D, mape_video):
@@ -4886,6 +4911,21 @@ _FJ_KR = {"G": S.DZELTENS, "A": S.ZILS, "GA": S.SARKANS, "S": (203, 213, 225)}
 FJ_RIPA_PAUZE = 2.8              # s – pēc pēdējās ripas aina vēl stāv (var apskatīt visus vārtus kopā)
 
 
+def _fj_punkts(d, x, y, k_, a=255, dn=None):
+    """Metiena punkts uz laukuma / leģendā. Ielaistie vārti (GA) – lielāki, ar baltu apmali un mirdzumu, lai neliktos
+    pēc iemetiena punktiem (tie arī sarkani); pārējie – ar melnu apmali (kā līdz šim)."""
+    kr = _FJ_KR.get(k_, S.DZELTENS)
+    if k_ == "GA":
+        if dn is not None:
+            dn.ellipse([x - 15, y - 15, x + 15, y + 15], fill=kr + (int(a * 0.8),))
+        d.ellipse([x - 14, y - 14, x + 14, y + 14], fill=kr + (a,), outline=S.BALTS + (a,), width=4)
+    else:
+        d.ellipse([x - 11, y - 11, x + 11, y + 11], fill=kr + (a,), outline=S.MELNS + (a,), width=3)
+
+
+FJ_ST_KARTE = (70, 1010, 1422, 1648)   # SEASON SO FAR kartīte (x0, x1, y0, y1) – zem skaitītāja, virs subtitriem
+
+
 def _fj_ripa_dt(ilg, n):
     """Laiks starp ripām: visas nokrīt FJ_RIPA_PAUZE s pirms ainas beigām (0,9 s sākums, 0,35 s lidojums)."""
     return min(0.5, max(0.06, (ilg - 0.9 - 0.35 - FJ_RIPA_PAUZE) / max(1, n)))
@@ -4926,7 +4966,7 @@ def aina_fakts_ripa(t, c):
         sx, sy = X(p_["x"]), Yf(p_["y"])
         glaba = p_["k"] == "S"
         q = S.ease(min(1.0, k)) * (0.86 if glaba else 1.0)
-        d.ellipse([sx - 11, sy - 11, sx + 11, sy + 11], fill=kr + (255,), outline=S.MELNS + (255,), width=3)
+        _fj_punkts(d, sx, sy, p_["k"], 255, dn)
         if k < 1:
             for j in range(9):
                 qq = max(0.0, q - j * 0.04)
@@ -4945,17 +4985,23 @@ def aina_fakts_ripa(t, c):
                 dn.arc([ex - rr, ey - rr, ex + rr, ey + rr], 120, 240, fill=S.BALTS + (int(255 * (1 - kf)),), width=6)
             else:
                 dn.ellipse([tx - rr, ty - rr, tx + rr, ty + rr], outline=kr + (int(255 * (1 - kf)),), width=6)
-    if ped and ped.get("lab"):
-        d.rounded_rectangle([x0 + 30, y0 + h - 86, x0 + 520, y0 + h - 22], radius=22, fill=(0, 0, 0, 160))
-        d.text((x0 + 50, y0 + h - 54), ped["lab"], font=S.ietilpinat(d, ped["lab"], "black", 34, 450), fill=S.BALTS, anchor="lm")
+    if ped and ped.get("lab"):                                         # pēdējā metiena laiks – zīmīte teksta platumā
+        fl_ = S.ietilpinat(d, ped["lab"], "black", 34, 450)            # (agrāk 490 px plata – aizsedza punktus stūrī)
+        d.rounded_rectangle([x0 + 30, y0 + h - 86, x0 + 30 + d.textlength(ped["lab"], font=fl_) + 40, y0 + h - 22], radius=22,
+                            fill=(0, 0, 0, 160))
+        d.text((x0 + 50, y0 + h - 54), ped["lab"], font=fl_, fill=S.BALTS, anchor="lm")
     if R.get("legenda"):                                               # leģenda – augšmalas vidū (stūri ir noapaļoti)
-        fl_ = F("black", 26)
-        plat_ = sum(d.textlength(lab_, font=fl_) + 34 for lab_, _ in R["legenda"]) + 26 * (len(R["legenda"]) - 1)
+        fl_ = F("black", 26)                                           # kopš 11.11.2026 – uz tumša pamata, simboli kā punkti
+        al_ = int(255 * k0)
+        plat_ = sum(d.textlength(lab_, font=fl_) + 40 for lab_, _ in R["legenda"]) + 30 * (len(R["legenda"]) - 1)
+        yl_ = y0 + 40
+        d.rounded_rectangle([540 - plat_ / 2 - 22, yl_ - 24, 540 + plat_ / 2 + 22, yl_ + 24], radius=24,
+                            fill=(6, 10, 24, int(215 * k0)), outline=(148, 163, 184, int(90 * k0)), width=2)
         xx = 540 - plat_ / 2
         for lab_, k_ in R["legenda"]:
-            d.ellipse([xx, y0 + 26, xx + 20, y0 + 46], fill=_FJ_KR[k_])
-            d.text((xx + 30, y0 + 36), lab_, font=fl_, fill=S.BALTS, anchor="lm")
-            xx += d.textlength(lab_, font=fl_) + 34 + 26
+            _fj_punkts(d, xx + 12, yl_, k_, al_)
+            d.text((xx + 36, yl_ + 1), lab_, font=fl_, fill=S.BALTS + (al_,), anchor="lm")
+            xx += d.textlength(lab_, font=fl_) + 40 + 30
     beigas_ = t > T0 + len(pk) * DT + 0.4
     if beigas_ and R.get("kopa"):                                      # beigās – īstais kopskaits (arī bez metiena vietas)
         nv = int(R["kopa"])
@@ -4967,18 +5013,27 @@ def aina_fakts_ripa(t, c):
         d.text((400, 1352), R["skaititajs2"], font=S.ietilpinat(d, R["skaititajs2"], "semi", 32, 560), fill=_NV_LAB, anchor="lm")
     st = R.get("stats") or []
     ks = (t - T0 - len(pk) * DT - 0.2) / 0.4
-    if st and ks > 0:
-        S.teksts_c(d, 1430, R.get("stats_virs", "SEASON SO FAR"), F("semi", 28), _NV_LAB + (int(255 * min(1, ks)),))
+    if st and ks > 0:                                                  # kopš 11.11.2026 – kartītē (citādi saplūst ar fonu)
+        ka = min(1.0, ks)
+        cx0, cx1, cy0, cy1 = FJ_ST_KARTE
+        d.rounded_rectangle([cx0, cy0, cx1, cy1], radius=30, fill=(10, 14, 32, int(235 * ka)))
+        dn.rounded_rectangle([cx0, cy0, cx1, cy1], radius=30, outline=S.ZILS + (int(170 * ka),), width=3)
+        S.teksts_c(d, cy0 + 40, R.get("stats_virs", "SEASON SO FAR"), F("semi", 28), _NV_LAB + (int(255 * ka),))
         n_ = len(st)
-        tw_ = (900 - (n_ - 1) * 16) / n_
+        pad, gap = 26, 14
+        tw_ = (cx1 - cx0 - 2 * pad - (n_ - 1) * gap) / n_
+        ty0, ty1 = cy0 + 82, cy1 - pad                                 # atstarpe starp virsrakstu un laukiem
         for j, (lab_, val) in enumerate(st):
             kk = ease_back(min(1.0, max(0.0, ks - j * 0.12)))
             if kk <= 0:
                 continue
-            xx = 90 + j * (tw_ + 16)
-            d.rounded_rectangle([xx, 1460, xx + tw_, 1590], radius=22, fill=_NV_TILE + (int(255 * min(1, kk)),))
-            d.text((xx + tw_ / 2, 1505), str(val), font=S.ietilpinat(d, str(val), "black", 56, tw_ - 20), fill=S.BALTS, anchor="mm")
-            d.text((xx + tw_ / 2, 1562), str(lab_).upper(), font=S.ietilpinat(d, str(lab_).upper(), "semi", 24, tw_ - 20), fill=_NV_LAB, anchor="mm")
+            xx = cx0 + pad + j * (tw_ + gap)
+            aa = int(255 * min(1, kk))
+            d.rounded_rectangle([xx, ty0, xx + tw_, ty1], radius=20, fill=_NV_TILE + (aa,))
+            d.text((xx + tw_ / 2, ty0 + (ty1 - ty0) * 0.38), str(val), font=S.ietilpinat(d, str(val), "black", 56, tw_ - 20),
+                   fill=S.BALTS + (aa,), anchor="mm")
+            d.text((xx + tw_ / 2, ty0 + (ty1 - ty0) * 0.78), str(lab_).upper(), font=S.ietilpinat(d, str(lab_).upper(), "semi", 24, tw_ - 20),
+                   fill=_NV_LAB + (aa,), anchor="mm")
     L.alpha_composite(_nv_glow(N, 10, 1.3))
     return L
 
@@ -5910,7 +5965,8 @@ def fakts_ripa_dati(D, m, c):
         x = m[(m["game_id"] == gid) & (m["vartsargs"] == pid) & (m["uz_v"] == 1)]
         p = koord(x[x["varti"] == 0], "S", per_lab) + koord(x[x["varti"] == 1], "GA", per_lab)
         rez = {"kopa": int(c.get("garums", 0)) or None, "virsr": [("EVERY", S.BALTS), ("SAVE", S.DZELTENS)], "apaksa": "SHOTS ON GOAL HE FACED",
-               "skaititajs": "SAVES", "kr_sk": "S", "skaita": ("S",)}
+               "skaititajs": "SAVES", "kr_sk": "S", "skaita": ("S",),
+               "legenda": [("SAVE", "S"), ("GOAL AGAINST", "GA")] if (x["varti"] == 1).any() else None}
     elif veids in ("periods", "comeback", "atri"):
         gid = int(dal[0])
         kom = dal[1] if veids == "periods" else c.get("badge")
@@ -5932,7 +5988,8 @@ def fakts_ripa_dati(D, m, c):
         x = m[(m["game_id"] == gid) & (m["pretinieks"] == kom) & (m["uz_v"] == 1)]
         p = koord(x[x["varti"] == 0], "S", per_lab) + koord(x[x["varti"] == 1], "GA", per_lab)
         rez = {"virsr": [("EVERY", S.BALTS), ("SHOT", S.BALTS), ("THEY", S.BALTS), ("SURVIVED", S.DZELTENS)],
-               "apaksa": "SHOTS ON GOAL AGAINST THEM", "skaititajs": "SHOTS FACED", "kr_sk": "S"}
+               "apaksa": "SHOTS ON GOAL AGAINST THEM", "skaititajs": "SHOTS FACED", "kr_sk": "S",
+               "legenda": [("SAVE", "S"), ("GOAL AGAINST", "GA")] if (x["varti"] == 1).any() else None}
     elif veids in ("kom_uzv", "kom_zaud"):
         kom = dal[0]
         g = sg[((sg["home_team"] == kom) | (sg["away_team"] == kom)) & (sg["datums"] <= str(c.get("datums")))].sort_values("datums")
@@ -6329,26 +6386,30 @@ NOSL_Q2 = {
                    (("ABOUT TO", "TURN IT", "AROUND?"), "About to turn it around?"),
                    (("BAD TEAM", "OR", "BAD LUCK?"), "Bad team, or bad luck?"),
                    (("DON'T", "WRITE THEM", "OFF"), "Don't write them off.")],
-    "fakti_sp": [(("CAN ANYONE", "STOP", "HIM?"), "Can anyone stop him?"),
-                 (("HOW IS THIS", "EVEN", "POSSIBLE?"), "How is this even possible?"),
+    # faktu āķi (kopš 11.11.2026): fakti ir vienas spēles / nedēļas notikumi (sērijas – Streak watch), tāpēc nav
+    # "the hottest … right now?", "can anyone stop / beat him?", "the best duo in the NHL?" – vienai spēlei pārspīlēti
+    "fakti_sp": [(("HOW IS THIS", "EVEN", "POSSIBLE?"), "How is this even possible?"),
                  (("THE STAT", "OF THE", "WEEK?"), "The stat of the week?"),
                  (("NOBODY SAW", "THIS", "COMING"), "Nobody saw this coming."),
-                 (("THE HOTTEST", "PLAYER", "RIGHT NOW?"), "The hottest player right now?")],
-    "fakti_va": [(("CAN ANYONE", "BEAT", "HIM?"), "Can anyone beat him?"),
-                 (("HOW IS THIS", "EVEN", "POSSIBLE?"), "How is this even possible?"),
+                 (("A NIGHT", "TO", "REMEMBER"), "A night to remember."),
+                 (("THE BEST NIGHT", "OF THE", "WEEK?"), "The best night of the week?")],
+    "fakti_va": [(("HOW IS THIS", "EVEN", "POSSIBLE?"), "How is this even possible?"),
                  (("THE WALL", "OF THE", "WEEK?"), "The wall of the week?"),
                  (("NOBODY SAW", "THIS", "COMING"), "Nobody saw this coming."),
-                 (("THE HOTTEST", "GOALIE", "RIGHT NOW?"), "The hottest goalie right now?")],
-    "fakti_duo": [(("CAN ANYONE", "STOP", "THEM?"), "Can anyone stop them?"),
-                  (("THE BEST DUO", "IN THE", "NHL?"), "The best duo in the NHL?"),
+                 (("A NIGHT", "TO", "REMEMBER"), "A night to remember.")],
+    "fakti_va_sausa": [(("NOTHING", "GOT", "PAST HIM"), "Nothing got past him.")],          # + fakti_va (sausā spēle)
+    "fakti_va_daudz": [(("UNDER", "SIEGE", "ALL NIGHT"), "Under siege, all night."),         # + fakti_va (45+ atvairīti)
+                       (("THE BUSIEST", "GOALIE", "THIS WEEK?"), "The busiest goalie this week?")],
+    "fakti_duo": [(("TWO PLAYERS", "ONE", "BIG NIGHT"), "Two players, one big night."),
+                  (("THE DUO", "OF THE", "WEEK?"), "The duo of the week?"),
                   (("HOW IS THIS", "EVEN", "POSSIBLE?"), "How is this even possible?"),
                   (("THE STAT", "OF THE", "WEEK?"), "The stat of the week?"),
                   (("NOBODY SAW", "THIS", "COMING"), "Nobody saw this coming.")],
-    "fakti_kom": [(("CAN ANYONE", "STOP", "THEM?"), "Can anyone stop them?"),
+    "fakti_kom": [(("DID YOU", "SEE", "THIS?"), "Did you see this?"),
                   (("HOW IS THIS", "EVEN", "POSSIBLE?"), "How is this even possible?"),
                   (("THE TEAM", "OF THE", "WEEK?"), "The team of the week?"),
                   (("NOBODY SAW", "THIS", "COMING"), "Nobody saw this coming."),
-                  (("THE HOTTEST", "TEAM", "RIGHT NOW?"), "The hottest team right now?")],
+                  (("THE GAME", "OF THE", "WEEK?"), "The game of the week?")],
     "fakti_kom_zaud": [(("WHEN WILL", "THEY", "WIN?"), "When will they win again?"),
                        (("WHAT IS", "GOING", "WRONG?"), "What is going wrong?"),
                        (("IS THIS", "ROCK", "BOTTOM?"), "Is this rock bottom?"),
@@ -7321,8 +7382,10 @@ def _ns_fakti(rez, hero):
         return rez
     if atsl.startswith(("points_serija", "goals_serija", "liela:")):
         kr, q1, q2, kom_v = [(kom, v)], NOSL_Q1["speletajs"], NOSL_Q2["fakti_sp"], None
-    elif atsl.startswith("vartsargs"):
-        kr, q1, q2, kom_v = [(kom, v)], NOSL_Q1["vartsargs"], NOSL_Q2["fakti_va"], None
+    elif atsl.startswith("vartsargs"):                                # sausā spēle / 45+ atvairīti – savs papildu āķis
+        sausa = "SHUTOUT" in " ".join(str(x) for x in (hero.get("hook") or [])).upper()
+        kr, q1, kom_v = [(kom, v)], NOSL_Q1["vartsargs"], None
+        q2 = NOSL_Q2["fakti_va"] + NOSL_Q2["fakti_va_sausa" if sausa else "fakti_va_daudz"]
     elif atsl.startswith("liela_duo"):
         kr, q1, q2, kom_v = [(kom, x.strip()) for x in str(v).split("&")][:3], NOSL_Q1["duo"], NOSL_Q2["fakti_duo"], None
     else:
@@ -7354,6 +7417,13 @@ ISS_CILPA_APG = ["{Q}", "Like we said: {q}"]                                    
 ISS_FAKTI_BEIGAS = ["Which one surprised you most? Follow for the NHL week in numbers.",
                     "Which number would you put first? Follow for more.",
                     "Did we miss one? Tell us, and follow for next week's numbers."]
+ISS_FAKTI_BEIGAS_NOSL = {        # ar noslēpuma āķi (kopš 11.11.2026 – āķa jautājums beigās vairs neatkārtojas)
+    "topn": ["Did you guess number one? Follow for next week's numbers.",
+             "Which one would you put first? Follow for more.",
+             "Which one surprised you most? Follow for next week's numbers."],
+    "viens": ["Did you guess it? Follow for next week's numbers.",
+              "Ever seen that before? Follow for more numbers like this.",
+              "Follow for next week's NHL numbers."]}
 _VARDIEM = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
 
 ISS_FAN_IEVADS = {
@@ -8332,8 +8402,11 @@ def _iss_fakti(s):
     for c in kartes:
         if c.get("tips") == "fakts_ripa":                             # īsāka pauze ripu ainas beigās
             c["ilgums"] = max(4.5, 1.25 + 0.1 * len(c["ripa"]["punkti"]) + 1.0)
+    # beigas (kopš 11.11.2026): āķa jautājumu vairs neatkārto ("Your call: the wall of the week?" – atbilde jau bija video),
+    # bet jautā skatītājam / aicina sekot; video tāpat pāriet atpakaļ uz āķi (cilpa)
+    topn = any(c.get("tips") == "fakts_tablo" and len(c.get("fakti") or []) > 1 for c in kartes)
     if (s.get("intro") or {}).get("noslepums"):
-        runa.append(_iss_cilpa(s, "fakts"))
+        runa.append(S.reta_frase(ISS_FAKTI_BEIGAS_NOSL["topn" if topn else "viens"], veids="fakts", n=2))
     else:                                                             # TOP N bez noslēpuma – jautājums komentāriem
         runa.append(S.reta_frase(ISS_FAKTI_BEIGAS, veids="fakts", n=2))
     return kartes, runa
@@ -8420,6 +8493,38 @@ NOSL_Q2["serijas"] = [(("WHO'S", "STILL", "ROLLING?"), "Who's still rolling?"),
                       (("CAN ANYONE", "CATCH", "HIM?"), "Can anyone catch him?"),
                       (("WHO CAN'T", "STOP", "SCORING?"), "Who can't stop scoring?"),
                       (("STREAK", "WATCH:", "WHO'S #1?"), "Streak watch: who's number one?")]
+ST_STIPRS = {"punkti": 10, "varti": 5, "komandas": 7}   # "spēcīga" nedēļa – vismaz viens no šiem (vai aktīva sausā sērija)
+
+
+def _streak_watch_vertejums(kartes):
+    """Konsolē – nedēļas garākās sērijas un brīdinājums, ja visas vājas (tad video var izlaist; tas tomēr tiek izveidots)."""
+    try:
+        def mx(xs):
+            xs = [int(x) for x in xs if str(x).isdigit()]
+            return max(xs) if xs else 0
+        p_ = g_ = a_ = k_ = 0
+        akt = 0
+        for c in kartes:
+            v0 = str((c.get("virsr") or [("",)])[0][0])
+            if c.get("tips") == "fakts_ga_serijas":
+                g_ = mx(r["n"] for r in c["kol"][0]["rindas"])
+                a_ = mx(r["n"] for r in c["kol"][1]["rindas"])
+            elif c.get("tips") == "fakts_hc":
+                k_ = mx(r["n"] for kol in c["kol"] for r in kol["rindas"])
+            elif v0 == "POINT":
+                p_ = mx(r["liels"] for r in c.get("rindas") or [])
+            elif v0 == "GOALIES":
+                akt = sum(1 for r in c.get("rindas") or [] if r.get("maz") == "STILL GOING")
+        print(f"STREAK WATCH: garākās sērijas – punkti {p_}, vārti {g_}, piespēles {a_}, komandas {k_}; "
+              f"aktīvas sausās sērijas: {akt}")
+        if not (p_ >= ST_STIPRS["punkti"] or g_ >= ST_STIPRS["varti"] or k_ >= ST_STIPRS["komandas"] or akt):
+            print(f"UZMANĪBU: šonedēļ sērijas vājas (nav punktu sērijas {ST_STIPRS['punkti']}+, vārtu sērijas "
+                  f"{ST_STIPRS['varti']}+, komandu sērijas {ST_STIPRS['komandas']}+ un aktīvas sausās sērijas) – "
+                  f"apsver šonedēļ Streak watch nepublicēt (video tomēr izveidots).")
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"  (Streak watch vērtējums: {type(ex).__name__}: {ex})")
+
+
 ST_BEIGAS = ["Can {v} make it {n1}? Follow for next week's streak watch.",
              "Which streak ends first? Follow for next week's streak watch.",
              "Who keeps it rolling? Follow for next week's streak watch."]
@@ -8445,6 +8550,7 @@ def veids_serijas_b(m, a):
         print("Streak watch: nav ne punktu sēriju, ne vārtsargu datu.")
         return None
     kartes = [k_ for k_, _ in ainas]
+    _streak_watch_vertejums(kartes)                                   # konsolē: vai šonedēļ sērijas pietiekami spēcīgas
     tv["kr"] = [S.DZELTENS] + [S.ZILS] * (len(kartes) - 1)            # tablo punkti – cik ainu (2–3)
     for i, k_ in enumerate(kartes):
         k_["_tv_idx"] = i
