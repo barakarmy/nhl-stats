@@ -5120,10 +5120,12 @@ def aina_fakts_serijas(t, c):
             continue
         y = y_r
         al = int(235 * k)
-        mans = bool(r.get("video") or r.get("izcelt"))                # dzeltens rāmis: 10+ sērijas / sausās sērijas / video fakts
+        mans = bool(r.get("video") or r.get("izcelt"))                # dzeltens rāmis: 10+ sērijas / aktīvās sausās sērijas
+        ram_ = r.get("ramis")                                         # sarkans – beigusies sausā sērija
         d.rounded_rectangle([80, y, 1000, y + RH], radius=30, fill=(10, 14, 32, al))
-        (dn if mans else d).rounded_rectangle([80, y, 1000, y + RH], radius=30, outline=(S.DZELTENS if mans else S.ZILS) + (int(220 * k),),
-                                              width=4 if mans else 3)
+        (dn if (mans or ram_) else d).rounded_rectangle([80, y, 1000, y + RH], radius=30,
+                                                        outline=tuple(ram_ or (S.DZELTENS if mans else S.ZILS)) + (int(220 * k),),
+                                                        width=4 if (mans or ram_) else 3)
         if i in c["_izc_t"]:                                          # balss nosauc – mirdzošs rāmis ~1,6 s
             dtt = t - c["_izc_t"][i] + 0.1
             g_ = min(1.0, max(0.0, dtt / 0.2)) * (1 - min(1.0, max(0.0, (dtt - 1.1) / 0.5)))
@@ -5138,7 +5140,7 @@ def aina_fakts_serijas(t, c):
         xa_ = 230 + (pw_ + 12 if pw_ else 0)
         d.text((xa_, y + 94 * sk_), r["apaksa"], font=S.ietilpinat(d, r["apaksa"], "semi", int(30 * sk_), 470 - (xa_ - 230)),
                fill=tuple(r.get("apaksa_kr") or _NV_LAB) + (int(255 * k),), anchor="lm")
-        kr_l = S.DZELTENS if r.get("izcelt", bool(r.get("video")) or i == 0) else S.BALTS
+        kr_l = tuple(r.get("liels_kr") or (S.DZELTENS if r.get("izcelt", bool(r.get("video")) or i == 0) else S.BALTS))
         d.text((960, y + 50 * sk_), r["liels"], font=S.ietilpinat(d, r["liels"], "black", int(64 * sk_), 260), fill=kr_l + (int(255 * k),), anchor="rm")
         d.text((960, y + 100 * sk_), r["maz"], font=S.ietilpinat(d, r["maz"], "semi", int(26 * sk_), 260), fill=r.get("maz_kr", _NV_LAB) + (int(255 * k),), anchor="rm")
     L.alpha_composite(_nv_glow(N, 12, 1.3))
@@ -5172,58 +5174,127 @@ SS_SOLO_NAV = ["No two-hour shutout streak this week, but these goalies were har
 _SER_KUR = {"HOME": " at home", "AWAY": " on the road", "ALL": ""}
 
 
+# ---- Streak watch balss: vienāda garuma sērijas – vienā teikumā (kopš 11.11.2026)
+# Līdz šim balss nosauca saraksta 1. un 2. rindu – ja 4 spēlētājiem ir 8, tika nosaukts viens (nejauši), un vienādie
+# 6 tika stāstīti divos teikumos. Tagad: līderu grupa (vienāds skaits) – viens teikums; mājas / izbraukuma – precīzi.
+_KUR_ADJ = {"HOME": " home", "AWAY": " road"}                          # "8 straight road games"
+_KUR_PEC = {"HOME": " at home", "AWAY": " on the road"}                # "Bouchard on the road"
+SER_TEIK = {
+    "p": {"viens": "{a} leads with {n} straight{k} games{vis}.",
+          "divi": "{a} and {b} lead with {n} straight{k} games.",
+          "divi_jauk": "{a} leads with {n} straight{ka} games, and {b} has {n} straight{kb}.",
+          "daudzi": "{N} players lead with {n} straight{k} games: {list}.",
+          "daudzi_jauk": "{N} players are tied for the lead at {n}: {parts}."},
+    "g": {"viens": "{a} has scored in {n} straight{k} games.",
+          "divi": "{a} and {b} have both scored in {n} straight{k} games.",
+          "divi_jauk": "{a} has scored in {n} straight{ka} games, and {b} in {n} straight{kb} games.",
+          "daudzi": "{N} players have scored in {n} straight{k} games: {list}.",
+          "daudzi_jauk": "{N} players are at {n} straight with a goal: {parts}."},
+    "a": {"viens": "{a} has an assist in {n} straight{k} games.",
+          "divi": "{a} and {b} have both had an assist in {n} straight{k} games.",
+          "divi_jauk": "{a} has an assist in {n} straight{ka} games, and {b} in {n} straight{kb} games.",
+          "daudzi": "{N} players have an assist in {n} straight{k} games: {list}.",
+          "daudzi_jauk": "{N} players are at {n} straight with an assist: {parts}."},
+}
+
+
+def _ser_grupas_teik(rr, idx, veids_t, vis=None):
+    """Vienāda garuma grupa (rindas idx) → (teikums, vai pieminēta mājas / izbraukuma sērija).
+    viens – ar mājām / izbraukumu teikumā; divi – kopā (vienāds veids) vai katram savs; 3+ – skaits un uzvārdi;
+    ja jaukti (kopā / mājās / izbr.) – uzvārdi pa grupām ar "on the road" / "at home"."""
+    T = SER_TEIK[veids_t]
+    xs = [rr[i] for i in idx]
+    n = xs[0]["n"]
+    veidi = {x["veids"] for x in xs}
+    k = _KUR_ADJ.get(xs[0]["veids"], "") if len(veidi) == 1 else ""
+    kur_ir = any(x["veids"] != "ALL" for x in xs)
+    if len(xs) == 1:
+        return T["viens"].format(a=xs[0]["vards"], n=n, k=k, vis=(vis or {}).get(xs[0].get("visi"), "")), kur_ir
+    if len(xs) == 2:
+        a, b = xs
+        if len(veidi) == 1:
+            return T["divi"].format(a=a["vards"], b=b["vards"], n=n, k=k), kur_ir
+        if veids_t == "p":
+            return T["divi_jauk"].format(a=a["vards"], b=b["vards"], n=n, ka=_KUR_ADJ.get(a["veids"], ""),
+                                         kb=_KUR_PEC.get(b["veids"], "")), kur_ir
+        return T["divi_jauk"].format(a=a["vards"], b=b["vards"], n=n, ka=_KUR_ADJ.get(a["veids"], ""),
+                                     kb=_KUR_ADJ.get(b["veids"], "")), kur_ir
+    N = _VARDIEM.get(len(xs), str(len(xs))).capitalize()
+    uzv = lambda ys: _vardu_saraksts([y["vards"].split()[-1] for y in ys])
+    if len(xs) > 4:                                                   # 5+ vienādi – tikai skaits (vārdi redzami tabulā)
+        return T["daudzi"].split(":")[0].format(N=N, n=n, k=k) + ".", len(veidi) == 1 and bool(k)
+    if len(veidi) == 1:
+        return T["daudzi"].format(N=N, n=n, k=k, list=uzv(xs)), kur_ir
+    parts = []
+    for v_ in ("ALL", "AWAY", "HOME"):
+        ys = [x for x in xs if x["veids"] == v_]
+        if ys:
+            parts.append(uzv(ys) + _KUR_PEC.get(v_, ""))
+    return T["daudzi_jauk"].format(N=N, n=n, parts="; ".join(parts)), kur_ir
+
+
+def _ser_grupa(rr, no=0):
+    """Rindu indeksi ar tādu pašu garumu kā rr[no] (saraksts sakārtots, garākās pirmās)."""
+    if no >= len(rr):
+        return []
+    return [i for i in range(no, len(rr)) if rr[i]["n"] == rr[no]["n"]]
+
+
 def _ps_stasts(ps):
-    """Streak watch – punktu sērijas balsī: līderis, otrais, nākamā grupa ar vienādu skaitu, mājas / izbraukuma sērija,
-    cik ir 10+. → (teksts, [(rindas nr, vārds)] – rinda izceļas, kad balss nosauc vārdu)."""
+    """Streak watch – punktu sērijas balsī: līderu grupa (vienāds skaits – vienā teikumā), nākamā grupa, viena mājas /
+    izbraukuma sērija (ja vēl nav pieminēta), cik ir 10+. → (teksts, [(rindas nr, vārds)] – rinda izceļas, kad nosauc)."""
     if not ps:
         return "", []
     out, izc = [], []
     vis = {"G": ", with a goal in every one", "A": ", with an assist in every one"}
-    a = ps[0]
-    out.append(f"{a['vards']} leads with {a['n']} straight games{_SER_KUR.get(a['veids'], '')}{vis.get(a.get('visi'), '')}.")
-    izc.append((0, a["vards"]))
-    if len(ps) > 1:
-        b = ps[1]
-        out.append((f"{b['vards']} also has {b['n']}" if b["n"] == a["n"] else f"{b['vards']} is next with {b['n']}")
-                   + f"{_SER_KUR.get(b['veids'], '')}{vis.get(b.get('visi'), '')}.")
-        izc.append((1, b["vards"]))
-    gr = [i for i in range(2, len(ps)) if ps[i]["veids"] == "ALL"]
-    if gr:
-        n3 = ps[gr[0]]["n"]
-        gr = [i for i in gr if ps[i]["n"] == n3][:3]
-        if len(gr) == 1:
-            out.append(f"{ps[gr[0]]['vards']} has {n3}.")
+    g1 = _ser_grupa(ps, 0)
+    t_, kur_ir = _ser_grupas_teik(ps, g1, "p", vis)
+    out.append(t_)
+    izc += [(i, ps[i]["vards"]) for i in g1]
+    g2 = _ser_grupa(ps, g1[-1] + 1)
+    if g2:
+        n2 = ps[g2[0]]["n"]
+        if len(g2) == 1:
+            b = ps[g2[0]]
+            out.append(f"{b['vards']} is next with {n2}{_KUR_PEC.get(b['veids'], '')}{vis.get(b.get('visi'), '')}.")
+            kur_ir = kur_ir or b["veids"] != "ALL"
+        elif len(g2) <= 4:
+            out.append(f"{_vardu_saraksts([ps[i]['vards'].split()[-1] for i in g2])} are next with {n2}.")
         else:
-            out.append(f"{_vardu_saraksts([ps[i]['vards'].split()[-1] for i in gr])} are all at {n3}.")
-        izc += [(i, ps[i]["vards"]) for i in gr]
-    mj = next((i for i in range(2, len(ps)) if ps[i]["veids"] != "ALL" and i not in [x for x, _ in izc]), None)
-    if mj is not None:
-        x = ps[mj]
-        verb_ = {"G": "has scored in", "A": "has an assist in"}.get(x.get("visi"), "has a point in")
-        out.append(f"{x['vards']} {verb_} {x['n']} straight {'home' if x['veids'] == 'HOME' else 'road'} games.")
-        izc.append((mj, x["vards"]))
+            out.append(f"{_VARDIEM.get(len(g2), str(len(g2))).capitalize()} players are next with {n2}.")
+        izc += [(i, ps[i]["vards"]) for i in g2]
+    if not kur_ir:                                                    # viena mājas / izbraukuma sērija (ja balss vēl nav teikusi)
+        min_ = {i for i, _ in izc}
+        mj = next((i for i in range(len(ps)) if ps[i]["veids"] != "ALL" and i not in min_), None)
+        if mj is not None:
+            x = ps[mj]
+            verb_ = {"G": "has scored in", "A": "has an assist in"}.get(x.get("visi"), "has a point in")
+            out.append(f"{x['vards']} {verb_} {x['n']} straight{_KUR_ADJ.get(x['veids'], '')} games.")
+            izc.append((mj, x["vards"]))
     k10 = sum(1 for x in ps if x["n"] >= S.PUNKTU_SERIJA_MIN)
     if k10 >= 3:
         out.append(f"{_VARDIEM.get(k10, str(k10)).capitalize()} streaks are at ten games or more.")
     return " ".join(out), izc
 
 
-def _ss_stasts(ss, labakie):
-    """Streak watch – vārtsargi balsī: 1–2 garākās sausās sērijas (minūtes, vai turpinās) un labākais atvairīto %."""
+def _ss_stasts(akt, labakie, beig=()):
+    """Streak watch – vārtsargi balsī tādā secībā kā ekrānā: aktīvās sausās sērijas (1–2), labākais atvairīto %,
+    garākā beigusies sērija. Indeksi – rindas ekrānā (aktīvās augšā, beigušās – pašā apakšā)."""
     out, izc = [], []
-    for j, x in enumerate(ss[:2]):
+    for j, x in enumerate(akt[:2]):
         mins = int(x["sek"]) // 60
-        if j == 0:
-            out.append(f"{x['vards']} hasn't allowed a goal in {mins} minutes, and counting." if x["aktiva"]
-                       else f"{x['vards']} went {mins} minutes without allowing a goal.")
-        else:
-            out.append(f"{x['vards']} is at {mins} minutes, still going." if x["aktiva"] else f"{x['vards']} went {mins} minutes.")
+        out.append(f"{x['vards']} hasn't allowed a goal in {mins} minutes, and counting." if j == 0
+                   else f"{x['vards']} is at {mins} minutes, still going.")
         izc.append((j, x["vards"]))
     if labakie:
         _, r_ = labakie[0]
         out.append(f"{r_['vards']} leads the week with a {r_['pct']:.3f} save percentage".replace(" 0.", " .")
                    + f", {int(r_['sv'])} saves in {int(r_['gs'])} starts.")
-        izc.append((len(ss), r_["vards"]))
+        izc.append((len(akt), r_["vards"]))
+    if beig:
+        x = beig[0]
+        out.append(f"{x['vards']}'s streak ended at {int(x['sek']) // 60} minutes.")
+        izc.append((len(akt) + len(labakie), x["vards"]))
     return " ".join(out), izc
 
 
@@ -5264,23 +5335,25 @@ def _ga_serijas(D, kol, min_n=GA_MIN):
 
 
 def _ga_stasts(gs, asl):
-    """Balss: vārtu sērijas līderis, piespēļu sērijas līderis, viena mājas / izbraukuma sērija (ja līderi nav tādi).
-    → (teksts, [(kolonna, rindas nr, vārds)])."""
-    kur = {"HOME": " home", "AWAY": " road", "ALL": ""}
-    out, izc = [], []
-    for kol_, rr, verbs in ((0, gs, "has scored in"), (1, asl, "has an assist in")):   # katras tabulas līderis
+    """Balss: katras tabulas līderu grupa vienā teikumā (vienāds skaits – kopā, mājas / izbraukums – precīzi), tad viena
+    mājas / izbraukuma sērija, ja balss to vēl nav teikusi. → (teksts, [(kolonna, rindas nr, vārds)])."""
+    out, izc, kur_ir = [], [], False
+    for kol_, rr, vt in ((0, gs, "g"), (1, asl, "a")):
         if not rr:
             continue
-        a = rr[0]
-        out.append(f"{a['vards']} {verbs} {a['n']} straight{kur[a['veids']]} games.")
-        izc.append((kol_, 0, a["vards"]))
-    for kol_, rr, verbs in ((0, gs, "has scored in"), (1, asl, "has an assist in")):   # viena mājas / izbraukuma sērija
-        j = next((i for i, x in enumerate(rr[:GA_RINDAS]) if x["veids"] != "ALL" and (kol_, i) not in [(k, i_) for k, i_, _ in izc]), None)
-        if j is not None:
-            x = rr[j]
-            out.append(f"{x['vards']} {verbs} {x['n']} straight{kur[x['veids']]} games.")
-            izc.append((kol_, j, x["vards"]))
-            break
+        g1 = _ser_grupa(rr, 0)
+        t_, k_ = _ser_grupas_teik(rr, g1, vt)
+        out.append(t_)
+        kur_ir = kur_ir or k_
+        izc += [(kol_, i, rr[i]["vards"]) for i in g1]
+    if not kur_ir:
+        min_ = {(k, i) for k, i, _ in izc}
+        for kol_, rr, vt in ((0, gs, "g"), (1, asl, "a")):
+            j = next((i for i, x in enumerate(rr) if x["veids"] != "ALL" and (kol_, i) not in min_), None)
+            if j is not None:
+                out.append(_ser_grupas_teik(rr, [j], vt)[0])
+                izc.append((kol_, j, rr[j]["vards"]))
+                break
     return " ".join(out), izc
 
 
@@ -5632,10 +5705,16 @@ def fakti_serijas_ainas(D, m, izv, tv, idx, solo=False):
                 print(f"  (vārtu / piespēļu sērijas: {type(ex_).__name__}: {ex_} – izlaists)")
         # GOALIES OF THE WEEK (kopš 09.11.2026): augšā sausās sērijas ≥ 120 min (dzeltenas), tālāk – nedēļas labākie pēc
         # atvairīto % (≥ 2 starti), lai ekrāns vienmēr pilns; aina ir vienmēr (arī, ja sēriju nav)
-        ss = S.sausas_serijas_nedela(D, m)[:3]
+        ss_all = S.sausas_serijas_nedela(D, m)
+        akt = [x for x in ss_all if x["aktiva"]][:3]                   # (kopš 11.11.2026) aktīvās – augšā, dzeltenā rāmī;
+        beig = [x for x in ss_all if not x["aktiva"]][:3]               # beigušās – pašā apakšā, sarkanā; vidū – sv%
+        ss = akt + beig
         rindas = [{"vards": x["vards"], "team": x["team"], "liels": f"{x['sek'] // 60}:{x['sek'] % 60:02d}",
-                   "maz": "STILL GOING" if x["aktiva"] else "ENDED", "maz_kr": S.ZALS if x["aktiva"] else _NV_LAB,
-                   "apaksa": f"shutout streak · {x['atvairiti']} saves", "izcelt": True} for x in ss]
+                   "maz": "STILL GOING", "maz_kr": S.ZALS, "apaksa": f"shutout streak · {x['atvairiti']} saves", "izcelt": True}
+                  for x in akt]
+        rindas_b = [{"vards": x["vards"], "team": x["team"], "liels": f"{x['sek'] // 60}:{x['sek'] % 60:02d}",
+                     "maz": "ENDED", "maz_kr": S.SARKANS, "liels_kr": (252, 165, 165), "ramis": S.SARKANS,
+                     "apaksa": f"shutout streak · {x['atvairiti']} saves", "izcelt": False} for x in beig]
         no_ = (S.pd.Timestamp(D["lidz"]) - S.timedelta(days=6)).strftime("%Y-%m-%d")
         vg = D["vg"][(D["vg"]["datums"] >= no_) & (D["vg"]["starter"].astype(str) == "True")].copy()
         for c_ in ("saves", "shotsAgainst", "goalsAgainst"):
@@ -5646,19 +5725,20 @@ def fakti_serijas_ainas(D, m, izv, tv, idx, solo=False):
         gw["pct"] = gw["sv"] / gw["sa"]
         gw = gw.sort_values(["pct", "sv"], ascending=False)
         jau = {x["pid"] for x in ss}
-        labakie = [(int(p_), r_) for p_, r_ in gw.iterrows() if int(p_) not in jau][:max(0, 8 - len(rindas))]
+        labakie = [(int(p_), r_) for p_, r_ in gw.iterrows() if int(p_) not in jau][:max(2, 8 - len(akt) - len(beig))]
         for p_, r_ in labakie:
             rindas.append({"vards": r_["vards"], "team": r_["team"], "liels": f"{r_['pct']:.3f}".lstrip("0"),
                            "maz": "SAVE %", "apaksa": f"{int(r_['gs'])} starts · {int(r_['sv'])} saves, {int(r_['ga'])} goals allowed",
                            "izcelt": False})
+        rindas += rindas_b                                            # beigušās sērijas – pašā apakšā
         if rindas:
             runa = S.reta_frase(SS_RUNA if ss else SS_RUNA_NAV, veids="serijas" if solo else "fakts", n=3)   # vārdi – sarakstā
             izc = []
             if solo:                                                  # Streak watch – īss ievads + kas redzams ekrānā
-                st_, izc = _ss_stasts(ss, labakie)
+                st_, izc = _ss_stasts(akt, labakie, beig)
                 runa = (S.reta_frase(SS_SOLO if ss else SS_SOLO_NAV, veids="serijas", n=2) + " " + st_).strip()
             out.append(({"tips": "fakts_serijas", "ilgums": 4.8, "virsr": [("GOALIES", S.BALTS), ("OF THE WEEK", S.DZELTENS)],
-                         "apaksa": "SHUTOUT STREAKS 120+ MIN IN YELLOW  ·  SAVE %  ·  2+ STARTS", "rindas": rindas,
+                         "apaksa": "SHUTOUT STREAKS 120+ MIN  ·  SAVE % (2+ STARTS)  ·  ENDED IN RED", "rindas": rindas,
                          "_tv": tv, "_tv_idx": idx, "izc": izc}, runa))
         if solo:                                                      # Streak watch: HOT & COLD – pēdējā aina (kopš 11.11.2026)
             try:
