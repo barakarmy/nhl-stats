@@ -1368,7 +1368,7 @@ def veids_fakti_b(m, a):
                          "apaksa": hero.get("aki_apaksa") or hero.get("skaitlis_apaksa", "")},
              "uzlime": S.reta_frase(S.UZLIME_NR1) if n > 1 else jaut.upper()}
     runa.append((S.reta_frase(FAKTI_TOPN_IEVADS, veids="fakts", n=2).format(n=skaits_v, N=skaits_v.capitalize())
-                  + f" Number one: {hook_runa}." if n > 1 else f"{hook_runa}. {jaut}"))   # TOP N – bez "Who is it?" (11.11.)
+                  + f" Number one: {hook_runa}. {jaut}" if n > 1 else f"{hook_runa}. {jaut}"))
     # #n → #2: viena aina katram
     mini_runa = []
     for nr, c in zip(range(n, 1, -1), citi[::-1]):
@@ -2649,10 +2649,7 @@ def renderet(s, izvade, kanals="", balss=None):
         try:
             import sikteli
             vp_ = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(izvade))), MEDIJI_JSON)
-            s_th, in_ = s, (s.get("intro") or {})
-            if not in_.get("noslepums") and in_.get("_sikts"):        # TOP N fakti (bez noslēpuma) – sīktēlam tie paši krekli
-                s_th = dict(s, intro=dict(in_, noslepums=in_["_sikts"]))
-            r_ = sikteli.izveidot(sys.modules[__name__], s_th, vp_, SIKTS["kods"])
+            r_ = sikteli.izveidot(sys.modules[__name__], s, vp_, SIKTS["kods"])
             if r_:
                 kods_, im_, alt_, veids_ = r_
                 _THUMB.update(alt=dict(alt_, **{"0": _THUMB["im"]}), im=im_, kods=kods_, veids=veids_)
@@ -4434,11 +4431,7 @@ def aina_fakts_tablo(t, c):
                     d.text((290, y + 32), vv, font=S.ietilpinat(d, vv, "black", 34, 330), fill=S.BALTS + (int(255 * ka),), anchor="lm")
                     ds_ = " ".join(rw.get("hook") or [])
                     d.text((950, y + 32), ds_, font=S.ietilpinat(d, ds_, "semi", 26, 300), fill=_NV_LAB + (int(255 * ka),), anchor="rm")
-                elif rw["nr"] == 1:
-                    p = 0.5 + 0.5 * math.sin(t * 5)
-                    dn.rounded_rectangle([110, y, 970, y + 64], radius=18, outline=S.DZELTENS + (int(120 + 120 * p),), width=3)
-                    d.text((540, y + 32), "?  ?  ?", font=F("black", 40), fill=S.DZELTENS, anchor="mm")
-                else:
+                else:                                                 # arī #1 – LOCKED (bez "? ? ?", kopš 11.11.2026)
                     d.text((540, y + 32), "LOCKED", font=F("semi", 28), fill=_NV_LAB + (120,), anchor="mm")
     if plus:                                                          # tablo slānis – pritumšināts, kamēr kartīte izvērsta
         fb = 1 - 0.85 * k_exp
@@ -4499,17 +4492,17 @@ def aina_fakts_tablo(t, c):
 
 # ---------------------------------------------------------------- TOP N tablo – variants A (kopš 11.11.2026, īsā versija)
 # Nav loga virs tabulas: tabula aizpilda ekrānu (centrēta), pašreizējā fakta rinda izplešas lielā kartītē turpat tabulā
-# (pārējās rindas pabīdās), kamēr balss runā; beigās saplok atpakaļ kompaktā rindā (vārds + fakts). #1 – "? ? ?" līdz
+# (pārējās rindas pabīdās), kamēr balss runā; beigās saplok atpakaļ kompaktā rindā (vārds + fakts). #1 – LOCKED līdz
 # savai kārtai un paliek izvērsts līdz ainas beigām. Garajā versijā (--long) – iepriekšējais izkārtojums.
-FJA_Y0, FJA_Y1 = 500, 1440       # tabulas laukums (zem virsraksta, virs subtitriem)
+FJA_Y0, FJA_Y1 = 500, 1690       # tabulas laukums ainas koordinātās (drošā zona ×0,82 → video ~455–1430, virs subtitriem)
 FJA_X0, FJA_X1 = 50, 1030
 FJA_G = 14
 
 
 def _fja_izm(n):
     """(kompaktās rindas augstums, izvērstās rindas augstums) – lai tabula aizpilda laukumu arī ar 2–3 faktiem."""
-    rh = {2: 170, 3: 150, 4: 124}.get(n, 108)
-    eh = min(660, (FJA_Y1 - FJA_Y0) - (n - 1) * (rh + FJA_G))
+    rh = {2: 200, 3: 180, 4: 148}.get(n, 128)
+    eh = min(820, (FJA_Y1 - FJA_Y0) - (n - 1) * (rh + FJA_G))
     return rh, eh
 
 
@@ -4526,22 +4519,22 @@ def _fja_saturs(f_, W, H):
     F = S.fonts
     kr = tuple(f_["kr"])
     im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
-    d.text((42, 30), f"#{f_['nr']}", font=F("black", int(min(96, H * 0.15))), fill=kr)
-    r = int(min(58, H * 0.09))
+    d.text((42, 30), f"#{f_['nr']}", font=F("black", int(min(110, H * 0.15))), fill=kr)
+    r = int(min(66, H * 0.09))
     if f_.get("badge"):
         _fj_ripa(d, W - 44 - r, 34 + r, r, f_["badge"])
     h = [str(x) for x in (f_.get("hook") or [""])]
-    d.text((W / 2, H * 0.47), h[0], font=S.ietilpinat(d, h[0], "black", int(min(170, H * 0.27)), W - 100), fill=S.BALTS, anchor="mm")
+    d.text((W / 2, H * 0.47), h[0], font=S.ietilpinat(d, h[0], "black", int(min(200, H * 0.27)), W - 100), fill=S.BALTS, anchor="mm")
     if len(h) > 1:
         r_ = " ".join(h[1:])
-        d.text((W / 2, H * 0.665), r_, font=S.ietilpinat(d, r_, "black", int(min(62, H * 0.1)), W - 100), fill=S.DZELTENS, anchor="mm")
+        d.text((W / 2, H * 0.665), r_, font=S.ietilpinat(d, r_, "black", int(min(74, H * 0.1)), W - 100), fill=S.DZELTENS, anchor="mm")
     v = str(f_.get("vards_pilns") or f_.get("vards") or "").upper()
-    d.text((W / 2, H * 0.835), v, font=S.ietilpinat(d, v, "semi", int(min(46, H * 0.075)), W - 100), fill=_NV_LAB, anchor="mm")
+    d.text((W / 2, H * 0.835), v, font=S.ietilpinat(d, v, "semi", int(min(54, H * 0.075)), W - 100), fill=_NV_LAB, anchor="mm")
     return im
 
 
 def _fja_rinda(d, dn, y, h, rw, atv, t, a=1.0):
-    """Kompaktā rinda: atvērta – #nr, komanda, vārds + fakts; #1 – "? ? ?"; pārējās – LOCKED."""
+    """Kompaktā rinda: atvērta – #nr, komanda, vārds + fakts; vēl neatklāta (arī #1) – LOCKED."""
     F = S.fonts
     x0, x1 = FJA_X0, FJA_X1
     kr = tuple(rw["kr"])
@@ -4560,11 +4553,7 @@ def _fja_rinda(d, dn, y, h, rw, atv, t, a=1.0):
         d.text((xt, y + h * 0.37), vv, font=S.ietilpinat(d, vv, "black", int(h * 0.29), x1 - 30 - xt), fill=S.BALTS + (A(255),), anchor="lm")
         ds_ = " ".join(str(x) for x in (rw.get("hook") or []))
         d.text((xt, y + h * 0.72), ds_, font=S.ietilpinat(d, ds_, "semi", int(h * 0.2), x1 - 30 - xt), fill=(203, 213, 225, A(255)), anchor="lm")
-    elif rw["nr"] == 1:
-        p = 0.5 + 0.5 * math.sin(t * 5)
-        dn.rounded_rectangle([x0, y, x1, y + h], radius=22, outline=S.DZELTENS + (A(120 + 120 * p),), width=4)
-        d.text(((x0 + x1) / 2, y + h / 2), "?  ?  ?", font=F("black", int(h * 0.34)), fill=S.DZELTENS + (A(255),), anchor="mm")
-    else:
+    else:                                                             # neatklāta (arī #1) – LOCKED
         d.text(((x0 + x1) / 2, y + h / 2), "LOCKED", font=F("semi", int(h * 0.2)), fill=_NV_LAB + (A(130),), anchor="mm")
 
 
@@ -5620,24 +5609,11 @@ def fakti_jauns(rez, D, m, izv, st, mini_runa):
         h = list(hero.get("hook") or [""])
         aki = {"liels": h[0], "apli": [f"+{v}" for v in ap], "izcelt": [int(S.np.argmax(ap))] if ap else [],
                "zem": " ".join(h[1:]), "josla": ("..." + uzl) if uzl else "", "vards": str(hero.get("vards") or "").upper(),
-               "kom": hero.get("badge"), "tag": "NHL  ·  THE WEEK IN NUMBERS", "kart_txt": "#1",
-               "bez_kartes": n > 1}                                   # TOP N: #1 skaitlis + "STAY FOR #1", bez vārda kartītes
+               "kom": hero.get("badge"), "tag": "NHL  ·  THE WEEK IN NUMBERS", "kart_txt": "#1"}
         rez["intro"] = {"aki": True, "fantasy_aki": aki, "tag": aki["tag"], "ilgums": 2.6, "_tv": tv}
         rez["kartes"], rez["runa"] = kartes, runa
         rez["_bez_zimoga"] = True
-        if n == 1:                                                    # noslēpuma āķis – tikai vienam faktam; TOP N (kopš 11.11.2026)
-            _ns_fakti(rez, hero)                                      # – bez tā: #1 tāpat paliek "? ? ?" tablo līdz beigām
-        else:                                                         # sīktēlam (sikteli.py) – tie paši krekli, kas noslēpumā
-            atsl_ = str(hero.get("atsl", ""))
-            kom_, v_ = hero.get("badge"), hero.get("vards")
-            if kom_ and not atsl_.startswith("tiesnesis"):
-                if atsl_.startswith("liela_duo"):
-                    kr_ = [(kom_, x.strip()) for x in str(v_).split("&")][:3]
-                elif atsl_.startswith(("points_serija", "goals_serija", "liela:", "vartsargs")):
-                    kr_ = [(kom_, v_)]
-                else:
-                    kr_ = [(kom_, "")]
-                rez["intro"]["_sikts"] = {"krekli": [(str(k or ""), str(x or "").upper()) for k, x in kr_]}
+        _ns_fakti(rez, hero)                                          # noslēpuma āķis (ja ieslēgts) – arī TOP N
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (faktu jaunais izskats: {type(ex).__name__}: {ex} – vecais)")
     return rez
