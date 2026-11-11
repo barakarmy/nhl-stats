@@ -5067,6 +5067,16 @@ def aina_fakts_serijas(t, c):
     a0 = S.ease(min(1.0, max(0.0, (t - 0.35) / 0.3)))
     S.teksts_c(d, 478, c["apaksa"], S.ietilpinat(d, c["apaksa"], "semi", 34, 900), _NV_LAB + (int(255 * a0),))
     rr = c["rindas"][:8]
+    if "_izc_t" not in c:                                             # Streak watch: rinda izceļas, kad balss nosauc vārdu
+        vardi_, izc_t = c.get("_vardi") or [], {}
+        for i_, nm_ in c.get("izc") or []:
+            tok = [re.sub(r"[^a-z0-9]", "", w.lower()) for w in str(nm_).split()]
+            tt_ = _nv_vards_laiks(vardi_, *tok) if tok and all(tok) else None
+            if tt_ is None and tok and tok[-1]:
+                tt_ = _nv_vards_laiks(vardi_, tok[-1])
+            if tt_ is not None and i_ not in izc_t:
+                izc_t[i_] = tt_
+        c["_izc_t"] = izc_t
     RH, GAP, Y0 = (132, 16, 560) if len(rr) <= 5 else (106, 11, 540)   # vairāk rindu – zemākas (ekrāns aizpildīts)
     dt_ = 0.22 if len(rr) <= 5 else 0.15
     Y_end = Y0 + len(rr) * (RH + GAP)
@@ -5085,6 +5095,12 @@ def aina_fakts_serijas(t, c):
         d.rounded_rectangle([80, y, 1000, y + RH], radius=30, fill=(10, 14, 32, al))
         (dn if mans else d).rounded_rectangle([80, y, 1000, y + RH], radius=30, outline=(S.DZELTENS if mans else S.ZILS) + (int(220 * k),),
                                               width=4 if mans else 3)
+        if i in c["_izc_t"]:                                          # balss nosauc – mirdzošs rāmis ~1,6 s
+            dtt = t - c["_izc_t"][i] + 0.1
+            g_ = min(1.0, max(0.0, dtt / 0.2)) * (1 - min(1.0, max(0.0, (dtt - 1.1) / 0.5)))
+            if g_ > 0:
+                d.rounded_rectangle([80, y, 1000, y + RH], radius=30, fill=(255, 255, 255, int(28 * g_)))
+                dn.rounded_rectangle([76, y - 4, 1004, y + RH + 4], radius=32, outline=S.DZELTENS + (int(255 * g_),), width=7)
         sk_ = RH / 132
         _fj_ripa(d, 160, y + RH / 2, int(42 * sk_), r.get("team"), int(255 * k))
         nm = str(r["vards"]).upper()
@@ -5118,6 +5134,65 @@ SS_RUNA_NAV = ["No two-hour shutout streak this week. These goalies were still t
                "The goalies of the week, ranked by save percentage."]
 
 
+SS_SOLO = ["Now, the goalies of the week.", "In net this week:", "The brick walls of the week.", "And the goalies of the week."]
+SS_SOLO_NAV = ["No two-hour shutout streak this week, but these goalies were hard to beat.",
+               "Nobody went two hours without allowing a goal this week. The hottest goalies instead."]
+_SER_KUR = {"HOME": " at home", "AWAY": " on the road", "ALL": ""}
+
+
+def _ps_stasts(ps):
+    """Streak watch – punktu sērijas balsī: līderis, otrais, nākamā grupa ar vienādu skaitu, mājas / izbraukuma sērija,
+    cik ir 10+. → (teksts, [(rindas nr, vārds)] – rinda izceļas, kad balss nosauc vārdu)."""
+    if not ps:
+        return "", []
+    out, izc = [], []
+    a = ps[0]
+    out.append(f"{a['vards']} leads with {a['n']} straight games{_SER_KUR.get(a['veids'], '')}.")
+    izc.append((0, a["vards"]))
+    if len(ps) > 1:
+        b = ps[1]
+        out.append((f"{b['vards']} also has {b['n']}" if b["n"] == a["n"] else f"{b['vards']} is next with {b['n']}")
+                   + f"{_SER_KUR.get(b['veids'], '')}.")
+        izc.append((1, b["vards"]))
+    gr = [i for i in range(2, len(ps)) if ps[i]["veids"] == "ALL"]
+    if gr:
+        n3 = ps[gr[0]]["n"]
+        gr = [i for i in gr if ps[i]["n"] == n3][:3]
+        if len(gr) == 1:
+            out.append(f"{ps[gr[0]]['vards']} has {n3}.")
+        else:
+            out.append(f"{_vardu_saraksts([ps[i]['vards'].split()[-1] for i in gr])} are all at {n3}.")
+        izc += [(i, ps[i]["vards"]) for i in gr]
+    mj = next((i for i in range(2, len(ps)) if ps[i]["veids"] != "ALL" and i not in [x for x, _ in izc]), None)
+    if mj is not None:
+        x = ps[mj]
+        out.append(f"{x['vards']} has a point in {x['n']} straight {'home' if x['veids'] == 'HOME' else 'road'} games.")
+        izc.append((mj, x["vards"]))
+    k10 = sum(1 for x in ps if x["n"] >= S.PUNKTU_SERIJA_MIN)
+    if k10 >= 3:
+        out.append(f"{_VARDIEM.get(k10, str(k10)).capitalize()} streaks are at ten games or more.")
+    return " ".join(out), izc
+
+
+def _ss_stasts(ss, labakie):
+    """Streak watch – vārtsargi balsī: 1–2 garākās sausās sērijas (minūtes, vai turpinās) un labākais atvairīto %."""
+    out, izc = [], []
+    for j, x in enumerate(ss[:2]):
+        mins = int(x["sek"]) // 60
+        if j == 0:
+            out.append(f"{x['vards']} hasn't allowed a goal in {mins} minutes, and counting." if x["aktiva"]
+                       else f"{x['vards']} went {mins} minutes without allowing a goal.")
+        else:
+            out.append(f"{x['vards']} is at {mins} minutes, still going." if x["aktiva"] else f"{x['vards']} went {mins} minutes.")
+        izc.append((j, x["vards"]))
+    if labakie:
+        _, r_ = labakie[0]
+        out.append(f"{r_['vards']} leads the week with a {r_['pct']:.3f} save percentage".replace(" 0.", " .")
+                   + f", {int(r_['sv'])} saves in {int(r_['gs'])} starts.")
+        izc.append((len(ss), r_["vards"]))
+    return " ".join(out), izc
+
+
 def fakti_serijas_ainas(D, m, izv, tv, idx, solo=False):
     """Divas kopsavilkuma ainas pirms verdikta (ja ir dati): punktu sērijas 10+ un nedēļas sausās sērijas.
     → [(kartīte, balss teksts)]. Video jau atsevišķi pieminētās sērijas rāda, bet balsī nesauc vārdā."""
@@ -5134,8 +5209,13 @@ def fakti_serijas_ainas(D, m, izv, tv, idx, solo=False):
             desmit = [x for x in ps if x["n"] >= S.PUNKTU_SERIJA_MIN]
             runa = (S.reta_frase(PS_SOLO if desmit else PS_SOLO_NAV, veids="serijas", n=2) if solo else
                     S.reta_frase(PS_RUNA_10 if desmit else PS_RUNA_NAV, veids="fakts", n=3))   # vispārīgi – vārdi redzami sarakstā
+            izc = []
+            if solo:                                                  # Streak watch – balss izstāsta redzamo (kopš 11.11.2026)
+                st_, izc = _ps_stasts(ps)
+                runa = (runa + " " + st_).strip()
             out.append(({"tips": "fakts_serijas", "ilgums": 4.8, "virsr": [("POINT", S.BALTS), ("STREAKS", S.DZELTENS)],
-                         "apaksa": "LONGEST ACTIVE  ·  ALL / HOME / ROAD  ·  10+ IN YELLOW", "rindas": rindas, "_tv": tv, "_tv_idx": idx}, runa))
+                         "apaksa": "LONGEST ACTIVE  ·  ALL / HOME / ROAD  ·  10+ IN YELLOW", "rindas": rindas, "_tv": tv, "_tv_idx": idx,
+                         "izc": izc}, runa))
         # GOALIES OF THE WEEK (kopš 09.11.2026): augšā sausās sērijas ≥ 120 min (dzeltenas), tālāk – nedēļas labākie pēc
         # atvairīto % (≥ 2 starti), lai ekrāns vienmēr pilns; aina ir vienmēr (arī, ja sēriju nav)
         ss = S.sausas_serijas_nedela(D, m)[:3]
@@ -5159,9 +5239,13 @@ def fakti_serijas_ainas(D, m, izv, tv, idx, solo=False):
                            "izcelt": False})
         if rindas:
             runa = S.reta_frase(SS_RUNA if ss else SS_RUNA_NAV, veids="serijas" if solo else "fakts", n=3)   # vārdi – sarakstā
+            izc = []
+            if solo:                                                  # Streak watch – īss ievads + kas redzams ekrānā
+                st_, izc = _ss_stasts(ss, labakie)
+                runa = (S.reta_frase(SS_SOLO if ss else SS_SOLO_NAV, veids="serijas", n=2) + " " + st_).strip()
             out.append(({"tips": "fakts_serijas", "ilgums": 4.8, "virsr": [("GOALIES", S.BALTS), ("OF THE WEEK", S.DZELTENS)],
                          "apaksa": "SHUTOUT STREAKS 120+ MIN IN YELLOW  ·  SAVE %  ·  2+ STARTS", "rindas": rindas,
-                         "_tv": tv, "_tv_idx": idx}, runa))
+                         "_tv": tv, "_tv_idx": idx, "izc": izc}, runa))
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (sēriju kopsavilkums: {type(ex).__name__}: {ex} – izlaists)")
     return out
@@ -6697,11 +6781,8 @@ def _ns_fakti(rez, hero):
         kr, q1, kom_v = [(kom, "")], NOSL_Q1["komanda"], v
         q2 = NOSL_Q2["fakti_kom_zaud" if atsl.startswith("kom_zaud") else "fakti_kom"]
     vecais = str(rez["runa"][0])
-    h0 = str((hero.get("runa") or [""])[0])[:40]
-    i1 = next((j for j, r_ in enumerate(rez["runa"]) if j > 0 and (str(r_).startswith("Number one.") or (h0 and str(r_).startswith(h0)))), None)
-    tips_ = "komanda" if kom_v else ("duo" if len(kr) > 1 else ("vartsargs" if atsl.startswith("vartsargs") else "speletajs"))
-    noslepuma_aki(rez, kr, q1, q2, "fakts", atcere="this team" if kom_v else ("these names" if len(kr) > 1 else "the name"),
-                  atkl=(i1, tips_) if i1 else None)
+    noslepuma_aki(rez, kr, q1, q2, "fakts", atcere="this team" if kom_v else ("these names" if len(kr) > 1 else "the name"))
+    # (kopš 11.11.2026 – bez atklāšanas frāzes "Mystery solved." pie #1; āķis – kā līdz šim)
     if (rez.get("intro") or {}).get("noslepums"):
         m = re.match(r"(The NHL week in numbers[^.]*\.)", vecais)       # ievada teikums → 2. ainā
         if m and not rez["runa"][1].startswith("The NHL week"):
@@ -7805,14 +7886,7 @@ def veids_serijas_b(m, a):
     r0 = kartes[0]["rindas"][0]
     ps = kartes[0]["virsr"][0][0] == "POINT"
     vards, team = str(r0["vards"]), str(r0["team"])
-    if ps:
-        kur = {"STRAIGHT HOME GAMES": " at home", "STRAIGHT ROAD GAMES": " on the road"}.get(r0["maz"], "")
-        atkl = f"{vards} leads with {r0['liels']} straight games{kur}."
-    elif r0.get("maz") == "SAVE %":
-        atkl = f"{vards} leads with a {r0['liels']} save percentage."
-    else:
-        atkl = f"{vards}: {r0['liels']} without allowing a goal."
-    runa = ["", f"{atkl} {ainas[0][1]}"] + [r_ for _, r_ in ainas[1:]] + [""]
+    runa = [""] + [r_ for _, r_ in ainas] + [""]                      # stāsts par redzamo – fakti_serijas_ainas(solo=True)
     saraksts = []
     for k_ in kartes:
         saraksts.append(("Longest active point streaks:" if k_["virsr"][0][0] == "POINT" else "Goalies of the week:"))
@@ -7830,7 +7904,7 @@ def veids_serijas_b(m, a):
                    "skaitlis": f"{n_} GAMES" if ps else str(r0["liels"]), "kr": S.DZELTENS,
                    "apaksa": "in a row with a point · longest active" if ps else "goalie of the week", "datums": lidz}}
     noslepuma_aki(s, [(team, vards.split()[-1])], NOSL_Q1["speletajs" if ps else "vartsargs"],
-                  NOSL_Q2["serijas" if ps else "serijas_va"], "serijas", atkl=(1, "speletajs" if ps else "vartsargs"), bez_q1=True)
+                  NOSL_Q2["serijas" if ps else "serijas_va"], "serijas", bez_q1=True)   # bez "Mystery solved"
     nsl = (s.get("intro") or {}).get("noslepums")
     if nsl:
         if NOSL_VIRSRAKSTS:
