@@ -5450,12 +5450,9 @@ def aina_fakts_ga_serijas(t, c):
 
 
 # ---------------------------------------------------------------- Streak watch: HOT & COLD (kopš 11.11.2026)
-# Divas tabulas blakus – komandu uzvaru sērijas (HOT) un sērijas bez uzvaras (COLD), apakšā – zvaigznes garākā sērija
-# bez vārtiem (SCORING DROUGHT). Mājas / izbraukuma sērijas – ar HOME / ROAD zīmīti (tikai, ja garākas par kopējo).
+# Divas tabulas blakus – komandu uzvaru sērijas (HOT) un sērijas bez uzvaras (COLD), apakšā – COLD STICKS: zvaigznes
+# bez vārtiem | bez punkta (top 3 katrā). Mājas / izbraukuma sērijas – ar HOME / ROAD zīmīti (tikai, ja garākas par kopējo).
 HC_SOLO = ["Hot and cold.", "Who's hot, and who's not?", "The hottest and coldest streaks right now."]   # ne tikai komandas –
-HC_SAUSUMS = ["And the coldest star: {v} hasn't scored in {n} games.",                  # beigās arī spēlētājs
-              "One star in a slump: {v} hasn't scored in {n} games.",
-              "And a star in a slump: {v}, {n} games without a goal."]
 HC_MIN = 3                       # komandu sērija – no 3 spēlēm
 HC_RINDAS = 4
 HC_SAUSUMS_MIN = 5               # sērija bez vārtiem – no 5 spēlēm
@@ -5495,8 +5492,15 @@ def _hc_serijas(D):
     return sorted(karst, key=k_), sorted(auk, key=k_)
 
 
-def _hc_sausums(D):
-    """Zvaigznes (uzbrucēja) garākā aktīvā sērija bez vārtiem. → {pid, vards, team, n, pedejie} vai None."""
+HC_OTRA = "points"               # COLD STICKS labā puse: "points" – bez punkta (zvaigznei – lielākā ziņa) vai "assists"
+HC_OTRA_MIN = 3                  # labās puses sērija – no 3 spēlēm
+HC_SAUSUMS_RINDAS = 3
+
+
+def _hc_sausumi(D):
+    """COLD STICKS – zvaigžņu (uzbrucēji, ESPN ≥ HC_ZVAIGZNE %) garākās aktīvās sērijas bez vārtiem (≥ HC_SAUSUMS_MIN)
+    un bez punkta / piespēles (≥ HC_OTRA_MIN), top 3 katrā. Ja sērija bez vārtiem = sērija bez punkta (tas pats garums),
+    tā ir viena sērija – paliek tikai labajā (bez punkta). → {"g": [...], "o": [...], "otra": "points" | "assists"}."""
     sp = D["sp"].sort_values(["datums", "game_id"])
     robeza = (S.pd.Timestamp(D["lidz"]) - S.timedelta(days=7)).strftime("%Y-%m-%d")
     sp = sp[~sp["pozicija"].astype(str).str.upper().isin(["D", "G"])] if "pozicija" in sp else sp
@@ -5506,24 +5510,49 @@ def _hc_sausums(D):
     else:
         gl = sp.assign(goals=S.pd.to_numeric(sp["goals"], errors="coerce").fillna(0)).groupby("playerId")["goals"].sum()
         pool = {int(p) for p in gl.sort_values(ascending=False).index[:60]}
-    lab = None
-    for pid, g in sp.groupby("playerId"):
-        if S.pd.isna(pid) or int(pid) not in pool or g["datums"].max() < robeza:
-            continue
-        v = S.pd.to_numeric(g["goals"], errors="coerce").fillna(0).to_numpy()
+    kol2 = "assists" if HC_OTRA == "assists" else "points"
+
+    def bez(g, kol):
         n = 0
-        for x in v[::-1]:
+        for x in S.pd.to_numeric(g[kol], errors="coerce").fillna(0).to_numpy()[::-1]:
             if x > 0:
                 break
             n += 1
-        if n >= HC_SAUSUMS_MIN and (lab is None or n > lab["n"]):
-            ar_v = g[S.pd.to_numeric(g["goals"], errors="coerce").fillna(0) > 0]
-            lab = {"pid": int(pid), "vards": str(g["vards"].iloc[-1]), "team": str(g["team"].iloc[-1]), "n": n,
-                   "pedejie": str(ar_v["datums"].max()) if len(ar_v) else None}
-    return lab
+        return n
+    G, O = [], []
+    for pid, g in sp.groupby("playerId"):
+        if S.pd.isna(pid) or int(pid) not in pool or g["datums"].max() < robeza:
+            continue
+        x = {"pid": int(pid), "vards": str(g["vards"].iloc[-1]), "team": str(g["team"].iloc[-1])}
+        ng, no = bez(g, "goals"), bez(g, kol2)
+        if no >= HC_OTRA_MIN:
+            O.append(dict(x, n=no))
+        if ng >= HC_SAUSUMS_MIN and ng != no:                          # tas pats garums – viena sērija (bez punkta)
+            G.append(dict(x, n=ng))
+    k_ = lambda x: (-x["n"], x["vards"])
+    return {"g": sorted(G, key=k_)[:HC_SAUSUMS_RINDAS], "o": sorted(O, key=k_)[:HC_SAUSUMS_RINDAS], "otra": kol2}
 
 
-def _hc_stasts(karst, auk, sausums):
+HC_COLD_IEVADS = ["And the cold sticks:", "Stars in a slump:", "On the cold side for the stars:"]
+
+
+def _hc_cold_teik(xs, otra):
+    """Līderu grupa (vienāds skaits) → "Slafkovský hasn't scored in 9 games" / "A and B haven't scored in 6 games"."""
+    if not xs:
+        return "", []
+    n = xs[0]["n"]
+    gr = [x for x in xs if x["n"] == n]
+    vardi = [x["vards"] if len(gr) <= 2 else x["vards"].split()[-1] for x in gr]
+    v = _vardu_saraksts(vardi)
+    if otra is None:
+        t = f"{v} {'hasn' if len(gr) == 1 else 'haven'}'t scored in {n} games"
+    else:
+        lieta = "a point" if otra == "points" else "an assist"
+        t = f"{v} {'has' if len(gr) == 1 else 'have'} gone {n} games without {lieta}"
+    return t, [x["vards"] for x in gr]
+
+
+def _hc_stasts(karst, auk, cold):
     kur = {"HOME": " at home", "AWAY": " on the road", "ALL": ""}
     out, izc = [], []
     if karst:
@@ -5534,9 +5563,21 @@ def _hc_stasts(karst, auk, sausums):
         a = auk[0]
         out.append(f"The {S.kom_nos(a['kom'])} haven't won in {a['n']} games{kur[a['veids']]}.")
         izc.append((1, 0, S.kom_nos(a["kom"])))
-    if sausums:                                                       # pāreja no komandām uz spēlētāju
-        out.append(S.reta_frase(HC_SAUSUMS, veids="serijas", n=1).format(v=sausums["vards"], n=sausums["n"]))
-        izc.append(("s", 0, sausums["vards"]))
+    if cold and (cold["g"] or cold["o"]):                             # pāreja no komandām uz spēlētājiem (COLD STICKS)
+        tg, vg = _hc_cold_teik(cold["g"], None)
+        to, vo = _hc_cold_teik(cold["o"], cold["otra"])
+        lieta = "a point" if cold["otra"] == "points" else "an assist"
+        if len(vg) == 1 and vg[0] in vo:                              # tas pats spēlētājs abos – vienā teikumā, nevis divreiz
+            n_o = cold["o"][0]["n"]
+            citi = [v for v in vo if v != vg[0]]
+            t_ = f"{tg} and has gone {n_o} without {lieta}"
+            if citi:
+                t_ += f", and {_vardu_saraksts(citi)} {'is' if len(citi) == 1 else 'are'} also at {n_o} without {lieta}"
+            dalas = [t_]
+        else:
+            dalas = [x for x in (tg, to) if x]
+        out.append(S.reta_frase(HC_COLD_IEVADS, veids="serijas", n=1) + " " + ", and ".join(dalas) + ".")
+        izc += [("g", i, v) for i, v in enumerate(vg)] + [("o", cold["o"].index(next(y for y in cold["o"] if y["vards"] == v)), v) for v in vo]
     return " ".join(out), izc
 
 
@@ -5545,17 +5586,19 @@ def hc_aina(D, tv, idx):
     karst, auk = _hc_serijas(D)
     karst, auk = karst[:HC_RINDAS], auk[:HC_RINDAS]
     try:
-        sausums = _hc_sausums(D)
+        cold = _hc_sausumi(D)
+        if not cold["g"] and not cold["o"]:
+            cold = None
     except Exception as ex_:                                          # noqa: BLE001
-        print(f"  (sērija bez vārtiem: {type(ex_).__name__}: {ex_})")
-        sausums = None
+        print(f"  (COLD STICKS: {type(ex_).__name__}: {ex_})")
+        cold = None
     if not karst and not auk:
         return None
-    st_, izc = _hc_stasts(karst, auk, sausums)
+    st_, izc = _hc_stasts(karst, auk, cold)
     runa = (S.reta_frase(HC_SOLO, veids="serijas", n=2) + " " + st_).strip()
     kol = [{"virs": "HOT", "kr": S.ZALS, "rindas": karst}, {"virs": "COLD", "kr": S.SARKANS, "rindas": auk}]
     return ({"tips": "fakts_hc", "ilgums": 5.0, "virsr": [("HOT", S.ZALS), ("&", S.BALTS), ("COLD", (96, 165, 250))],
-             "apaksa": "TEAM STREAKS  ·  WINS  ·  GAMES WITHOUT A WIN", "kol": kol, "sausums": sausums,
+             "apaksa": "TEAM STREAKS  ·  WINS  ·  GAMES WITHOUT A WIN", "kol": kol, "sausums": cold,
              "_tv": tv, "_tv_idx": idx, "izc": izc}, runa)
 
 
@@ -5590,7 +5633,7 @@ def aina_fakts_hc(t, c):
     sausums = c.get("sausums")
     W, GX, X0, Y0, GAP = 470, 20, 60, 590, 12
     nmax = max([len(k_["rindas"]) for k_ in c["kol"]] + [1])
-    lauks = (1690 - 260 - 30 if sausums else 1690) - Y0                # apakšā vieta SCORING DROUGHT kartītei
+    lauks = (1690 - 340 - 30 if sausums else 1690) - Y0                # apakšā vieta COLD STICKS kartītei
     RH = int(min(220, lauks / max(3, nmax) - GAP))
     sc = RH / 122
     Y_end = Y0 + max(1, nmax) * (RH + GAP)
@@ -5627,26 +5670,32 @@ def aina_fakts_hc(t, c):
             rek = f"{W_}-0" if ci == 0 else f"0-{L_}-{O_}"
             d.text((xn_ + (pw_ + 10 if pw_ else 0), y + RH * 0.8), rek, font=S.fonts("semi", int(20 * sc)), fill=_NV_LAB + (A(255),), anchor="lm")
             d.text((x + W - 22, y + RH * 0.46), str(r["n"]), font=S.fonts("black", int(66 * sc)), fill=(kr if pirm else S.BALTS) + (A(255),), anchor="rm")
-    if sausums:                                                       # SCORING DROUGHT – visā platumā tieši zem tabulām
+    if sausums:                                                       # COLD STICKS – zvaigznes bez vārtiem | bez punkta (top 3)
         yk = Y_end + 18
         ka = S.ease(min(1.0, max(0.0, (t - 0.6 - 0.22 * max(1, nmax) - 0.2) / 0.4)))
         if ka > 0:
             A = lambda v: int(v * ka)
-            box = [X0, yk, X0 + 2 * W + GX, yk + 260]
+            KR_C = (96, 165, 250)
+            box = [X0, yk, X0 + 2 * W + GX, yk + 340]
             d.rounded_rectangle(box, radius=30, fill=(10, 14, 32, A(240)))
-            dn.rounded_rectangle(box, radius=30, outline=(96, 165, 250) + (A(230),), width=5)
-            mirdz(("s", 0), box, 30)
-            d.text((X0 + 34, yk + 40), "SCORING DROUGHT", font=S.fonts("black", 34), fill=(96, 165, 250) + (A(255),), anchor="lm")
-            _fj_ripa(d, X0 + 80, yk + 150, 44, sausums["team"], A(255))
-            vv = str(sausums["vards"]).split(" ", 1)
-            d.text((X0 + 150, yk + 112), vv[0] if len(vv) > 1 else "", font=S.fonts("semi", 30), fill=_NV_LAB + (A(255),), anchor="lm")
-            uz = vv[-1].upper()
-            d.text((X0 + 150, yk + 158), uz, font=S.ietilpinat(d, uz, "black", 60, 470), fill=S.BALTS + (A(255),), anchor="lm")
-            ped = f"LAST GOAL: {S.dat(sausums['pedejie']).upper()}" if sausums.get("pedejie") else "NO GOAL THIS SEASON"
-            d.text((X0 + 150, yk + 212), ped, font=S.fonts("semi", 26), fill=_NV_LAB + (A(255),), anchor="lm")
-            xr = X0 + 2 * W + GX - 34
-            d.text((xr, yk + 128), str(sausums["n"]), font=S.fonts("black", 110), fill=(96, 165, 250) + (A(255),), anchor="rm")
-            d.text((xr, yk + 212), "GAMES WITHOUT A GOAL", font=S.fonts("semi", 24), fill=_NV_LAB + (A(255),), anchor="rm")
+            dn.rounded_rectangle(box, radius=30, outline=KR_C + (A(230),), width=5)
+            d.text((X0 + 30, yk + 36), "COLD STICKS", font=S.fonts("black", 36), fill=KR_C + (A(255),), anchor="lm")
+            d.text((X0 + 2 * W + GX - 30, yk + 36), "STARS  ·  GAMES IN A ROW", font=S.fonts("semi", 22), fill=_NV_LAB + (A(255),), anchor="rm")
+            cw = (2 * W + GX - 60 - 30) / 2
+            otra = "NO POINT" if sausums.get("otra") == "points" else "NO ASSIST"
+            for ci, (key, virs) in enumerate((("g", "NO GOAL"), ("o", otra))):
+                x0 = X0 + 30 + ci * (cw + 30)
+                d.text((x0, yk + 90), virs, font=S.fonts("black", 28), fill=(203, 213, 225, A(255)), anchor="lm")
+                rr_ = sausums.get(key) or []
+                if not rr_:
+                    d.text((x0, yk + 150), "NONE RIGHT NOW", font=S.fonts("semi", 24), fill=_NV_LAB + (A(160),), anchor="lm")
+                for i, x in enumerate(rr_):
+                    yr = yk + 118 + i * 72
+                    mirdz((key, i), [x0 - 12, yr, x0 + cw + 8, yr + 64], 16)
+                    _fj_ripa(d, x0 + 26, yr + 32, 24, x["team"], A(255))
+                    uz = str(x["vards"]).split(" ", 1)[-1].upper()
+                    d.text((x0 + 64, yr + 32), uz, font=S.ietilpinat(d, uz, "black", 38, cw - 64 - 76), fill=S.BALTS + (A(255),), anchor="lm")
+                    d.text((x0 + cw, yr + 32), str(x["n"]), font=S.fonts("black", 52), fill=(KR_C if i == 0 else S.BALTS) + (A(255),), anchor="rm")
     L.alpha_composite(_nv_glow(N, 12, 1.3))
     return L
 
@@ -8417,9 +8466,13 @@ def veids_serijas_b(m, a):
                     saraksts.append(nos_)
                     saraksts += [f"{S.KOMANDAS.get(r_['kom'], ('', r_['kom']))[0]} {S.kom_nos(r_['kom'])}: {r_['n']} games{kur_k.get(r_['veids'], '')}".strip()
                                  for r_ in kol_["rindas"]]
-            if k_.get("sausums"):
+            if k_.get("sausums"):                                     # COLD STICKS
                 x_ = k_["sausums"]
-                saraksts.append(f"Scoring drought: {x_['vards']} ({x_['team']}) – {x_['n']} games without a goal")
+                if x_.get("g"):
+                    saraksts.append("Stars without a goal: " + ", ".join(f"{y['vards']} ({y['team']}) {y['n']}" for y in x_["g"]))
+                if x_.get("o"):
+                    saraksts.append(f"Stars without {'a point' if x_.get('otra') == 'points' else 'an assist'}: "
+                                    + ", ".join(f"{y['vards']} ({y['team']}) {y['n']}" for y in x_["o"]))
             continue
         if k_.get("kol"):                                             # vārtu + piespēļu sērijas
             for kol_, nos_ in zip(k_["kol"], ("Goal streaks:", "Assist streaks:")):
