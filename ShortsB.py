@@ -588,6 +588,26 @@ def sfx_notikumi(ainas):
         elif tips == "fantasy_divi":                                  # īsā versija: 2 DROP kartītes – ielido (swoosh), zīmogs (boom)
             _ti, _ts = _nv_divi_laiki(c)
             ev += [(t0 + x_, "swoosh", 0.4) for x_ in _ti] + [(t0 + x_ + 0.24, "boom", 0.6) for x_ in _ts]
+        elif tips == "fantasy_ats_saraksts":                          # fantasy atskats, 2. aina: ✓/✗ rūtiņas, rindas, zīmogi
+            _tt, _ti, _ts = _fa_s2_laiki(c)
+            _rk = c.get("rek") or (0, 0)
+            ev += [(t0 + _tt + 0.2 + 0.13 * j_ + 0.05, "tick", 0.5) for j_ in range(min(6, _rk[1]))]
+            if _ti:
+                ev.append((t0 + _ti[0], "swoosh", 0.45))
+            ev += [(t0 + x_ + 0.05, "tick", 0.6) for x_ in _ts]
+        elif tips in ("fantasy_saraksts", "fantasy_kalendars"):     # īsā versija, 2. aina: rindas, poga / dienas, zaļās
+            _ti, _tk, _tz = _iss_s2_laiki(c)
+            if _ti:
+                ev.append((t0 + _ti[0], "swoosh", 0.45))
+            if tips == "fantasy_saraksts":
+                _sp = c.get("speletaji") or []
+                _d0 = next((x_ for x_, p_ in zip(_ti, _sp) if p_["drop"]), None)
+                if _d0 is not None:
+                    ev.append((t0 + _d0, "swoosh", 0.35))
+                ev += [(t0 + x_ + 0.3, "tick", 0.55) for x_ in _ti]
+            else:
+                ev += [(t0 + _tk + 0.1 * j_ + 0.05, "tick", 0.4) for j_ in range(7)]
+            ev.append((t0 + _tz, "tick", 0.7))
         elif tips == "fantasy_kartis":                                # kārtis: izdala → katra apgriežas (tick) → čips
             _dl, _fl, _cp = _nv_kartis_laiki(c)
             ev.append((t0 + _dl[0], "swoosh", 0.45))
@@ -2509,7 +2529,9 @@ def renderet(s, izvade, kanals="", balss=None):
               "fantasy_intro": lambda t_, c_: aina_intro(t_, c_["intro"]), "fantasy_kartis": aina_kartis, "xg_karte": aina_xg_karte,
               "fakts_tablo": aina_fakts_tablo, "fakts_ripa": aina_fakts_ripa, "fakts_hist": aina_fakts_hist,
               "fakts_reti": aina_fakts_reti, "fakts_serijas": aina_fakts_serijas,
-              "fakts_nak_j": aina_fakts_nak_j, "fantasy_divi": aina_fantasy_divi}
+              "fakts_nak_j": aina_fakts_nak_j, "fantasy_divi": aina_fantasy_divi,
+              "fantasy_saraksts": aina_fantasy_saraksts, "fantasy_kalendars": aina_fantasy_kalendars,
+              "fantasy_ats_saraksts": aina_fantasy_ats_saraksts}
     _DAL["fons"] = bool(JAUNS_FANTASY and s.get("_bez_zimoga"))       # jaunais izskats: burbuļi fonā (ne āķī)
     # cilpai: āķa (1. ainas) sākuma kadrs – beigās video pāriet atpakaļ uz to
     v0, c0, _ = ainas[0]
@@ -2681,17 +2703,38 @@ def testa_mape():
     print(f"TESTS: video mapē {TESTA_MAPE}\\ (īstā vēsture video\\ netiek mainīta)")
 
 
+def _argv_vertiba(nos):
+    """Argumenta vērtība no sys.argv ("--veids fantasy" vai "--veids=fantasy"); None, ja nav."""
+    for i_, x_ in enumerate(sys.argv):
+        if x_ == nos:
+            return sys.argv[i_ + 1] if i_ + 1 < len(sys.argv) else ""
+        if x_.startswith(nos + "="):
+            return x_.split("=", 1)[1]
+    return None
+
+
 def ieslegt():
     global JAUNS_FANTASY, NOSL_AKIS, FJ_ANIM
     if "--bez-noslepuma" in sys.argv:                                 # vecais āķis (ar skaitli), noslēpuma vietā
         sys.argv.remove("--bez-noslepuma")
         NOSL_AKIS = False
         print("ĀĶIS: bez noslēpuma (--bez-noslepuma)")
-    if "--iss" in sys.argv:                                           # īsā versija (~30–45 s): xG, fantasy, streameri, fakti, atskati
-        sys.argv.remove("--iss")
-        ISS["on"] = True
-        S.ISS = True
-        print("ĪSĀ VERSIJA: --iss (bez jautājuma 1, verdikta un CTA balsī; beigās cilpa uz āķi)")
+    rez_ = None                                                       # garums: xG (3 veidi), fantasy, streameri – īsā versija
+    if "--iss" in sys.argv:                                           # pēc noklusējuma (kopš 10.11.2026); --long – garā;
+        sys.argv.remove("--iss")                                      # --iss – īsā arī faktiem un atskatiem
+        rez_ = "iss"
+    if "--long" in sys.argv:
+        sys.argv.remove("--long")
+        rez_ = "long"
+    v_ = _argv_vertiba("--veids") or "speletaji"
+    ats_ = _argv_vertiba("--atskats") is not None
+    ISS["on"] = rez_ == "iss" or (rez_ is None and not ats_ and v_ in ISS_NOKLUSETS)
+    S.ISS = ISS["on"]
+    if ISS["on"]:
+        print("ĪSĀ VERSIJA" + (" (--iss)" if rez_ == "iss" else " (noklusējums; garā – --long)")
+              + ": bez jautājuma 1, verdikta un CTA balsī; beigās cilpa uz āķi")
+    elif rez_ == "long" and not ats_ and v_ in ISS_NOKLUSETS:
+        print("GARĀ VERSIJA: --long")
     if "--sikts" in sys.argv:                                         # sīktēla izkārtojums ar roku: --sikts D  (0 = vecais)
         i_ = sys.argv.index("--sikts")
         if i_ + 1 < len(sys.argv) and sys.argv[i_ + 1].upper() in ("0", "A", "B", "D", "E", "F", "J", "K"):
@@ -3133,6 +3176,10 @@ def fantasy_atskats_jauns(s):
                                      [("CHECKING", S.BALTS), ("OUR", S.BALTS), ("CALLS", S.DZELTENS)]], veids="atskats_fantasy", n=1),
               "apaksa": f"{ned}  ·  VS A TYPICAL PLAYER IN THE SAME POOL",
               "kartis": kartis, "n_pick": n_add, "rek": tuple(s["atskats_rek"]) if s.get("atskats_rek") else None}
+        try:                                                          # 2. aina – rezultātu saraksts ar vārdiem (kopš 10.11.2026)
+            k2 = _fa_s2_aina(k2, kar, s) or k2
+        except Exception as ex_:                                      # noqa: BLE001
+            print(f"  (atskata saraksts: {type(ex_).__name__}: {ex_} – kārtis)")
         jaunas, nr_ = [k2], {}
         for i, c in enumerate(kar):                                   # visas ieteiktās kartītes (secībā kā sestdienas video)
             c = dict(c)
@@ -6509,6 +6556,7 @@ def _ns_fakti(rez, hero):
 # still free?") un video pāriet atpakaļ uz āķi. Bez THE FINAL VERDICT un bez SHEET piedāvājuma balsī (aprakstā – paliek).
 # Fantasy ~45 s, streameri ~35 s, xG ~40 s, fakti ~30 s, atskati ~30 s.  Palaišana:  python ShortsB.py --veids fantasy --iss
 ISS = {"on": False}
+ISS_NOKLUSETS = ("speletaji", "vartsargi", "komandas", "fantasy", "streameri")   # īsā versija pēc noklusējuma (--long – garā)
 ISS_CILPA_ILG = 1.6              # beigu ainas minimums (ar balsi – cilpas teikuma garums + 0,45 s)
 ISS_CILPA_Q = ["So… {q}", "Your call: {q}", "{Q}", "One more time: {q}"]          # jautājums 2 – jautājums
 ISS_CILPA_APG = ["{Q}", "Like we said: {q}"]                                        # jautājums 2 – apgalvojums
@@ -6799,6 +6847,560 @@ def aina_fantasy_divi(t, c):
     return out
 
 
+# ---------------------------------------------------------------- īsā versija: 2. aina – waiver saraksts (fantasy) / nedēļas kalendārs (streameri)
+ISS_DIENAS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+ISS_S2_DROP_LAB = "DROP CANDIDATES"
+ISS_S2_LEGENDA = [(S.ZALS, "SOFT"), ((100, 116, 139), "AVERAGE"), (S.SARKANS, "TOUGH")]
+
+
+def _iss_spel(c, hero=False):
+    """Kartīte → viena rinda 2. ainai (saraksts / kalendārs)."""
+    v = c.get("viz") or {}
+    return {"kom": str(c.get("badge", "")), "poz": str(v.get("poz", "")), "rost": v.get("rost"), "v1": str(c.get("v1", "")),
+            "v2": str(c.get("v2", "")), "nr": c.get("nr"), "gp": v.get("sp_nak"), "ned": list(v.get("ned") or [])[:7],
+            "akc": tuple(c.get("akc") or S.ZALS), "drop": c.get("liels") in ("DROP", "BENCH"), "hero": hero}
+
+
+def _iss_s2_aina(k2, pl, dl, hero, stream):
+    """2. aina īsajai versijai: fantasy – saraksts kā lietotnē (+ / −), streameri – nedēļas kalendārs (MON–SUN)."""
+    if not pl or not all((c.get("viz") or {}).get("ned") for c in pl + dl):
+        return None
+    sp = [_iss_spel(c, c is hero) for c in sorted(pl, key=lambda c: c.get("nr") or 9)] + \
+         [_iss_spel(c) for c in sorted(dl, key=lambda c: c.get("nr") or 9)]
+    nl = str((hero.get("viz") or {}).get("ned_lab", "")).split("·")[0].strip() or ("THIS WEEK" if stream else "NEXT WEEK")
+    return {"tips": "fantasy_kalendars" if stream else "fantasy_saraksts", "ilgums": 3.5, "tag": k2.get("tag", ""),
+            "_tv": k2.get("_tv"), "virsr": k2["virsr"], "apaksa": k2.get("apaksa", ""), "speletaji": sp, "ned_lab": nl}
+
+
+def _iss_s2_laiki(c):
+    """(rindu ieslīdēšana[], krāsu sākums, zaļo izcēlums) – rindas pēc kārtas (drop – ar pauzi), krāsas aizpildās
+    pa dienām, zaļās spēles izceļas, kad balss saka "green" (bez balss – pēc krāsām). Viss paspēj līdz ainas beigām."""
+    sp = c.get("speletaji") or []
+    ilg, vardi = c.get("_ilg", c.get("ilgums", 3.5)), c.get("_vardi") or []
+    t_in = [0.45 + 0.2 * i + (0.25 if p["drop"] else 0.0) for i, p in enumerate(sp)]
+    t_kr = (t_in[-1] if t_in else 0.45) + 0.4
+    lim = max(1.8, ilg - 0.55)
+    if t_kr + 0.75 > lim:                                             # saspiest (īss audio / bez balss)
+        k = max(0.3, (lim - 0.75 - 0.45) / max(0.01, t_kr - 0.45))
+        t_in = [0.45 + (x - 0.45) * k for x in t_in]
+        t_kr = 0.45 + (t_kr - 0.45) * k
+    tg = _nv_vards_laiks(vardi, "green")
+    t_zal = tg if tg is not None else t_kr + 1.0
+    t_zal = min(max(t_zal, t_kr + 0.7), lim - 0.2)
+    return t_in, t_kr, t_zal
+
+
+def _iss_s2_augsa(L, N, t, c):
+    _nv_dalinas(L, t)
+    if c.get("_tv"):
+        _nv_tablo_virs(L, N, t, c["_tv"])
+    _fj_virsr(L, t, c["virsr"], 400, 130)
+    a = S.ease(min(1.0, max(0.0, (t - 0.5) / 0.3)))
+    if c.get("apaksa") and a > 0:
+        d = ImageDraw.Draw(L)
+        S.teksts_c(d, 488, c["apaksa"], S.ietilpinat(d, c["apaksa"], "semi", 34, 900), _NV_LAB + (int(255 * a),))
+
+
+def _iss_pct(x):
+    return "–" if not isinstance(x, (int, float)) else (f"{x:.0f}%" if x >= 1 else "<1%")
+
+
+def _iss_tm(kr):
+    return S.MELNS if tuple(kr) in (S.ZALS, S.DZELTENS) else S.BALTS
+
+
+def _iss_zal_puls(t, t_zal):
+    """0…1…0 – zaļo spēļu izcēlums (0,8 s)."""
+    k = (t - t_zal) / 0.8
+    return math.sin(math.pi * k) if 0 < k < 1 else 0.0
+
+
+def _iss_punkts(d, x, y, s, n_, a=255):
+    """Viena diena: zaļš / pelēks / sarkans kvadrātiņš ar spēli, tukšs – kontūra, pagājusi – blāvs."""
+    if n_.get("o"):
+        kr = tuple(n_.get("kr") or (100, 116, 139))
+        d.rounded_rectangle([x, y, x + s, y + s], radius=s // 4, fill=kr + (int(a * (0.4 if n_.get("pag") else 1.0)),))
+    elif n_.get("pag"):
+        d.rounded_rectangle([x, y, x + s, y + s], radius=s // 4, fill=(32, 40, 62, a))
+    else:
+        d.rounded_rectangle([x, y, x + s, y + s], radius=s // 4, outline=(70, 80, 108, a), width=2)
+
+
+# --- B: waiver saraksts (fantasy)
+def _iss_s2_izkartojums(c):
+    sp = c.get("speletaji") or []
+    dr = any(p["drop"] for p in sp)
+    k, h, g, y = (1.0, 142, 12, 560) if dr else (1.18, 176, 22, 600)
+    ys, yl = [], None
+    y += 46
+    for i, p in enumerate(sp):
+        if p["drop"] and yl is None:
+            yl = y + 12 - g
+            y += 58 - g
+        ys.append(y)
+        y += h + g
+    return k, h, ys, yl
+
+
+def _iss_rinda_pamats(p, h, k):
+    """Saraksta rindas nemainīgā daļa (fons, komandas svītra, vārds, pozīcija, tukšas dienas) → (attēls, punktu x, y, izm.)."""
+    W = 960
+    im = Image.new("RGBA", (W, h), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    prim, _ = kom_krasas(p["kom"])
+    d.rounded_rectangle([0, 0, W - 1, h - 1], radius=26, fill=(14, 19, 42, 245))
+    d.rounded_rectangle([0, 0, 16, h - 1], radius=8, fill=prim)
+    r = int(40 * k)
+    xn = 36 + 2 * r + 30
+    fn = int(54 * k)
+    nm = (p["v1"][:1] + ". " if p["v1"] else "") + p["v2"].upper()
+    if p["hero"]:                                                     # noslēpuma #1 – vārds izpludināts
+        ti = _nv_timg(nm, S.fonts("black", fn), S.BALTS)
+        b = Image.new("RGBA", (ti.width + 60, ti.height + 60), (0, 0, 0, 0)); b.alpha_composite(ti, (30, 30))
+        im.alpha_composite(b.filter(ImageFilter.GaussianBlur(12)), (xn - 30, int(14 * k) - 30))
+    else:
+        d.text((xn, 16 * k), nm, font=S.ietilpinat(d, nm, "black", fn, W - 230 - xn), fill=S.BALTS)
+    yl = h - 22 * k
+    d.text((xn, yl), f"{p['poz']} · {p['kom']}", font=S.fonts("semi", int(28 * k)), fill=_NV_LAB, anchor="ls")
+    s_, g_ = int(26 * k), int(7 * k)
+    xd, yd = int(xn + 160 * k), int(yl - s_ + 2)
+    for i in range(7):
+        _iss_punkts(d, xd + i * (s_ + g_), yd, s_, {})
+    d.text((xd + 7 * (s_ + g_) + 10, yl), f"{p['gp']} GP" if p.get("gp") is not None else "", font=S.fonts("black", int(28 * k)),
+           fill=S.BALTS, anchor="ls")
+    d.text((W - 28, yl), "ROSTERED", font=S.fonts("semi", int(20 * k)), fill=_NV_LAB, anchor="rs")
+    return im, (xd, yd, s_, g_, xn, r)
+
+
+def aina_fantasy_saraksts(t, c):
+    """Īsā fantasy 2. aina: brīvo spēlētāju saraksts kā lietotnē – rindas ieslīd, "+" (drop – "−") nospiežas,
+    rostered % saskaitās, nedēļas dienas iekrāsojas, zaļās spēles izceļas, kad balss saka "green"."""
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    _iss_s2_augsa(L, N, t, c)
+    sp = c.get("speletaji") or []
+    k, h, ys, yl = _iss_s2_izkartojums(c)
+    t_in, t_kr, t_zal = _iss_s2_laiki(c)
+    d = ImageDraw.Draw(L); dn = ImageDraw.Draw(N)
+    a0 = S.ease(min(1.0, max(0.0, (t - 0.4) / 0.3)))
+    if a0 > 0:
+        akc = sp[0]["akc"] if sp else S.ZALS
+        d.text((60, ys[0] - 46 if ys else 606), "FREE AGENTS  ·  ESPN", font=S.fonts("black", 30), fill=akc + (int(255 * a0),))
+        d.text((1020, ys[0] - 44 if ys else 606), c.get("ned_lab", "NEXT WEEK"), font=S.fonts("black", 26), fill=_NV_LAB + (int(255 * a0),), anchor="ra")
+    if yl is not None:
+        ad_ = S.ease(min(1.0, max(0.0, (t - (min(t_in[i] for i, p in enumerate(sp) if p["drop"]) - 0.15)) / 0.3)))
+        if ad_ > 0:
+            d.text((60, yl), ISS_S2_DROP_LAB, font=S.fonts("black", 30), fill=S.SARKANS + (int(255 * ad_),))
+    kesa = c.setdefault("_kesa_s2", {})
+    puls = _iss_zal_puls(t, t_zal)
+    for i, p in enumerate(sp):
+        e = S.ease(min(1.0, max(0.0, (t - t_in[i]) / 0.4)))
+        if e <= 0:
+            continue
+        if i not in kesa:
+            kesa[i] = _iss_rinda_pamats(p, h, k)
+        base, (xd, yd, s_, g_, xn, r) = kesa[i]
+        im = base.copy(); di = ImageDraw.Draw(im)
+        kr = S.SARKANS if p["drop"] else p["akc"]
+        # poga: "+" / "−" – nospiežas 0,3 s pēc ieslīdēšanas
+        kp = (t - t_in[i] - 0.3) / 0.22
+        sc = 1 - 0.16 * math.sin(math.pi * kp) if 0 < kp < 1 else 1.0
+        cx, cy, rr = 36 + r, h / 2, r * sc
+        di.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], fill=kr)
+        di.line([cx - rr * 0.45, cy, cx + rr * 0.45, cy], fill=_iss_tm(kr), width=max(3, int(9 * k * sc)))
+        if not p["drop"]:
+            di.line([cx, cy - rr * 0.45, cx, cy + rr * 0.45], fill=_iss_tm(kr), width=max(3, int(9 * k * sc)))
+        # rostered % – saskaitās
+        kc = S.ease(min(1.0, max(0.0, (t - t_in[i]) / 0.6)))
+        txt = _iss_pct(p["rost"])
+        di.text((960 - 28, 18 * k), skaitit(txt, kc) if txt not in ("–", "<1%") else txt, font=S.fonts("black", int(58 * k)),
+                fill=S.BALTS if not p["drop"] else (252, 165, 165), anchor="ra")
+        # nedēļas dienas – iekrāsojas pa vienai
+        for j, n_ in enumerate(p["ned"]):
+            kd = (t - t_kr - 0.06 * j - 0.03 * i) / 0.2
+            if kd <= 0:
+                continue
+            x = xd + j * (s_ + g_)
+            zal = bool(n_.get("o")) and tuple(n_.get("kr") or ()) == tuple(S.ZALS) and not n_.get("pag")
+            ps = (1 + 0.35 * (1 - ease_back(min(1.0, kd), 2.0))) * (1 + 0.35 * puls * zal)
+            if ps != 1:
+                q = Image.new("RGBA", (s_ * 2, s_ * 2), (0, 0, 0, 0))
+                _iss_punkts(ImageDraw.Draw(q), s_ // 2, s_ // 2, s_, n_)
+                q = q.resize((max(2, int(q.width * ps)), max(2, int(q.height * ps))), Image.BICUBIC)
+                im.alpha_composite(q, (int(x + s_ / 2 - q.width / 2), int(yd + s_ / 2 - q.height / 2)))
+            else:
+                _iss_punkts(di, x, yd, s_, n_)
+        xo = (1 - e) * 300
+        X0 = 60 + xo
+        _nv_put(L, im, X0, ys[i] + h / 2, 1.0, e, 0, "l")
+        if kp > 0:                                                    # pogas spīdums nospiešanas brīdī
+            ag = max(0.25, 1 - max(0.0, kp - 1) / 2.5)
+            dn.ellipse([X0 + cx - r - 6, ys[i] + cy - r - 6, X0 + cx + r + 6, ys[i] + cy + r + 6], outline=kr + (int(220 * ag),), width=7)
+        if puls > 0:                                                  # zaļās spēles – spīdums
+            for j, n_ in enumerate(p["ned"]):
+                if n_.get("o") and tuple(n_.get("kr") or ()) == tuple(S.ZALS) and not n_.get("pag"):
+                    x = X0 + xd + j * (s_ + g_)
+                    dn.rounded_rectangle([x - 8, ys[i] + yd - 8, x + s_ + 8, ys[i] + yd + s_ + 8], radius=10, fill=S.ZALS + (int(240 * puls),))
+    out = _nv_glow(N, 18, 1.1)
+    out.alpha_composite(L)
+    return out
+
+
+# --- D: nedēļas kalendārs (streameri)
+def _iss_kal_izkartojums(c):
+    sp = c.get("speletaji") or []
+    dr = any(p["drop"] for p in sp)
+    XL, LW = 50, 258
+    XC, cg = XL + LW + 8, 8
+    cw = (1030 - XC - 6 * cg) / 7
+    rh, rg, y = (124, 12, 562) if dr else (160, 18, 670)
+    yh = y
+    y += 44
+    ys, yl = [], None
+    for p in sp:
+        if p["drop"] and yl is None:
+            yl = y + 8 - rg
+            y += 52 - rg
+        ys.append(y)
+        y += rh + rg
+    return XL, LW, XC, cg, cw, rh, yh, ys, yl, y + 16 - rg
+
+
+def _iss_kal_etikete(p, LW, rh):
+    """Kalendāra rindas kreisā daļa: komanda, pozīcija, vārds (noslēpuma #1 – ???)."""
+    im = Image.new("RGBA", (LW, rh), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    prim, _ = kom_krasas(p["kom"])
+    ak = S.SARKANS if p["drop"] else p["akc"]
+    d.rounded_rectangle([0, 0, LW - 1, rh - 1], radius=20, fill=(14, 19, 42, 245), outline=ak, width=4)
+    f1 = S.fonts("black", 30)
+    tw = d.textlength(p["kom"], font=f1) + 24
+    d.rounded_rectangle([14, 14, 14 + tw, 58], radius=12, fill=prim)
+    d.text((14 + tw / 2, 36), p["kom"], font=f1, fill=S.MELNS if sum(prim) > 450 else S.BALTS, anchor="mm")
+    d.text((26 + tw, 36), p["poz"], font=f1, fill=S.BALTS, anchor="lm")
+    nm = "???" if p["hero"] else p["v2"].upper()
+    d.text((16, rh - 18), nm, font=S.ietilpinat(d, nm, "black", 30, LW - 32), fill=S.DZELTENS if p["hero"] else (226, 232, 240), anchor="ls")
+    return im
+
+
+def _iss_kal_suna(n_, cw, rh):
+    """Viena kalendāra diena: pretinieks krāsā (zaļš – vāja aizsardzība, pelēks – vidēja, sarkans – stipra)."""
+    im = Image.new("RGBA", (int(cw), rh), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    box = [0, 0, int(cw) - 1, rh - 1]
+    if n_.get("o"):
+        kr = tuple(n_.get("kr") or (100, 116, 139))
+        pag = bool(n_.get("pag"))
+        d.rounded_rectangle(box, radius=18, fill=kr + ((95 if pag else 255),))
+        o = str(n_["o"]); at = o.startswith("@")
+        fc = (_iss_tm(kr) if kr != (100, 116, 139) else S.BALTS) if not pag else (190, 198, 212)
+        d.text((cw / 2, rh / 2 - (12 if at else 0)), o.lstrip("@"), font=S.ietilpinat(d, o.lstrip("@"), "black", 32, cw - 12), fill=fc, anchor="mm")
+        if at:
+            d.text((cw / 2, rh / 2 + 26), "AWAY", font=S.fonts("semi", 17), fill=fc, anchor="mm")
+    elif n_.get("pag"):
+        d.rounded_rectangle(box, radius=18, fill=(22, 28, 50, 230))
+        d.line([cw / 2 - 18, rh / 2, cw / 2 + 18, rh / 2], fill=(70, 80, 105), width=4)
+    else:
+        d.rounded_rectangle(box, radius=18, outline=(48, 58, 85), width=3)
+    return im
+
+
+def aina_fantasy_kalendars(t, c):
+    """Īsā streameru 2. aina: nedēļas kalendārs – rindas (komanda, pozīcija, vārds) ieslīd, dienas iekrāsojas
+    no pirmdienas līdz svētdienai (GP skaitās), zaļās spēles izceļas, kad balss saka "green"; apakšā – leģenda."""
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    _iss_s2_augsa(L, N, t, c)
+    sp = c.get("speletaji") or []
+    XL, LW, XC, cg, cw, rh, yh, ys, yl, yleg = _iss_kal_izkartojums(c)
+    t_in, t_kr, t_zal = _iss_s2_laiki(c)
+    d = ImageDraw.Draw(L); dn = ImageDraw.Draw(N)
+    a0 = S.ease(min(1.0, max(0.0, (t - 0.4) / 0.3)))
+    if a0 > 0:
+        for j, dn_ in enumerate(ISS_DIENAS):
+            d.text((XC + j * (cw + cg) + cw / 2, yh), dn_, font=S.fonts("black", 26), fill=_NV_LAB + (int(255 * a0),), anchor="ma")
+    if yl is not None:
+        ad_ = S.ease(min(1.0, max(0.0, (t - (min(t_in[i] for i, p in enumerate(sp) if p["drop"]) - 0.15)) / 0.3)))
+        if ad_ > 0:
+            d.text((XL, yl), ISS_S2_DROP_LAB, font=S.fonts("black", 30), fill=S.SARKANS + (int(255 * ad_),))
+    kesa = c.setdefault("_kesa_kal", {})
+    puls = _iss_zal_puls(t, t_zal)
+    if ys:                                                            # skeneris – gaiša kolonna, kas iet pāri dienām
+        for j in range(7):
+            ah = max(0.0, 1 - abs(t - (t_kr + 0.1 * j + 0.08)) / 0.16)
+            if ah > 0:
+                x = XC + j * (cw + cg)
+                d.rounded_rectangle([x - 4, ys[0] - 8, x + cw + 4, ys[-1] + rh + 8], radius=22, fill=(255, 255, 255, int(38 * ah)))
+    for i, p in enumerate(sp):
+        e = S.ease(min(1.0, max(0.0, (t - t_in[i]) / 0.4)))
+        if e <= 0:
+            continue
+        y = ys[i]
+        if ("et", i) not in kesa:
+            kesa[("et", i)] = _iss_kal_etikete(p, LW, rh)
+        X = XL - (1 - e) * 220
+        _nv_put(L, kesa[("et", i)], X, y + rh / 2, 1.0, e, 0, "l")
+        gp_n = 0
+        for j, n_ in enumerate(p["ned"]):
+            x = XC + j * (cw + cg)
+            kd = (t - t_kr - 0.1 * j - 0.025 * i) / 0.25
+            if kd <= 0:                                               # vēl neatklāta – tukša kontūra
+                d.rounded_rectangle([x, y, x + cw, y + rh], radius=18, outline=(48, 58, 85, int(255 * e)), width=3)
+                continue
+            if n_.get("o") and not n_.get("pag"):
+                gp_n += 1
+            zal = bool(n_.get("o")) and tuple(n_.get("kr") or ()) == tuple(S.ZALS) and not n_.get("pag")
+            if ("su", i, j) not in kesa:
+                kesa[("su", i, j)] = _iss_kal_suna(n_, cw, rh)
+            sc = (0.7 + 0.3 * ease_back(min(1.0, kd), 2.2)) * (1 + 0.07 * puls * zal)
+            _nv_put(L, kesa[("su", i, j)], x + cw / 2, y + rh / 2, sc, min(1.0, kd * 2.5))
+            if zal and (puls > 0 or 0 < kd < 1.6):
+                ag = max(puls, 0.55 * max(0.0, 1 - kd / 1.6))
+                dn.rounded_rectangle([x - 2, y - 2, x + cw + 2, y + rh + 2], radius=20, fill=S.ZALS + (int(200 * ag),))
+        if t > t_kr:                                                  # GP skaitās līdzi dienām
+            gpv = p.get("gp") if (t > t_kr + 0.85 and p.get("gp") is not None) else gp_n
+            ak = S.SARKANS if p["drop"] else p["akc"]
+            d.text((X + LW - 16, y + 36), f"{gpv} GP", font=S.fonts("black", 28), fill=ak + (int(255 * e),), anchor="rm")
+    al = S.ease(min(1.0, max(0.0, (t - t_kr - 0.75) / 0.35)))
+    if al > 0:                                                        # leģenda
+        f = S.fonts("black", 28)
+        tot = sum(44 + d.textlength(t_, font=f) for _, t_ in ISS_S2_LEGENDA) + 56 * (len(ISS_S2_LEGENDA) - 1)
+        x = 540 - tot / 2
+        for kr, t_ in ISS_S2_LEGENDA:
+            d.rounded_rectangle([x, yleg, x + 32, yleg + 32], radius=8, fill=tuple(kr) + (int(255 * al),))
+            d.text((x + 44, yleg + 16), t_, font=f, fill=S.BALTS + (int(255 * al),), anchor="lm")
+            x += 44 + d.textlength(t_, font=f) + 56
+    out = _nv_glow(N, 18, 1.1)
+    out.alpha_composite(L)
+    return out
+
+
+# ---------------------------------------------------------------- fantasy atskats: 2. aina – rezultātu saraksts (kopš 10.11.2026)
+FA_S2_IKONA = {"HIT": "v", "GOOD CALL": "v", "MISS": "x", "BAD CALL": "x", "DIDN'T PLAY": "x", "EVEN": "="}
+
+
+def _fa_s2_aina(k2, kar, s):
+    """Fantasy atskata 2. aina: augšā LAST WEEK (✓/✗) un SEASON (trāpīts / kopā, %), zem tam visi ieteiktie ar vārdiem –
+    punkti katrā nedēļas dienā, punkti pret tipisko spēlētāju un rezultāts (HIT / MISS / EVEN / GOOD CALL / BAD CALL)."""
+    if not kar or not all((c.get("viz") or {}).get("ned") for c in kar):
+        return None
+    m_ = re.search(r"SEASON:\s*(\d+)\s*/\s*(\d+)", " ".join(str(x[0]) for x in ((s.get("outro") or {}).get("rindas") or [])))
+    rind = []
+    for c in kar:
+        v = c["viz"]
+        rind.append({"kom": str(c.get("badge", "")), "poz": str(v.get("poz", "")), "v1": str(c.get("v1", "")),
+                     "v2": str(c.get("v2", "")), "grupa": v.get("grupa", "add"), "pts": int(v.get("pts") or 0),
+                     "med": float(v.get("med") or 0), "verd": str(c.get("liels") or v.get("verd") or ""),
+                     "akc": tuple(c.get("akc") or (100, 116, 139)), "ned": list(v.get("ned") or [])[:7]})
+    return {"tips": "fantasy_ats_saraksts", "ilgums": k2.get("ilgums", 6.0), "tag": k2.get("tag", ""), "_tv": k2.get("_tv"),
+            "virsr": k2["virsr"], "apaksa": k2.get("apaksa", ""), "rindas": rind,
+            "rek": tuple(s["atskats_rek"]) if s.get("atskats_rek") else None,
+            "sezona": (int(m_.group(1)), int(m_.group(2))) if m_ else None,
+            "_ievads_no": len(str(s.get("aki_runa") or "").split())}
+
+
+def _fa_s2_izk(c):
+    R = c.get("rindas") or []
+    n = max(1, len(R))
+    ir_t = bool(c.get("rek") or c.get("sezona"))
+    yt = 548
+    y = yt + 142 if ir_t else 556
+    y0 = y + 46
+    dr = any(r["grupa"] == "drop" for r in R)
+    g = 10
+    h = int(min(140, (1432 - y0 - (54 if dr else 0) - g * (n - 1)) / n))
+    ys, yl, yy = [], None, y0
+    for r in R:
+        if r["grupa"] == "drop" and yl is None:
+            yl = yy + 6
+            yy += 54
+        ys.append(yy)
+        yy += h + g
+    return ir_t, yt, y, h, ys, yl
+
+
+def _fa_s2_laiki(c):
+    """(tablo sākums, rindu ieslīdēšana[], zīmogi[]) – rezultāts uzreiz (balss: "0 for 4 last week"), rindas – kad balss
+    sāk ievadu ("Time to check last week's calls"), katrai rindai pēc mirkļa – rezultāta zīmogs. Viss paspēj līdz beigām."""
+    R = c.get("rindas") or []
+    ilg, vardi = c.get("_ilg", c.get("ilgums", 6.0)), c.get("_vardi") or []
+    t_t = 0.45
+    i0 = int(c.get("_ievads_no") or 0)
+    t_r = vardi[i0][0] - 0.15 if (i0 and len(vardi) > i0) else 1.4
+    lim = max(2.0, ilg - 0.5)
+    t_r = min(max(1.2, t_r), lim - 0.95 - 0.24 * max(0, len(R) - 1))
+    t_r = max(0.8, t_r)
+    t_in, p_ = [], False
+    for i, r in enumerate(R):
+        if r["grupa"] == "drop" and not p_:
+            p_ = True
+        t_in.append(t_r + 0.24 * i + (0.2 if p_ else 0.0))
+    if t_in and t_in[-1] + 0.95 > lim:                                # saspiest
+        k = max(0.3, (lim - 0.95 - t_in[0]) / max(0.01, t_in[-1] - t_in[0]))
+        t_in = [t_in[0] + (x - t_in[0]) * k for x in t_in]
+    return t_t, t_in, [x + 0.6 for x in t_in]
+
+
+def _fa_ikona(d, cx, cy, r, ik, kr):
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=kr)
+    w = max(4, int(r * 0.22))
+    if ik == "v":
+        d.line([(cx - r * 0.45, cy + r * 0.02), (cx - r * 0.1, cy + r * 0.36), (cx + r * 0.48, cy - r * 0.34)], fill=S.BALTS, width=w, joint="curve")
+    elif ik == "x":
+        d.line([(cx - r * 0.38, cy - r * 0.38), (cx + r * 0.38, cy + r * 0.38)], fill=S.BALTS, width=w)
+        d.line([(cx + r * 0.38, cy - r * 0.38), (cx - r * 0.38, cy + r * 0.38)], fill=S.BALTS, width=w)
+    else:
+        d.line([(cx - r * 0.4, cy - r * 0.18), (cx + r * 0.4, cy - r * 0.18)], fill=S.BALTS, width=w)
+        d.line([(cx - r * 0.4, cy + r * 0.18), (cx + r * 0.4, cy + r * 0.18)], fill=S.BALTS, width=w)
+
+
+def _fa_diena(d, x, y, s_, n_, a=255):
+    """Viena nedēļas diena: punkti tajā spēlē (zaļš – ≥1, pelēks – 0), bez spēles – kontūra."""
+    p = n_.get("p")
+    if n_.get("o") and p is not None:
+        kr = S.ZALS if p > 0 else (100, 116, 139)
+        d.rounded_rectangle([x, y, x + s_, y + s_], radius=max(4, s_ // 4), fill=kr + (a,))
+        d.text((x + s_ / 2, y + s_ / 2 + 1), str(p), font=S.fonts("black", int(s_ * 0.62)), fill=(S.MELNS if p > 0 else S.BALTS) + (a,), anchor="mm")
+    else:
+        d.rounded_rectangle([x, y, x + s_, y + s_], radius=max(4, s_ // 4), outline=(70, 80, 108, a), width=2)
+
+
+def _fa_rinda_pamats(r, h):
+    W = 960
+    im = Image.new("RGBA", (W, h), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    prim, _ = kom_krasas(r["kom"])
+    d.rounded_rectangle([0, 0, W - 1, h - 1], radius=24, fill=(14, 19, 42, 245))
+    d.rounded_rectangle([0, 0, 16, h - 1], radius=8, fill=prim)
+    rr = int(min(36, h * 0.3))
+    xn = 36 + 2 * rr + 24
+    nm = (r["v1"][:1] + ". " if r["v1"] else "") + r["v2"].upper()
+    d.text((xn, h * 0.12), nm, font=S.ietilpinat(d, nm, "black", int(min(50, h * 0.4)), W - 220 - xn), fill=S.BALTS)
+    yl = h - h * 0.15
+    f2 = S.fonts("semi", int(min(26, h * 0.22)))
+    d.text((xn, yl), f"{r['poz']} · {r['kom']}", font=f2, fill=_NV_LAB, anchor="ls")
+    s_ = int(min(30, h * 0.25)); g_ = max(4, s_ // 5)
+    xd, yd = int(xn + 140), int(yl - s_ + 3)
+    for j in range(7):
+        _fa_diena(d, xd + j * (s_ + g_), yd, s_, {})
+    d.text((W - 28, yl), f"TYPICAL {r['med']:.0f}", font=S.fonts("semi", int(min(22, h * 0.19))), fill=_NV_LAB, anchor="rs")
+    return im, (rr, xn, xd, yd, s_, g_, yl)
+
+
+def _fa_tablo(t, c, yt, kesa):
+    """Augšas flīzes: LAST WEEK (✓/✗ rūtiņas + 1/4) un SEASON (H/T, % josla)."""
+    t_t = _fa_s2_laiki(c)[0]
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    F = S.fonts
+    for i_, (x0, x1) in enumerate(((60, 530), (550, 1020))):
+        e = S.ease(min(1.0, max(0.0, (t - t_t - 0.2 * i_) / 0.35)))
+        if e <= 0:
+            continue
+        a = int(255 * e)
+        dy = (1 - e) * 40
+        y0, y1 = yt + dy, yt + 120 + dy
+        if i_ == 0 and c.get("rek"):
+            tr, n = c["rek"]
+            kr = S.ZALS if n and tr / n >= 0.5 else S.SARKANS
+            d.rounded_rectangle([x0, y0, x1, y1], radius=24, fill=_NV_TILE + (int(245 * e),), outline=kr + (a,), width=4)
+            d.text((x0 + 24, y0 + 16), "LAST WEEK", font=F("black", 26), fill=_NV_LAB + (a,))
+            d.text((x1 - 24, y0 + 60), f"{tr}/{n}", font=F("black", 70), fill=S.BALTS + (a,), anchor="rm")
+            n_ = min(n, 6)
+            for j in range(n_):
+                kj = (t - t_t - 0.2 - 0.13 * j) / 0.2
+                if kj <= 0:
+                    continue
+                sc = 1 + 0.4 * (1 - ease_back(min(1.0, kj), 2.0))
+                q = 40 * sc
+                cx, cy = x0 + 44 + j * 50, y0 + 84
+                ok = j < tr
+                d.rounded_rectangle([cx - q / 2, cy - q / 2, cx + q / 2, cy + q / 2], radius=10, fill=(S.ZALS if ok else S.SARKANS) + (a,))
+                if ok:
+                    d.line([(cx - q * 0.25, cy), (cx - q * 0.05, cy + q * 0.2), (cx + q * 0.28, cy - q * 0.22)], fill=S.BALTS + (a,), width=5)
+                else:
+                    d.line([(cx - q * 0.2, cy - q * 0.2), (cx + q * 0.2, cy + q * 0.2)], fill=S.BALTS + (a,), width=5)
+                    d.line([(cx + q * 0.2, cy - q * 0.2), (cx - q * 0.2, cy + q * 0.2)], fill=S.BALTS + (a,), width=5)
+        elif i_ == 1 and c.get("sezona"):
+            H, T = c["sezona"]
+            pr = H / T if T else 0.0
+            kr = S.ZALS if pr >= 0.5 else S.SARKANS
+            d.rounded_rectangle([x0, y0, x1, y1], radius=24, fill=_NV_TILE + (int(245 * e),), outline=(255, 255, 255, int(70 * e)), width=3)
+            fl_ = F("black", 26)
+            d.text((x0 + 24, y0 + 16), "SEASON", font=fl_, fill=_NV_LAB + (a,))
+            kb = S.ease(min(1.0, max(0.0, (t - t_t - 0.45) / 0.7)))
+            d.text((x0 + 24 + d.textlength("SEASON", font=fl_) + 14, y0 + 16), f"{pr * 100 * kb:.0f}%", font=fl_, fill=kr + (a,))
+            d.text((x1 - 24, y0 + 60), f"{H}/{T}", font=F("black", 70), fill=S.BALTS + (a,), anchor="rm")
+            bx0, bx1, by = x0 + 24, x0 + 200, y0 + 78
+            d.rounded_rectangle([bx0, by, bx1, by + 14], radius=7, fill=(255, 255, 255, int(40 * e)))
+            if pr > 0 and kb > 0:
+                d.rounded_rectangle([bx0, by, bx0 + max(14, (bx1 - bx0) * pr * kb), by + 14], radius=7, fill=kr + (a,))
+    return L
+
+
+def aina_fantasy_ats_saraksts(t, c):
+    """Fantasy atskata 2. aina: LAST WEEK + SEASON augšā, zem tam visi ieteiktie (WE SAID ADD / WE SAID DROP) ar vārdiem –
+    rindas ieslīd, nedēļas dienas iekrāsojas (punkti spēlē), punkti saskaitās, rezultāta zīmogs + ✓/✗."""
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    _iss_s2_augsa(L, N, t, c)
+    R = c.get("rindas") or []
+    ir_t, yt, ylab, h, ys, yl = _fa_s2_izk(c)
+    t_t, t_in, t_st = _fa_s2_laiki(c)
+    kesa = c.setdefault("_kesa_fa", {})
+    if ir_t:
+        L.alpha_composite(_fa_tablo(t, c, yt, kesa))
+    d = ImageDraw.Draw(L); dn = ImageDraw.Draw(N)
+    if t_in:
+        a0 = S.ease(min(1.0, max(0.0, (t - t_in[0] + 0.15) / 0.3)))
+        if a0 > 0 and any(r["grupa"] != "drop" for r in R):
+            d.text((60, ylab), "WE SAID ADD", font=S.fonts("black", 30), fill=S.ZALS + (int(255 * a0),))
+            d.text((1020, ylab + 2), "PTS THAT WEEK", font=S.fonts("black", 26), fill=_NV_LAB + (int(255 * a0),), anchor="ra")
+        if yl is not None:
+            i_d = next(i for i, r in enumerate(R) if r["grupa"] == "drop")
+            ad_ = S.ease(min(1.0, max(0.0, (t - t_in[i_d] + 0.15) / 0.3)))
+            if ad_ > 0:
+                d.text((60, yl), "WE SAID DROP", font=S.fonts("black", 30), fill=S.SARKANS + (int(255 * ad_),))
+    for i, r in enumerate(R):
+        e = S.ease(min(1.0, max(0.0, (t - t_in[i]) / 0.4)))
+        if e <= 0:
+            continue
+        if i not in kesa:
+            kesa[i] = _fa_rinda_pamats(r, h)
+        base, (rr, xn, xd, yd, s_, g_, yl_) = kesa[i]
+        im = base.copy(); di = ImageDraw.Draw(im)
+        ik = FA_S2_IKONA.get(r["verd"], "=")
+        kr = r["akc"]
+        ks = (t - t_st[i]) / 0.25                                     # zīmogs: ✓/✗ + rezultāts
+        if ks > 0:
+            sc = 1 + 0.5 * (1 - ease_back(min(1.0, ks), 2.0))
+            _fa_ikona(di, 36 + rr, h / 2, rr * sc, ik, kr)
+        else:
+            di.ellipse([36, h / 2 - rr, 36 + 2 * rr, h / 2 + rr], outline=(70, 80, 108), width=3)
+        for j, n_ in enumerate(r["ned"]):                             # dienas – punkti katrā spēlē
+            kd = (t - t_in[i] - 0.2 - 0.05 * j) / 0.18
+            if kd > 0 and n_.get("o"):
+                _fa_diena(di, xd + j * (s_ + g_), yd, s_, n_, int(255 * min(1.0, kd)))
+        kc = S.ease(min(1.0, max(0.0, (t - t_in[i] - 0.15) / 0.5)))
+        p_ = round(r["pts"] * kc)
+        di.text((960 - 28, h * 0.1), f"{p_} PT{'' if p_ == 1 else 'S'}", font=S.fonts("black", int(min(50, h * 0.4))),
+                fill=S.BALTS, anchor="ra")
+        if ks > 0:
+            txt = r["verd"]
+            f = S.fonts("black", int(min(24, h * 0.2)))
+            tw = di.textlength(txt, font=f) + 26
+            px = xd + 7 * (s_ + g_) + 14
+            ph = int(min(38, h * 0.3))
+            st = Image.new("RGBA", (int(tw) + 8, ph + 8), (0, 0, 0, 0)); ds = ImageDraw.Draw(st)
+            ds.rounded_rectangle([4, 4, 4 + tw, 4 + ph], radius=ph // 2, fill=kr)
+            ds.text((4 + tw / 2, 4 + ph / 2), txt, font=f, fill=S.MELNS if kr == tuple(S.ZALS) else S.BALTS, anchor="mm")
+            sc = 1 + 0.6 * (1 - ease_back(min(1.0, ks), 2.0))
+            _nv_put(im, st, px + st.width / 2, yd + s_ / 2, sc, min(1.0, ks * 3))
+        X0 = 60 + (1 - e) * 300
+        _nv_put(L, im, X0, ys[i] + h / 2, 1.0, e, 0, "l")
+        if 0 < ks < 3:                                                # zīmoga spīdums
+            ag = max(0.0, 1 - ks / 3)
+            dn.ellipse([X0 + 36 - 6, ys[i] + h / 2 - rr - 6, X0 + 36 + 2 * rr + 6, ys[i] + h / 2 + rr + 6], fill=kr + (int(200 * ag),))
+    out = _nv_glow(N, 18, 1.1)
+    out.alpha_composite(L)
+    return out
+
+
 def _iss_fantasy(s, veids):
     kk, rr = s["kartes"], s["runa"]
     if len(rr) != len(kk) + 2:
@@ -6815,7 +7417,8 @@ def _iss_fantasy(s, veids):
     mr = re.search(r"UNDER (\d+)%", str(k2.get("apaksa", "")))
     rost = f"under {mr.group(1)}% rostered" if mr else "barely rostered"
     n_ = _VARDIEM.get(len(adds), str(len(adds)))
-    kartes = [dict(k2, ilgums=3.5)]
+    a2 = _iss_s2_aina(k2, adds, [] if stream else drops, hero, stream)   # fantasy – saraksts, streameri – kalendārs
+    kartes = [a2 or dict(k2, ilgums=3.5)]
     runa = [rr[0], S.reta_frase(ISS_FAN_IEVADS[stream], veids=veids, n=2).format(N=n_.capitalize(), n=n_, rost=rost)]
     for c in citi:
         kartes.append(c)
@@ -6923,7 +7526,7 @@ def _akc_tips(c):
 
 def _iss_atskats(s):
     kk, rr = s["kartes"], s["runa"]
-    if len(rr) != len(kk) + 2 or len(kk) < 2 or kk[0].get("tips") != "fantasy_kartis":
+    if len(rr) != len(kk) + 2 or len(kk) < 2 or kk[0].get("tips") not in ("fantasy_kartis", "fantasy_ats_saraksts"):
         return None
     tag = str((s.get("intro") or {}).get("tag", "")).upper()
     xg = "FOLLOW-UP" in tag
