@@ -5379,8 +5379,10 @@ def aina_fakts_ga_serijas(t, c):
 # ---------------------------------------------------------------- Streak watch: HOT & COLD (kopš 11.11.2026)
 # Divas tabulas blakus – komandu uzvaru sērijas (HOT) un sērijas bez uzvaras (COLD), apakšā – zvaigznes garākā sērija
 # bez vārtiem (SCORING DROUGHT). Mājas / izbraukuma sērijas – ar HOME / ROAD zīmīti (tikai, ja garākas par kopējo).
-HC_SOLO = ["Hot and cold.", "Now, the hottest and coldest teams.", "Who can't lose, and who can't win?",
-           "Team streaks: hot on the left, cold on the right."]
+HC_SOLO = ["Hot and cold.", "Who's hot, and who's not?", "The hottest and coldest streaks right now."]   # ne tikai komandas –
+HC_SAUSUMS = ["And the coldest star: {v} hasn't scored in {n} games.",                  # beigās arī spēlētājs
+              "One star in a slump: {v} hasn't scored in {n} games.",
+              "And a star in a slump: {v}, {n} games without a goal."]
 HC_MIN = 3                       # komandu sērija – no 3 spēlēm
 HC_RINDAS = 4
 HC_SAUSUMS_MIN = 5               # sērija bez vārtiem – no 5 spēlēm
@@ -5459,8 +5461,8 @@ def _hc_stasts(karst, auk, sausums):
         a = auk[0]
         out.append(f"The {S.kom_nos(a['kom'])} haven't won in {a['n']} games{kur[a['veids']]}.")
         izc.append((1, 0, S.kom_nos(a["kom"])))
-    if sausums:
-        out.append(f"And {sausums['vards']} hasn't scored in {sausums['n']} games.")
+    if sausums:                                                       # pāreja no komandām uz spēlētāju
+        out.append(S.reta_frase(HC_SAUSUMS, veids="serijas", n=1).format(v=sausums["vards"], n=sausums["n"]))
         izc.append(("s", 0, sausums["vards"]))
     return " ".join(out), izc
 
@@ -8268,7 +8270,7 @@ def iss_parveidot(s, veids):
 # Atsevišķs ~25 s video: noslēpuma āķis (garākās aktīvās punktu sērijas līderis) → POINT STREAKS → GOALIES OF THE WEEK
 # → cilpa. Ainas – tās pašas, kas faktu video beigās (fakti_serijas_ainas).   python ShortsB.py --veids serijas
 PS_SOLO = ["The longest active point streaks in the NHL right now. Anything in yellow has reached ten games.",
-           "Streak watch: the longest point streaks still alive.",
+           "The longest point streaks still alive.",
            "Still rolling: the longest active point streaks in the league.",
            "Who keeps finding the scoresheet? The longest active point streaks."]
 PS_SOLO_NAV = ["No one has reached ten straight games yet. These are the longest active point streaks.",
@@ -8278,6 +8280,11 @@ NOSL_Q2["serijas"] = [(("WHO'S", "STILL", "ROLLING?"), "Who's still rolling?"),
                       (("CAN ANYONE", "CATCH", "HIM?"), "Can anyone catch him?"),
                       (("WHO CAN'T", "STOP", "SCORING?"), "Who can't stop scoring?"),
                       (("STREAK", "WATCH:", "WHO'S #1?"), "Streak watch: who's number one?")]
+ST_BEIGAS = ["Can {v} make it {n1}? Follow for next week's streak watch.",
+             "Which streak ends first? Follow for next week's streak watch.",
+             "Who keeps it rolling? Follow for next week's streak watch."]
+ST_BEIGAS_VA = ["Which streak ends first? Follow for next week's streak watch.",
+                "Who shuts the door next? Follow for next week's streak watch."]
 NOSL_Q2["serijas_va"] = [(("WHO", "SHUT THE", "DOOR?"), "Who shut the door?"),
                          (("THE HOTTEST", "GOALIE", "THIS WEEK?"), "The hottest goalie this week?"),
                          (("CAN ANYONE", "BEAT", "HIM?"), "Can anyone beat him?")]
@@ -8354,8 +8361,10 @@ def veids_serijas_b(m, a):
     else:                                                             # bez noslēpuma (--bez-noslepuma) – sākas ar sarakstu
         s["intro"] = None
         s["runa"] = s["runa"][1:]
-        s["runa"][0] = f"Streak watch. {atkl} {ainas[0][1]}"
-    s["runa"][-1] = _iss_cilpa(s, "serijas", "Follow for next week's streak watch.")
+        s["runa"][0] = f"Streak watch. {s['runa'][0]}"
+    # beigas (kopš 11.11.2026): nevis āķa jautājums atkārtoti (atbilde jau bija), bet jautājums par nākamo spēli
+    s["runa"][-1] = S.reta_frase(ST_BEIGAS if ps else ST_BEIGAS_VA, veids="serijas", n=2).format(
+        v=vards, n1=(int(r0["liels"]) + 1) if ps and str(r0.get("liels", "")).isdigit() else "")
     _iss_outro(s)
     s["_iss"] = True
     return s
