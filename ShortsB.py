@@ -564,6 +564,11 @@ def sfx_notikumi(ainas):
             ev.append((t0 + 1.0, "tick", 0.9))
         elif tips in ("intro", "fantasy_intro"):
             ev.append((t0 + 1.0, "tick", 0.9))
+        elif tips == "fakts_tablo" and c.get("izk") == "A" and len(c.get("fakti") or []) > 1:   # rinda izplešas / saplok
+            _to, _tc = _fja_laiki(c)
+            ev.append((t0 + _to, "tick", 0.8))
+            if _tc is not None:
+                ev.append((t0 + _tc + 0.4, "boom", 0.45))
         elif tips == "fakts_tablo":                                  # kartīte ielido (tick), nolaižas tablo (boom)
             ev.append((t0 + 0.15, "tick", 0.8))
             ev.append((t0 + max(0.8, ilg - 0.8 + 0.4), "boom", 0.45))
@@ -1341,10 +1346,7 @@ def veids_fakti_b(m, a):
     if a.fakts is None:
         S.fakti_saraksts(kand)
         print("\n(--fakts nav norādīts → izmantoju #1. Vairāki: --fakts 1,3,5 vai --fakts top5)")
-    izv = _fakti_izvele(a.fakts, kand)
-    if ISS["on"] and len(izv) > ISS_FAKTI_N:                          # īsā versija – TOP 3: #3, #2 īsi, #1 – pilnais stāsts
-        print(f"ĪSĀ VERSIJA: faktu video – TOP {ISS_FAKTI_N} no {len(izv)} (garā ar visiem – --long)")
-        izv = izv[:ISS_FAKTI_N]
+    izv = _fakti_izvele(a.fakts, kand)                                # top5 → 5, top3 → 3, 1,3,5 → 3, "8,1,2!" – tava secība
     if not izv:
         S.fakti_saraksts(kand)
         print(f"\nNav faktu ar numuru {a.fakts}. Piem.: --fakts 3  vai  --fakts 1,4,6  vai  --fakts top5")
@@ -1366,7 +1368,7 @@ def veids_fakti_b(m, a):
                          "apaksa": hero.get("aki_apaksa") or hero.get("skaitlis_apaksa", "")},
              "uzlime": S.reta_frase(S.UZLIME_NR1) if n > 1 else jaut.upper()}
     runa.append((S.reta_frase(FAKTI_TOPN_IEVADS, veids="fakts", n=2).format(n=skaits_v, N=skaits_v.capitalize())
-                  + f" Number one: {hook_runa}. {jaut}" if n > 1 else f"{hook_runa}. {jaut}"))
+                  + f" Number one: {hook_runa}." if n > 1 else f"{hook_runa}. {jaut}"))   # TOP N – bez "Who is it?" (11.11.)
     # #n → #2: viena aina katram
     mini_runa = []
     for nr, c in zip(range(n, 1, -1), citi[::-1]):
@@ -2647,7 +2649,10 @@ def renderet(s, izvade, kanals="", balss=None):
         try:
             import sikteli
             vp_ = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(izvade))), MEDIJI_JSON)
-            r_ = sikteli.izveidot(sys.modules[__name__], s, vp_, SIKTS["kods"])
+            s_th, in_ = s, (s.get("intro") or {})
+            if not in_.get("noslepums") and in_.get("_sikts"):        # TOP N fakti (bez noslēpuma) – sīktēlam tie paši krekli
+                s_th = dict(s, intro=dict(in_, noslepums=in_["_sikts"]))
+            r_ = sikteli.izveidot(sys.modules[__name__], s_th, vp_, SIKTS["kods"])
             if r_:
                 kods_, im_, alt_, veids_ = r_
                 _THUMB.update(alt=dict(alt_, **{"0": _THUMB["im"]}), im=im_, kods=kods_, veids=veids_)
@@ -4383,6 +4388,8 @@ def _fj_karte_plus(f_, kr):
 
 def aina_fakts_tablo(t, c):
     """TOP N tablo: rindas #1…#N, pašreizējais fakts ielido kā liela kartīte un beigās nolaižas savā rindā."""
+    if c.get("izk") == "A" and not c.get("bez_tablo") and len(c.get("fakti") or []) > 1:
+        return aina_fakts_tablo_a(t, c)                               # īsā versija – rinda izplešas tabulā (kopš 11.11.2026)
     F = S.fonts
     L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
     N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
@@ -4487,6 +4494,136 @@ def aina_fakts_tablo(t, c):
     L.alpha_composite(_nv_glow(N, 12, 1.2))
     if FJ_ANIM == "E" and not bez_tablo and not plus:
         L = _nv_kratit(L, t, t_dock + 0.38, amp=10, dur=0.2)
+    return L
+
+
+# ---------------------------------------------------------------- TOP N tablo – variants A (kopš 11.11.2026, īsā versija)
+# Nav loga virs tabulas: tabula aizpilda ekrānu (centrēta), pašreizējā fakta rinda izplešas lielā kartītē turpat tabulā
+# (pārējās rindas pabīdās), kamēr balss runā; beigās saplok atpakaļ kompaktā rindā (vārds + fakts). #1 – "? ? ?" līdz
+# savai kārtai un paliek izvērsts līdz ainas beigām. Garajā versijā (--long) – iepriekšējais izkārtojums.
+FJA_Y0, FJA_Y1 = 500, 1440       # tabulas laukums (zem virsraksta, virs subtitriem)
+FJA_X0, FJA_X1 = 50, 1030
+FJA_G = 14
+
+
+def _fja_izm(n):
+    """(kompaktās rindas augstums, izvērstās rindas augstums) – lai tabula aizpilda laukumu arī ar 2–3 faktiem."""
+    rh = {2: 170, 3: 150, 4: 124}.get(n, 108)
+    eh = min(660, (FJA_Y1 - FJA_Y0) - (n - 1) * (rh + FJA_G))
+    return rh, eh
+
+
+def _fja_laiki(c):
+    """(izvēršanās sākums, sakļaušanās sākums | None) – #1 paliek izvērsts līdz ainas beigām."""
+    ilg = c.get("_ilg", c.get("ilgums", 4.0))
+    t_open = 0.95 if c.get("pirmais") else 0.15
+    t_close = None if c.get("nr") == 1 else max(t_open + 1.0, ilg - 0.75)
+    return t_open, t_close
+
+
+def _fja_saturs(f_, W, H):
+    """Izvērstās rindas saturs (bez fona): #nr, komanda, galvenais skaitlis, apraksts, vārds."""
+    F = S.fonts
+    kr = tuple(f_["kr"])
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    d.text((42, 30), f"#{f_['nr']}", font=F("black", int(min(96, H * 0.15))), fill=kr)
+    r = int(min(58, H * 0.09))
+    if f_.get("badge"):
+        _fj_ripa(d, W - 44 - r, 34 + r, r, f_["badge"])
+    h = [str(x) for x in (f_.get("hook") or [""])]
+    d.text((W / 2, H * 0.47), h[0], font=S.ietilpinat(d, h[0], "black", int(min(170, H * 0.27)), W - 100), fill=S.BALTS, anchor="mm")
+    if len(h) > 1:
+        r_ = " ".join(h[1:])
+        d.text((W / 2, H * 0.665), r_, font=S.ietilpinat(d, r_, "black", int(min(62, H * 0.1)), W - 100), fill=S.DZELTENS, anchor="mm")
+    v = str(f_.get("vards_pilns") or f_.get("vards") or "").upper()
+    d.text((W / 2, H * 0.835), v, font=S.ietilpinat(d, v, "semi", int(min(46, H * 0.075)), W - 100), fill=_NV_LAB, anchor="mm")
+    return im
+
+
+def _fja_rinda(d, dn, y, h, rw, atv, t, a=1.0):
+    """Kompaktā rinda: atvērta – #nr, komanda, vārds + fakts; #1 – "? ? ?"; pārējās – LOCKED."""
+    F = S.fonts
+    x0, x1 = FJA_X0, FJA_X1
+    kr = tuple(rw["kr"])
+    A = lambda v: int(v * a)
+    d.rounded_rectangle([x0, y, x1, y + h], radius=22, fill=(12, 18, 40, A(235)) if atv else (255, 255, 255, A(16)))
+    fnr = F("black", int(h * 0.34))
+    d.text((x0 + 30, y + h / 2), f"#{rw['nr']}", font=fnr, fill=(kr if atv else _NV_LAB) + (A(255),), anchor="lm")
+    if atv:
+        dn.rounded_rectangle([x0, y, x1, y + h], radius=22, outline=kr + (A(110),), width=3)
+        r = int(h * 0.21)
+        cx = x0 + 30 + d.textlength("#5", font=fnr) + 26 + r
+        if rw.get("badge"):
+            _fj_ripa(d, cx, y + h / 2, r, rw["badge"], A(255))
+        xt = cx + r + 24
+        vv = str(rw.get("vards") or "").upper()
+        d.text((xt, y + h * 0.37), vv, font=S.ietilpinat(d, vv, "black", int(h * 0.29), x1 - 30 - xt), fill=S.BALTS + (A(255),), anchor="lm")
+        ds_ = " ".join(str(x) for x in (rw.get("hook") or []))
+        d.text((xt, y + h * 0.72), ds_, font=S.ietilpinat(d, ds_, "semi", int(h * 0.2), x1 - 30 - xt), fill=(203, 213, 225, A(255)), anchor="lm")
+    elif rw["nr"] == 1:
+        p = 0.5 + 0.5 * math.sin(t * 5)
+        dn.rounded_rectangle([x0, y, x1, y + h], radius=22, outline=S.DZELTENS + (A(120 + 120 * p),), width=4)
+        d.text(((x0 + x1) / 2, y + h / 2), "?  ?  ?", font=F("black", int(h * 0.34)), fill=S.DZELTENS + (A(255),), anchor="mm")
+    else:
+        d.text(((x0 + x1) / 2, y + h / 2), "LOCKED", font=F("semi", int(h * 0.2)), fill=_NV_LAB + (A(130),), anchor="mm")
+
+
+def aina_fakts_tablo_a(t, c):
+    """TOP N (variants A): tabula pa visu laukumu, pašreizējā rinda izplešas lielā kartītē un beigās saplok."""
+    from PIL import ImageChops
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
+    _nv_dalinas(L, t)
+    _fj_tablo(L, N, t, c, anim=c.get("pirmais", False))
+    _fj_virsr(L, t, c["virsr"], 400, 120, staticks=not c.get("pirmais"))
+    fakti, nr = c["fakti"], c["nr"]
+    n = len(fakti)
+    docked = set(c.get("docked") or [])
+    rh, eh = _fja_izm(n)
+    t_open, t_close = _fja_laiki(c)
+    k_o = S.ease(min(1.0, max(0.0, (t - t_open) / 0.5)))
+    k_c = S.ease(min(1.0, max(0.0, (t - t_close) / 0.45))) if t_close is not None else 0.0
+    k = k_o * (1 - k_c)
+    aug = {rw["nr"]: (rh + (eh - rh) * k if rw["nr"] == nr else rh) for rw in fakti}
+    kopa = sum(aug.values()) + (n - 1) * FJA_G
+    y = (FJA_Y0 + FJA_Y1) / 2 - kopa / 2                              # centrēta – izvēršoties rindas pabīdās uz augšu / leju
+    W = FJA_X1 - FJA_X0
+    for i, rw in enumerate(sorted(fakti, key=lambda r_: r_["nr"])):
+        h = aug[rw["nr"]]
+        a = 1.0
+        if c.get("pirmais"):                                          # pirmā aina – rindas uzrodas pa vienai
+            a = S.ease(min(1.0, max(0.0, (t - 0.3 - 0.09 * i) / 0.3)))
+        if a <= 0:
+            y += h + FJA_G
+            continue
+        yy = y + (1 - a) * 40
+        if rw["nr"] == nr and k > 0.001:                              # izvērstā rinda
+            kr = tuple(rw["kr"])
+            hi = int(round(h))
+            d.rounded_rectangle([FJA_X0, yy, FJA_X1, yy + hi], radius=30, fill=(12, 18, 40, 250))
+            dn.rounded_rectangle([FJA_X0, yy, FJA_X1, yy + hi], radius=30, outline=kr + (255,), width=6)
+            if "_kesa_a" not in c:
+                c["_kesa_a"] = _fja_saturs(rw, W, eh)
+            sat = c["_kesa_a"]
+            ca = min(1.0, k_o * 1.4) * (1 - min(1.0, k_c * 1.8))      # saturs – atritinās ar augstumu, sakļaujoties izgaist
+            if ca > 0.01 and hi > 8:
+                cr = sat.crop((0, 0, W, min(eh, hi)))
+                if ca < 1:
+                    cr.putalpha(cr.getchannel("A").point(lambda v: int(v * ca)))
+                L.alpha_composite(cr, (FJA_X0, int(yy)))
+            if k_c > 0.4:                                             # sakļaujoties – parādās kompaktais saturs
+                _fja_rinda(d, dn, yy, hi, rw, True, t, min(1.0, (k_c - 0.4) / 0.4))
+            if k_o < 1:                                               # skeneris pa apakšējo malu, kamēr izplešas
+                _skeneris(N, FJA_X0 + 10, FJA_X1 - 10, yy + hi - 4, 1 - k_o)
+        else:
+            atv = rw["nr"] in docked or (rw["nr"] == nr and k_c >= 1)
+            _fja_rinda(d, dn, yy, h, rw, atv, t, a)
+            if rw["nr"] == nr and t_close is not None and k_c >= 1:  # nolaižoties – rinda iemirdzas
+                g_ = 1 - min(1.0, max(0.0, (t - t_close - 0.45) / 0.5))
+                if g_ > 0:
+                    dn.rounded_rectangle([FJA_X0, yy, FJA_X1, yy + h], radius=22, outline=tuple(rw["kr"]) + (int(255 * g_),), width=6)
+        y += h + FJA_G
+    L.alpha_composite(_nv_glow(N, 12, 1.2))                          # neona rāmji – virs rindām (kā iepriekš)
     return L
 
 
@@ -5483,11 +5620,24 @@ def fakti_jauns(rez, D, m, izv, st, mini_runa):
         h = list(hero.get("hook") or [""])
         aki = {"liels": h[0], "apli": [f"+{v}" for v in ap], "izcelt": [int(S.np.argmax(ap))] if ap else [],
                "zem": " ".join(h[1:]), "josla": ("..." + uzl) if uzl else "", "vards": str(hero.get("vards") or "").upper(),
-               "kom": hero.get("badge"), "tag": "NHL  ·  THE WEEK IN NUMBERS", "kart_txt": "#1"}
+               "kom": hero.get("badge"), "tag": "NHL  ·  THE WEEK IN NUMBERS", "kart_txt": "#1",
+               "bez_kartes": n > 1}                                   # TOP N: #1 skaitlis + "STAY FOR #1", bez vārda kartītes
         rez["intro"] = {"aki": True, "fantasy_aki": aki, "tag": aki["tag"], "ilgums": 2.6, "_tv": tv}
         rez["kartes"], rez["runa"] = kartes, runa
         rez["_bez_zimoga"] = True
-        _ns_fakti(rez, hero)                                          # noslēpuma āķis (ja ieslēgts)
+        if n == 1:                                                    # noslēpuma āķis – tikai vienam faktam; TOP N (kopš 11.11.2026)
+            _ns_fakti(rez, hero)                                      # – bez tā: #1 tāpat paliek "? ? ?" tablo līdz beigām
+        else:                                                         # sīktēlam (sikteli.py) – tie paši krekli, kas noslēpumā
+            atsl_ = str(hero.get("atsl", ""))
+            kom_, v_ = hero.get("badge"), hero.get("vards")
+            if kom_ and not atsl_.startswith("tiesnesis"):
+                if atsl_.startswith("liela_duo"):
+                    kr_ = [(kom_, x.strip()) for x in str(v_).split("&")][:3]
+                elif atsl_.startswith(("points_serija", "goals_serija", "liela:", "vartsargs")):
+                    kr_ = [(kom_, v_)]
+                else:
+                    kr_ = [(kom_, "")]
+                rez["intro"]["_sikts"] = {"krekli": [(str(k or ""), str(x or "").upper()) for k, x in kr_]}
     except Exception as ex:                                           # noqa: BLE001
         print(f"  (faktu jaunais izskats: {type(ex).__name__}: {ex} – vecais)")
     return rez
@@ -6593,10 +6743,12 @@ def _ns_fakti(rez, hero):
 # Fantasy ~45 s, streameri ~35 s, xG ~40 s, fakti ~30 s, atskati ~30 s.  Palaišana:  python ShortsB.py --veids fantasy --iss
 ISS = {"on": False}
 ISS_NOKLUSETS = ("speletaji", "vartsargi", "komandas", "fantasy", "streameri", "fakts")   # īsā pēc noklusējuma (--long – garā)
-ISS_FAKTI_N = 3                  # īsajā faktu video – TOP 3 (#3 un #2 – viens teikums, #1 – ripa, HOW RARE, NEXT UP)
 ISS_CILPA_ILG = 1.6              # beigu ainas minimums (ar balsi – cilpas teikuma garums + 0,45 s)
 ISS_CILPA_Q = ["So… {q}", "Your call: {q}", "{Q}", "One more time: {q}"]          # jautājums 2 – jautājums
 ISS_CILPA_APG = ["{Q}", "Like we said: {q}"]                                        # jautājums 2 – apgalvojums
+ISS_FAKTI_BEIGAS = ["Which one surprised you most? Follow for the NHL week in numbers.",
+                    "Which number would you put first? Follow for more.",
+                    "Did we miss one? Tell us, and follow for next week's numbers."]
 _VARDIEM = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
 
 ISS_FAN_IEVADS = {
@@ -6648,8 +6800,8 @@ ISS_ATS_PIRMS = ["Every call, on the record.", "No edits, no excuses.", "Hits an
 
 
 def _iss_args(a, veids):
-    """Īsās versijas argumenti. Fakti (kopš 11.11.2026): --fakts top5 / 1,3,5 → TOP 3 (veids_fakti_b paņem 3 augstāk
-    vērtētos), --fakts 3 / auto → viens fakts. (Līdz 11.11. īsajā versijā vienmēr palika tikai viens fakts.)"""
+    """Īsās versijas argumenti. Fakti (kopš 11.11.2026): faktu skaits – kā --fakts (top5 → 5, top3 → 3, 1,3,5 → 3,
+    viens numurs / auto → viens fakts); īsajā versijā #N…#2 – viens teikums, #1 – pilnais stāsts."""
     return a
 
 
@@ -7558,10 +7710,16 @@ def _iss_fakti(s):
             m_ = re.match(r"(The NHL week in numbers[^.]*\.)\s*", runa[j + 1])
             runa[j + 1] = ((m_.group(1) + " ") if m_ else "") + pre
         kartes[j] = dict(c, ilgums=3.4, bez_plus=True)                # kartīte bez izvēršanās – parādās un nolaižas rindā
+    for j, c in enumerate(kartes):                                    # TOP N izkārtojums A – rinda izplešas tabulā (11.11.)
+        if c.get("tips") == "fakts_tablo" and len(c.get("fakti") or []) > 1 and not c.get("bez_tablo"):
+            kartes[j] = dict(c, izk="A")
     for c in kartes:
         if c.get("tips") == "fakts_ripa":                             # īsāka pauze ripu ainas beigās
             c["ilgums"] = max(4.5, 1.25 + 0.1 * len(c["ripa"]["punkti"]) + 1.0)
-    runa.append(_iss_cilpa(s, "fakts"))
+    if (s.get("intro") or {}).get("noslepums"):
+        runa.append(_iss_cilpa(s, "fakts"))
+    else:                                                             # TOP N bez noslēpuma – jautājums komentāriem
+        runa.append(S.reta_frase(ISS_FAKTI_BEIGAS, veids="fakts", n=2))
     return kartes, runa
 
 
