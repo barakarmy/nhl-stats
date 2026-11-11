@@ -3971,9 +3971,68 @@ RETUMS_MIN = 0.45          # zem šī – notiek bieži (vairāk nekā ~20× sez
 SPELU_KOMANDU_FAKTI = ("kom_uzv", "kom_zaud", "comeback", "periods", "atri", "metieni")
 
 
+FAKTI_SERIJAS = True             # False – sēriju detektori netiek palaisti (ShortsB: sērijas – Streak watch video; jāizslēdz
+                                 # PIRMS "viens spēlētājs – viens fakts", citādi sērija izspiež spēlētāja lielo spēli un pēc tam
+                                 # pati tiek izmesta)
+FAKTI_LIDZIGI_BONUSS = 5         # +vērtējums par katru līdzīgo faktu tai pašai komandai / spēlētājam nedēļā (apvienots)
+
+
+def _fakta_kat(c):
+    k_ = str(c["atsl"]).split(":")[0]
+    return "liela" if k_ == "liela_duo" else k_
+
+
+def _fakta_gid(c):
+    a_ = str(c["atsl"]).split(":")
+    return a_[2] if a_[0] in ("liela", "liela_duo", "vartsargs") and len(a_) > 2 else (a_[1] if len(a_) > 1 else "")
+
+
+def _lidzigs_teik(c, x):
+    """Līdzīgā fakta teikums galvenā fakta stāstam: "Earlier this week, he had 2 goals and 2 assists against the Flames." """
+    s_ = re.split(r"(?<=[.!?])\s+", str(x["runa"][0]).strip())[0].rstrip(".!? ")
+    k_ = _fakta_kat(c)
+    if _fakta_gid(c) == _fakta_gid(x):
+        kur = "In the same game"
+    else:
+        kur = "Earlier this week" if str(x["datums"]) < str(c["datums"]) else "Later in the week"
+    if k_ == "liela" and ":" in s_:                                  # "Adrian Kempe: 3 goals and 1 assist against …"
+        pre, rest = s_.split(":", 1)
+        c_pre = str(c["runa"][0]).split(":", 1)[0].strip()
+        subj = ("they" if " and " in pre else "he") if pre.strip() == c_pre else pre.strip()
+        s_ = f"{subj} had {rest.strip()}"
+    elif k_ == "vartsargs":
+        pilns = f"{x.get('v1') or ''} {x.get('vards') or ''}".strip()
+        if pilns and s_.startswith(pilns):
+            s_ = "he" + s_[len(pilns):]
+    else:
+        nos = f"The {kom_nos(x.get('badge'))} "
+        if s_.startswith(nos):
+            s_ = "they " + s_[len(nos):]
+    return f"{kur}, {s_}."
+
+
+def _lidzigi_apvienot(c):
+    """Tā paša veida fakti tai pašai komandai / spēlētājam nedēļā → viens fakts: kartītē "TWICE THIS WEEK" / "ONE MORE
+    THIS WEEK", balsī pēc galvenā teikuma – arī pārējie (kopš 11.11.2026)."""
+    ll = sorted(c["lidzigi"], key=lambda x: str(x["datums"]))
+    n = 1 + len(ll)
+    h = [str(x) for x in (c.get("hook") or [""])]
+    vienadi = all(str((x.get("hook") or [""])[0]) == h[0] for x in ll) or \
+        (_fakta_kat(c) == "vartsargs" and all(list(x.get("hook") or [])[1:] == h[1:] for x in ll))
+    piez = ({2: "TWICE", 3: "3 TIMES"}.get(n, f"{n} TIMES") if vienadi else
+            {2: "ONE MORE", 3: "TWO MORE"}.get(n, f"{n - 1} MORE")) + " THIS WEEK"
+    c["hook"] = h[:-1] + [f"{h[-1]}  ·  {piez}"] if len(h) > 1 else h + [piez]
+    c["lidz_txt"] = piez
+    c["runa"] = list(c["runa"])
+    c["runa"][0] = (str(c["runa"][0]).rstrip() + " " + " ".join(_lidzigs_teik(c, x) for x in ll)).strip()
+    c["teksts"] = str(c["teksts"]) + f"  (+ šonedēļ vēl: " + "; ".join(str(x["teksts"]).split("  (")[0] for x in ll) + ")"
+    c["vert"] = c["vert"] + FAKTI_LIDZIGI_BONUSS * len(ll)
+
+
 def fakti_kandidati(D, mape_video):
     kand = []
-    for f in (f_serijas, f_komandu_serijas, f_lielas_speles, f_vartsargi, f_speles):     # tiesneši – atsevišķs mēneša video
+    det = (f_serijas, f_komandu_serijas) if FAKTI_SERIJAS else ()
+    for f in det + (f_lielas_speles, f_vartsargi, f_speles):          # tiesneši – atsevišķs mēneša video
         try:
             kand += f(D)
         except Exception as ex:                                       # noqa: BLE001
@@ -4014,13 +4073,28 @@ def fakti_kandidati(D, mape_video):
         if a_[0] in ("kom_uzv", "kom_zaud"):
             return {"kom:" + a_[1]}
         return {str(c["atsl"])}
-    redz, uniq = set(), []
+    # Kopš 11.11.2026: TĀ PAŠA VEIDA fakts tam pašam spēlētājam / komandai (piem. divi hat tricki, divreiz 4 vārti periodā)
+    # netiek izmests, bet apvienots ar labāko – kartītē "TWICE THIS WEEK", balsī abi (_lidzigi_apvienot)
+    redz, kom_kat, uniq = {}, {}, []
     for c in kand:
         v_ = vienumi(c)
-        if not (v_ & redz):
-            redz |= v_
-            uniq.append(c)
-    kand = uniq
+        k_ = _fakta_kat(c)
+        cits = next((redz[x] for x in v_ if x in redz), None)
+        if cits is None and k_ in SPELU_KOMANDU_FAKTI:
+            cits = kom_kat.get((c.get("badge"), k_))
+        if cits is not None:
+            if _fakta_kat(cits) == k_:
+                cits.setdefault("lidzigi", []).append(c)
+            continue
+        for x in v_:
+            redz[x] = c
+        if k_ in SPELU_KOMANDU_FAKTI:
+            kom_kat[(c.get("badge"), k_)] = c
+        uniq.append(c)
+    for c in uniq:
+        if c.get("lidzigi"):
+            _lidzigi_apvienot(c)
+    kand = sorted(uniq, key=lambda c: (c["biezi"], -c["vert"]))
     # dažādībai: no katras kategorijas (atsl sākums) ne vairāk kā 3 kandidāti
     skaits, out = {}, []
     for c in kand:
