@@ -3933,6 +3933,24 @@ def aina_kartis(t, c):
     return out
 
 
+def _nv_virs(dc, zimet):
+    """Zīmē VIRS jau uzzīmētā tajā pašā slānī ar pakāpenisku caurspīdīgumu. ImageDraw RGBA attēlā krāsas nejauc, bet
+    pikseļus aizstāj (arī alfa) – mazs alfa "izsita caurumu" flīzē, un teksts parādījās melns (kopš 12.11.2026 – atsevišķā
+    slānī + alpha_composite). zimet(d) – zīmēšana uz pagaidu slāņa."""
+    im = dc._image
+    L_ = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    zimet(ImageDraw.Draw(L_))
+    bb = L_.getbbox()
+    if bb:
+        im.alpha_composite(L_.crop(bb), (bb[0], bb[1]))
+
+
+def _nv_bultas_x(dc, x0, vv, beigu, izm=60):
+    """▲/▼ bultas x – aiz lielā procentu skaitļa (agrāk fiksēts x0 + 200 – "39.0%" to pārklāja)."""
+    fv = S.fonts("black", izm)
+    return x0 + 22 + max(dc.textlength(f"{vv:.1f}%", font=fv), dc.textlength(f"{beigu:.1f}%", font=fv)) + 16
+
+
 def _nv_flizes_atskats(dc, N, u, c, v, prim, ta, gk, t_at, flize, stabini, X0, X1, CW, GAP):
     """Atskata kartītes flīzes: PTS un SOG pa spēlēm, GAMES / PP PTS, viņš pret tipisko spēlētāju (kāpēc HIT / MISS),
     nedēļas kalendārs ar punktiem katrā spēlē, ESPN rostered kopš mūsu ieteikuma."""
@@ -4020,13 +4038,15 @@ def _nv_flizes_atskats(dc, N, u, c, v, prim, ta, gk, t_at, flize, stabini, X0, X
         kc = (u - T1 - 0.9) / 0.3
         if len(rv) >= 2 and abs(dlt) >= 0.1 and kc > 0:
             _nv_put(dc._image, _nv_timg(("▲ " if dlt > 0 else "▼ ") + f"{abs(dlt):.1f}", F("black", 34), G if dlt > 0 else S.SARKANS),
-                    x0 + 200 + (20 if vv >= 10 else 0), y0 + 88, 1 + 0.5 * (1 - ease_back(min(1, kc))), min(1, kc * 3), 0, "l")
+                    _nv_bultas_x(dc, x0, vv, v["rost"]), y0 + 88, 1 + 0.5 * (1 - ease_back(min(1, kc))), min(1, kc * 3), 0, "l")
         if drop:
             txt = "leagues are dropping him too" if dlt <= -0.5 else "still widely rostered"
         else:
             txt = ("leagues followed our call" if dlt >= 2 else "leagues are starting to notice" if dlt >= 0.5
                    else "leagues are dropping him" if dlt <= -0.5 else "still under the radar")
-        dc.text((x0 + 22, y1 - 12), txt, font=F("semi", 24), fill=LAB + (int(255 * a * eo(kc if kc > 0 else 0)),), anchor="lb")
+        al_ = int(255 * a * eo(kc if kc > 0 else 0))
+        if al_ > 0:
+            _nv_virs(dc, lambda d_: d_.text((x0 + 22, y1 - 12), txt, font=F("semi", 24), fill=LAB + (al_,), anchor="lb"))
         if len(rv) >= 2:
             px0, px1, py0, py1 = x1 - 400, x1 - 34, y0 + 58, y1 - 40
             lo_, hi_ = min(x_ for _, x_ in rv) - 0.15, max(x_ for _, x_ in rv) + 0.1
@@ -4146,11 +4166,14 @@ def _nv_flizes_spec(dc, N, u, c, v, prim, ta, gk, t_at, stabini, X0, X1, CW, GAP
                 uzraksti.append(((max(bx0 + 36, bx1) + 14, yy + 18), txt, "lm"))
         if f.get("diverg") and xr is not None and gk(T1 + 0.4, 0.4) > 0:   # pusceļa līnija – virs joslām (raustīta, dzeltena)
             ar_ = int(255 * a * eo(gk(T1 + 0.4, 0.4)))
-            yy_ = y0 + 54
-            while yy_ < y1 - 8:
-                dc.line([(xr, yy_), (xr, min(yy_ + 10, y1 - 8))], fill=S.MELNS + (ar_,), width=8)
-                dc.line([(xr, yy_), (xr, min(yy_ + 10, y1 - 8))], fill=Y + (ar_,), width=4)
-                yy_ += 16
+
+            def _linija(d_):
+                yy_ = y0 + 54
+                while yy_ < y1 - 8:
+                    d_.line([(xr, yy_), (xr, min(yy_ + 10, y1 - 8))], fill=S.MELNS + (ar_,), width=8)
+                    d_.line([(xr, yy_), (xr, min(yy_ + 10, y1 - 8))], fill=Y + (ar_,), width=4)
+                    yy_ += 16
+            _nv_virs(dc, _linija)
         for (px_, py_), txt, anc in uzraksti:
             dc.text((px_, py_), txt, font=F("black", 32), fill=WH + (int(255 * a),), anchor=anc, stroke_width=4, stroke_fill=_NV_TILE + (int(255 * a),))
         ch_ = f.get("chip")
@@ -4192,7 +4215,8 @@ def _nv_flizes_spec(dc, N, u, c, v, prim, ta, gk, t_at, stabini, X0, X1, CW, GAP
         dc.text((x0 + 22, y0 + 52), f"{vv:.1f}%", font=F("black", 60), fill=WH + (int(255 * a),))
         kc = (u - T1 - 0.9) / 0.3
         if f.get("tip") and kc > 0:
-            dc.text((x0 + 22, y1 - 12), f["tip"], font=F("black", 26), fill=Y + (int(255 * a * eo(kc)),), anchor="lb")
+            al_ = int(255 * a * eo(kc))
+            _nv_virs(dc, lambda d_: d_.text((x0 + 22, y1 - 12), f["tip"], font=F("black", 26), fill=Y + (al_,), anchor="lb"))
         if len(rv) >= 2:
             px0, px1, py0, py1 = x1 - 400, x1 - 34, y0 + 58, y1 - 40
             lo_, hi_ = min(x_ for _, x_ in rv) - 0.15, max(x_ for _, x_ in rv) + 0.1
@@ -4425,12 +4449,14 @@ def aina_fantasy_jauna(t, c):
             kc = (u - T1 - 0.9) / 0.3
             if len(rv) >= 2 and abs(dlt) >= 0.1 and kc > 0:
                 _nv_put(C, _nv_timg(("▲ " if dlt > 0 else "▼ ") + f"{abs(dlt):.1f}", F("black", 34), G if dlt > 0 else S.SARKANS),
-                        x0 + 200 + (20 if vv >= 10 else 0), y0 + 88, 1 + 0.5 * (1 - eb(min(1, kc))), min(1, kc * 3), 0, "l")
+                        _nv_bultas_x(dc, x0, vv, v["rost"]), y0 + 88, 1 + 0.5 * (1 - eb(min(1, kc))), min(1, kc * 3), 0, "l")
             if c.get("liels") in ("DROP", "BENCH"):
                 txt = "leagues are dropping him" if dlt <= -0.5 else "still widely rostered"
             else:
                 txt = "leagues are starting to notice" if dlt >= 0.5 else ("leagues are dropping him" if dlt <= -0.5 else "still under the radar")
-            dc.text((x0 + 22, y1 - 12), txt, font=F("semi", 24), fill=LAB + (int(255 * a * eo(kc if kc > 0 else 0)),), anchor="lb")
+            al_ = int(255 * a * eo(kc if kc > 0 else 0))
+            if al_ > 0:
+                _nv_virs(dc, lambda d_: d_.text((x0 + 22, y1 - 12), txt, font=F("semi", 24), fill=LAB + (al_,), anchor="lb"))
             if len(rv) >= 2:
                 px0, px1, py0, py1 = x1 - 400, x1 - 34, y0 + 58, y1 - 40          # zem virsraksta rindas
                 lo_, hi_ = min(x_ for _, x_ in rv) - 0.15, max(x_ for _, x_ in rv) + 0.1
@@ -5165,13 +5191,17 @@ def aina_fakts_ripa(t, c):
         al_ = int(255 * k0)
         plat_ = sum(d.textlength(lab_, font=fl_) + 40 for lab_, _ in R["legenda"]) + 30 * (len(R["legenda"]) - 1)
         yl_ = y0 + 40
-        d.rounded_rectangle([540 - plat_ / 2 - 22, yl_ - 24, 540 + plat_ / 2 + 22, yl_ + 24], radius=24,
-                            fill=(6, 10, 24, int(215 * k0)), outline=(148, 163, 184, int(90 * k0)), width=2)
-        xx = 540 - plat_ / 2
-        for lab_, k_ in R["legenda"]:
-            _fj_punkts(d, xx + 12, yl_, k_, al_)
-            d.text((xx + 36, yl_ + 1), lab_, font=fl_, fill=S.BALTS + (al_,), anchor="lm")
-            xx += d.textlength(lab_, font=fl_) + 40 + 30
+        def _leg(d_):
+            d_.rounded_rectangle([540 - plat_ / 2 - 22, yl_ - 24, 540 + plat_ / 2 + 22, yl_ + 24], radius=24,
+                                 fill=(6, 10, 24, 215), outline=(148, 163, 184, 90), width=2)
+            xx = 540 - plat_ / 2
+            for lab_, k_ in R["legenda"]:
+                _fj_punkts(d_, xx + 12, yl_, k_, 255)
+                d_.text((xx + 36, yl_ + 1), lab_, font=fl_, fill=S.BALTS, anchor="lm")
+                xx += d_.textlength(lab_, font=fl_) + 40 + 30
+        LL = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+        _leg(ImageDraw.Draw(LL))
+        L.alpha_composite(_ar_alfu(LL, k0) if k0 < 1 else LL)
     beigas_ = t > T0 + len(pk) * DT + 0.4
     if beigas_ and R.get("kopa"):                                      # beigās – īstais kopskaits (arī bez metiena vietas)
         nv = int(R["kopa"])
@@ -5198,12 +5228,13 @@ def aina_fakts_ripa(t, c):
             if kk <= 0:
                 continue
             xx = cx0 + pad + j * (tw_ + gap)
-            aa = int(255 * min(1, kk))
-            d.rounded_rectangle([xx, ty0, xx + tw_, ty1], radius=20, fill=_NV_TILE + (aa,))
-            d.text((xx + tw_ / 2, ty0 + (ty1 - ty0) * 0.38), str(val), font=S.ietilpinat(d, str(val), "black", 56, tw_ - 20),
-                   fill=S.BALTS + (aa,), anchor="mm")
-            d.text((xx + tw_ / 2, ty0 + (ty1 - ty0) * 0.78), str(lab_).upper(), font=S.ietilpinat(d, str(lab_).upper(), "semi", 24, tw_ - 20),
-                   fill=_NV_LAB + (aa,), anchor="mm")
+            ft_ = Image.new("RGBA", (int(tw_) + 2, int(ty1 - ty0) + 2), (0, 0, 0, 0)); df_ = ImageDraw.Draw(ft_)   # flīze – savā
+            df_.rounded_rectangle([0, 0, tw_, ty1 - ty0], radius=20, fill=_NV_TILE + (255,))                      # slānī (virs
+            df_.text((tw_ / 2, (ty1 - ty0) * 0.38), str(val), font=S.ietilpinat(df_, str(val), "black", 56, tw_ - 20),   # kartītes
+                     fill=S.BALTS, anchor="mm")                                                                        # bez "cauruma")
+            df_.text((tw_ / 2, (ty1 - ty0) * 0.78), str(lab_).upper(), font=S.ietilpinat(df_, str(lab_).upper(), "semi", 24, tw_ - 20),
+                     fill=_NV_LAB, anchor="mm")
+            L.alpha_composite(_ar_alfu(ft_, min(1.0, kk)) if kk < 1 else ft_, (int(xx), int(ty0)))
     L.alpha_composite(_nv_glow(N, 10, 1.3))
     return L
 
