@@ -3303,7 +3303,7 @@ def _ats_s2_ainas(kar, veids, tv, kad, n_kop=None, ievads=None, beigas=None):
             if not out and ievads:
                 runa = f"{ievads} {runa}"
             out.append(({"tips": "fantasy_divi", "veids_k": "fantasy" if fan else veids, "ilgums": 3.6, "_tv": tv,
-                         "virsr": virsr, "kartites": kk, "kompakts": True, "_pec_balss": True, "_ats_s2": True,
+                         "virsr": virsr, "kartites": kk, "kompakts": True, "_pec_balss": True, "_ats_s2": True, "_visas_uzreiz": True,
                          "apaksa": f"{kad}  ·  NUMBERS AT THE TIME" if not fan else f"{kad}  ·  NUMBERS BEFORE THE WEEK"}, runa))
     if beigas and out:
         a_, r_ = out[-1]
@@ -6802,7 +6802,7 @@ def krekls_reals(kom, vards, numurs, izm=820, vards_izpl=0.0):
             NAMm = _kr_blur(NAMm, vards_izpl * ss)
     _kr_uzlikt(NUMm, _kr_burti(str(numurs), 290 * sc, 0.80, 0.03), 500 * sc, 520 * sc)
     ang = math.degrees(math.atan2(ax_b[0] - ax_a[0], ax_b[1] - ax_a[1]))
-    for side in (0, 1):
+    for side in ((0, 1) if str(numurs).strip() != "?" else ()):      # noslēpuma krekls (kopš 12.11.2026): "?" tikai mugurā
         px, py = ax_a[0] + (ax_b[0] - ax_a[0]) * 0.33, ax_a[1] + (ax_b[1] - ax_a[1]) * 0.33
         _kr_uzlikt(NUMm, _kr_burti(str(numurs), 66 * sc, 0.80, 0.03), (1000 - px if side else px) * sc, py * sc,
                    ang if side else -ang)
@@ -7730,6 +7730,14 @@ def _nv_divi_laiki(c):
         w_ = [x for x in w_ if x]
         return (_nv_vards_laiks(vardi, *w_) or _nv_vards_laiks(vardi, w_[-1])) if w_ else None
     t_in, t_st = [], []
+    if c.get("_visas_uzreiz"):                                        # atskata 2. aina (kopš 12.11.2026): visas kartītes uzreiz,
+        for i, k in enumerate(K):                                     # zīmogs – kad balss nosauc uzvārdu
+            tv1, tv2 = laiks(k.get("v1")), laiks(k.get("v2"))
+            t_in.append(0.35 + 0.18 * i)
+            tv_ = tv2 or tv1
+            t_st.append(max(t_in[-1] + 0.5, tv_ + 0.35 if tv_ else 1.3 + 0.5 * i, (t_st[-1] + 0.3) if t_st else 0))
+        lim = max(1.2, ilg - 0.6)
+        return t_in, [min(x, lim) for x in t_st]
     for i, k in enumerate(K):
         tv1, tv2 = laiks(k.get("v1")), laiks(k.get("v2"))
         if i == 0:
@@ -7880,6 +7888,12 @@ def aina_fantasy_divi(t, c):
         im = kesa[i]
         x = 540 - im.width / 2 + (1 - e) * 260
         _nv_put(L, im, x, ys[i] + H / 2, 1.0, e, 0, "l")
+        if c.get("_visas_uzreiz"):                                    # balss nosauc – kartīte iemirdzas (dzeltens rāmis)
+            dtt = t - (t_st[i] - 0.35)
+            g_ = min(1.0, dtt / 0.2) * (1 - min(1.0, max(0.0, (dtt - 0.8) / 0.5))) if dtt > 0 else 0.0
+            if g_ > 0:
+                ImageDraw.Draw(N).rounded_rectangle([540 - W / 2 - 7, ys[i] - 7, 540 + W / 2 + 7, ys[i] + H + 7], radius=40,
+                                                    outline=S.DZELTENS + (int(255 * g_),), width=7)
         ks = (t - t_st[i]) / 0.24
         if ks > 0:                                                    # DROP / BENCH zīmogs (kā lielajai kartītei, mazāks)
             akc = tuple(k.get("akc") or S.SARKANS)
