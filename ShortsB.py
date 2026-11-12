@@ -3163,6 +3163,154 @@ def xg_jauns(s, veids):
     return s
 
 
+# ---------------------------------------------------------------- atskatu 2. aina (kopš 12.11.2026): "ko mēs teicām"
+# Agrāk – 6 mazas kārtis "DID xG CALL IT?" (fantasy – rezultātu saraksts). Tagad – kartītes kā īsās versijas WHO TO CUT:
+# vārds, 3 flīzes ar rādītājiem MŪSU VIDEO DIENĀ (fantasy – pirms nedēļas), sānā zīmogs ar toreizējo lēmumu
+# (LUCKY / UNLUCKY / STEALING / COSTING; fantasy – ADD / STREAM / DROP / BENCH). Viena aina katrai grupai (≤ 3 kartītes);
+# kartīte ieslīd, kad balss nosauc uzvārdu. Pārējais atskats (katra kartīte, THE FINAL VERDICT) – kā līdz šim.
+ATS_S2_KARTITES = True           # False – vecā 2. aina (kārtis / fantasy saraksts)
+ATS_S2_VIRSR = {
+    ("speletaji", "laim"): [("WE SAID", S.BALTS), ("COOLDOWN", S.DZELTENS)],
+    ("speletaji", "nelaim"): [("WE SAID", S.BALTS), ("DUE FOR GOALS", S.DZELTENS)],
+    ("vartsargi", "laim"): [("WE SAID", S.BALTS), ("COOLDOWN", S.DZELTENS)],
+    ("vartsargi", "nelaim"): [("WE SAID", S.BALTS), ("BOUNCE BACK", S.DZELTENS)],
+    ("komandas", "laim"): [("WE SAID", S.BALTS), ("PDO WILL DROP", S.DZELTENS)],
+    ("komandas", "nelaim"): [("WE SAID", S.BALTS), ("PDO WILL RISE", S.DZELTENS)],
+    ("fantasy", "add"): [("WE SAID", S.BALTS), ("ADD", S.DZELTENS)],
+    ("fantasy", "drop"): [("WE SAID", S.BALTS), ("CUT", S.DZELTENS)]}
+ATS_S2_ZIMOGS = {("speletaji", "laim"): ("LUCKY", S.ZALS), ("speletaji", "nelaim"): ("UNLUCKY", S.SARKANS),
+                 ("vartsargi", "laim"): ("STEALING", S.ZALS), ("vartsargi", "nelaim"): ("COSTING", S.SARKANS),
+                 ("komandas", "laim"): ("LUCKY", S.ZALS), ("komandas", "nelaim"): ("UNLUCKY", S.SARKANS)}
+ATS_S2_FAN_KR = {"ADD": S.ZALS, "STREAM": S.DZELTENS, "DROP": S.SARKANS, "BENCH": (249, 115, 22)}
+ATS_S2_IEVADS = ["On {d}, the numbers flagged {n} NHL {X}.", "Back on {d}, we flagged {n} NHL {X}.",
+                 "Our list from {d}: {n} NHL {X}."]
+ATS_S2_BEIGAS = ["Here's what happened since.", "Here's what happened next.", "Time to check."]
+ATS_S2_GRUPA = {
+    ("speletaji", "laim"): ["Running hot: {names}.", "Riding the luck: {names}."],
+    ("speletaji", "nelaim"): ["Due for goals: {names}.", "Getting robbed: {names}."],
+    ("vartsargi", "laim"): ["Stealing games: {names}.", "Red hot in net: {names}."],
+    ("vartsargi", "nelaim"): ["Costing games: {names}.", "Ice cold in net: {names}."],
+    ("komandas", "laim"): ["Living on luck: {names}.", "Riding the bounces: {names}."],
+    ("komandas", "nelaim"): ["Owed some bounces: {names}.", "Better than their record: {names}."],
+    ("fantasy", "add"): ["Our pickups: {names}.", "We said add {names}."],
+    ("fantasy", "stream"): ["Our streamers: {names}.", "We said stream {names}."],
+    ("fantasy", "drop"): ["And we said cut {names}.", "Our drop calls: {names}."]}
+ATS_S2_FAN_BEIGAS = ["Here's how it went.", "Let's see how they did."]
+
+
+def _ats_sk(v, f="{:.0f}"):
+    try:
+        x = float(v)
+        return f.format(x) if math.isfinite(x) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _ats_flizes(veids, p):
+    """3 flīzes no momentuzņēmuma (rādītāji mūsu video dienā)."""
+    q = lambda k_, f="{:.0f}": _ats_sk(p.get(k_), f) or "–"          # noqa: E731
+    svf = lambda v: f".{round(float(v) * 10):03d}" if _ats_sk(v) else "–"   # noqa: E731
+    if veids == "speletaji":
+        G, sog = _ats_sk(p.get("G")), float(p.get("sog") or 0)
+        sh = f"{float(p.get('G') or 0) / sog * 100:.0f}%" if sog else "–"
+        return [("GOALS", q("G"), f"IN {q('sp')} GP"), ("EXPECTED", q("xG", "{:.1f}"), "GOALS (xG)"),
+                ("SHOOTING %", sh, f"ON {q('sog')} SHOTS" if G is not None else "")]
+    if veids == "vartsargi":
+        gs = _ats_sk(p.get("GSAx"), "{:+.1f}")
+        return [("GSAx", S.minus(S.bez_neg_nulles(gs)) if gs else "–", f"IN {q('GP')} GP"),
+                ("ALLOWED", q("GA"), f"ON {q('xGA', '{:.1f}')} EXPECTED"),
+                ("SAVE %", svf(p.get("sv")), f"ON {q('SA')} SHOTS")]
+    if veids == "komandas":
+        gd, xgd = _ats_sk(p.get("GD"), "{:+.0f}"), _ats_sk(p.get("xGD"), "{:+.1f}")
+        return [("PDO", q("PDO", "{:.1f}"), f"AVG 100  ·  {q('GP')} GP"),
+                ("GOAL DIFF", S.minus(S.bez_neg_nulles(gd)) if gd else "–", f"xGD {S.minus(S.bez_neg_nulles(xgd))}" if xgd else ""),
+                ("SHOOTING %", f"{q('sh', '{:.1f}')}%", f"SAVE {svf(p.get('sv'))}")]
+    rost = _ats_sk(p.get("rost"))
+    gp_ = _ats_sk(p.get("GP"))
+    return [("PTS", q("P"), f"IN {gp_} GP" if gp_ else "LAST 14 DAYS"), ("ROSTERED", f"{rost}%" if rost else "–", "ESPN"),
+            ("GAMES", f"{q('sp_ned')} GP", "THAT WEEK")]
+
+
+def _ats_iemesls(veids, p):
+    """Kartītes apakšējā rinda (rādītāji mūsu video dienā vārdos)."""
+    f = lambda k_: _ats_sk(p.get(k_), "{:.4f}")                      # noqa: E731
+    try:
+        if veids == "speletaji":
+            G, xG, sp = float(f("G")), float(f("xG")), max(1, int(float(f("sp"))))
+            d = G - xG
+            return f"{abs(d):.1f} goals {'above' if d >= 0 else 'below'} expected in {sp} games  ·  {S.minus(f'{d / sp:+.2f}')} per game"
+        if veids == "vartsargi":
+            gs, gsp = float(f("GSAx")), float(f("GSAx_sp"))
+            return (f"{abs(gs):.1f} goals {'saved above' if gs >= 0 else 'worse than'} expected  ·  "
+                    f"{S.minus(S.bez_neg_nulles(f'{gsp:+.2f}'))} per game")
+        if veids == "komandas":
+            return f"Shooting {float(f('sh')):.1f}% + save {float(f('sv')):.1f}% = PDO {float(f('PDO')):.1f}"
+        P, GP, sn = _ats_sk(p.get("P")), _ats_sk(p.get("GP")), _ats_sk(p.get("sp_ned"))
+        if P is None or not GP:
+            return ""
+        pt = "No points" if P == "0" else (f"{P} point" + ("" if P == "1" else "s"))
+        return f"{pt} in {GP} games before the week" + (f", {sn} games that week" if sn else "")
+    except (TypeError, ValueError):
+        return ""
+
+
+def _ats_s2_ainas(kar, veids, tv, kad, n_kop=None, ievads=None, beigas=None):
+    """Atskata 2. aina(s): katrai grupai (xG – laim / nelaim, fantasy – add / drop) – ≤ 3 kartītes ar rādītājiem mūsu video
+    dienā un toreizējo lēmumu zīmogā. → [(aina, balss)] vai None (ja trūkst momentuzņēmuma)."""
+    if not kar or not all(c.get("_pirms") for c in kar):
+        return None
+    fan = veids == "fantasy"
+    grupas = {}
+    for c in kar:
+        g_ = (c.get("viz") or {}).get("grupa") or ("add" if str(c["_pirms"].get("veids", "")).upper() in ("ADD", "STREAM") else "drop")
+        grupas.setdefault(g_, []).append(c)
+    seciba = [g_ for g_ in (("add", "drop") if fan else ("laim", "nelaim")) if g_ in grupas]
+    if not seciba:
+        return None
+    out = []
+    for gi, g_ in enumerate(seciba):
+        cc = sorted(grupas[g_], key=lambda c: c.get("nr") or 9)
+        for j in range(0, len(cc), 3):
+            dala = cc[j:j + 3]
+            kk = []
+            for c in dala:
+                p = c["_pirms"]
+                if fan:
+                    lab, kr = str(p.get("veids") or ("ADD" if g_ == "add" else "DROP")).upper(), None
+                    kr = ATS_S2_FAN_KR.get(lab, S.ZALS if g_ == "add" else S.SARKANS)
+                else:
+                    lab, kr = ATS_S2_ZIMOGS[(veids, g_)]
+                kk.append({"v1": c.get("v1", ""), "v2": c.get("v2", ""), "badge": c.get("badge", ""), "akc": tuple(kr),
+                           "liels": lab, "viz": {"poz": ("G" if veids == "vartsargi" else str(p.get("poz") or "") if fan else "")},
+                           "_flizes3": _ats_flizes(veids, p), "apaksa": _ats_iemesls(veids, p)})
+            gk = (veids, g_)
+            if fan and g_ == "add" and all(str(c["_pirms"].get("veids", "")).upper() == "STREAM" for c in dala):
+                gk = ("fantasy", "stream")
+            virsr = ATS_S2_VIRSR.get(gk) or ATS_S2_VIRSR.get((veids, g_))
+            if fan and gk[1] == "stream":
+                virsr = [("WE SAID", S.BALTS), ("STREAM", S.DZELTENS)]
+            if fan and g_ == "drop":                                  # DROP / BENCH – virsraksts pēc tā, kas ainā
+                lab_ = {str(c["_pirms"].get("veids") or "").upper() for c in dala}
+                if lab_ == {"BENCH"}:
+                    virsr = [("WE SAID", S.BALTS), ("BENCH", S.DZELTENS)]
+                elif "BENCH" in lab_:
+                    virsr = [("WE SAID", S.BALTS), ("CUT OR BENCH", S.DZELTENS)]
+            vardi = [("the " + str(c.get("v2", ""))) if veids == "komandas" else str(c.get("v2", "")) for c in dala]
+            teik = S.reta_frase(ATS_S2_GRUPA[gk], veids=f"atskats_{veids}", n=1).format(names=_vardu_saraksts(vardi))
+            if veids == "komandas":
+                teik = teik[0].upper() + teik[1:]
+            runa = teik
+            if not out and ievads:
+                runa = f"{ievads} {runa}"
+            out.append(({"tips": "fantasy_divi", "veids_k": "fantasy" if fan else veids, "ilgums": 3.6, "_tv": tv,
+                         "virsr": virsr, "kartites": kk, "kompakts": True, "_pec_balss": True, "_ats_s2": True,
+                         "apaksa": f"{kad}  ·  NUMBERS AT THE TIME" if not fan else f"{kad}  ·  NUMBERS BEFORE THE WEEK"}, runa))
+    if beigas and out:
+        a_, r_ = out[-1]
+        out[-1] = (a_, f"{r_} {beigas}")
+    return out
+
+
 def xg_atskats_jauns(s):
     """xG atskats jaunajā izskatā: rezultāts ("2/3" + ✓/✗) → kārtis "DID xG CALL IT?" → visas kartītes → THE FINAL VERDICT."""
     if not s or not JAUNS_FANTASY or not s.get("aki_f"):
@@ -3184,7 +3332,21 @@ def xg_atskats_jauns(s):
               "virsr": [("DID", S.BALTS), ("xG", S.BALTS), ("CALL IT?", S.DZELTENS)],
               "apaksa": "  ·  ".join(str(x).upper() for x in ap[:2]), "kartis": kartis,
               "n_pick": sum(1 for c in kar if c["viz"]["grupa"] == "laim"), "rek": None}
-        jaunas = [k2]
+        jaunas, runa_s2 = [k2], [s.get("_intro_runa", s["runa"][0])]
+        if ATS_S2_KARTITES:                                           # kopš 12.11.2026 – "ko mēs teicām" kartītes
+            try:
+                veids_j = "vartsargi" if liels_ == "GOALIES" else ("komandas" if liels_ == "TEAMS" else "speletaji")
+                m_ = re.search(r"([A-Z][a-z]{2} \d+)", str(ap[0] if ap else ""))
+                d_ = m_.group(1) if m_ else "our last list"
+                X = {"speletaji": "scorers", "vartsargi": "goalies", "komandas": "teams"}[veids_j]
+                n_ = _VARDIEM.get(len(kar), str(len(kar)))
+                iev = S.reta_frase(ATS_S2_IEVADS, veids=f"atskats_{veids_j}", n=2).format(d=d_, n=n_, X=X)
+                bei = S.reta_frase(ATS_S2_BEIGAS, veids=f"atskats_{veids_j}", n=2)
+                s2 = _ats_s2_ainas(kar, veids_j, tv, d_.upper(), ievads=iev, beigas=bei)
+                if s2:
+                    jaunas, runa_s2 = [a_ for a_, _ in s2], [r_ for _, r_ in s2]
+            except Exception as ex_:                                  # noqa: BLE001
+                print(f"  (atskata 2. aina: {type(ex_).__name__}: {ex_} – kārtis)")
         for i, c in enumerate(kar):
             c = dict(c)
             c["tips"], c["liels"] = "fantasy", c["viz"]["zimogs"]
@@ -3192,7 +3354,7 @@ def xg_atskats_jauns(s):
             c["_datums"] = c["viz"].get("tablo_txt", "")
             jaunas.append(c)
         s["intro"] = {"aki": True, "fantasy_aki": s["aki_f"], "tag": tag, "ilgums": 2.6, "_tv": tv}
-        s["runa"] = [s["aki_runa"], s.get("_intro_runa", s["runa"][0])] + s["runa"][1:]
+        s["runa"] = [s["aki_runa"]] + runa_s2 + s["runa"][1:]
         s["kartes"] = jaunas
         s["_bez_zimoga"] = True
         kom_ = liels_ == "TEAMS"                                      # noslēpuma āķis: visi atzīmētie – silueti rindā
@@ -3232,11 +3394,19 @@ def fantasy_atskats_jauns(s):
                                      [("CHECKING", S.BALTS), ("OUR", S.BALTS), ("CALLS", S.DZELTENS)]], veids="atskats_fantasy", n=1),
               "apaksa": f"{ned}  ·  VS A TYPICAL PLAYER IN THE SAME POOL",
               "kartis": kartis, "n_pick": n_add, "rek": tuple(s["atskats_rek"]) if s.get("atskats_rek") else None}
-        try:                                                          # 2. aina – rezultātu saraksts ar vārdiem (kopš 10.11.2026)
-            k2 = _fa_s2_aina(k2, kar, s) or k2
-        except Exception as ex_:                                      # noqa: BLE001
-            print(f"  (atskata saraksts: {type(ex_).__name__}: {ex_} – kārtis)")
-        jaunas, nr_ = [k2], {}
+        s2 = None
+        if ATS_S2_KARTITES:                                           # kopš 12.11.2026 – "ko mēs teicām" kartītes
+            try:
+                s2 = _ats_s2_ainas(kar, "fantasy", tv, f"WEEK OF {ned}", ievads=str(s["runa"][0]),
+                                   beigas=S.reta_frase(ATS_S2_FAN_BEIGAS, veids="atskats_fantasy", n=1))
+            except Exception as ex_:                                  # noqa: BLE001
+                print(f"  (atskata 2. aina: {type(ex_).__name__}: {ex_} – saraksts)")
+        if not s2:
+            try:                                                      # 2. aina – rezultātu saraksts ar vārdiem (kopš 10.11.2026)
+                k2 = _fa_s2_aina(k2, kar, s) or k2
+            except Exception as ex_:                                  # noqa: BLE001
+                print(f"  (atskata saraksts: {type(ex_).__name__}: {ex_} – kārtis)")
+        jaunas, nr_ = ([a_ for a_, _ in s2] if s2 else [k2]), {}
         for i, c in enumerate(kar):                                   # visas ieteiktās kartītes (secībā kā sestdienas video)
             c = dict(c)
             teica = str(c.get("augsa", "")).split("  ·  ")[0].replace("WE SAID:", "").strip() or \
@@ -3247,7 +3417,7 @@ def fantasy_atskats_jauns(s):
             jaunas.append(c)
         runa_k = s["runa"][1:-1]
         s["intro"] = {"aki": True, "fantasy_aki": s["aki_f"], "tag": s["aki_f"]["tag"], "ilgums": 2.6, "_tv": tv}
-        s["runa"] = [s["aki_runa"], s["runa"][0]] + runa_k + [s["runa"][-1]]
+        s["runa"] = [s["aki_runa"]] + ([r_ for _, r_ in s2] if s2 else [s["runa"][0]]) + runa_k + [s["runa"][-1]]
         s["kartes"] = jaunas
         s["_bez_zimoga"] = True
         noslepuma_aki(s, [(c.get("badge"), c.get("v2")) for c in kar], NOSL_Q1["atskats_f"], NOSL_Q2["atskats_f"],
@@ -7564,6 +7734,8 @@ def _nv_divi_laiki(c):
         tv1, tv2 = laiks(k.get("v1")), laiks(k.get("v2"))
         if i == 0:
             a_ = 0.35                                                 # pirmā – uzreiz
+            if c.get("_pec_balss") and (tv1 or tv2):                  # atskata 2. aina: kad balss nosauc (pirms tam – ievads)
+                a_ = max(0.35, (tv1 or tv2) - 0.3)
         else:
             a_ = max(t_in[-1] + 0.45, ((tv1 or tv2) - 0.3) if (tv1 or tv2) else 1.0)
         t_in.append(a_)
@@ -7582,6 +7754,8 @@ def _spec_x(k, lab):
 
 def _mk_flizes(k, veids):
     """3 flīzes mazajai kartītei: [(virsraksts, vērtība, apakšā)]."""
+    if k.get("_flizes3"):                                             # atskata 2. aina – rādītāji mūsu video dienā
+        return list(k["_flizes3"])[:3]
     v = k.get("viz") or {}
     gp = _gp(k)
     if veids in XG_VEIDI:
@@ -7633,7 +7807,7 @@ def _nv_divi_karte(k, W, H, veids="fantasy"):
     ya = 30 if liela else 18
     if v1:
         d.text((x0, y0 + ya), v1, font=f1, fill=(255, 255, 255, 225))
-    lab_ = str(k.get("badge", "")) if veids == "komandas" else f"{v.get('poz', '')}  ·  {k.get('badge', '')}"
+    lab_ = str(k.get("badge", "")) if veids == "komandas" or not v.get("poz") else f"{v.get('poz', '')}  ·  {k.get('badge', '')}"
     d.text((x0 + (d.textlength(v1, font=f1) + 22 if v1 else 0), y0 + ya + (6 if liela else 4)), lab_,
            font=F("black", 30 if liela else 26), fill=_NV_LAB)
     vards = str(k.get("v2", "")).upper()
@@ -7660,6 +7834,8 @@ def _nv_divi_karte(k, W, H, veids="fantasy"):
     ie = str(k.get("apaksa") or "")
     if ie and liela:
         d.text((x0, ty1 + 52), ie, font=S.ietilpinat(d, ie, "semi", 32, W - 68), fill=(203, 213, 225, 255), anchor="ls")
+    elif ie and H >= 330:                                             # vidēja (atskata 2. aina): iemesls zem flīzēm
+        d.text((x0, ty1 + 46), ie, font=S.ietilpinat(d, ie, "semi", 28, W - 68), fill=(203, 213, 225, 255), anchor="ls")
     d.rounded_rectangle(box, radius=34, outline=prim + (230,), width=5)
     return im
 
@@ -7677,11 +7853,21 @@ def aina_fantasy_divi(t, c):
     n = len(K)
     veids_k = c.get("veids_k", "fantasy")
     W = 940
-    if n >= 3:                                                        # trīs – kompaktas (bez iemesla rindas)
+    if c.get("kompakts") and K and all(k.get("apaksa") for k in K):   # atskata 2. aina – vidējas, ar iemesla rindu
+        H, gap_k = 340, 26
+    elif n >= 3 or c.get("kompakts"):                                 # trīs – kompaktas (bez iemesla rindas)
         H, gap_k = 290, 22
     else:
         H, gap_k = (430 if n == 2 else 470), 34
     ys = [500 + i * (H + gap_k) for i in range(n)] if n > 1 else [600]
+    if c.get("apaksa"):                                               # atskata 2. aina: "OCT 25 · NUMBERS AT THE TIME"
+        a_ = S.ease(min(1.0, max(0.0, (t - 0.4) / 0.3)))
+        if a_ > 0:
+            d_ = ImageDraw.Draw(L)
+            S.teksts_c(d_, 488, c["apaksa"], S.ietilpinat(d_, c["apaksa"], "semi", 34, 900), _NV_LAB + (int(255 * a_),))
+        kopa_ = n * H + (n - 1) * gap_k
+        y_ = max(548, int(980 - kopa_ / 2))
+        ys = [y_ + i * (H + gap_k) for i in range(n)]
     t_in, t_st = _nv_divi_laiki(c)
     kesa = c.setdefault("_kesa_divi", {})
     flash = None
@@ -8419,6 +8605,22 @@ def _akc_tips(c):
 
 def _iss_atskats(s):
     kk, rr = s["kartes"], s["runa"]
+    n2 = 0
+    while n2 < len(kk) and kk[n2].get("_ats_s2"):                     # jaunā 2. aina (kopš 12.11.2026) – 1–2 ainas, sava balss
+        n2 += 1
+    if n2 and len(rr) == len(kk) + 2:
+        cards = kk[n2:]
+        zal = [c for c in cards if _akc_tips(c) == "v"]
+        sar = [c for c in cards if _akc_tips(c) == "x"]
+        pel = [c for c in cards if _akc_tips(c) == "-"]
+        izv = ([zal[0]] if zal else pel[:1]) + (sar[:1] if sar else zal[1:2]) or cards[:1]
+        tag = str((s.get("intro") or {}).get("tag", "")).upper()
+        veids_v = ("atskats_" + ("vartsargi" if "GOALIE" in tag else ("komandas" if "TEAM" in tag else "speletaji"))
+                   if "FOLLOW-UP" in tag else "atskats_fantasy")
+        kartes = list(kk[:n2]) + izv
+        runa = [rr[0]] + rr[1:1 + n2] + [rr[1 + kk.index(c)] for c in izv]
+        runa.append(_iss_cilpa(s, veids_v, S.reta_frase(ISS_ATS_PIRMS, veids=veids_v, n=1)))
+        return kartes, runa
     if len(rr) != len(kk) + 2 or len(kk) < 2 or kk[0].get("tips") not in ("fantasy_kartis", "fantasy_ats_saraksts"):
         return None
     tag = str((s.get("intro") or {}).get("tag", "")).upper()
