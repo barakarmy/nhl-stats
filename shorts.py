@@ -3037,16 +3037,58 @@ def _toi_sek(x):
         return 0
 
 
+def _tuksi_varti(r, home, away):
+    """Vārti tukšos vārtos (ielaidušās komandas vārtsargs nebija laukumā) – vārtsargam netiek pieskaitīti."""
+    if "empty" in str(getattr(r, "goal_modifier", "")).lower():
+        return True
+    kods = str(getattr(r, "situacijas_kods", "") or "").split(".")[0]
+    if kods.isdigit() and len(kods) <= 4:
+        kods = kods.zfill(4)                                          # "0651" CSV failā kļūst par 651
+        return (kods[0] if str(r.komanda) == str(home) else kods[3]) == "0"
+    return False
+
+
 def sausas_serijas_nedela(D, m, min_sek=SAUSA_SERIJA_MIN):
     """Vārtsargu sērijas bez ielaistiem vārtiem (laukumā pavadītais laiks), kas daļēji vai pilnībā bija pēdējās 7 dienās
-    – arī pārtrauktās. Metieni – no metieni.csv (vārtsargs = kam meta). → [{pid, vards, team, sek, atvairiti, aktiva}]."""
-    if m is None or not len(m) or "vartsargs" not in m:
+    – arī pārtrauktās. → [{pid, vards, team, sek, atvairiti, aktiva}].
+    Labots 12.11.2026: metieni.csv "sek" jau ir laiks no spēles sākuma, bet te tam vēlreiz tika pieskaitīts (periods − 1) × 20 min
+    → 3. perioda un papildlaika vārti palika ārpus vārtsarga laika un sēriju NEPĀRTRAUCA (sērijas bija par garām, arī
+    "aktīvas", kuras patiesībā beidzās). Tagad vārti – no varti.csv (periods + laiks periodā; bez tukšiem vārtiem), skaits
+    pārbaudīts pret vartsargi.csv goalsAgainst: sākuma vārtsargam – spēles pirmie N pretinieku vārti, maiņas vārtsargam –
+    pēdējie N. Ja kāda vārtu laiks nav zināms – sērija pārtrūkst gan spēles sākumā, gan beigās (nekad nepārspīlē)."""
+    if D.get("vg") is None or not len(D["vg"]):
         return []
     no = (pd.Timestamp(D["lidz"]) - timedelta(days=6)).strftime("%Y-%m-%d")
     sg = D["sg"].set_index("game_id")
-    mm = m[m["tips"].isin(["sog", "goal"]) & m["vartsargs"].notna()].copy()
-    mm["t_abs"] = (pd.to_numeric(mm["period"], errors="coerce") - 1) * 1200 + pd.to_numeric(mm["sek"], errors="coerce")
-    mm["vartsargs"] = pd.to_numeric(mm["vartsargs"], errors="coerce")
+    vv = {}                                                           # (spēle, ielaidusī komanda) → [vārtu laiki no spēles sākuma]
+    va = D.get("va")
+    if va is not None and len(va):
+        for r in va.itertuples(index=False):
+            if str(getattr(r, "period_type", "")) == "SO" or r.game_id not in sg.index:
+                continue
+            home, away = sg.loc[r.game_id, "home_team"], sg.loc[r.game_id, "away_team"]
+            if _tuksi_varti(r, home, away):
+                continue
+            ielaida = away if str(r.komanda) == str(home) else home
+            vv.setdefault((r.game_id, str(ielaida)), []).append((int(r.period) - 1) * 1200 + _sek(r.laiks))
+    ot_beigas = {}                                                    # papildlaikā uzvarēta spēle beidzas ar uzvaras vārtiem
+    if va is not None and len(va):
+        for r in va.itertuples(index=False):
+            if int(r.period) == 4 and str(getattr(r, "period_type", "")) != "SO":
+                ot_beigas[r.game_id] = max(ot_beigas.get(r.game_id, 0), 3600 + _sek(r.laiks))
+
+    def speles_garums(gid_):
+        b_ = str(sg.loc[gid_, "spele_beidzas"]) if gid_ in sg.index else "REG"
+        return 3600 if b_ == "REG" else (ot_beigas.get(gid_, 3900) if b_ == "OT" else 3900)
+    sog = {}                                                          # (spēle, vārtsargs) → [atvairīto metienu laiki]
+    if m is not None and len(m) and "vartsargs" in m:
+        mm = m[(m["tips"] == "sog") & m["vartsargs"].notna()].copy()
+        per0 = (pd.to_numeric(mm["period"], errors="coerce").fillna(1) - 1) * 1200
+        sk_ = pd.to_numeric(mm["sek"], errors="coerce").fillna(0)
+        mm["t_abs"] = sk_.where(sk_ >= per0, per0 + sk_)                # "sek" – no spēles sākuma (vecos failos – periodā)
+        mm["vartsargs"] = pd.to_numeric(mm["vartsargs"], errors="coerce")
+        for (gid, pid), x in mm.groupby(["game_id", "vartsargs"]):
+            sog[(gid, float(pid))] = list(x["t_abs"])
     vg = D["vg"].copy()
     vg["toi_s"] = vg["toi"].map(_toi_sek)
     vg = vg[vg["toi_s"] > 0].sort_values(["datums", "game_id"])
@@ -3054,36 +3096,100 @@ def sausas_serijas_nedela(D, m, min_sek=SAUSA_SERIJA_MIN):
     for pid, g in vg.groupby("playerId"):
         if g["datums"].max() < no:
             continue
-        sm = mm[mm["vartsargs"] == pid]
         serijas, cur = [], {"sek": 0, "atv": 0, "no": None, "lidz": None}
         for r in g.itertuples(index=False):
-            beigas = sg.loc[r.game_id, "spele_beidzas"] if r.game_id in sg.index else "REG"
-            garums = 3600 + (300 if str(beigas) != "REG" else 0)
-            a0, a1 = (0, min(r.toi_s, garums)) if str(r.starter) == "True" else (max(0, garums - r.toi_s), garums)
-            ev = sm[sm["game_id"] == r.game_id].sort_values("t_abs")
+            garums = speles_garums(r.game_id)
+            sakuma = str(r.starter) == "True"
+            a0, a1 = (0, min(r.toi_s, garums)) if sakuma else (max(0, garums - r.toi_s), garums)
+            gl = sorted(vv.get((r.game_id, str(r.team)), []))
+            ga = pd.to_numeric(getattr(r, "goalsAgainst", None), errors="coerce")
+            if not np.isfinite(ga):                                   # nav oficiālā skaita – vārti viņa laikā
+                mani = [x for x in gl if a0 <= x <= a1 + 1]
+            else:
+                ga = int(ga)
+                mani = (gl[:ga] if sakuma else gl[len(gl) - ga:]) if ga else []
+                if len(gl) < ga:                                      # ne visiem vārtiem zināms laiks → pārtrūkst sākumā un beigās
+                    mani = sorted(set(mani + [a0, a1]))
+            ev = [(x, 1) for x in mani] + [(x, 0) for x in sog.get((r.game_id, float(pid)), [])]
             t = a0
             if cur["no"] is None:
                 cur["no"] = r.datums
-            for e in ev.itertuples(index=False):
-                if not (a0 <= e.t_abs <= a1 + 1):
-                    continue
-                if e.tips == "goal":
-                    cur["sek"] += max(0, e.t_abs - t)
+            for te, ir_varti in sorted(ev):
+                te = min(max(te, a0), a1)
+                if ir_varti:
+                    cur["sek"] += max(0, te - t)
                     cur["lidz"] = r.datums
                     serijas.append(dict(cur, aktiva=False))
                     cur = {"sek": 0, "atv": 0, "no": r.datums, "lidz": None}
-                    t = e.t_abs
-                else:
+                    t = te
+                elif te >= t:
                     cur["atv"] += 1
             cur["sek"] += max(0, a1 - t)
             cur["lidz"] = r.datums
         serijas.append(dict(cur, aktiva=True))
         der = [x for x in serijas if x["sek"] >= min_sek and str(x["lidz"]) >= no]
         if der:
-            b = max(der, key=lambda x: x["sek"])
+            b_ = max(der, key=lambda x: x["sek"])
             out.append({"pid": int(pid), "vards": str(g["vards"].iloc[-1]), "team": str(g["team"].iloc[-1]),
-                        "sek": int(b["sek"]), "atvairiti": int(b["atv"]), "aktiva": bool(b["aktiva"])})
+                        "sek": int(b_["sek"]), "atvairiti": int(b_["atv"]), "aktiva": bool(b_["aktiva"])})
+    def atv_pedejas(pid_, sek_):
+        """Atvairītie metieni aktīvās sērijas laikā: vārtsarga pēdējās sek_ sekundes laukumā (no jaunākās spēles atpakaļ)."""
+        n_, atl = 0, int(sek_)
+        for r in vg[vg["playerId"] == pid_].sort_values(["datums", "game_id"], ascending=False).itertuples(index=False):
+            if atl <= 0:
+                break
+            garums = speles_garums(r.game_id)
+            a0, a1 = (0, min(r.toi_s, garums)) if str(r.starter) == "True" else (max(0, garums - r.toi_s), garums)
+            no_t = max(a0, a1 - atl)
+            n_ += sum(1 for x in sog.get((r.game_id, float(pid_)), []) if no_t <= x <= a1 + 1)
+            atl -= a1 - a0
+        return n_
+    out = _sausas_ka_nhl_stats(D, out, min_sek, atv_pedejas)
     return sorted(out, key=lambda x: -x["sek"])
+
+
+def _atv_drosi(fn, pid_, sek_):
+    try:
+        return int(fn(pid_, sek_)) if fn else None
+    except Exception:                                                 # noqa: BLE001
+        return None
+
+
+def _sausas_ka_nhl_stats(D, out, min_sek, atv_fn=None):
+    """Aktīvās sausās sērijas – tieši kā nhl-stats lapā (fakti.py sausas_serijas – to pašu varti.csv + vartsargi.csv):
+    aktīvā, kuras lapā nav, tiek izņemta; lapas minūtes aizstāj šejienes; lapas aktīvā, kuras te nav, tiek pievienota.
+    Tikai, ja video dati ir līdz jaunākajai spēlei (ar --lidz pagātnē lapa rādītu šodienu). Bez fakti.py – kā aprēķināts."""
+    try:
+        import fakti as _fk                                           # nhl-stats lietotnes modulis (tā pati mape)
+    except Exception:                                                 # noqa: BLE001
+        return out
+    try:
+        vg_v, va_v = _lasit("vartsargi.csv"), _lasit("varti.csv")
+        if vg_v.empty or va_v.empty or str(vg_v["datums"].max()) > str(D["lidz"]):
+            return out
+        ref = {int(x["playerId"]): x for x in (_fk.sausas_serijas(vg_v, va_v) or []) if x.get("aktiva") and int(x["sek"]) >= min_sek}
+    except Exception as ex:                                           # noqa: BLE001
+        print(f"  (sausās sērijas: salīdzinājums ar nhl-stats izlaists – {type(ex).__name__}: {ex})")
+        return out
+    jauns, starp = [], []
+    for x in out:
+        if not x["aktiva"]:
+            jauns.append(x)
+        elif x["pid"] in ref:
+            r = ref.pop(x["pid"])
+            if abs(int(r["sek"]) - x["sek"]) > 60:
+                starp.append(f"{x['vards']}: {x['sek'] // 60} → {int(r['sek']) // 60} min")
+                x = dict(x, atvairiti=_atv_drosi(atv_fn, x["pid"], int(r["sek"])))   # atvairītie – lapas sērijas garumam
+            jauns.append(dict(x, sek=int(r["sek"])))
+        else:
+            starp.append(f"{x['vards']}: izņemta (nhl-stats lapā aktīvas sērijas nav)")
+    for pid_, r in ref.items():
+        starp.append(f"{r.get('vards')}: pievienota no nhl-stats ({int(r['sek']) // 60} min)")
+        jauns.append({"pid": pid_, "vards": str(r.get("vards", "")), "team": str(r.get("komanda", "")), "sek": int(r["sek"]),
+                      "atvairiti": _atv_drosi(atv_fn, pid_, int(r["sek"])), "aktiva": True})
+    print("SAUSĀS SĒRIJAS: aktīvās salīdzinātas ar nhl-stats lapu (fakti.py) – " + ("sakrīt" if not starp else
+          "laboju: " + "; ".join(starp)))
+    return jauns
 
 
 def f_serijas(D):
