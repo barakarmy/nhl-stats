@@ -141,6 +141,12 @@ def spelu(n):
     return f"{n} game" + ("" if n == 1 else "s")
 
 
+def bez_neg_nulles(s):
+    """"+0.00" / "-0.0" → "0.00" / "0.0" (noapaļota nulle bez zīmes; agrāk kartītēs "−0.00")."""
+    s = str(s)
+    return s[1:] if re.fullmatch(r"[+\-−]0(\.0+)?", s) else s
+
+
 def minus(s):
     return s.replace("-", "−")
 
@@ -1319,7 +1325,7 @@ def xg_atskats_viz(kartes, veids, j, pec, t, bil, lidz0, no2, lidz2):
     BEFORE → SINCE ar pusceļa līniju (HIT, ja SINCE ir aiz tās – tuvāk normai par pusi)."""
     rindas = [(g_, k_, r_) for g_ in ("laim", "nelaim") for k_, r_ in j["momentuzn"][g_].items()]
     svf = lambda v: f".{round(v * 10):03d}"                             # noqa: E731
-    pp = lambda v, n=2: minus(f"{v:+.{n}f}")                           # noqa: E731
+    pp = lambda v, n=2: minus(bez_neg_nulles(f"{v:+.{n}f}"))           # noqa: E731
     for c, (grupa, key, r) in zip(kartes, rindas):
         if veids == "speletaji":
             sub = pec[pec["metejs"] == float(key)]
@@ -1341,7 +1347,7 @@ def xg_atskats_viz(kartes, veids, j, pec, t, bil, lidz0, no2, lidz2):
                           "txt": [f"{len(sub)} shots", f"{G2} goal{'' if G2 == 1 else 's'}"]},
                          {"tips": "skaitlis", "lab": "SHOOTING % SINCE", "val": f"{sh2:.0f}%", "sub": f"before {sh1:.0f}% · league {lg:.0f}%"}),
                 ("full", {"tips": "joslas", "lab": "SINCE OUR CALL  ·  GOALS VS EXPECTED",
-                          "rind": [("GOALS", G2, f"{G2}", "prim"), ("EXPECTED", xG2, f"{xG2:.1f}", "pel")], "chip": (minus(f"{d2:+.1f}"), c["akc"])}),
+                          "rind": [("GOALS", G2, f"{G2}", "prim"), ("EXPECTED", xG2, f"{xG2:.1f}", "pel")], "chip": (pp(d2, 1), c["akc"])}),
                 ("full", {"tips": "speles", "lab": f"GAME BY GAME SINCE  ·  {dat(no2).upper()} – {dat(lidz2).upper()}",
                           "speles": [{"aug": _dd(x.datums), "vid": f"{int(x.G)}G", "apa": f"{x.xG:.1f} xG", "kr": ZALS if x.G > 0 else None}
                                      for x in last.itertuples(index=False)]}),
@@ -1370,9 +1376,9 @@ def xg_atskats_viz(kartes, veids, j, pec, t, bil, lidz0, no2, lidz2):
                           "sub": f"before {svf(float(r['sv']))} · league {svf(lg)}"}),
                 ("full", {"tips": "joslas", "lab": "SINCE OUR CALL  ·  ALLOWED VS EXPECTED",
                           "rind": [("ALLOWED", GA2, f"{GA2}", "prim"), ("EXPECTED", xGA2, f"{xGA2:.1f}", "pel")],
-                          "chip": (minus(f"{xGA2 - GA2:+.1f}"), c["akc"])}),
+                          "chip": (pp(xGA2 - GA2, 1), c["akc"])}),
                 ("full", {"tips": "speles", "lab": "GAME BY GAME SINCE  ·  SAVED ABOVE EXPECTED",
-                          "speles": [{"aug": _dd(x.datums), "vid": minus(f"{x.gs:+.1f}"), "apa": f"{int(x.GA)} GA", "kr": ZALS if x.gs >= 0 else SARKANS}
+                          "speles": [{"aug": _dd(x.datums), "vid": pp(x.gs, 1), "apa": f"{int(x.GA)} GA", "kr": ZALS if x.gs >= 0 else SARKANS}
                                      for x in last.itertuples(index=False)]}),
                 ("full", {"tips": "joslas", "lab": "GSAx PER GAME  ·  LINE = HALFWAY TO NORMAL", "diverg": True, "robeza": 0.5 * r1,
                           "rind": [("BEFORE", r1, pp(r1), "pel"), ("SINCE", r2, pp(r2), c["akc"])]})]
@@ -1482,7 +1488,11 @@ def atskats(fails, m, a):
                         pusc = " Per game, that's more than halfway back to normal."
                     elif not ok and abs(d2pg) < abs(d1pg):
                         pusc = " Per game, not even halfway back to normal."
-                runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was unlucky'}. Since then: {G2} goal{'' if G2 == 1 else 's'} on {xgv(xG2)} expected.{pusc} {tail}")
+                kartes[-1]["_pirms"] = dict(r)                           # rādītāji mūsu video dienā (ShortsB 2. ainai)
+                vg_ = f"{G2} goal{'' if G2 == 1 else 's'} on {xgv(xG2)} expected"
+                sec_ = ("He hasn't played since." if sp2 == 0 else
+                        (f"Since then, just one game: {vg_}." if sp2 == 1 else f"Since then: {vg_}."))
+                runa_k.append(f"{r['vards']} {'was running hot' if lucky else 'was unlucky'}. {sec_}{pusc} {tail}")
                 saraksts.append(f"{r['vards']} ({r['team']}): {int(r['G'])} G / {r['xG']:.1f} xG → {G2} G / {xG2:.1f} xG  {verd}")
                 if ok is not None:
                     vert_skaits += 1
@@ -1522,8 +1532,12 @@ def atskats(fails, m, a):
                                "apaksa": f"{gd_txt}{dat(no2)} – {dat(lidz2)}"})
                 tail = F("kom_maz") if ok is None else F(("kom_laim" if lucky else "kom_nelaim") + ("_ok" if ok else "_ne"))
                 kartes[-1]["_frase"] = kartes[-1]["_zim_frase"] = tail
+                kartes[-1]["_pirms"] = dict(r)
                 p2_txt = "n/a" if not np.isfinite(p2) else f"{p2:.1f}"
-                runa_k.append(f"The {nos}: PDO was {r['PDO']:.1f}. Since then: {p2_txt}. {tail}")
+                gp_ = 0 if x is None else int(x["GP"])
+                sec_ = (f"Since then: {p2_txt}." if np.isfinite(p2) else
+                        ("No games since." if gp_ == 0 else ("Only one game since." if gp_ == 1 else "")))
+                runa_k.append(f"The {nos}: PDO was {r['PDO']:.1f}. {sec_} {tail}".replace("  ", " "))
                 saraksts.append(f"{pils} {nos}: PDO {r['PDO']:.1f} → {p2_txt}  {verd}")
                 if ok is not None:
                     vert_skaits += 1
@@ -1560,10 +1574,24 @@ def atskats(fails, m, a):
                                "apaksa": f"{sv_txt}{spelu(gp2)}  ·  {dat(no2)} – {dat(lidz2)}"})
                 tail = F("maz") if ok is None else F(("va_labs" if labs else "va_slikts") + ("_ok" if ok else "_ne"))
                 kartes[-1]["_frase"] = kartes[-1]["_zim_frase"] = tail
+                kartes[-1]["_pirms"] = dict(r)
                 r2_txt = "n/a" if not np.isfinite(r2) else f"{r2:+.2f}"
-                r2_runa = r2_txt.replace("+", "plus ").replace("-", "minus ")
                 stav = "was red hot" if labs else "was ice cold"
-                runa_k.append(f"{r['vards']} {stav}. Since then: {r2_runa} goals saved above expected per game. {tail}")
+                # balsī – kopsummas kā spēlētājiem (kopš 12.11.2026; agrāk "plus 1.02 / n/a / minus 0.00 goals saved above
+                # expected per game" – TTS izrunāja dīvaini); "uz spēli" – tikai pusceļa paskaidrojumā
+                if x is None or int(x["GP"]) == 0:
+                    sec_ = "He hasn't played since."
+                else:
+                    GA2_, xGA2_ = int(x["GA"]), float(x["xGA"])
+                    vg_ = f"{GA2_} goal{'' if GA2_ == 1 else 's'} allowed on {xgv(xGA2_)} expected"
+                    sec_ = f"Since then, just one game: {vg_}." if int(x["GP"]) == 1 else f"Since then: {vg_}."
+                pusc = ""
+                if ok is not None and np.isfinite(r2):
+                    if ok and (r2 > 0.005 if labs else r2 < -0.005):
+                        pusc = " Per game, that's more than halfway back to normal."
+                    elif not ok and abs(r2) < abs(r1):
+                        pusc = " Per game, not even halfway back to normal."
+                runa_k.append(f"{r['vards']} {stav}. {sec_}{pusc} {tail}")
                 saraksts.append(f"{r['vards']} ({r['kom']}): GSAx/GP {r1:+.2f} → {r2_txt}  {verd}")
                 if ok is not None:
                     vert_skaits += 1
@@ -1590,7 +1618,7 @@ def atskats(fails, m, a):
         aki_runa = f"{ok_skaits} for {vert_skaits} on our xG calls. " + reta_frase(ATSKATS_XG_BALSS[gad], veids=f"atskats_{veids}", n=4)
 
     def ats_vk(c_, virs):
-        fl = [(str(b[0]), b[3].format(b[1] + (b[4] if len(b) > 4 else 0)) if np.isfinite(b[1]) else "n/a")   # PDO: +100 (josla rāda novirzi)
+        fl = [(str(b[0]), bez_neg_nulles(b[3].format(b[1] + (b[4] if len(b) > 4 else 0))) if np.isfinite(b[1]) else "n/a")   # PDO: +100
               for b in c_.get("bars", [])[:2]]
         v_ = vk(virs, f"{c_.get('v1', '')} {c_.get('v2', '')}".strip().upper(), fl, c_.get("info", ""), c_.get("_frase", ""),
                 c_["akc"], vizu="badge", badge=c_.get("badge", ""), bkr=c_.get("bkr"))
@@ -2602,6 +2630,12 @@ def atskats_fantasy(j, m, a):
         info[(r.game_id, r.away_team)] = ("@", r.home_team)
     kartes, runa, saraksts, trap, kopa, vien = [], [], [], 0, 0, 0
     nr_add = nr_drop = 0
+    try:                                                              # rādītāji ieteikuma brīdī: 14 dienas pirms nedēļas, spēles nedēļā
+        no14 = (pd.Timestamp(no) - timedelta(days=14)).strftime("%Y-%m-%d")
+        pre14 = sp[(sp["datums"] >= no14) & (sp["datums"] < no)].groupby("playerId").agg(GP=("game_id", "nunique"), P=("points", "sum"))
+        ned_sp = pd.concat([sg["home_team"], sg["away_team"]]).value_counts()
+    except Exception:                                                 # noqa: BLE001
+        pre14, ned_sp = None, None
     for grupa in ("add", "drop"):
         for pid, r in j["momentuzn"][grupa].items():
             pid = int(pid)
@@ -2647,6 +2681,10 @@ def atskats_fantasy(j, m, a):
             # (līdz 10.11.2026 te tika izsauktas visas 4 grupas katrai kartītei – vēsturē nonāca visas frāzes)
             kartes[-1]["_frase"] = frase if verd != "DIDN'T PLAY" else "He didn't play."
             kartes[-1]["_pts"], kartes[-1]["_med"] = P, med
+            kartes[-1]["_pirms"] = {"veids": r.get("veids"), "poz": r.get("poz", ""), "rost": r.get("rostered"),
+                                    "P": int(pre14.loc[pid, "P"]) if pre14 is not None and pid in pre14.index else None,
+                                    "GP": int(pre14.loc[pid, "GP"]) if pre14 is not None and pid in pre14.index else None,
+                                    "sp_ned": int(ned_sp.get(r["team"], 0)) if ned_sp is not None else None}
             kartes[-1]["_zim_frase"] = frase
             kartes[-1]["_a"] = {"pid": pid, "grupa": grupa, "G": G, "A": A, "P": P, "SOG": SOG, "PPP": PPP, "GP": GP,
                                 "med": med, "verd": verd, "rost0": r.get("rostered"), "poz": r.get("poz", ""),
