@@ -5713,6 +5713,14 @@ def _hc_serijas(D):
                     lab = {"kom": kom, "veids": veids, "n": n, "rek": rek}
             if lab:
                 sar.append(lab)
+    # (kopš 12.11.2026) komanda – tikai vienā pusē: garākā sērija (vienādas – kopējā; abas mājas / izbr. – uzvaru)
+    k_hot, k_cold = {x["kom"]: x for x in karst}, {x["kom"]: x for x in auk}
+    for kom in set(k_hot) & set(k_cold):
+        h_, c_ = k_hot[kom], k_cold[kom]
+        if (c_["n"], c_["veids"] == "ALL") > (h_["n"], h_["veids"] == "ALL"):
+            karst.remove(h_)
+        else:
+            auk.remove(c_)
     k_ = lambda x: (-x["n"], x["veids"] != "ALL")
     return sorted(karst, key=k_), sorted(auk, key=k_)
 
@@ -5750,9 +5758,15 @@ def _hc_sausumi(D):
             continue
         x = {"pid": int(pid), "vards": str(g["vards"].iloc[-1]), "team": str(g["team"].iloc[-1])}
         ng, no = bez(g, "goals"), bez(g, kol2)
-        if no >= HC_OTRA_MIN:
+        def ps_n_(x_):                                                # aktīvā punktu sērija
+            pts = S.pd.to_numeric(x_["points"], errors="coerce").fillna(0).to_numpy()
+            return next((i for i, v in enumerate(pts[::-1]) if v <= 0), len(pts))
+        ps_n = max(ps_n_(g), *(ps_n_(g[g["home_away"] == v_]) for v_ in ("home", "away"))) if "home_away" in g else ps_n_(g)
+        if no >= HC_OTRA_MIN and ps_n < HC_OTRA_MIN:                 # (ne tas, kam mājās / izbr. punktu sērija)
             O.append(dict(x, n=no))
-        if ng >= HC_SAUSUMS_MIN and ng != no:                          # tas pats garums – viena sērija (bez punkta)
+        # (kopš 12.11.2026) bez vārtiem, bet ar punktu sēriju ≥ 3 (kopā / mājās / izbr. – kā POINT STREAKS ainā) – nav
+        # "slump" (bija: 20 spēļu punktu sērija un vienlaikus COLD STICKS "hasn't scored in 5 games")
+        if ng >= HC_SAUSUMS_MIN and ng != no and ps_n < HC_OTRA_MIN:   # tas pats garums – viena sērija (bez punkta)
             G.append(dict(x, n=ng))
     k_ = lambda x: (-x["n"], x["vards"])
     return {"g": sorted(G, key=k_)[:HC_SAUSUMS_RINDAS], "o": sorted(O, key=k_)[:HC_SAUSUMS_RINDAS], "otra": kol2}
@@ -5984,11 +5998,13 @@ def fakti_serijas_ainas(D, m, izv, tv, idx, solo=False):
         beig = [x for x in ss_all if not x["aktiva"]][:3]               # beigušās – pašā apakšā, sarkanā; vidū – sv%
         ss = akt + beig
         rindas = [{"vards": x["vards"], "team": x["team"], "liels": f"{x['sek'] // 60}:{x['sek'] % 60:02d}",
-                   "maz": "STILL GOING", "maz_kr": S.ZALS, "apaksa": f"shutout streak · {x['atvairiti']} saves", "izcelt": True}
+                   "maz": "STILL GOING", "maz_kr": S.ZALS, "izcelt": True,
+                   "apaksa": "shutout streak" + (f" · {x['atvairiti']} saves" if x.get("atvairiti") else "")}
                   for x in akt]
         rindas_b = [{"vards": x["vards"], "team": x["team"], "liels": f"{x['sek'] // 60}:{x['sek'] % 60:02d}",
                      "maz": "ENDED", "maz_kr": S.SARKANS, "liels_kr": (252, 165, 165), "ramis": S.SARKANS,
-                     "apaksa": f"shutout streak · {x['atvairiti']} saves", "izcelt": False} for x in beig]
+                     "apaksa": "shutout streak" + (f" · {x['atvairiti']} saves" if x.get("atvairiti") else ""), "izcelt": False}
+                    for x in beig]
         no_ = (S.pd.Timestamp(D["lidz"]) - S.timedelta(days=6)).strftime("%Y-%m-%d")
         vg = D["vg"][(D["vg"]["datums"] >= no_) & (D["vg"]["starter"].astype(str) == "True")].copy()
         for c_ in ("saves", "shotsAgainst", "goalsAgainst"):
