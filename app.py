@@ -985,15 +985,17 @@ html.tumss .pk-d summary { color: var(--t-zils); }
 /* Picks */
 .pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: .7rem; margin: .4rem 0 .9rem; }
 .pc { position: relative; }
-.pc-t { display: flex; align-items: center; gap: .45rem; font-size: .8rem; opacity: .75; }
+.pc-h { display: flex; align-items: flex-start; gap: .5rem; }
+.pc-t { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; font-size: .8rem; opacity: .75; flex: 1 1 auto; min-width: 0; }
 .pc-t img { width: 1.55rem; height: 1.55rem; object-fit: contain; }
+.pc-d { white-space: nowrap; }
 .pc-iz { font-size: 1.15rem; font-weight: 800; margin-top: .35rem; font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; }
 .pc-k { font-size: .82rem; opacity: .75; }
 .pc-r { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .3rem; margin-top: .55rem; text-align: center; }
 .pc-r div { background: rgba(128,128,128,.09); border-radius: .5rem; padding: .3rem .2rem; }
 .pc-r small { display: block; font-size: .64rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .6; }
 .pc-r b { font-size: .95rem; }
-.pc-ev { position: absolute; top: .65rem; right: .75rem; font-weight: 800; font-size: .85rem; color: #15803d; background: rgba(22,163,74,.12);
+.pc-ev { flex: none; margin-left: auto; white-space: nowrap; font-weight: 800; font-size: .85rem; color: #15803d; background: rgba(22,163,74,.12);
   padding: .12rem .5rem; border-radius: .4rem; }
 .pc-s { margin-top: .45rem; font-size: .74rem; opacity: .65; }
 .pr-w { color: #15803d; font-weight: 800; } .pr-l { color: #b91c1c; font-weight: 800; } .pr-p { opacity: .7; font-weight: 700; }
@@ -1974,7 +1976,7 @@ def picks_iestatijumi():
 def _vartsarga_txt(kom, vs, statuss):
     """'BOS: Jeremy Swayman ✓' – ticamākais sākuma vārtsargs un paziņojuma statuss."""
     vards = max(vs, key=lambda z: z[2])[1]
-    zime = {"Confirmed": " ✓", "Expected": " (gaidāms)"}.get(statuss, " (nav paziņots)")
+    zime = {"Confirmed": " ✓", "Expected": " " + i18n.T("(gaidāms)")}.get(statuss, " " + i18n.T("(nav paziņots)"))   # EN: (expected)
     return f"{kom}: {vards}{zime}"
 
 
@@ -2015,9 +2017,11 @@ def pick_karte_html(r, arh_atsl):
     w_ = r.get("modela_svars", 1.0)
     lem_t = ("Varbūtība, pēc kuras rēķināts EV un likme: " + ("tikai modelis" if w_ >= 1 else
              f"{w_ * 100:.0f}% modelis + {(1 - w_) * 100:.0f}% tirgus"))
-    return (f'<div class="kpi pc"><span class="pc-ev" title="Expected Value: p × (koef − 1) − (1 − p)">EV {r["ev"] * 100:+.1f}%</span>'
+    # EV zīmīte – vienā rindā ar spēles nosaukumu (agrāk absolūti augšējā labajā stūrī → šaurā kartītē pārklāja laiku)
+    return (f'<div class="kpi pc"><div class="pc-h">'
             f'<div class="pc-t"><img src="{e(da.logo_url(r["viesi"]))}" alt="">{e(r["viesi"])} @ {e(r["majas"])}'
-            f'<img src="{e(da.logo_url(r["majas"]))}" alt=""> · {i18n.datums(sak, "%d.%m %H:%M")}</div>'
+            f'<img src="{e(da.logo_url(r["majas"]))}" alt=""><span class="pc-d">{i18n.datums(sak, "%d.%m %H:%M")}</span></div>'
+            f'<span class="pc-ev" title="Expected Value: p × (koef − 1) − (1 − p)">EV {r["ev"] * 100:+.1f}%</span></div>'
             f'<div class="pc-iz">{e(r["izvele"])}</div>'
             f'<div class="pc-k">{e(picks.TIRGU_NOS.get(r["tirgus"], r["tirgus"]))} · <b>{r["koef"]:.2f}</b> ({e(_bk_nos(r["bukmeikers"]))})'
             f'{pin_t}</div>'
