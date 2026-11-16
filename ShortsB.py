@@ -7180,10 +7180,7 @@ def aina_noslepums(t, nsl, ilg=None, thumb=False):
     for i, j in enumerate(js):
         rot = 0.0 if thumb else 0.6 * math.sin(t * 2.0 + i * 1.3)
         sc_k = j["izm"] / 820
-        d = ImageDraw.Draw(im)                                        # pakaramais
-        cx, yt = j["cx"], j["top"] + 30 * sc_k
-        d.line([(cx, yt + 30 * sc_k), (cx, yt - 12 * sc_k)], fill=(190, 196, 208, 255), width=max(3, int(9 * sc_k)))
-        d.arc([cx - 30 * sc_k, yt - 72 * sc_k, cx + 30 * sc_k, yt - 12 * sc_k], 140, 400, fill=(190, 196, 208, 255), width=max(3, int(9 * sc_k)))
+        # (kopš 16.11.2026 – bez pakaramā virs krekla; video un sīktēlos)
         if hint:
             _ns_put(im, j["hint"], j["cx"], j["cy"], 1, 1, rot)
             continue
