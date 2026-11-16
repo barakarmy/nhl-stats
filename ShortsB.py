@@ -598,6 +598,10 @@ def sfx_notikumi(ainas):
             ev.append((t0 + 1.3, "boom", 0.6))
         elif tips == "xg_karte":                                     # līgas karte: tick katram izceltajam
             ev += [(t0 + 1.95 + 0.22 * j, "tick", 0.7) for j in range(len(c.get("izcelti", [])))]
+        elif tips == "xg_kops":                                       # xG beigu kopsavilkums: rindas ieslīd, nosauktās – tick
+            _ti, _tv = _xg_kops_laiki(c)
+            ev += [(t0 + 0.1, "boom", 0.6), (t0 + 0.35, "swoosh", 0.4)]
+            ev += [(t0 + x_, "tick", 0.5) for x_ in sorted(_tv.values())]
         elif tips == "fantasy_divi":                                  # īsā versija: 2 DROP kartītes – ielido (swoosh), zīmogs (boom)
             _ti, _ts = _nv_divi_laiki(c)
             ev += [(t0 + x_, "swoosh", 0.4) for x_ in _ti] + [(t0 + x_ + 0.24, "boom", 0.6) for x_ in _ts]
@@ -1996,17 +2000,13 @@ def virsraksta_fonts(d, txt, sl, izm=74):
     return S.fonts("black", izm)
 
 
-def aina_verdikts(t, s, kanals):
-    im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    # virsraksts – slīpa dzeltena josla ar "THE FINAL VERDICT"
+def _verdikta_josla(d, t, y0=226, h_=112, sl=40):
+    """Slīpa dzeltena josla "THE FINAL VERDICT" ar "//" svītrām abās pusēs (ielido no kreisās)."""
     k = S.ease(t / 0.35)
-    h_, sl = 112, 40
     f = virsraksta_fonts(d, "THE FINAL VERDICT", sl)
     tw = d.textlength("THE FINAL VERDICT", font=f)
     w_ = tw + 2 * sl + 60
     x0 = (S.W - w_) / 2 - (1 - k) * 700
-    y0 = 226
     d.polygon([(x0 + sl, y0), (x0 + w_, y0), (x0 + w_ - sl, y0 + h_), (x0, y0 + h_)], fill=S.ar_alfa(S.DZELTENS, 255 * k))
     for i_ in range(2):                                               # mazas svītras abās pusēs
         xx = x0 - 44 - i_ * 26
@@ -2015,6 +2015,13 @@ def aina_verdikts(t, s, kanals):
         d.polygon([(xx + 22, y0 + 18), (xx + 34, y0 + 18), (xx + 12, y0 + h_ - 18), (xx, y0 + h_ - 18)], fill=S.ar_alfa(S.DZELTENS, 200 * k))
     bb = d.textbbox((0, 0), "THE FINAL VERDICT", font=f)
     d.text((x0 + sl + 30, y0 + (h_ - (bb[3] - bb[1])) / 2 - bb[1]), "THE FINAL VERDICT", font=f, fill=S.MELNS)
+
+
+def aina_verdikts(t, s, kanals):
+    im = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    # virsraksts – slīpa dzeltena josla ar "THE FINAL VERDICT"
+    _verdikta_josla(d, t)
     k2 = S.ease((t - 0.25) / 0.4)
     S.teksts_c(d, 364, s.get("verd_apaksa", "NUMBERS TELL A STORY. HERE'S WHAT IT MEANS."), S.fonts("semi", 34),
                S.ar_alfa((147, 197, 253), 255 * k2))
@@ -2579,7 +2586,7 @@ def renderet(s, izvade, kanals="", balss=None):
               "fakts_reti": aina_fakts_reti, "fakts_serijas": aina_fakts_serijas, "fakts_ga_serijas": aina_fakts_ga_serijas, "fakts_hc": aina_fakts_hc,
               "fakts_nak_j": aina_fakts_nak_j, "fantasy_divi": aina_fantasy_divi,
               "fantasy_saraksts": aina_fantasy_saraksts, "fantasy_kalendars": aina_fantasy_kalendars,
-              "fantasy_ats_saraksts": aina_fantasy_ats_saraksts}
+              "fantasy_ats_saraksts": aina_fantasy_ats_saraksts, "xg_kops": aina_xg_kops}
     _DAL["fons"] = bool(JAUNS_FANTASY and s.get("_bez_zimoga"))       # jaunais izskats: burbuļi fonā (ne āķī)
     # cilpai: āķa (1. ainas) sākuma kadrs – beigās video pāriet atpakaļ uz to
     v0, c0, _ = ainas[0]
@@ -3721,6 +3728,35 @@ def _nv_rekords(L, rek, t, cy):
     _nv_put(L, ch, 540, cy, 1 + 0.4 * (1 - ease_back(min(1.0, k))), min(1.0, k * 2))
 
 
+def _xg_etiketes(punkti, peleki, kaste, uzr, fnt):
+    """"#n" uzrakstu vietas līgas kartē: no 8 vietām ap punktu – tā, kur mazāk sadursmju ar jau noliktajiem uzrakstiem,
+    citiem izceltajiem punktiem, pelēkajiem punktiem un laukuma malām (kopš 16.11.2026; agrāk #2 / #3 apakšā pārklājās
+    ar punktiem un x asi). → [(x, y, anchor)]."""
+    d_ = ImageDraw.Draw(Image.new("RGBA", (4, 4)))
+    vietas = [(28, 0, "lm"), (-28, 0, "rm"), (24, -26, "lm"), (-24, -26, "rm"), (0, -38, "mm"), (24, 26, "lm"), (-24, 26, "rm"), (0, 38, "mm")]
+    liktas, out = [], []
+    for i, (cx, cy) in enumerate(punkti):
+        w_ = d_.textlength(str(uzr[i]), font=fnt) + 6
+        h_ = 34
+        lab_ = None
+        for j, (ox, oy, anc) in enumerate(vietas):
+            lx, ly = cx + ox, cy + oy
+            x0 = lx if anc == "lm" else (lx - w_ if anc == "rm" else lx - w_ / 2)
+            y0, x1 = ly - h_ / 2, x0 + w_
+            y1 = y0 + h_
+            sods = j * 0.5
+            if x0 < kaste[0] or x1 > kaste[2] or y0 < kaste[1] or y1 > kaste[3]:
+                sods += 200
+            sods += 100 * sum(1 for b in liktas if not (x1 < b[0] or x0 > b[2] or y1 < b[1] or y0 > b[3]))
+            sods += 60 * sum(1 for k_, (qx, qy) in enumerate(punkti) if k_ != i and x0 - 22 < qx < x1 + 22 and y0 - 22 < qy < y1 + 22)
+            sods += 3 * sum(1 for qx, qy in peleki if x0 - 8 < qx < x1 + 8 and y0 - 8 < qy < y1 + 8)
+            if lab_ is None or sods < lab_[0]:
+                lab_ = (sods, (lx, ly, anc), (x0, y0, x1, y1))
+        liktas.append(lab_[2])
+        out.append(lab_[1])
+    return out
+
+
 def aina_xg_karte(t, c):
     """xG video 2. aina – "līgas karte": visi spēlētāji / vārtsargi / komandas kā punkti (xG pret vārtiem, xGA pret
     ielaistajiem, SV% pret SH%), "godīgā" līnija (vārti = xG / PDO = 100), zonas LUCKY / UNLUCKY un mūsu 6 izceltie
@@ -3767,7 +3803,7 @@ def aina_xg_karte(t, c):
         ya, yb = min(ys) - 0.6, max(ys) + 0.6
     else:
         m_ = max(max(xs), max(ys)) * 1.06 if xs else 1
-        xa, xb, ya, yb = 0.0, m_, 0.0, m_
+        xa, xb, ya, yb = -0.04 * m_, m_, -0.04 * m_, m_                 # (16.11.2026) 0 vārtu punkti – nost no ass
 
     def X(v):
         return PX0 + (v - xa) / (xb - xa) * (PX1 - PX0)
@@ -3823,6 +3859,9 @@ def aina_xg_karte(t, c):
     dc.text((PX1, PY1 + 22), K["x_lab"] + "  →", font=F("semi", 28), fill=LAB, anchor="ra")
     ylab = _nv_timg("↑  " + K["y_lab"], F("semi", 28), LAB).rotate(90, expand=True)
     C.alpha_composite(ylab, (int(PX0 - 30 - ylab.width), int(PY0)))
+    if "_etiketes" not in c:
+        c["_etiketes"] = _xg_etiketes([(X(px), Y(py)) for px, py, _, _ in izc], [(X(px), Y(py)) for px, py in pk],
+                                      (PX0 + 8, PY0 + 8, PX1 - 8, PY1 - 10), [lab for _, _, _, lab in izc], F("black", 30))
     # "godīgā" līnija – zīmējas
     kl = S.ease(min(1.0, max(0.0, (t - 1.0) / 0.6)))
     ln2 = math.hypot(q2_[0] - q1_[0], q2_[1] - q1_[1])
@@ -3832,11 +3871,32 @@ def aina_xg_karte(t, c):
             a0 = (q1_[0] + ux * j * 26, q1_[1] + uy * j * 26); a1 = (q1_[0] + ux * (j * 26 + 15), q1_[1] + uy * (j * 26 + 15))
             dc.line([a0, a1], fill=(255, 255, 255, 200), width=4)
         if kl >= 1:
-            lt = _nv_timg(K["linija"], F("black", 26), WH)
+            lt0 = _nv_timg(K["linija"], F("black", 26), WH)
             ang = -math.degrees(math.atan2(dy, dx))
-            lt = lt.rotate(ang, expand=True, resample=Image.BICUBIC)
-            mx_, my_ = q1_[0] + (q2_[0] - q1_[0]) * 0.7, q1_[1] + (q2_[1] - q1_[1]) * 0.7
-            C.alpha_composite(lt, (int(mx_ - lt.width / 2 + nx * 24), int(my_ - lt.height / 2 + ny * 24)))
+            lt = lt0.rotate(ang, expand=True, resample=Image.BICUBIC)
+            if "_lin_poz" not in c:                                   # (16.11.2026) vieta uz līnijas – ne virs izceltajiem
+                pts_ = [(X(px), Y(py)) for px, py, _, _ in izc]       # punktiem / to uzrakstiem un laukuma iekšpusē
+                lbl_ = [(x_, y_) for x_, y_, _ in (c.get("_etiketes") or [])]
+                hw = lt0.width / 2
+                best_ = None
+                for fr in (0.7, 0.6, 0.8, 0.5, 0.4, 0.3):
+                    for sg_ in (1, -1):
+                        mx_ = q1_[0] + (q2_[0] - q1_[0]) * fr + sg_ * nx * 24
+                        my_ = q1_[1] + (q2_[1] - q1_[1]) * fr + sg_ * ny * 24
+                        a_ = (mx_ - ux * hw, my_ - uy * hw); b_ = (mx_ + ux * hw, my_ + uy * hw)
+
+                        def att(p_):
+                            vx, vy = b_[0] - a_[0], b_[1] - a_[1]
+                            tt = max(0.0, min(1.0, ((p_[0] - a_[0]) * vx + (p_[1] - a_[1]) * vy) / (vx * vx + vy * vy or 1)))
+                            return math.hypot(p_[0] - a_[0] - vx * tt, p_[1] - a_[1] - vy * tt)
+                        sods = sum(3 for p_ in pts_ if att(p_) < 34) + sum(2 for p_ in lbl_ if att(p_) < 30)
+                        sods += 5 * sum(1 for x_, y_ in (a_, b_) if not (PX0 + 6 < x_ < PX1 - 6 and PY0 + 6 < y_ < PY1 - 6))
+                        sods += abs(fr - 0.7) + (0.2 if sg_ < 0 else 0)
+                        if best_ is None or sods < best_[0]:
+                            best_ = (sods, mx_, my_)
+                c["_lin_poz"] = best_[1:]
+            mx_, my_ = c["_lin_poz"]
+            C.alpha_composite(lt, (int(mx_ - lt.width / 2), int(my_ - lt.height / 2)))
     # visi punkti (pelēki) – parādās pakāpeniski
     for i, (px, py) in enumerate(pk):
         kk = (t - 0.6 - (i % 40) * 0.025) / 0.3
@@ -3844,8 +3904,7 @@ def aina_xg_karte(t, c):
             continue
         r = 6
         dc.ellipse([X(px) - r, Y(py) - r, X(px) + r, Y(py) + r], fill=(203, 213, 225, int(120 * min(1.0, kk))))
-    # izceltie – mūsu 6
-    vietas = []
+    # izceltie – mūsu 6 (uzraksti "#n" – vietā, kur tie nepārklājas ar citiem uzrakstiem, punktiem un asīm)
     for i, (px, py, kr, lab) in enumerate(izc):
         kk = (t - 1.9 - i * 0.22) / 0.3
         if kk <= 0:
@@ -3855,12 +3914,8 @@ def aina_xg_karte(t, c):
         dn.ellipse([cx_ - r - 10, cy_ - r - 10, cx_ + r + 10, cy_ + r + 10], fill=tuple(kr) + (60,))
         dn.ellipse([cx_ - r, cy_ - r, cx_ + r, cy_ + r], fill=tuple(kr) + (255,), outline=WH + (255,), width=3)
         if kk > 0.6:
-            for ox, oy, anc in ((24, -22, "lm"), (24, 24, "lm"), (-24, -22, "rm"), (-24, 24, "rm")):
-                lx, ly = cx_ + ox, cy_ + oy
-                if all(abs(lx - qx) > 56 or abs(ly - qy) > 30 for qx, qy in vietas):
-                    break
-            vietas.append((lx, ly))
-            dn.text((lx, ly), lab, font=F("black", 30), fill=WH, anchor=anc)
+            lx, ly, anc = c["_etiketes"][i]
+            dn.text((lx, ly), lab, font=F("black", 30), fill=WH, anchor=anc, stroke_width=4, stroke_fill=(10, 14, 32, 255))
     m = Image.new("L", (S.W, S.H), 0)
     ImageDraw.Draw(m).rounded_rectangle([74, B0 + 4, 1006, max(B0 + 10, B1 - 4)], radius=32, fill=255)
     C.putalpha(ImageChops.multiply(C.getchannel("A"), m))
@@ -7884,6 +7939,11 @@ def _nv_divi_karte(k, W, H, veids="fantasy"):
             d.text((tx + 18, ty1 - (12 if liela else 9)), sub, font=S.ietilpinat(d, sub, "semi", 22 if liela else 19, tw - 36),
                    fill=_NV_LAB, anchor="ls")
     ie = str(k.get("apaksa") or "")
+    kl_ = str(((v.get("kart") or {}).get("liels")) or "")              # xG: rindai trūka skaitļa ("goals vs expected · …")
+    if kl_ and veids == "speletaji" and ie.startswith("goals vs expected"):
+        ie = f"{kl_} {ie}"                                             # → "+3.3 goals vs expected · 36% shooting on 14 SOG"
+    elif kl_ and veids == "vartsargi" and ie.startswith("saved above expected"):
+        ie = f"{kl_} goals {ie}"                                       # → "+3.8 goals saved above expected · .915 SV% · …"
     if ie and liela:
         d.text((x0, ty1 + 52), ie, font=S.ietilpinat(d, ie, "semi", 32, W - 68), fill=(203, 213, 225, 255), anchor="ls")
     elif ie and H >= 330:                                             # vidēja (atskata 2. aina): iemesls zem flīzēm
@@ -7905,7 +7965,8 @@ def aina_fantasy_divi(t, c):
     n = len(K)
     veids_k = c.get("veids_k", "fantasy")
     W = 940
-    if c.get("kompakts") and K and all(k.get("apaksa") for k in K):   # atskata 2. aina – vidējas, ar iemesla rindu
+    if (c.get("kompakts") or (n >= 3 and veids_k in XG_VEIDI)) and K and all(k.get("apaksa") for k in K):   # vidējas, ar
+                                                                      # iemesla rindu (atskata 2. aina; xG – 3 kartītes)
         H, gap_k = 340, 26
     elif n >= 3 or c.get("kompakts"):                                 # trīs – kompaktas (bez iemesla rindas)
         H, gap_k = 290, 22
@@ -8562,6 +8623,136 @@ def _xg_skaitli(c):
     return (float(b[0][1]), float(b[1][1])) if len(b) >= 2 else (None, None)
 
 
+# ---------------------------------------------------------------- īsā xG versija: beigu kopsavilkums (kopš 16.11.2026)
+# Pēc #1 kartītes – visas 6 kartītes vienā ekrānā (divas grupas pa 3 rindām); balss vēlreiz nosauc abas grupas, tad
+# "We'll check back on …" + aicinājums sekot (cilpas aina turpina šo pašu ekrānu).
+# (kopš 16.11.2026) balss vairs neatkārto visus vārdus – īss teikums, tad cilpas aina: "We'll check back on … Follow …"
+ISS_XG_KOPS_TEIK = ["And here's the final list: all {n} {X} in one place.",
+                    "Here's the full list, all {n} {X} at a glance.",
+                    "And that's the whole list: all {n} {X} on one screen.",
+                    "Here's everyone we flagged, all on one screen.",
+                    "One last look at all {n} {X}.",
+                    "And here they are, all {n} {X} side by side.",
+                    "Screenshot this one: the full list of {X}.",
+                    "Save this one: all {n} {X} in one place.",
+                    "That's the full list. All {n} {X}, one screen.",
+                    "Here's the final board: every one of our {n} {X}.",
+                    "All {n} {X}, side by side. That's the final list.",
+                    "And there it is: the complete list of {X}."]
+
+
+def _iss_xg_kops(cards, veids, k2, hero):
+    """Kopsavilkuma aina + balss: laimīgie (augšā), nelaimīgie (apakšā), katrā – #1…#3."""
+    grupas = []
+    for g_ in ("laim", "nelaim"):
+        cc = sorted([c for c in cards if c["viz"]["grupa"] == g_], key=lambda c: c.get("nr") or 9)
+        if cc:
+            grupas.append((g_, cc))
+    if not grupas:
+        return None
+    n_ = sum(len(cc) for _, cc in grupas)
+    X_ = {"speletaji": "players", "vartsargi": "goalies", "komandas": "teams"}.get(veids, "players")
+    teik = [S.reta_frase(ISS_XG_KOPS_TEIK, veids=veids, n=4).format(n=_VARDIEM.get(n_, str(n_)), X=X_)]
+    sek = []
+    for g_, cc in grupas:
+        sek.append({"virs": ISS_XG_GRUPA[(veids, g_)][0], "kr": S.ZALS if g_ == "laim" else S.SARKANS,
+                    "rindas": [{"nr": c.get("nr"), "v1": str(c.get("v1", "")), "v2": str(c.get("v2", "")), "badge": c.get("badge"),
+                                "liels": str(c["viz"]["kart"]["liels"]), "maz": str(c["viz"]["kart"].get("maz", "")),
+                                "zim": str(c["viz"].get("zimogs", "")), "akc": tuple(c["akc"]), "hero": c is hero} for c in cc]})
+    aina = {"tips": "xg_kops", "veids_k": veids, "ilgums": 3.6, "_tv": k2.get("_tv"), "sek": sek}
+    return aina, " ".join(teik)
+
+
+def _xg_kops_laiki(c):
+    """(rindu ieslīdēšana{(si, ri): t}, nosaukšana{(si, ri): t}) – visas rindas uzreiz; nosauktā rinda iemirdzas."""
+    vardi = c.get("_vardi") or []
+    t_in, t_v = {}, {}
+    n = 0
+    for si, sk in enumerate(c.get("sek") or []):
+        for ri, r in enumerate(sk["rindas"]):
+            t_in[(si, ri)] = 0.35 + 0.09 * n
+            n += 1
+            tok = [re.sub(r"[^a-z0-9]", "", w.lower()) for w in r["v2"].split()]
+            tok = [x for x in tok if x]
+            tv_ = (_nv_vards_laiks(vardi, *tok) or _nv_vards_laiks(vardi, tok[-1])) if tok else None
+            if tv_ is not None:
+                t_v[(si, ri)] = tv_
+    return t_in, t_v
+
+
+def aina_xg_kops(t, c):
+    """Beigu kopsavilkums: divas grupas (LUCKY / UNLUCKY u.c.) pa 3 rindām – komanda, vārds, galvenais skaitlis, zīmogs;
+    #1 – dzeltenā rāmī; kad balss nosauc uzvārdu, rinda iemirdzas."""
+    F = S.fonts
+    L = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); d = ImageDraw.Draw(L)
+    N = Image.new("RGBA", (S.W, S.H), (0, 0, 0, 0)); dn = ImageDraw.Draw(N)
+    _nv_dalinas(L, t)
+    if c.get("_tv"):
+        _nv_tablo_virs(L, N, t, c["_tv"])
+    _verdikta_josla(d, t, y0=346, h_=108)                             # (16.11.2026) kā garās versijas THE FINAL VERDICT
+    if "_laiki" not in c:
+        c["_laiki"] = _xg_kops_laiki(c)
+    t_in, t_v = c["_laiki"]
+    sek_ = c.get("sek") or []
+    n_r = sum(len(sk["rindas"]) for sk in sek_)
+    HH, HG, SG = 58, 14, 26                                           # grupas virsraksts, atstarpe, starp grupām
+    RH = int(min(160, max(110, (1650 - 500 - len(sek_) * (HH + HG) - SG * (len(sek_) - 1) - 14 * max(0, n_r - len(sek_))) / max(1, n_r))))
+    G_ = 14
+    sc = RH / 124                                                     # mērogs (rindas augstums 124 → fonti)
+    X0, X1 = 60, 1020
+    kopa = len(sek_) * (HH + HG) + SG * (len(sek_) - 1) + n_r * RH + G_ * max(0, n_r - len(sek_))
+    y = max(500, int(1075 - kopa / 2))
+    for si, sk in enumerate(sek_):
+        kr_s = tuple(sk["kr"])
+        ah = S.ease(min(1.0, max(0.0, (t - 0.3 - 0.25 * si) / 0.3)))
+        if ah > 0:                                                    # grupas virsraksts – krāsaina josla ar tekstu
+            txt = " ".join(x for x, _ in sk["virs"])
+            fh = F("black", 38)
+            w_ = d.textlength(txt, font=fh) + 48
+            d.rounded_rectangle([X0, y, X0 + w_, y + HH], radius=16, fill=kr_s + (int(235 * ah),))
+            d.text((X0 + 24, y + HH / 2 + 1), txt, font=fh, fill=(S.MELNS if kr_s == tuple(S.ZALS) else S.BALTS) + (int(255 * ah),), anchor="lm")
+        y += HH + HG
+        for ri, r in enumerate(sk["rindas"]):
+            k = S.ease(min(1.0, max(0.0, (t - t_in[(si, ri)]) / 0.35)))
+            if k > 0:
+                yy = y + (1 - k) * 30
+                A = lambda v: int(v * k)                              # noqa: E731
+                rl = Image.new("RGBA", (X1 - X0 + 20, RH + 20), (0, 0, 0, 0)); dr = ImageDraw.Draw(rl)   # rinda – savā slānī
+                dr.rounded_rectangle([10, 10, X1 - X0 + 10, RH + 10], radius=24, fill=(10, 14, 32, 240))
+                kr_r = tuple(r["akc"])
+                dr.rounded_rectangle([10, 10, X1 - X0 + 10, RH + 10], radius=24, outline=(S.DZELTENS if r["hero"] else kr_r) + (230,),
+                                     width=5 if r["hero"] else 3)
+                dr.text((30, 10 + RH / 2), f"#{r['nr']}", font=F("black", int(44 * sc)), fill=(S.DZELTENS if r["hero"] else _NV_LAB), anchor="lm")
+                _fj_ripa(dr, int(30 + 100 * sc), 10 + RH / 2, int(32 * sc), r["badge"])
+                xn = int(30 + 152 * sc)
+                if r["v1"]:
+                    dr.text((xn, 10 + RH * 0.3), r["v1"].upper(), font=F("semi", int(25 * sc)), fill=_NV_LAB, anchor="lm")
+                uz = r["v2"].upper()
+                xr = X1 - X0 - 14
+                fz = F("black", int(25 * sc))
+                zw = dr.textlength(r["zim"], font=fz) + 30
+                xs = xr - zw - 24
+                fl = S.ietilpinat(dr, r["liels"], "black", int(60 * sc), 230)
+                wl = max(dr.textlength(r["liels"], font=fl), dr.textlength(r["maz"], font=F("semi", int(23 * sc))) if r["maz"] else 0)
+                dr.text((xn, 10 + RH * (0.64 if r["v1"] else 0.5)), uz, font=S.ietilpinat(dr, uz, "black", int(52 * sc), xs - wl - 24 - xn),
+                        fill=S.BALTS, anchor="lm")
+                dr.rounded_rectangle([xr - zw, 10 + RH / 2 - 22 * sc, xr, 10 + RH / 2 + 22 * sc], radius=12, outline=kr_r, width=3)
+                dr.text((xr - zw / 2, 10 + RH / 2 + 1), r["zim"], font=fz, fill=kr_r, anchor="mm")
+                dr.text((xs, 10 + RH * 0.42), r["liels"], font=fl, fill=kr_r, anchor="rm")
+                if r["maz"]:
+                    dr.text((xs, 10 + RH * 0.79), r["maz"], font=S.ietilpinat(dr, r["maz"], "semi", int(23 * sc), 240), fill=_NV_LAB, anchor="rm")
+                L.alpha_composite(_ar_alfu(rl, k) if k < 1 else rl, (X0 - 10, int(yy) - 10))
+                if (si, ri) in t_v:                                   # balss nosauc – mirdzošs rāmis
+                    dtt = t - t_v[(si, ri)] + 0.1
+                    g_ = min(1.0, max(0.0, dtt / 0.2)) * (1 - min(1.0, max(0.0, (dtt - 1.0) / 0.5)))
+                    if g_ > 0:
+                        dn.rounded_rectangle([X0 - 4, yy - 4, X1 + 4, yy + RH + 4], radius=27, outline=S.DZELTENS + (int(255 * g_),), width=7)
+            y += RH + G_
+        y += SG - G_
+    L.alpha_composite(_nv_glow(N, 12, 1.3))
+    return L
+
+
 def _iss_xg_grupa(cards, veids, k2, virsr, apaksa):
     kartis = [{"kom": str(c.get("badge", "")), "poz": (c.get("viz") or {}).get("poz", ""), "akc": tuple(c["akc"]),
                "liels": c["viz"]["kart"]["liels"], "maz": c["viz"]["kart"]["maz"], "lab": c["viz"]["zimogs"]} for c in cards]
@@ -8620,6 +8811,14 @@ def _iss_xg(s, veids):
         runa.append(" ".join(dalas))
     kartes.append(hero)
     runa.append(rr[-2])
+    try:                                                              # (kopš 16.11.2026) beigu kopsavilkums – visas 6 kartītes
+        kp_ = _iss_xg_kops(cards, veids, k2, hero)
+    except Exception as ex_:                                          # noqa: BLE001
+        print(f"  (xG kopsavilkums: {type(ex_).__name__}: {ex_} – izlaists)")
+        kp_ = None
+    if kp_:
+        kartes.append(kp_[0])
+        runa.append(kp_[1])
     runa.append(S.atskata_teksts() + " " + S.reta_frase(ISS_XG_BEIGAS, veids=veids, n=2))       # ne āķa jautājums
     return kartes, runa
 
