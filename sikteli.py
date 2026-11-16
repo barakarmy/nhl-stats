@@ -171,15 +171,6 @@ def _mist(kom, v, izm):
     return B._NS_KESA[kb]
 
 
-def _pakaramais(im, cx, top, izm):
-    sc_k = izm / 820
-    d = ImageDraw.Draw(im)
-    yt = top + 30 * sc_k
-    w_ = max(3, int(9 * sc_k))
-    d.line([(cx, yt + 30 * sc_k), (cx, yt - 12 * sc_k)], fill=(190, 196, 208, 255), width=w_)
-    d.arc([cx - 30 * sc_k, yt - 72 * sc_k, cx + 30 * sc_k, yt - 12 * sc_k], 140, 400, fill=(190, 196, 208, 255), width=w_)
-
-
 def _ena(img, r=18, a=0.75, nob=(0, 14)):
     """Mīksta ēna zem attēla (RGBA, mazliet lielāka)."""
     pad = r * 3
@@ -274,7 +265,6 @@ def sikts_A(c):
     rim = _gaisaks(kr, 0.15)
     for (kom, v), (cx, top, izm) in zip(c["krekli"], _izk(len(c["krekli"]), 215, 925, 660)):
         mist = _mist(kom, v, izm)
-        _pakaramais(im, cx, top, izm)
         sil = B._ns_siluets(mist, rim)
         cy = top + mist.height / 2
         B._ns_put(im, sil, cx, cy)
@@ -295,7 +285,6 @@ def sikts_B(c):
     im = _fons(gl, 1.0)
     for (kom, v), (cx, top, izm) in zip(c["krekli"], _izk(len(c["krekli"]), 215, 925, 660)):
         mist = _mist(kom, v, izm)
-        _pakaramais(im, cx, top, izm)
         aura = Image.new("RGBA", mist.size, tuple(B._ns_mala(kom)) + (0,))
         aura.putalpha(mist.getchannel("A").point(lambda x: int(x * 0.55)))
         aura = aura.filter(ImageFilter.GaussianBlur(28 * izm / 660))
