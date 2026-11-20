@@ -2105,7 +2105,7 @@ def fantasy_forma(g, cfg):
         if cfg["veiksme"]:
             f = f - cfg["veiksme"] * _fz(x["veiksme"]).clip(lower=0)
         out.append(f)
-    return pd.concat(out).reindex(g.index)
+    return pd.concat(out).reindex(g.index) if out else pd.Series(np.nan, index=g.index, dtype=float)
 
 
 def _fantasy_pret(df, cfg):
