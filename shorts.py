@@ -431,7 +431,7 @@ GRAFIKA_BIRKAS = ["Ride the schedule", "Chase the games", "Volume wins the week"
 
 # fantasy video beigas (krāsu skaidrojums + follow) – neatkārto pēdējos 5 fantasy video (katrs variants ~reizi 6 nedēļās)
 FANTASY_BEIGAS = [
-    "Green matchups are the weakest defenses by expected goals against. Follow for weekly fantasy hockey tips.",
+    "Green matchups are the teams that give up the most goals and expected goals. Follow for weekly fantasy hockey tips.",
     "Green means a soft defense, red means a tough one. Follow for weekly fantasy hockey tips.",
     "The greener the schedule, the better the week. Follow for fantasy pickups every week.",
     "Check the colors: green games are the easiest matchups. Follow for next week's pickups.",
@@ -1896,10 +1896,11 @@ def fantasy_csv(g, brivi, nometami, a):
            "iSC60": "iSCF/60", "iHD60": "iHDCF/60", "HIT": "HIT", "BLK": "BLK",
            "TOI5_gp": "5v5 TOI/GP", "CF60_5": "CF/60 5v5", "CA60_5": "CA/60 5v5", "CFpct_5": "CF% 5v5",
            "xGF60_5": "xGF/60 5v5", "xGA60_5": "xGA/60 5v5", "xGFpct_5": "xGF% 5v5", "SCF60_5": "SCF/60 5v5", "SCA60_5": "SCA/60 5v5", "HDCF60_5": "HDCF/60 5v5",
-           "HDCA60_5": "HDCA/60 5v5", "ixG": "ixG", "sp_nak": "Games next week", "vajie": "Soft matchups", "stipras": "Tough matchups",
+           "HDCA60_5": "HDCA/60 5v5", "ixG": "ixG", "P_s_gp": "Season PTS/GP", "sp_nak": "Games next week", "vajie": "Soft matchups", "stipras": "Tough matchups",
+           "pret": "Matchup score", "b2b": "Opp. back-to-backs", "viegl": "Light-day games",
            "forma": "Form score", "score_pickup": "Pickup score", "score_drop": "Drop score"}
     t = t[[k for k in kol if k in t.columns]].rename(columns=kol)
-    for c_ in ("Shots/60", "iFF/60", "iCF/60", "iSCF/60", "iHDCF/60", "Form score", "Pickup score", "Drop score", "CF/60 5v5", "CA/60 5v5",
+    for c_ in ("Shots/60", "iFF/60", "iCF/60", "iSCF/60", "iHDCF/60", "Form score", "Pickup score", "Drop score", "Season PTS/GP", "Matchup score", "CF/60 5v5", "CA/60 5v5",
                "CF% 5v5", "xGF/60 5v5", "xGA/60 5v5", "xGF% 5v5", "SCF/60 5v5", "SCA/60 5v5", "HDCF/60 5v5", "HDCA/60 5v5"):
         if c_ in t:
             t[c_] = t[c_].round(2)
@@ -1909,14 +1910,60 @@ def fantasy_csv(g, brivi, nometami, a):
     return t.sort_values("Pickup score", ascending=False, na_position="last")
 
 
-def veids_fantasy(m, a):
-    dienas = a.dienas or 14
-    sp = pd.read_csv(os.path.join(BASE, "sezonas", "speletaji.csv"), encoding="utf-8-sig", low_memory=False)
-    sp["playerId"] = pd.to_numeric(sp["playerId"], errors="coerce")
-    sp["toi_m"] = sp["toi"].map(_toi_min)
-    if a.lidz:
-        sp = sp[sp["datums"] <= a.lidz]
-    lidz = sp["datums"].max()
+# ================================================================ fantasy modelis (pickups / streameri / drop)
+# "jauns" – kopš 20.11.2026; "vecs" – iepriekšējā loģika (salīdzināšanai: --fantasy-modelis vecs; fantasy_backtest.py rēķina abus).
+FANTASY_MODELI = {
+    "jauns": {"logs": 0.60,             # forma: 60 % pēdējās N dienas + 40 % visa sezona (mazāk "karstās rokas")
+              "P": 0.20, "ixG": 0.25, "SOG": 0.15, "PPP": 0.10, "TOI": 0.10, "TOI_d": 0.10,
+              "veiksme": 0.10,          # sods: vārti spēlē stipri virs ixG pēdējās N dienās (realizācija parasti atdziest)
+              "pret": 0.15,             # katrai spēlei: pretinieka vājums (z, ±1.5; xGA + ielaistie) – nevis tikai top/bottom 10
+              "b2b": 0.10,              # katrai spēlei, kurā pretinieks spēlē 2. vakaru pēc kārtas (noguris, bieži rezerves vārtsargs)
+              "viegl": 0.05,            # nedēļas pickiem: spēle vieglajā dienā (≤ 7 NHL spēles) – dienas sastāvu līgās
+              "viegl_stream": 0.15,     # streameriem (kā līdz šim)
+              "drop_aizs": True,        # DROP aizsardzība: sezonas kvalitāte / metieni un ixG joprojām normā
+              "drop_min": 0.0,          # DROP tikai, ja kopvērtējums (dscore) > 0 – ne spēlētājam ar 5 vieglām spēlēm nākamnedēļ
+              "stream_min_sp": True},   # streameri: tikai komandas ar ≥ (maks. − 1) un ≥ 2 spēlēm līdz svētdienai
+    "vecs": {"logs": 1.0, "P": 0.30, "ixG": 0.25, "SOG": 0.15, "PPP": 0.10, "TOI": 0.0, "TOI_d": 0.10, "veiksme": 0.0,
+             "pret": None, "b2b": 0.0, "viegl": 0.0, "viegl_stream": 0.15, "drop_aizs": False, "drop_min": None,
+             "stream_min_sp": False},
+}
+FANTASY_MODELIS = "jauns"
+FANTASY_SPELE = 0.40                    # par katru nākamās nedēļas spēli virs 3.5 (spēļu skaits joprojām svarīgākais)
+FANTASY_VIEGLA_DIENA = 7                # ≤ 7 NHL spēles dienā = vieglā diena
+_FANTASY_KESA = {}
+
+
+def _fz(s_):
+    sd = s_.std()
+    return (s_ - s_.mean()) / sd if sd and np.isfinite(sd) else s_ * 0
+
+
+def _fantasy_csv_kesa(p):
+    """CSV vienreiz uz failu (backtest katrai nedēļai neielasa onice.csv / bloketi.csv no jauna)."""
+    k = (p, os.path.getmtime(p))
+    if k not in _FANTASY_KESA:
+        _FANTASY_KESA[k] = pd.read_csv(p, encoding="utf-8-sig", low_memory=False)
+    return _FANTASY_KESA[k]
+
+
+def fantasy_pp_varti():
+    """varti.csv → tikai vairākuma vārti (strength == pp)."""
+    v = pd.read_csv(os.path.join(BASE, "sezonas", "varti.csv"), encoding="utf-8-sig", low_memory=False)
+    return v[v["strength"].astype(str).str.lower() == "pp"]
+
+
+def _pp_punkti(v):
+    """Vairākuma punkti spēlētājam (vārti + piespēles) – Series pēc playerId."""
+    if v.empty:
+        return pd.Series(dtype=float)
+    return pd.concat([pd.to_numeric(v[c], errors="coerce") for c in ("scorer_id", "assist1_id", "assist2_id")]).dropna().astype(int).value_counts()
+
+
+def fantasy_pazimes(sp, m, lidz, dienas, v_pp=None):
+    """Laukuma spēlētāju rādītāji pēdējās `dienas` dienās + visa sezona līdz `lidz` (fantasy vērtējumam).
+    sp – speletaji.csv (playerId skaitlis, toi_m, līdz lidz); m – metieni ar xg; v_pp – fantasy_pp_varti() (None → nolasa).
+    → (g, nesen, mm, no): g – kandidāti (≥ 4 spēles, spēlējis komandas pēdējā spēlē), nesen – sp rindas logā, mm – metieni logā."""
+    sp = sp[sp["datums"] <= lidz]
     no = (pd.Timestamp(lidz) - timedelta(days=dienas - 1)).strftime("%Y-%m-%d")
     nesen = sp[sp["datums"] >= no]
     vec = sp[sp["datums"] < no]
@@ -1940,7 +1987,7 @@ def veids_fantasy(m, a):
     # bloķētie metieni (sezonas/bloketi.csv) → iCF = visi meginājumi = neblokētie + bloķētie
     pb = os.path.join(BASE, "sezonas", "bloketi.csv")
     if os.path.exists(pb):
-        bl = pd.read_csv(pb, encoding="utf-8-sig", low_memory=False)
+        bl = _fantasy_csv_kesa(pb)
         bl = bl[(bl["datums"] >= no) & (bl["datums"] <= lidz) & (pd.to_numeric(bl["tuksi"], errors="coerce").fillna(0) == 0)]
         bl["metejs"] = pd.to_numeric(bl["metejs"], errors="coerce")
         g["iBLK"] = bl.groupby("metejs").size().reindex(g.index).fillna(0)
@@ -1951,7 +1998,7 @@ def veids_fantasy(m, a):
     po = os.path.join(BASE, "sezonas", "onice.csv")
     oi_kol = ["TOI5", "CF60_5", "CA60_5", "CFpct_5", "xGF60_5", "xGA60_5", "xGFpct_5", "SCF60_5", "SCA60_5", "HDCF60_5", "HDCA60_5"]
     if os.path.exists(po):
-        oi = pd.read_csv(po, encoding="utf-8-sig", low_memory=False)
+        oi = _fantasy_csv_kesa(po)
         oi = oi[(oi["datums"] >= no) & (oi["datums"] <= lidz) & (oi["sit"] == "5v5")]
         if "SCF" not in oi:                                          # vecs onice.csv (pirms scoring chances)
             oi["SCF"], oi["SCA"] = np.nan, np.nan
@@ -1972,12 +2019,154 @@ def veids_fantasy(m, a):
     for k, k60 in (("SOG", "SOG60"), ("iFF", "iFF60"), ("iCF", "iCF60"), ("ixG", "ixG60"), ("iSC", "iSC60"), ("iHD", "iHD60")):
         g[k60] = (g[k] / g["TOI_kopa"] * 60).where(g["TOI_kopa"] > 0)
     # punkti vairākumā (vārti + piespēles ar strength == pp)
-    v = pd.read_csv(os.path.join(BASE, "sezonas", "varti.csv"), encoding="utf-8-sig", low_memory=False)
-    v = v[(v["datums"] >= no) & (v["datums"] <= lidz) & (v["strength"].astype(str).str.lower() == "pp")]
-    pp = pd.concat([pd.to_numeric(v[c], errors="coerce") for c in ("scorer_id", "assist1_id", "assist2_id")]).dropna().astype(int).value_counts()
+    if v_pp is None:
+        v_pp = fantasy_pp_varti()
+    vs = v_pp[v_pp["datums"] <= lidz]
+    pp = _pp_punkti(vs[vs["datums"] >= no])
     g["PPP"] = pp.reindex(g.index).fillna(0)
+    # visa sezona līdz lidz – formas stabilizēšanai (jaunais modelis: 60 % pēdējās N dienas + 40 % sezona)
+    sez = sp.groupby("playerId").agg(GP_s=("game_id", "nunique"), P_s=("points", "sum"), SOG_s=("sog", "sum"), TOI_s=("toi_m", "mean"))
+    g = g.join(sez)
+    g["ixG_s"] = m[m["datums"] <= lidz].groupby("metejs")["xg"].sum().reindex(g.index).fillna(0)
+    g["PPP_s"] = _pp_punkti(vs).reindex(g.index).fillna(0)
     for k in ("P", "SOG", "ixG", "PPP"):
         g[k + "_gp"] = g[k] / g["GP"]
+        g[k + "_s_gp"] = g[k + "_s"] / g["GP_s"].where(g["GP_s"] > 0)
+    g["G_ixG_gp"] = (g["G"] - g["ixG"]) / g["GP"]                     # "veiksme": vārti virs ixG spēlē
+    g["grupa"] = np.where(g["poz"] == "D", "D", "F")
+    return g, nesen, mm, no
+
+
+def fantasy_grafiks(kal):
+    """Kalendārs (majas_komanda, viesu_komanda, datums) → {komanda: [(datums, 'MON', pretinieks, 'vs'/'@'), ...]}."""
+    grafiks = {}
+    for r in kal.itertuples(index=False):
+        d = DIENAS_EN[pd.Timestamp(r.datums).weekday()]
+        grafiks.setdefault(r.majas_komanda, []).append((r.datums, d, r.viesu_komanda, "vs"))
+        grafiks.setdefault(r.viesu_komanda, []).append((r.datums, d, r.majas_komanda, "@"))
+    for k in grafiks:
+        grafiks[k].sort()
+    return grafiks
+
+
+def fantasy_pretinieki(m, lidz, cfg):
+    """Komandu vājums kā pretiniekam (augstāks = vieglāka spēle uzbrucējiem) + vājāko / stiprāko 10 kopas (krāsām).
+    Jaunais: 0.5·z(xGA/spēlē) + 0.5·z(ielaistie/spēlē bez tukšajiem vārtiem) – aizsardzība UN vārtsargi. Vecais: tikai xGA/spēlē."""
+    kt = komandu_tabula(m[m["datums"] <= lidz])
+    gp = kt["GP"].where(kt["GP"] > 0)
+    ind = _fz(kt["xGA"] / gp) if cfg.get("pret") is None else 0.5 * _fz(kt["xGA"] / gp) + 0.5 * _fz(kt["GA"] / gp)
+    ind = ind.dropna().sort_values(ascending=False)
+    return ind, set(ind.index[:10]), set(ind.index[-10:])
+
+
+def fantasy_grafika_pazimes(g, grafiks, kal, ind, vajas, stipras, spelu_dienas):
+    """Nedēļas grafiks katram spēlētājam: sp_nak, vajie, stipras, viegl, pret (Σ pretinieku vājums, ±1.5 spēlei),
+    b2b (spēles pret pretinieku, kas iepriekšējā vakarā arī spēlēja). spelu_dienas – {(komanda, 'YYYY-MM-DD')}. → (g, vieglās dienas)"""
+    g = g.copy()
+    sp_d = kal.groupby("datums").size()
+    vieglas = {d_ for d_, n_ in sp_d.items() if n_ <= FANTASY_VIEGLA_DIENA}
+
+    def b2b(o, d_):
+        return (o, (pd.Timestamp(d_) - timedelta(days=1)).strftime("%Y-%m-%d")) in spelu_dienas
+
+    def gr(k):
+        return grafiks.get(k, [])
+    g["sp_nak"] = g["team"].map(lambda k: len(gr(k)))
+    g["viegl"] = g["team"].map(lambda k: sum(x[0] in vieglas for x in gr(k)))
+    g["vajie"] = g["team"].map(lambda k: sum(o in vajas for _, _, o, _ in gr(k)))
+    g["stipras"] = g["team"].map(lambda k: sum(o in stipras for _, _, o, _ in gr(k)))
+    g["pret"] = g["team"].map(lambda k: float(sum(np.clip(ind.get(o, 0.0), -1.5, 1.5) for _, _, o, _ in gr(k))))
+    g["b2b"] = g["team"].map(lambda k: sum(b2b(o, d_) for d_, _, o, _ in gr(k)))
+    return g, vieglas
+
+
+def fantasy_forma(g, cfg):
+    """Forma (z pret visiem spēlētājiem savā grupā – uzbrucēji / aizsargi atsevišķi)."""
+    w = cfg["logs"]
+
+    def mix(k):
+        x = g[k + "_gp"]
+        return x if w >= 1 else w * x + (1 - w) * g[k + "_s_gp"].fillna(x)
+    t = pd.DataFrame({"P": mix("P"), "ixG": mix("ixG"), "SOG": mix("SOG"), "PPP": mix("PPP"), "TOI": g["TOI"],
+                      "TOI_d": g["TOI_d"].clip(-4, 4), "veiksme": g["G_ixG_gp"]}, index=g.index)
+    out = []
+    for _, x in t.groupby(np.where(g["poz"] == "D", "D", "F")):
+        f = sum(cfg[k] * _fz(x[k]) for k in ("P", "ixG", "SOG", "PPP", "TOI", "TOI_d") if cfg[k])
+        if cfg["veiksme"]:
+            f = f - cfg["veiksme"] * _fz(x["veiksme"]).clip(lower=0)
+        out.append(f)
+    return pd.concat(out).reindex(g.index)
+
+
+def _fantasy_pret(df, cfg):
+    return 0.15 * df["vajie"] - 0.15 * df["stipras"] if cfg.get("pret") is None else cfg["pret"] * df["pret"]
+
+
+def fantasy_score(df, cfg, stream=False):
+    """Pickup vērtējums: forma + spēles + pretinieki (+ b2b, vieglās dienas) + ESPN tendence."""
+    return (df["forma"] + FANTASY_SPELE * (df["sp_nak"] - 3.5) + _fantasy_pret(df, cfg) + cfg["b2b"] * df["b2b"]
+            + (cfg["viegl_stream"] if stream else cfg["viegl"]) * df["viegl"] + 0.10 * _fz(df["delta7"].fillna(0)))
+
+
+def fantasy_dscore(df, cfg):
+    """Drop vērtējums: vāja forma + maz / grūtas spēles + krītošs ESPN %."""
+    return (-df["forma"] + FANTASY_SPELE * (3.5 - df["sp_nak"]) - _fantasy_pret(df, cfg) - cfg["b2b"] * df["b2b"]
+            - cfg["viegl"] * df["viegl"] - 0.10 * _fz(df["delta7"].fillna(0)))
+
+
+def fantasy_drop_aizsardziba(nometami, cfg):
+    """DROP aizsardzība (jaunais modelis) → {playerId: iemesls}. Neiesakām mest ārā, ja loma nav kritusies (TOI ≥ −1:30) un:
+    1) sezonā viens no labākajiem līdzīgi paņemto vidū – P/GP ≥ 75. procentile savā grupā (F/D), ≥ 8 spēles;
+    2) metieni UN ixG spēlē pēdējās N dienās joprojām ≥ grupas mediānai – punktu trūkums ir neveiksme, ne kritums."""
+    if not cfg.get("drop_aizs") or nometami.empty:
+        return {}
+    out = {}
+    for _, x in nometami.groupby("grupa"):
+        ref = x if len(x) >= 8 else nometami
+        q_p = ref["P_s_gp"].quantile(0.75)
+        med_x, med_s = ref["ixG_gp"].median(), ref["SOG_gp"].median()
+        for pid, r in x.iterrows():
+            if r["TOI_d"] <= -1.5:
+                continue
+            if r["GP_s"] >= 8 and r["P_s_gp"] >= q_p:
+                out[pid] = f"sezonā {r['P_s_gp']:.2f} P/GP – labāko 25 % vidū šajā grupā"
+            elif r["ixG_gp"] >= med_x and r["SOG_gp"] >= med_s:
+                out[pid] = f"metieni {r['SOG_gp']:.1f} un ixG {r['ixG_gp']:.2f} spēlē joprojām normā – neveiksme, ne kritums"
+    return out
+
+
+def fantasy_drop_kandidati(nometami, cfg, aizs):
+    """DROP kandidāti: forma < 0 (pret visiem savā grupā), nav aizsargāti un (jaunais) dscore > drop_min."""
+    k = nometami[(nometami["forma"] < 0) & ~nometami.index.isin(list(aizs))]
+    return k if cfg.get("drop_min") is None else k[k["dscore"] > cfg["drop_min"]]
+
+
+def fantasy_ar_limitu(df, kol, n):
+    """Top n pēc kol, bet ne vairāk kā 1 aizsargs (fantasy līgās vairāk vajag uzbrucējus) un 1 spēlētājs no komandas."""
+    out, d_, kom_ = [], 0, set()
+    for pid_, r_ in df.sort_values(kol, ascending=False).iterrows():
+        if (r_["grupa"] == "D" and d_ >= 1) or r_["team"] in kom_:
+            continue
+        out.append(pid_)
+        d_ += r_["grupa"] == "D"
+        kom_.add(r_["team"])
+        if len(out) >= n:
+            break
+    return df.loc[out]
+
+
+def veids_fantasy(m, a):
+    dienas = a.dienas or 14
+    sp = pd.read_csv(os.path.join(BASE, "sezonas", "speletaji.csv"), encoding="utf-8-sig", low_memory=False)
+    sp["playerId"] = pd.to_numeric(sp["playerId"], errors="coerce")
+    sp["toi_m"] = sp["toi"].map(_toi_min)
+    if a.lidz:
+        sp = sp[sp["datums"] <= a.lidz]
+    lidz = sp["datums"].max()
+    modelis = getattr(a, "fantasy_modelis", None) or FANTASY_MODELIS
+    cfg = FANTASY_MODELI[modelis]
+    print(f"FANTASY MODELIS: {modelis}" + (" (vecā loģika – salīdzināšanai)" if modelis == "vecs" else ""))
+    g, nesen, mm, no = fantasy_pazimes(sp, m, lidz, dienas)
     # nākamās nedēļas grafiks
     stream = a.veids == "streameri"            # nedēļas vidus: spēlētāji atlikušajām šīs nedēļas dienām (līdz svētdienai)
     if stream:
@@ -1997,31 +2186,22 @@ def veids_fantasy(m, a):
     kal = pd.read_csv(os.path.join(BASE, "sezonas", "nhl_kalendars.csv"), encoding="utf-8-sig")
     kal = kal[(kal["datums"] >= start.strftime("%Y-%m-%d")) & (kal["datums"] <= beigas.strftime("%Y-%m-%d"))]
     # nedēļas daļa, kas jau aizvadīta (piem. --nedela pagātnē), – no sezonas/speles.csv
-    sg_ = pd.read_csv(os.path.join(BASE, "sezonas", "speles.csv"), encoding="utf-8-sig", low_memory=False)
-    sg_ = sg_[(sg_["datums"] >= start.strftime("%Y-%m-%d")) & (sg_["datums"] <= beigas.strftime("%Y-%m-%d"))]
+    sg_vis = pd.read_csv(os.path.join(BASE, "sezonas", "speles.csv"), encoding="utf-8-sig", low_memory=False)
+    sg_ = sg_vis[(sg_vis["datums"] >= start.strftime("%Y-%m-%d")) & (sg_vis["datums"] <= beigas.strftime("%Y-%m-%d"))]
     sg_ = sg_[~sg_["game_id"].isin(kal["game_id"])].rename(columns={"home_team": "majas_komanda", "away_team": "viesu_komanda"})
     kal = pd.concat([kal, sg_[["game_id", "datums", "majas_komanda", "viesu_komanda"]]], ignore_index=True)
     if kal.empty:
         print(f"Kalendārā nav spēļu nedēļai {start:%Y-%m-%d} – {beigas:%Y-%m-%d}.")
         return None
-    grafiks = {}
-    for r in kal.itertuples(index=False):
-        d = DIENAS_EN[pd.Timestamp(r.datums).weekday()]
-        grafiks.setdefault(r.majas_komanda, []).append((r.datums, d, r.viesu_komanda, "vs"))
-        grafiks.setdefault(r.viesu_komanda, []).append((r.datums, d, r.majas_komanda, "@"))
-    for k in grafiks:
-        grafiks[k].sort()
-    # pretinieku aizsardzība: xG pret spēlē visā sezonā (augstāks = vājāka aizsardzība = labāka spēle uzbrucējiem)
-    kt = komandu_tabula(m[m["datums"] <= lidz])
-    xga = (kt["xGA"] / kt["GP"]).sort_values(ascending=False)
-    vajas, stipras = set(xga.index[:10]), set(xga.index[-10:])
-    g["sp_nak"] = g["team"].map(lambda k: len(grafiks.get(k, [])))
-    _sp_d = kal.groupby("datums").size()
-    vieglas = {d_ for d_, n_ in _sp_d.items() if n_ <= 7}             # vieglās dienas (≤ 7 NHL spēles) – dienas līgās vērtīgākas
-    g["viegl"] = g["team"].map(lambda k: sum(x[0] in vieglas for x in grafiks.get(k, [])))
-    g["vajie"] = g["team"].map(lambda k: sum(o in vajas for _, _, o, _ in grafiks.get(k, [])))
+    grafiks = fantasy_grafiks(kal)
+    # pretinieki: vājums (jaunais – aizsardzība + vārtsargi, nepārtraukti; vecais – top/bottom 10 pēc xGA spēlē)
+    pret_ind, vajas, stipras = fantasy_pretinieki(m, lidz, cfg)
+    # b2b: visas zināmās spēles (sezona + kalendārs) – vai pretinieks spēlēja iepriekšējā vakarā
+    _sv = sg_vis[["datums", "home_team", "away_team"]].rename(columns={"home_team": "majas_komanda", "away_team": "viesu_komanda"})
+    spelu_dienas = {(k_, d_) for x_ in (_sv, kal) for d_, h_, v_ in zip(x_["datums"], x_["majas_komanda"], x_["viesu_komanda"])
+                    for k_ in (h_, v_)}
+    g, vieglas = fantasy_grafika_pazimes(g, grafiks, kal, pret_ind, vajas, stipras, spelu_dienas)  # vieglās dienas – ≤ 7 NHL spēles
     g = g[g["sp_nak"] >= 1]
-    g["stipras"] = g["team"].map(lambda k: sum(o in stipras for _, _, o, _ in grafiks.get(k, [])))
     # ESPN % rostered
     e, e_dat = espn_dati()
     if e is not None:
@@ -2046,16 +2226,8 @@ def veids_fantasy(m, a):
             if atr.empty:
                 print(f"  --izslegt: '{v_}' neatbilst nevienam kandidātam (pārbaudi rakstību)")
 
-    def z(s_):
-        sd = s_.std()
-        return (s_ - s_.mean()) / sd if sd and np.isfinite(sd) else s_ * 0
     # forma tiek vērtēta pret VISIEM spēlētājiem (ne tikai brīvajiem), aizsargi – atsevišķi no uzbrucējiem
-    g["grupa"] = np.where(g["poz"] == "D", "D", "F")
-
-    def forma_grupai(x):
-        return (0.30 * z(x["P_gp"]) + 0.25 * z(x["ixG_gp"]) + 0.15 * z(x["SOG_gp"]) + 0.10 * z(x["TOI_d"].clip(-4, 4))
-                + 0.10 * z(x["PPP_gp"]))
-    g["forma"] = pd.concat([forma_grupai(x) for _, x in g.groupby("grupa")])
+    g["forma"] = fantasy_forma(g, cfg)
     if e is not None:
         brivi = g[g["rostered"].notna() & (g["rostered"] <= a.max_rostered) & (g["trauma"].isin(["", "ACTIVE"]))].copy()
         nometami = g[g["rostered"].notna() & (g["rostered"] >= a.drop_min_rostered) & (g["rostered"] <= a.drop_max_rostered)
@@ -2063,29 +2235,34 @@ def veids_fantasy(m, a):
     else:
         top = sp.groupby("playerId")["points"].sum().sort_values(ascending=False).index[:60]
         brivi, nometami = g[~g.index.isin(top) & (g["trauma"] != "IZSLEGTS")].copy(), g.iloc[0:0].copy()
+    if stream and cfg.get("stream_min_sp"):                          # streamerim ar 1 spēli līdz svētdienai nav jēgas
+        min_sp = max(2, max((len(v_) for v_ in grafiks.values()), default=0) - 1)
+        if (brivi["sp_nak"] >= min_sp).sum() >= a.top:
+            print(f"STREAMERI: tikai spēlētāji ar ≥ {min_sp} spēlēm līdz svētdienai "
+                  f"({int((brivi['sp_nak'] < min_sp).sum())} ar mazāk spēļu izlaisti)")
+            brivi = brivi[brivi["sp_nak"] >= min_sp]
     if len(brivi) < a.top:
         return None
-    # pretinieki: katra spēle pret vāju aizsardzību +0.15, pret stipru −0.15 (spēļu skaits joprojām svarīgākais – 0.40 par spēli)
-    brivi["score"] = (brivi["forma"] + 0.40 * (brivi["sp_nak"] - 3.5) + 0.15 * brivi["vajie"] - 0.15 * brivi["stipras"]
-                      + (0.15 * brivi["viegl"] if stream else 0)
-                      + 0.10 * z(brivi["delta7"].fillna(0)))
-    def ar_limitu(df, kol, n):
-        """Top n pēc kol, bet ne vairāk kā 1 aizsargs (fantasy līgās vairāk vajag uzbrucējus) un 1 spēlētājs no komandas."""
-        out, d_, kom_ = [], 0, set()
-        for pid_, r_ in df.sort_values(kol, ascending=False).iterrows():
-            if (r_["grupa"] == "D" and d_ >= 1) or r_["team"] in kom_:
-                continue
-            out.append(pid_)
-            d_ += r_["grupa"] == "D"
-            kom_.add(r_["team"])
-            if len(out) >= n:
-                break
-        return df.loc[out]
+    # spēļu skaits joprojām svarīgākais (0.40 par spēli); pretinieki, b2b, vieglās dienas – fantasy_score()
+    brivi["score"] = fantasy_score(brivi, cfg, stream)
+    ar_limitu = fantasy_ar_limitu
     izv = ar_limitu(brivi, "score", a.top)
     # drop: daudzās līgās paņemts, bet vāja forma un/vai mazs/grūts nākamās nedēļas grafiks
-    nometami["dscore"] = (-nometami["forma"] + 0.40 * (3.5 - nometami["sp_nak"]) + 0.15 * nometami["stipras"] - 0.15 * nometami["vajie"]
-                          - 0.10 * z(nometami["delta7"].fillna(0)))
-    drop = ar_limitu(nometami[nometami["forma"] < 0], "dscore", a.drop) if a.drop > 0 else nometami.iloc[0:0]
+    nometami["dscore"] = fantasy_dscore(nometami, cfg)
+    # DROP aizsardzība (jaunais modelis): sezonā labs spēlētājs ar nelielu kritumu / metieni un ixG joprojām normā – neiesakām
+    aizs = fantasy_drop_aizsardziba(nometami, cfg)
+    if a.drop > 0:
+        drop = ar_limitu(fantasy_drop_kandidati(nometami, cfg, aizs), "dscore", a.drop)
+        for pid_, r_ in ar_limitu(nometami[nometami["forma"] < 0], "dscore", a.drop + 2).iterrows():
+            if pid_ in aizs:
+                print(f"  DROP aizsardzība: {r_['vards']} ({r_['team']}) netiek ieteikts – {aizs[pid_]}")
+            elif pid_ not in drop.index and cfg.get("drop_min") is not None and r_["dscore"] <= cfg["drop_min"]:
+                print(f"  DROP: {r_['vards']} ({r_['team']}) netiek ieteikts – forma vāja, bet {int(r_['sp_nak'])} spēles / "
+                      f"pretinieki nākamnedēļ to atsver")
+        if len(drop) < a.drop:
+            print(f"  DROP: pārliecinošu kandidātu {len(drop)} (prasīti {a.drop}) – video rāda tikai tos")
+    else:
+        drop = nometami.iloc[0:0]
     drop_veids = {pid_: ("BENCH" if r_["forma"] > -0.4 and r_["sp_nak"] <= 2 else "DROP") for pid_, r_ in drop.iterrows()}
 
     lidz_ts = pd.Timestamp(lidz)
@@ -2104,6 +2281,8 @@ def veids_fantasy(m, a):
             return f"Real chances: {r['ixG_gp']:.2f} expected goals per game"
         if r["sp_nak"] >= 4:
             return f"{int(r['sp_nak'])} games next week" + (f", {int(r['vajie'])} vs weak defenses" if r["vajie"] else "")
+        if r.get("b2b", 0) >= 2 and cfg["b2b"]:
+            return f"Tired opponents: {int(r['b2b'])} games vs teams on a back-to-back"
         return f"{r['SOG_gp']:.1f} shots per game – volume drives fantasy points"
 
     def iemesls_drop(r):
@@ -2341,7 +2520,8 @@ def veids_fantasy(m, a):
     if n_drop:
         legenda.append(("DROP / BENCH  →  cut or sit", SARKANS, BALTS))
     saraksts = [f"ADD {r['vards']} ({r['team']}): {int(r['P'])} P in {int(r['GP'])} GP, {r['SOG60']:.1f} Shots/60, "
-                f"{r['ixG60']:.2f} ixG/60, {_mmss(r['TOI'])} TOI/GP, {int(r['sp_nak'])} games {'left this week' if stream else 'next week'}"
+                f"{r['ixG60']:.2f} ixG/60, {_mmss(r['TOI'])} TOI/GP, {int(r['sp_nak'])} game{'' if r['sp_nak'] == 1 else 's'} "
+                f"{'left this week' if stream else 'next week'}"
                 + ("" if not np.isfinite(r["rostered"]) else f", {r['rostered']:.1f}% rostered") for _, r in izv.iterrows()]
     saraksts += [f"{drop_veids[pid_]} {r['vards']} ({r['team']}): {r['rostered']:.0f}% rostered – {iemesls_drop(r)}" for pid_, r in drop.iterrows()]
     # āķis (ShortsB jaunais izskats): #1 izvēles spilgtākais fakts – punkti / spēles / metieni pēdējās 5 spēlēs
@@ -2384,7 +2564,7 @@ def veids_fantasy(m, a):
                   "legenda": legenda},
         "kartes": kartes,
         "outro": {"rindas": [("GRAB THEM", BALTS), ("BEFORE THEY'RE GONE.", DZELTENS)],
-                  "info": ["Rostered % from ESPN  ·  stats from NHL", "Green = soft matchup (high xG against)"],
+                  "info": ["Rostered % from ESPN  ·  stats from NHL", "Green = soft matchup (high xG against)" if cfg.get("pret") is None else "Green = soft matchup (high xG & goals against)"],
                   "komentars": jautajums("streameri" if stream else "fantasy"), "verdikts": verdikts},
         "zimogs": zimogs, "runa": runa, "lidz": lidz, "periods": f"{dat(no)} – {dat(lidz, True)}; week of {dat(start)} – {dat(beigas, True)}",
         "thumb": {"tag": "NHL  ·  FANTASY WAIVER WIRE", "hook": [f"{n_add} PICKUP{'' if n_add == 1 else 'S'}", f"+ {n_drop} DROP{'' if n_drop == 1 else 'S'}" if n_drop else "NEXT WEEK"],
@@ -2403,6 +2583,7 @@ def veids_fantasy(m, a):
                          for p_, r_ in drop.iterrows()]
                       + ([f"  Izlaisti – ne pick, ne drop (trauma / ar roku): {len(izslegti)}"] + [f"    {x}" for x in izslegti[:12]] if izslegti else [])),
         "momentuzn": {"nedela": [start.strftime("%Y-%m-%d"), beigas.strftime("%Y-%m-%d")], "max_rostered": a.max_rostered,
+                      "modelis": modelis,
                       "drop_rostered": [a.drop_min_rostered, a.drop_max_rostered],
                       "add": {str(int(p_)): {"vards": r_["vards"], "team": r_["team"], "poz": r_["poz"], "veids": add_veids[p_],
                                              "rostered": sk(r_["rostered"])} for p_, r_ in izv.iterrows()},
@@ -5310,6 +5491,8 @@ def main():
     ap.add_argument("--drop-min-rostered", type=float, default=50, help="fantasy drop: min. %% rostered (noklusējums 50)")
     ap.add_argument("--drop-max-rostered", type=float, default=90, help="fantasy drop: maks. %% rostered – zvaigznes neiesakām mest ārā (90)")
     ap.add_argument("--top", type=int, default=3)
+    ap.add_argument("--fantasy-modelis", choices=list(FANTASY_MODELI), default=None,
+                    help="fantasy / streameri: 'jauns' (noklusējums kopš 20.11.2026) vai 'vecs' (iepriekšējā loģika – salīdzināšanai)")
     ap.add_argument("--min-metieni", type=int, default=15)
     ap.add_argument("--balss", default="en-CA-LiamNeural", help="edge-tts balss (piem. en-US-AndrewNeural, en-US-GuyNeural)")
     ap.add_argument("--bez-balss", action="store_true")
