@@ -1,7 +1,7 @@
 """
 fantasy_backtest.py – fantasy pickup / drop loģikas pārbaude uz jau aizvadītām nedēļām: modeļu salīdzinājums.
 Modeļi (shorts.py FANTASY_MODELI): vecs (līdz 20.11.2026), sezona (20.11. 1. versija – forma ar sezonu visur),
-jauns (pēc 70 nedēļu backtest – forma ar sezonu, pretinieki top/bottom 10, DROP aizsardzība).
+jauns (pēc 70 nedēļu backtest – forma 40 % 14 d. + 60 % sezona, pretinieki top/bottom 10, DROP aizsardzība).
 
 Katrai aizvadītai fantasy nedēļai (pirmdiena–svētdiena):
   1) "ieteikums" tieši tā, kā shorts.py to būtu izrēķinājis svētdienas vakarā (dati līdz svētdienai, tā paša koda funkcijas);
@@ -22,7 +22,7 @@ Palaišana:
   python fantasy_backtest.py --visas                šī sezona + vēstures sezonas (sezonas/vesture/<sezona>/, ja tur ir faili)
   python fantasy_backtest.py --sezona 20252026      tikai viena vēstures sezona
   python fantasy_backtest.py --streameri            streameri: trešdiena–svētdiena (dati līdz otrdienai), bez drop
-  python fantasy_backtest.py --ablacija             + "jauns" ar vienu izmaiņu katrā variantā (logs80, logs40, P30, -veiksme,
+  python fantasy_backtest.py --ablacija             + "jauns" ar vienu izmaiņu katrā variantā (logs60, logs20, logs0, -veiksme,
                                                     -toi, +pret, +b2b, +viegl, +visi3) – vai kāda vēl uzlabo pašu augšu (ADD10)
 Rezultāts: konsolē + video/fantasy_backtest.csv (katra izvēle ar punktiem un verdiktu; mape video – .gitignore, netiek augšupielādēta).
 """
@@ -50,9 +50,9 @@ def ablacijas():
     def v(**kw):
         return dict(j, **kw)
     return {
-        "logs80": v(logs=0.80),                       # 80 % 14 dienas + 20 % sezona
-        "logs40": v(logs=0.40),                       # 40 % + 60 % (vairāk sezonas)
-        "P30": v(P=0.30),                             # punktiem kā agrāk
+        "logs60": v(logs=0.60),                       # 60 % 14 dienas + 40 % sezona (20.11. 1. versija)
+        "logs20": v(logs=0.20),                       # 20 % + 80 % (vēl vairāk sezonas)
+        "logs0": v(logs=0.0),                         # tikai sezonas vidējie (14 dienas – tikai laiks uz ledus un tā izmaiņa)
         "-veiksme": v(veiksme=0.0),                   # bez soda par vārtiem virs ixG
         "-toi": v(TOI=0.0),                           # bez laika uz ledus līmeņa
         "+pret": v(pret=0.15),                        # pretinieki nepārtraukti (xGA + ielaistie)
