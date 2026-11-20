@@ -1912,9 +1912,11 @@ def fantasy_csv(g, brivi, nometami, a):
 
 
 # ================================================================ fantasy modelis (pickups / streameri / drop)
-# Backtest uz 4 nedēļām (20.11.2026, fantasy_backtest.py): forma ar sezonu ("sezona") labāk sakārto VISU grupu un labāk izvēlas
-# DROP, bet sliktāk – pašu augšu (top 10 pickups visās 4 nedēļās). Tāpēc "jauns": pickups – kā līdz šim (14 dienu forma,
-# pretinieki top/bottom 10), DROP – forma ar sezonu + aizsardzība. "sezona" – 20.11. versija; "vecs" – līdz 20.11.
+# Backtest (fantasy_backtest.py, 20.11.2026, 70 nedēļas – 2023/24, 2024/25, 2025/26 + šī sezona): forma ar sezonu (60 % 14 d. +
+# 40 % sezona, laiks uz ledus, sods par veiksmi) – top 10 pickups 2.22 pret 2.10 punktiem nedēļā (labāk 36 : sliktāk 24 nedēļās),
+# visas grupas sakārtojums ρ 0.324 pret 0.282 (labāk 62 : 7), labāk visās 3 vēstures sezonās. Pretinieki ar vārtsargiem
+# (nepārtraukti) neuzlaboja ne pickups (19 : 28), ne DROP – paliek top/bottom 10 pēc xG pret.
+# "jauns" = forma ar sezonu + pretinieki top/bottom 10 + DROP aizsardzība; "sezona" – 20.11. 1. versija; "vecs" – līdz 20.11.
 _FORMA_14D = {"logs": 1.0, "P": 0.30, "ixG": 0.25, "SOG": 0.15, "PPP": 0.10, "TOI": 0.0, "TOI_d": 0.10, "veiksme": 0.0}
 _FORMA_SEZONA = {"logs": 0.60,          # 60 % pēdējās N dienas + 40 % visa sezona (mazāk "karstās rokas")
                  "P": 0.20, "ixG": 0.25, "SOG": 0.15, "PPP": 0.10, "TOI": 0.10, "TOI_d": 0.10,
@@ -1924,8 +1926,8 @@ _PRET_NEPARTR = {"pret": 0.15,          # katrai spēlei: pretinieka vājums (z,
                  "b2b": 0.10,           # katrai spēlei, kurā pretinieks spēlē 2. vakaru pēc kārtas
                  "viegl": 0.05, "viegl_stream": 0.15}     # spēle vieglajā dienā (≤ 7 NHL spēles)
 FANTASY_MODELI = {
-    "jauns": {**_FORMA_14D, **_PRET_TOP10,
-              "drop_forma": _FORMA_SEZONA,   # DROP grupai forma ar sezonu (pickups – 14 dienu forma)
+    "jauns": {**_FORMA_SEZONA, **_PRET_TOP10,
+              "drop_forma": None,       # (var dot DROP grupai citus formas svarus – fantasy_drop_cfg)
               "drop_aizs": True,        # DROP aizsardzība: sezonas kvalitāte / metieni un ixG joprojām normā
               "drop_min": 0.0,          # DROP tikai, ja kopvērtējums (dscore) > 0 – ne spēlētājam ar 5 vieglām spēlēm nākamnedēļ
               "stream_min_sp": True},   # streameri: tikai komandas ar ≥ (maks. − 1) un ≥ 2 spēlēm līdz svētdienai
@@ -2176,7 +2178,7 @@ def veids_fantasy(m, a):
     modelis = getattr(a, "fantasy_modelis", None) or FANTASY_MODELIS
     cfg = FANTASY_MODELI[modelis]
     print(f"FANTASY MODELIS: {modelis}" + {"vecs": " (līdz 20.11.2026 – salīdzināšanai)",
-                                            "sezona": " (20.11.2026 versija – forma ar sezonu arī pickups)"}.get(modelis, ""))
+                                            "sezona": " (20.11.2026 1. versija – pretinieki ar vārtsargiem, b2b)"}.get(modelis, ""))
     g, nesen, mm, no = fantasy_pazimes(sp, m, lidz, dienas)
     # nākamās nedēļas grafiks
     stream = a.veids == "streameri"            # nedēļas vidus: spēlētāji atlikušajām šīs nedēļas dienām (līdz svētdienai)
@@ -5506,8 +5508,8 @@ def main():
     ap.add_argument("--drop-max-rostered", type=float, default=90, help="fantasy drop: maks. %% rostered – zvaigznes neiesakām mest ārā (90)")
     ap.add_argument("--top", type=int, default=3)
     ap.add_argument("--fantasy-modelis", choices=list(FANTASY_MODELI), default=None,
-                    help="fantasy / streameri: 'jauns' (noklusējums; pickups – 14 dienu forma, drop – forma ar sezonu), "
-                         "'sezona' (20.11. versija – forma ar sezonu visur) vai 'vecs' (līdz 20.11.)")
+                    help="fantasy / streameri: 'jauns' (noklusējums; forma ar sezonu, pretinieki top/bottom 10), "
+                         "'sezona' (20.11. 1. versija – + pretinieki ar vārtsargiem, b2b, vieglās dienas) vai 'vecs' (līdz 20.11.)")
     ap.add_argument("--min-metieni", type=int, default=15)
     ap.add_argument("--balss", default="en-CA-LiamNeural", help="edge-tts balss (piem. en-US-AndrewNeural, en-US-GuyNeural)")
     ap.add_argument("--bez-balss", action="store_true")
