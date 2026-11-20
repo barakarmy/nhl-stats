@@ -1916,17 +1916,21 @@ def fantasy_csv(g, brivi, nometami, a):
 # 40 % sezona, laiks uz ledus, sods par veiksmi) – top 10 pickups 2.22 pret 2.10 punktiem nedēļā (labāk 36 : sliktāk 24 nedēļās),
 # visas grupas sakārtojums ρ 0.324 pret 0.282 (labāk 62 : 7), labāk visās 3 vēstures sezonās. Pretinieki ar vārtsargiem
 # (nepārtraukti) neuzlaboja ne pickups (19 : 28), ne DROP – paliek top/bottom 10 pēc xG pret.
-# "jauns" = forma ar sezonu + pretinieki top/bottom 10 + DROP aizsardzība; "sezona" – 20.11. 1. versija; "vecs" – līdz 20.11.
+# 2. backtests (variantu salīdzinājums): vairāk sezonas – labāk: 14 d. daļa 80 % → ADD10 2.21, ρ 0.315; 60 % → 2.21, 0.324;
+# 40 % → 2.24, 0.331 (labākais visos rādītājos); bez laika uz ledus – sliktāk (2.18, 0.305); veiksmes sods – neitrāls.
+# "jauns" = forma 40 % 14 d. + 60 % sezona + pretinieki top/bottom 10 + DROP aizsardzība; "sezona" – 20.11. 1. versija
+# (60/40, pretinieki ar vārtsargiem, b2b, vieglās dienas); "vecs" – līdz 20.11.
 _FORMA_14D = {"logs": 1.0, "P": 0.30, "ixG": 0.25, "SOG": 0.15, "PPP": 0.10, "TOI": 0.0, "TOI_d": 0.10, "veiksme": 0.0}
 _FORMA_SEZONA = {"logs": 0.60,          # 60 % pēdējās N dienas + 40 % visa sezona (mazāk "karstās rokas")
                  "P": 0.20, "ixG": 0.25, "SOG": 0.15, "PPP": 0.10, "TOI": 0.10, "TOI_d": 0.10,
                  "veiksme": 0.10}       # sods: vārti spēlē stipri virs ixG pēdējās N dienās (realizācija parasti atdziest)
+_FORMA_JAUNA = dict(_FORMA_SEZONA, logs=0.40)                     # 40 % pēdējās N dienas + 60 % visa sezona
 _PRET_TOP10 = {"pret": None, "b2b": 0.0, "viegl": 0.0, "viegl_stream": 0.15}      # +0.15 / −0.15 pret top/bottom 10 (xGA)
 _PRET_NEPARTR = {"pret": 0.15,          # katrai spēlei: pretinieka vājums (z, ±1.5; xGA + ielaistie)
                  "b2b": 0.10,           # katrai spēlei, kurā pretinieks spēlē 2. vakaru pēc kārtas
                  "viegl": 0.05, "viegl_stream": 0.15}     # spēle vieglajā dienā (≤ 7 NHL spēles)
 FANTASY_MODELI = {
-    "jauns": {**_FORMA_SEZONA, **_PRET_TOP10,
+    "jauns": {**_FORMA_JAUNA, **_PRET_TOP10,
               "drop_forma": None,       # (var dot DROP grupai citus formas svarus – fantasy_drop_cfg)
               "drop_aizs": True,        # DROP aizsardzība: sezonas kvalitāte / metieni un ixG joprojām normā
               "drop_min": 0.0,          # DROP tikai, ja kopvērtējums (dscore) > 0 – ne spēlētājam ar 5 vieglām spēlēm nākamnedēļ
@@ -5508,7 +5512,7 @@ def main():
     ap.add_argument("--drop-max-rostered", type=float, default=90, help="fantasy drop: maks. %% rostered – zvaigznes neiesakām mest ārā (90)")
     ap.add_argument("--top", type=int, default=3)
     ap.add_argument("--fantasy-modelis", choices=list(FANTASY_MODELI), default=None,
-                    help="fantasy / streameri: 'jauns' (noklusējums; forma ar sezonu, pretinieki top/bottom 10), "
+                    help="fantasy / streameri: 'jauns' (noklusējums; forma 40 %% 14 d. + 60 %% sezona, pretinieki top/bottom 10), "
                          "'sezona' (20.11. 1. versija – + pretinieki ar vārtsargiem, b2b, vieglās dienas) vai 'vecs' (līdz 20.11.)")
     ap.add_argument("--min-metieni", type=int, default=15)
     ap.add_argument("--balss", default="en-CA-LiamNeural", help="edge-tts balss (piem. en-US-AndrewNeural, en-US-GuyNeural)")
