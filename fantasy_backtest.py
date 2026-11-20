@@ -1,5 +1,7 @@
 """
-fantasy_backtest.py – fantasy pickup / drop loģikas pārbaude uz jau aizvadītām nedēļām: vecais vs jaunais modelis.
+fantasy_backtest.py – fantasy pickup / drop loģikas pārbaude uz jau aizvadītām nedēļām: modeļu salīdzinājums.
+Modeļi (shorts.py FANTASY_MODELI): vecs (līdz 20.11.2026), sezona (20.11. 1. versija – forma ar sezonu visur),
+jauns (20.11. pēc backtest – pickups kā vecais, DROP ar sezonas formu un aizsardzību).
 
 Katrai aizvadītai fantasy nedēļai (pirmdiena–svētdiena):
   1) "ieteikums" tieši tā, kā shorts.py to būtu izrēķinājis svētdienas vakarā (dati līdz svētdienai, tā paša koda funkcijas);
@@ -12,6 +14,7 @@ Rādītāji katram modelim:
   ADD top 3   – vidējie punkti nedēļā; HIT % (punkti virs grupas mediānas – tāpat kā atskata video); TOP25 % (grupas top 25 %)
   ADD top 10  – tas pats 10 izvēlēm (mazāk nejaušības nekā 3 izvēlēm)
   ρ           – rangu korelācija starp pickup score un nedēļas punktiem VISAI pickup grupai (augstāka = labāk sakārto)
+  pret vecs   – cik nedēļās ADD10 / ρ bija labāks : sliktāks nekā vecajam modelim (stabilitāte – ne tikai vidējais)
   DROP        – cik ieteikts, vidējie punkti (mazāk = labāk), GOOD CALL % (zem drop grupas mediānas), KĻŪDA % (drop grupas top 25 %)
 
 Palaišana:
@@ -19,7 +22,8 @@ Palaišana:
   python fantasy_backtest.py --visas                šī sezona + vēstures sezonas (sezonas/vesture/<sezona>/, ja tur ir faili)
   python fantasy_backtest.py --sezona 20252026      tikai viena vēstures sezona
   python fantasy_backtest.py --streameri            streameri: trešdiena–svētdiena (dati līdz otrdienai), bez drop
-  python fantasy_backtest.py --ablacija             + jaunais modelis bez katras daļas atsevišķi (kura daļa palīdz / traucē)
+  python fantasy_backtest.py --ablacija             + "jauns" ar vienu pickup izmaiņu katrā variantā (+sez80, +sez60, +veiksme,
+                                                    +toi, +pret, +b2b, +viegl) – kura izmaiņa uzlabo pašu augšu (ADD10)
 Rezultāts: konsolē + video/fantasy_backtest.csv (katra izvēle ar punktiem un verdiktu; mape video – .gitignore, netiek augšupielādēta).
 """
 import argparse
@@ -39,12 +43,21 @@ POOL_DROP = (60, 150)       # 61.–150. vieta ≈ 50–90 % rostered
 
 
 def ablacijas():
-    """Jaunais modelis bez katras daļas (tā daļa – kā vecajā)."""
-    j, v = S.FANTASY_MODELI["jauns"], S.FANTASY_MODELI["vecs"]
+    """"jauns" + viena pickup izmaiņa katrā variantā (DROP – kā "jauns"), lai redzētu, kura izmaiņa palīdz pašai augšai."""
+    j = S.FANTASY_MODELI["jauns"]
+    # DROP paliek kā "jauns": pretinieku / b2b / vieglo dienu svari DROP grupai – no "jauns" (tikai pickups mainās)
+    d_ = dict(j["drop_forma"] or {}, pret=j["pret"], b2b=j["b2b"], viegl=j["viegl"])
+
+    def v(**kw):
+        return dict(j, **kw, drop_forma=d_)
     return {
-        "j-forma": dict(j, **{k: v[k] for k in ("logs", "P", "ixG", "SOG", "PPP", "TOI", "TOI_d", "veiksme")}),
-        "j-pretin": dict(j, pret=None, b2b=0.0, viegl=0.0),
-        "j-drop": dict(j, drop_aizs=False, drop_min=None),
+        "+sez80": v(logs=0.80),                       # 80 % 14 dienas + 20 % sezona
+        "+sez60": v(logs=0.60),                       # 60 % + 40 % (kā "sezona", bet bez pārējām formas izmaiņām)
+        "+veiksme": v(veiksme=0.10),                  # sods, ja vārti stipri virs ixG
+        "+toi": v(TOI=0.10),                          # laiks uz ledus (līmenis)
+        "+pret": v(pret=0.15),                        # pretinieki nepārtraukti (xGA + ielaistie)
+        "+b2b": v(b2b=0.10),                          # pretinieks 2. vakaru pēc kārtas
+        "+viegl": v(viegl=0.05),                      # vieglās dienas arī nedēļai
     }
 
 
@@ -126,18 +139,21 @@ def nedela(a, dati, start, modeli, stream):
         vv = gg.index.map(vieta)
         brivi = gg[vv > POOL_BRIVI].copy()
         nom = gg[(vv > POOL_DROP[0]) & (vv <= POOL_DROP[1])].copy()
-        if stream and cfg.get("stream_min_sp"):
-            min_sp = max(2, max((len(x) for x in grafiks.values()), default=0) - 1)
-            if (brivi["sp_nak"] >= min_sp).sum() >= a.top:
-                brivi = brivi[brivi["sp_nak"] >= min_sp]
         if len(brivi) < 10:
             continue
         brivi["score"] = S.fantasy_score(brivi, cfg, stream)
-        nom["dscore"] = S.fantasy_dscore(nom, cfg)
-        aizs = S.fantasy_drop_aizsardziba(nom, cfg)
+        if stream and cfg.get("stream_min_sp"):                       # izslēgtie – grupas apakšā (ρ – tā pati grupa visiem)
+            min_sp = max(2, max((len(x) for x in grafiks.values()), default=0) - 1)
+            if (brivi["sp_nak"] >= min_sp).sum() >= a.top:
+                brivi.loc[brivi["sp_nak"] < min_sp, "score"] = brivi["score"].min() - 1.0
+        cfg_d = S.fantasy_drop_cfg(cfg)                               # "jauns": DROP – forma ar sezonu
+        if cfg_d is not cfg:
+            nom["forma"] = S.fantasy_forma(gg, cfg_d).reindex(nom.index)
+        nom["dscore"] = S.fantasy_dscore(nom, cfg_d)
+        aizs = S.fantasy_drop_aizsardziba(nom, cfg_d)
         add10 = S.fantasy_ar_limitu(brivi, "score", 10)
         add3 = add10.head(a.top)
-        drop = nom.iloc[0:0] if stream else S.fantasy_ar_limitu(S.fantasy_drop_kandidati(nom, cfg, aizs), "dscore", a.drop)
+        drop = nom.iloc[0:0] if stream else S.fantasy_ar_limitu(S.fantasy_drop_kandidati(nom, cfg_d, aizs), "dscore", a.drop)
         fakt = brivi[["score"]].join(w).fillna({"P": 0, "GP": 0})
         rho = fakt["score"].rank().corr(fakt["P"].rank())
         r = {"modelis": mod, "rho": rho}
@@ -175,7 +191,7 @@ def main():
     ap.add_argument("--sezona", default=None, help="vēstures sezona (mape sezonas/vesture/<sezona>/), piem. 20252026")
     ap.add_argument("--visas", action="store_true", help="šī sezona + visas vēstures sezonas ar vajadzīgajiem failiem")
     ap.add_argument("--streameri", action="store_true", help="streameri: trešdiena–svētdiena, dati līdz otrdienai, bez drop")
-    ap.add_argument("--ablacija", action="store_true", help="arī jaunais modelis bez formas / pretinieku / drop izmaiņām")
+    ap.add_argument("--ablacija", action="store_true", help='arī "jauns" ar vienu pickup izmaiņu katrā variantā')
     ap.add_argument("--no", default=None, help="tikai nedēļas no šī datuma (YYYY-MM-DD)")
     ap.add_argument("--dienas", type=int, default=14)
     ap.add_argument("--top", type=int, default=3)
@@ -185,7 +201,7 @@ def main():
     a = ap.parse_args()
     S.BASE = a.base
 
-    modeli = ["vecs", "jauns"]
+    modeli = [m_ for m_ in ("vecs", "sezona", "jauns") if m_ in S.FANTASY_MODELI]
     if a.ablacija:
         for k, v in ablacijas().items():
             S.FANTASY_MODELI[k] = v
@@ -200,6 +216,7 @@ def main():
         if a.visas and os.path.isdir(vd):
             avoti += [(s_, os.path.join(vd, s_), False) for s_ in sorted(os.listdir(vd)) if s_.isdigit()]
     kop = {mod: {} for mod in modeli}
+    pa_nedelam = []                                                   # [{modelis: (ADD10 vid., ρ)}] – stabilitātei pret "vecs"
     visas_rindas = []
     print(f"FANTASY BACKTEST – {'streameri (trešd.–svētd.)' if a.streameri else 'nedēļas pickups (pirmd.–svētd.)'}; "
           f"pickup grupa: ārpus top {POOL_BRIVI}, drop grupa: {POOL_DROP[0] + 1}.–{POOL_DROP[1]}. vieta pēc sezonas punktiem\n")
@@ -228,6 +245,7 @@ def main():
             for x in rindas:
                 x["sezona"] = nos
             visas_rindas += rindas
+            pa_nedelam.append({mod: (x["a10_P"] / max(1, x["a10_n"]), x["rho"]) for mod, x in out.items()})
             for mod, x in out.items():
                 k = kop[mod]
                 for kk, vv in x.items():
@@ -245,7 +263,17 @@ def main():
         return 1
     print("=" * 96)
     print(f"KOPĀ   {'MODELIS':<9} {'NED':>4} {'ADD3 P̄':>7} {'HIT%':>6} {'TOP25%':>7} {'ADD10 P̄':>8} {'HIT%':>6} {'TOP25%':>7} {'ρ vid.':>7}"
-          f"   {'DROP':>5} {'P̄':>5} {'GOOD%':>6} {'KĻŪDA%':>7}")
+          f"   {'DROP':>5} {'P̄':>5} {'GOOD%':>6} {'KĻŪDA%':>7}   {'pret vecs: ADD10':>16} {'ρ':>7}")
+
+    def pret_veco(mod):
+        if mod == "vecs":
+            return f"{'':>16} {'':>7}"
+        def zime(x_, y_):
+            return int(np.sign(round(float(x_) - float(y_), 6)))     # 1 labāk, −1 sliktāk, 0 vienādi
+        a_ = [zime(x[mod][0], x["vecs"][0]) for x in pa_nedelam if mod in x and "vecs" in x]
+        r_ = [zime(x[mod][1], x["vecs"][1]) for x in pa_nedelam if mod in x and "vecs" in x
+              and np.isfinite(x[mod][1]) and np.isfinite(x["vecs"][1])]
+        return f"{f'{a_.count(1)}:{a_.count(-1)}':>16} {f'{r_.count(1)}:{r_.count(-1)}':>7}"
     for mod in modeli:
         k = kop[mod]
         if not k.get("ned"):
@@ -253,10 +281,12 @@ def main():
         print(f"       {mod:<9} {k['ned']:>4} {k['a3_P'] / max(1, k['a3_n']):>7.2f} {pct(k['a3_hit'], k['a3_vert']):>6} "
               f"{pct(k['a3_top'], k['a3_n']):>7} {k['a10_P'] / max(1, k['a10_n']):>8.2f} {pct(k['a10_hit'], k['a10_vert']):>6} "
               f"{pct(k['a10_top'], k['a10_n']):>7} {k['rho'] / k['ned']:>7.3f}   {k['d_n']:>5} "
-              + (f"{k['d_P'] / k['d_n']:>5.2f}" if k["d_n"] else f"{'–':>5}") + f" {pct(k['d_good'], k['d_vert']):>6} {pct(k['d_kluda'], k['d_n']):>7}")
+              + (f"{k['d_P'] / k['d_n']:>5.2f}" if k["d_n"] else f"{'–':>5}") + f" {pct(k['d_good'], k['d_vert']):>6} {pct(k['d_kluda'], k['d_n']):>7}"
+              + f"   {pret_veco(mod)}")
     print("\nKā lasīt: ADD P̄ un HIT/TOP25 – augstāk = labāk; ρ – cik labi score sakārto VISU pickup grupu (augstāk = labāk);"
           "\n           DROP P̄ un KĻŪDA% – zemāk = labāk (KĻŪDA = ieteicām mest ārā, bet viņš nedēļā bija grupas top 25 %)."
-          "\n           Ar 3 izvēlēm nedēļā nejaušība ir liela – skaties ADD10 un ρ, un uz vairākām nedēļām.")
+          "\n           Ar 3 izvēlēm nedēļā nejaušība ir liela – skaties ADD10 un ρ, un uz vairākām nedēļām."
+          "\n           pret vecs 12:5 = 12 nedēļās labāk, 5 sliktāk (pārējās vienādi) – jo vairāk nedēļu, jo ticamāk.")
     if visas_rindas:
         p = os.path.join(a.base, "video", "fantasy_backtest.csv")
         try:
