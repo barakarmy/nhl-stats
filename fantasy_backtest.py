@@ -118,6 +118,9 @@ def nedela(a, dati, start, modeli, stream):
         return None
     g["rostered"], g["delta7"], g["trauma"] = np.nan, np.nan, ""
     kal = sg[(sg["datums"] >= s_) & (sg["datums"] <= b_)].rename(columns={"home_team": "majas_komanda", "away_team": "viesu_komanda"})
+    if len(kal) < 10:                                                 # pārtraukums (4 Nations, olimpiskās spēles u.c.)
+        print(f"   {s_}: nedēļā tikai {len(kal)} spēles (pārtraukums) – izlaižu")
+        return None
     grafiks = S.fantasy_grafiks(kal)
     spelu_dienas = {(k_, d_) for d_, h_, v_ in zip(sg["datums"], sg["home_team"], sg["away_team"]) for k_ in (h_, v_)}
     # patiesība: nedēļas punkti; grupas pēc sezonas punktu vietas līdz lidz
@@ -135,6 +138,8 @@ def nedela(a, dati, start, modeli, stream):
         ind, vajas, stipras = S.fantasy_pretinieki(m, lidz, cfg)
         gg, _ = S.fantasy_grafika_pazimes(g, grafiks, kal, ind, vajas, stipras, spelu_dienas)
         gg = gg[gg["sp_nak"] >= 1].copy()
+        if gg.empty:
+            continue
         gg["forma"] = S.fantasy_forma(gg, cfg)
         vv = gg.index.map(vieta)
         brivi = gg[vv > POOL_BRIVI].copy()
