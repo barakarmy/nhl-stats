@@ -1,7 +1,7 @@
 """
 fantasy_backtest.py – fantasy pickup / drop loģikas pārbaude uz jau aizvadītām nedēļām: modeļu salīdzinājums.
 Modeļi (shorts.py FANTASY_MODELI): vecs (līdz 20.11.2026), sezona (20.11. 1. versija – forma ar sezonu visur),
-jauns (20.11. pēc backtest – pickups kā vecais, DROP ar sezonas formu un aizsardzību).
+jauns (pēc 70 nedēļu backtest – forma ar sezonu, pretinieki top/bottom 10, DROP aizsardzība).
 
 Katrai aizvadītai fantasy nedēļai (pirmdiena–svētdiena):
   1) "ieteikums" tieši tā, kā shorts.py to būtu izrēķinājis svētdienas vakarā (dati līdz svētdienai, tā paša koda funkcijas);
@@ -22,8 +22,8 @@ Palaišana:
   python fantasy_backtest.py --visas                šī sezona + vēstures sezonas (sezonas/vesture/<sezona>/, ja tur ir faili)
   python fantasy_backtest.py --sezona 20252026      tikai viena vēstures sezona
   python fantasy_backtest.py --streameri            streameri: trešdiena–svētdiena (dati līdz otrdienai), bez drop
-  python fantasy_backtest.py --ablacija             + "jauns" ar vienu pickup izmaiņu katrā variantā (+sez80, +sez60, +veiksme,
-                                                    +toi, +pret, +b2b, +viegl) – kura izmaiņa uzlabo pašu augšu (ADD10)
+  python fantasy_backtest.py --ablacija             + "jauns" ar vienu izmaiņu katrā variantā (logs80, logs40, P30, -veiksme,
+                                                    -toi, +pret, +b2b, +viegl, +visi3) – vai kāda vēl uzlabo pašu augšu (ADD10)
 Rezultāts: konsolē + video/fantasy_backtest.csv (katra izvēle ar punktiem un verdiktu; mape video – .gitignore, netiek augšupielādēta).
 """
 import argparse
@@ -43,21 +43,22 @@ POOL_DROP = (60, 150)       # 61.–150. vieta ≈ 50–90 % rostered
 
 
 def ablacijas():
-    """"jauns" + viena pickup izmaiņa katrā variantā (DROP – kā "jauns"), lai redzētu, kura izmaiņa palīdz pašai augšai."""
+    """"jauns" + viena izmaiņa katrā variantā: vai kāda vēl uzlabo pašu augšu (ADD10). Tie paši svari ir arī DROP
+    vērtējumā, tāpēc katra izmaiņa var mainīt arī DROP kolonnas."""
     j = S.FANTASY_MODELI["jauns"]
-    # DROP paliek kā "jauns": pretinieku / b2b / vieglo dienu svari DROP grupai – no "jauns" (tikai pickups mainās)
-    d_ = dict(j["drop_forma"] or {}, pret=j["pret"], b2b=j["b2b"], viegl=j["viegl"])
 
     def v(**kw):
-        return dict(j, **kw, drop_forma=d_)
+        return dict(j, **kw)
     return {
-        "+sez80": v(logs=0.80),                       # 80 % 14 dienas + 20 % sezona
-        "+sez60": v(logs=0.60),                       # 60 % + 40 % (kā "sezona", bet bez pārējām formas izmaiņām)
-        "+veiksme": v(veiksme=0.10),                  # sods, ja vārti stipri virs ixG
-        "+toi": v(TOI=0.10),                          # laiks uz ledus (līmenis)
+        "logs80": v(logs=0.80),                       # 80 % 14 dienas + 20 % sezona
+        "logs40": v(logs=0.40),                       # 40 % + 60 % (vairāk sezonas)
+        "P30": v(P=0.30),                             # punktiem kā agrāk
+        "-veiksme": v(veiksme=0.0),                   # bez soda par vārtiem virs ixG
+        "-toi": v(TOI=0.0),                           # bez laika uz ledus līmeņa
         "+pret": v(pret=0.15),                        # pretinieki nepārtraukti (xGA + ielaistie)
         "+b2b": v(b2b=0.10),                          # pretinieks 2. vakaru pēc kārtas
         "+viegl": v(viegl=0.05),                      # vieglās dienas arī nedēļai
+        "+visi3": v(pret=0.15, b2b=0.10, viegl=0.05),  # = "sezona" pickups
     }
 
 
