@@ -431,7 +431,7 @@ GRAFIKA_BIRKAS = ["Ride the schedule", "Chase the games", "Volume wins the week"
 
 # fantasy video beigas (krāsu skaidrojums + follow) – neatkārto pēdējos 5 fantasy video (katrs variants ~reizi 6 nedēļās)
 FANTASY_BEIGAS = [
-    "Green matchups are the teams that give up the most goals and expected goals. Follow for weekly fantasy hockey tips.",
+    "Green matchups are the weakest defenses by expected goals against. Follow for weekly fantasy hockey tips.",
     "Green means a soft defense, red means a tough one. Follow for weekly fantasy hockey tips.",
     "The greener the schedule, the better the week. Follow for fantasy pickups every week.",
     "Check the colors: green games are the easiest matchups. Follow for next week's pickups.",
@@ -1887,6 +1887,7 @@ def fantasy_csv(g, brivi, nometami, a):
     t["grupa_fantasy"] = np.where(t.index.isin(brivi.index), "pickup", np.where(t.index.isin(nometami.index), "drop", ""))
     t["score_pickup"] = brivi["score"].reindex(t.index)
     t["score_drop"] = nometami["dscore"].reindex(t.index)
+    t["forma_drop"] = nometami["forma"].reindex(t.index)              # "jauns": drop grupai forma ar sezonu
     t["TOI_gp"] = t["TOI"].map(lambda v: _mmss(v) if np.isfinite(v) else "")
     t["TOI_izmaina"] = t["TOI_d"].map(lambda v: ("+" if v >= 0 else "−") + _mmss(v))
     t["TOI5_gp"] = t["TOI5"].map(lambda v: _mmss(v) if np.isfinite(v) else "")
@@ -1898,9 +1899,9 @@ def fantasy_csv(g, brivi, nometami, a):
            "xGF60_5": "xGF/60 5v5", "xGA60_5": "xGA/60 5v5", "xGFpct_5": "xGF% 5v5", "SCF60_5": "SCF/60 5v5", "SCA60_5": "SCA/60 5v5", "HDCF60_5": "HDCF/60 5v5",
            "HDCA60_5": "HDCA/60 5v5", "ixG": "ixG", "P_s_gp": "Season PTS/GP", "sp_nak": "Games next week", "vajie": "Soft matchups", "stipras": "Tough matchups",
            "pret": "Matchup score", "b2b": "Opp. back-to-backs", "viegl": "Light-day games",
-           "forma": "Form score", "score_pickup": "Pickup score", "score_drop": "Drop score"}
+           "forma": "Form score", "forma_drop": "Drop form score", "score_pickup": "Pickup score", "score_drop": "Drop score"}
     t = t[[k for k in kol if k in t.columns]].rename(columns=kol)
-    for c_ in ("Shots/60", "iFF/60", "iCF/60", "iSCF/60", "iHDCF/60", "Form score", "Pickup score", "Drop score", "Season PTS/GP", "Matchup score", "CF/60 5v5", "CA/60 5v5",
+    for c_ in ("Shots/60", "iFF/60", "iCF/60", "iSCF/60", "iHDCF/60", "Form score", "Pickup score", "Drop score", "Season PTS/GP", "Matchup score", "Drop form score", "CF/60 5v5", "CA/60 5v5",
                "CF% 5v5", "xGF/60 5v5", "xGA/60 5v5", "xGF% 5v5", "SCF/60 5v5", "SCA/60 5v5", "HDCF/60 5v5", "HDCA/60 5v5"):
         if c_ in t:
             t[c_] = t[c_].round(2)
@@ -1911,26 +1912,35 @@ def fantasy_csv(g, brivi, nometami, a):
 
 
 # ================================================================ fantasy modelis (pickups / streameri / drop)
-# "jauns" – kopš 20.11.2026; "vecs" – iepriekšējā loģika (salīdzināšanai: --fantasy-modelis vecs; fantasy_backtest.py rēķina abus).
+# Backtest uz 4 nedēļām (20.11.2026, fantasy_backtest.py): forma ar sezonu ("sezona") labāk sakārto VISU grupu un labāk izvēlas
+# DROP, bet sliktāk – pašu augšu (top 10 pickups visās 4 nedēļās). Tāpēc "jauns": pickups – kā līdz šim (14 dienu forma,
+# pretinieki top/bottom 10), DROP – forma ar sezonu + aizsardzība. "sezona" – 20.11. versija; "vecs" – līdz 20.11.
+_FORMA_14D = {"logs": 1.0, "P": 0.30, "ixG": 0.25, "SOG": 0.15, "PPP": 0.10, "TOI": 0.0, "TOI_d": 0.10, "veiksme": 0.0}
+_FORMA_SEZONA = {"logs": 0.60,          # 60 % pēdējās N dienas + 40 % visa sezona (mazāk "karstās rokas")
+                 "P": 0.20, "ixG": 0.25, "SOG": 0.15, "PPP": 0.10, "TOI": 0.10, "TOI_d": 0.10,
+                 "veiksme": 0.10}       # sods: vārti spēlē stipri virs ixG pēdējās N dienās (realizācija parasti atdziest)
+_PRET_TOP10 = {"pret": None, "b2b": 0.0, "viegl": 0.0, "viegl_stream": 0.15}      # +0.15 / −0.15 pret top/bottom 10 (xGA)
+_PRET_NEPARTR = {"pret": 0.15,          # katrai spēlei: pretinieka vājums (z, ±1.5; xGA + ielaistie)
+                 "b2b": 0.10,           # katrai spēlei, kurā pretinieks spēlē 2. vakaru pēc kārtas
+                 "viegl": 0.05, "viegl_stream": 0.15}     # spēle vieglajā dienā (≤ 7 NHL spēles)
 FANTASY_MODELI = {
-    "jauns": {"logs": 0.60,             # forma: 60 % pēdējās N dienas + 40 % visa sezona (mazāk "karstās rokas")
-              "P": 0.20, "ixG": 0.25, "SOG": 0.15, "PPP": 0.10, "TOI": 0.10, "TOI_d": 0.10,
-              "veiksme": 0.10,          # sods: vārti spēlē stipri virs ixG pēdējās N dienās (realizācija parasti atdziest)
-              "pret": 0.15,             # katrai spēlei: pretinieka vājums (z, ±1.5; xGA + ielaistie) – nevis tikai top/bottom 10
-              "b2b": 0.10,              # katrai spēlei, kurā pretinieks spēlē 2. vakaru pēc kārtas (noguris, bieži rezerves vārtsargs)
-              "viegl": 0.05,            # nedēļas pickiem: spēle vieglajā dienā (≤ 7 NHL spēles) – dienas sastāvu līgās
-              "viegl_stream": 0.15,     # streameriem (kā līdz šim)
+    "jauns": {**_FORMA_14D, **_PRET_TOP10,
+              "drop_forma": _FORMA_SEZONA,   # DROP grupai forma ar sezonu (pickups – 14 dienu forma)
               "drop_aizs": True,        # DROP aizsardzība: sezonas kvalitāte / metieni un ixG joprojām normā
               "drop_min": 0.0,          # DROP tikai, ja kopvērtējums (dscore) > 0 – ne spēlētājam ar 5 vieglām spēlēm nākamnedēļ
               "stream_min_sp": True},   # streameri: tikai komandas ar ≥ (maks. − 1) un ≥ 2 spēlēm līdz svētdienai
-    "vecs": {"logs": 1.0, "P": 0.30, "ixG": 0.25, "SOG": 0.15, "PPP": 0.10, "TOI": 0.0, "TOI_d": 0.10, "veiksme": 0.0,
-             "pret": None, "b2b": 0.0, "viegl": 0.0, "viegl_stream": 0.15, "drop_aizs": False, "drop_min": None,
-             "stream_min_sp": False},
+    "sezona": {**_FORMA_SEZONA, **_PRET_NEPARTR, "drop_forma": None, "drop_aizs": True, "drop_min": 0.0, "stream_min_sp": True},
+    "vecs": {**_FORMA_14D, **_PRET_TOP10, "drop_forma": None, "drop_aizs": False, "drop_min": None, "stream_min_sp": False},
 }
 FANTASY_MODELIS = "jauns"
 FANTASY_SPELE = 0.40                    # par katru nākamās nedēļas spēli virs 3.5 (spēļu skaits joprojām svarīgākais)
 FANTASY_VIEGLA_DIENA = 7                # ≤ 7 NHL spēles dienā = vieglā diena
 _FANTASY_KESA = {}
+
+
+def fantasy_drop_cfg(cfg):
+    """Svari DROP grupai: ja modelim ir "drop_forma" – tā forma (pārējais kā pickups)."""
+    return {**cfg, **cfg["drop_forma"], "drop_forma": None} if cfg.get("drop_forma") else cfg
 
 
 def _fz(s_):
@@ -2165,7 +2175,8 @@ def veids_fantasy(m, a):
     lidz = sp["datums"].max()
     modelis = getattr(a, "fantasy_modelis", None) or FANTASY_MODELIS
     cfg = FANTASY_MODELI[modelis]
-    print(f"FANTASY MODELIS: {modelis}" + (" (vecā loģika – salīdzināšanai)" if modelis == "vecs" else ""))
+    print(f"FANTASY MODELIS: {modelis}" + {"vecs": " (līdz 20.11.2026 – salīdzināšanai)",
+                                            "sezona": " (20.11.2026 versija – forma ar sezonu arī pickups)"}.get(modelis, ""))
     g, nesen, mm, no = fantasy_pazimes(sp, m, lidz, dienas)
     # nākamās nedēļas grafiks
     stream = a.veids == "streameri"            # nedēļas vidus: spēlētāji atlikušajām šīs nedēļas dienām (līdz svētdienai)
@@ -2248,15 +2259,18 @@ def veids_fantasy(m, a):
     ar_limitu = fantasy_ar_limitu
     izv = ar_limitu(brivi, "score", a.top)
     # drop: daudzās līgās paņemts, bet vāja forma un/vai mazs/grūts nākamās nedēļas grafiks
-    nometami["dscore"] = fantasy_dscore(nometami, cfg)
+    cfg_d = fantasy_drop_cfg(cfg)                                    # "jauns": DROP – forma ar sezonu
+    if cfg_d is not cfg:
+        nometami["forma"] = fantasy_forma(g, cfg_d).reindex(nometami.index)
+    nometami["dscore"] = fantasy_dscore(nometami, cfg_d)
     # DROP aizsardzība (jaunais modelis): sezonā labs spēlētājs ar nelielu kritumu / metieni un ixG joprojām normā – neiesakām
-    aizs = fantasy_drop_aizsardziba(nometami, cfg)
+    aizs = fantasy_drop_aizsardziba(nometami, cfg_d)
     if a.drop > 0:
-        drop = ar_limitu(fantasy_drop_kandidati(nometami, cfg, aizs), "dscore", a.drop)
+        drop = ar_limitu(fantasy_drop_kandidati(nometami, cfg_d, aizs), "dscore", a.drop)
         for pid_, r_ in ar_limitu(nometami[nometami["forma"] < 0], "dscore", a.drop + 2).iterrows():
             if pid_ in aizs:
                 print(f"  DROP aizsardzība: {r_['vards']} ({r_['team']}) netiek ieteikts – {aizs[pid_]}")
-            elif pid_ not in drop.index and cfg.get("drop_min") is not None and r_["dscore"] <= cfg["drop_min"]:
+            elif pid_ not in drop.index and cfg_d.get("drop_min") is not None and r_["dscore"] <= cfg_d["drop_min"]:
                 print(f"  DROP: {r_['vards']} ({r_['team']}) netiek ieteikts – forma vāja, bet {int(r_['sp_nak'])} spēles / "
                       f"pretinieki nākamnedēļ to atsver")
         if len(drop) < a.drop:
@@ -5492,7 +5506,8 @@ def main():
     ap.add_argument("--drop-max-rostered", type=float, default=90, help="fantasy drop: maks. %% rostered – zvaigznes neiesakām mest ārā (90)")
     ap.add_argument("--top", type=int, default=3)
     ap.add_argument("--fantasy-modelis", choices=list(FANTASY_MODELI), default=None,
-                    help="fantasy / streameri: 'jauns' (noklusējums kopš 20.11.2026) vai 'vecs' (iepriekšējā loģika – salīdzināšanai)")
+                    help="fantasy / streameri: 'jauns' (noklusējums; pickups – 14 dienu forma, drop – forma ar sezonu), "
+                         "'sezona' (20.11. versija – forma ar sezonu visur) vai 'vecs' (līdz 20.11.)")
     ap.add_argument("--min-metieni", type=int, default=15)
     ap.add_argument("--balss", default="en-CA-LiamNeural", help="edge-tts balss (piem. en-US-AndrewNeural, en-US-GuyNeural)")
     ap.add_argument("--bez-balss", action="store_true")
