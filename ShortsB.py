@@ -6336,7 +6336,18 @@ def _fj_proc(k, n):
 
 
 def fakts_hist_dati(D, c):
-    """→ {"bins", "hero", "x_lab", "apaksa", "z1", "z2", "hero_lab", "runa"} vai None (tad vecā konteksta aina)."""
+    """→ {"bins", "hero", "x_lab", "apaksa", "z1", "z2", "hero_lab", "runa"} vai None (tad vecā konteksta aina).
+    Kopš 20.11.2026: ja šī komanda šosezon to izdarījusi vairākkārt (c["atkartojums"]) – zīmogā "BOTH BY WPG" u.c."""
+    rez = _fakts_hist_dati(D, c)
+    a = c.get("atkartojums")
+    if rez and a and str(c.get("atsl", "")).split(":")[0] in ("comeback", "atri", "metieni", "periods"):
+        k, kk, kom = a["k"], a["k_kom"], a["kom"]
+        rez["z2"] = str(rez.get("z2", "")).split("  ·  TOP")[0] + "  ·  " + (
+            f"{'BOTH' if k == 2 else 'ALL'} BY {kom}" if k == kk else f"{kk} OF THEM BY {kom}")
+    return rez
+
+
+def _fakts_hist_dati(D, c):
     np, pd = S.np, S.pd
     veids, _, rest = str(c.get("atsl", "")).partition(":")
     dal = rest.split(":")
