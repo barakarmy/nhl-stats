@@ -3371,6 +3371,12 @@ def f_lielas_speles(D):
             nos = f"{P}-POINT GAME"
             hook = [f"{P} POINTS", "IN ONE GAME"]
         vards, kom = str(r["vards"]), str(r["team"])
+        try:                                                          # cik no tām – šim spēlētājam (kopš 20.11.2026)
+            sv_ = sez_g.xs(r["playerId"], level="playerId")
+            sv_ = sv_[sv_["datums"] <= r["datums"]]
+            own_k = int((sv_["goals"] >= G).sum()) if G >= 3 else int((sv_["points"] >= P).sum())
+        except Exception:                                             # noqa: BLE001
+            own_k = 1
         i = D["info"].get((r["game_id"], kom), {})
         va = D["va"][(D["va"]["game_id"] == r["game_id"])]
         rindas = []
@@ -3394,7 +3400,7 @@ def f_lielas_speles(D):
             "runa": [f"{vards}: {G} goal{'s' if G != 1 else ''} and {A} assist{'s' if A != 1 else ''} against the {kom_nos(i.get('o', ''))}.",
                      f"The {kom_nos(kom)} won {i.get('gf', '')} to {i.get('ga', '')}." if i.get("w") else
                      f"The {kom_nos(kom)} still lost {i.get('gf', '')} to {i.get('ga', '')}.",
-                     f"That's the {_kartas(max(sez_k, 1))} {nos.lower()} of the season.", ""],
+                     f"That's the {_kartas(max(sez_k, 1))} {nos.lower()} of the season" + _vina_reize(sez_k, own_k) + ".", ""],
             "yt": f"{vards} goes off: {G} goals, {A} assists 🔥" if G >= 3 else f"{vards} drops {P} points in one game 🔥",
             "_d": {"pid": int(r["playerId"]), "gid": r["game_id"], "G": G, "A": A, "P": P, "vards": vards, "kom": kom, "nos": nos,
                    "sez_k": sez_k, "i": i},
@@ -3508,6 +3514,7 @@ def f_vartsargi(D):
             pct = float(np.mean(hs["saves"] < sv_)) if len(hs) else 0.5
             retums = 0.35 + 0.5 * pct
             sez_s = sez_st[(sez_st["goalsAgainst"] == 0) & ((sez_st["datums"] < r["datums"]) | ((sez_st["datums"] == r["datums"]) & (sez_st["game_id"] <= r["game_id"])))]
+            own_s = int((pd.to_numeric(sez_s["playerId"], errors="coerce") == float(r["playerId"])).sum())
             sez_k = len(sez_s)
             hook = [f"{sv_} SAVES", "SHUTOUT"]
             galv = f"{_kartas(sez_k).upper()} SHUTOUT OF THE SEASON"
@@ -3538,7 +3545,8 @@ def f_vartsargi(D):
             "runa": [f"{vards} stopped all {sv_} shots against the {kom_nos(i.get('o', ''))}." if sausa
                      else f"{vards} made {sv_} saves against the {kom_nos(i.get('o', ''))}.",
                      f"Final score: {i.get('gf', '')} to {i.get('ga', '')}.",
-                     (galv.capitalize().replace("nhl", "NHL") + ".") if sausa else f"That's more saves than {pct * 100:.1f} percent of starts this season.", ""],
+                     (f"That's the {_kartas(max(sez_k, 1))} shutout of the season" + _vina_reize(sez_k, own_s) + ".") if sausa
+                     else f"That's more saves than {pct * 100:.1f} percent of starts this season.", ""],
             "yt": f"{vards} stops all {sv_} shots 🥅" if sausa else f"{vards} makes {sv_} saves 🥅",
         })
         try:
@@ -3851,6 +3859,56 @@ def _ip_pielikt(c, tk, ekr):
     return c
 
 
+_VARDI_SK = {2: "both", 3: "all three", 4: "all four", 5: "all five"}
+
+
+def _atkartojums(sar_k, dat_, nosac, kom, gid, no7):
+    """Tas pats retais notikums šosezon (līdz šai spēlei ieskaitot): cik kopā, cik no tiem – šī komanda, iepriekšējā šīs
+    komandas reize (ja pirms šīs nedēļas – citādi to jau stāsta "Earlier this week" apvienojums). sar_k: [(datums, vērtība,
+    komanda, pretinieks, game_id)]. → dict vai None (ja komanda šosezon to nav darījusi vēl)."""
+    visi = [x for x in sar_k if x[0] is not None and x[0] <= dat_ and nosac(x[1])]
+    sava = [x for x in visi if x[2] == kom]
+    if len(sava) < 2:
+        return None
+    iepr = sorted([x for x in sava if x[4] != gid], key=lambda x: x[0])
+    pedeja = iepr[-1] if iepr and str(iepr[-1][0]) < str(no7) else None
+    return {"k": len(visi), "k_kom": len(sava), "kom": kom, "pedeja": (pedeja[0], pedeja[3]) if pedeja else None}
+
+
+def _vina_reize(k, own):
+    """", and his 2nd" / ". He has both of them" – ja spēlētājam šosezon tas nav pirmais (kopš 20.11.2026)."""
+    if own < 2:
+        return ""
+    if own >= k:
+        return f". He has {_VARDI_SK.get(k, f'all {k}')} of them"
+    return f", and his {_kartas(own)}"
+
+
+def _atkartojums_teik(a, kas, ko_dara="did it"):
+    """Balsij: "…, and the Jets have both of them. The first was on November 2 against the Blues." """
+    if not a:
+        return ""
+    k, kk = a["k"], a["k_kom"]
+    if k == kk:
+        t_ = f" The {kas} have {_VARDI_SK.get(k, f'all {k}')} of them."
+    else:
+        vv_ = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+        t_ = f" The {kas} have {vv_.get(kk, kk)} of the {vv_.get(k, k)}."
+    if a.get("pedeja"):
+        d0, o0 = a["pedeja"]
+        d0 = pd.Timestamp(d0)
+        t_ += f" {'The first' if kk == 2 else 'The last one'} was on {d0:%B} {d0.day} against the {kom_nos(o0)}."
+    return t_
+
+
+def _atkartojums_marka(a):
+    """Kartītei / histogrammai: "BOTH WPG" / "ALL WPG" / "WPG ×2"."""
+    if not a:
+        return ""
+    k, kk, kom = a["k"], a["k_kom"], a["kom"]
+    return f"BOTH {kom}" if k == kk == 2 else (f"ALL {kom}" if k == kk else f"{kom} ×{kk}")
+
+
 def f_speles(D):
     """F/G/H/I: comebacks, 4+ vārti periodā, 2 vārti ātri pēc kārtas, uzvara ar lielu metienu deficītu."""
     out = []
@@ -3885,16 +3943,21 @@ def f_speles(D):
     nh = D["h_sez"]
     # šī sezona (salīdzinājumi ekrānā un balsī)
     s_def, s_per, s_atri, s_met = [], [], [], []
+    k_def, k_per, k_atri, k_met = [], [], [], []                       # tie paši ar komandu (kopš 20.11.2026 – "atkal tie paši")
     sv_g = D["va"].groupby("game_id")
     for r in D["sg"].itertuples(index=False):
+        zaud_ = r.away_team if r.uzvaretajs == r.home_team else r.home_team
         if r.game_id in sv_g.groups:
             s_def.append((r.datums, deficits(sv_g.get_group(r.game_id), r.home_team, r.away_team, r.uzvaretajs)))
-        for k_ in ("home", "away"):
+            k_def.append(s_def[-1] + (r.uzvaretajs, zaud_, r.game_id))
+        for k_, kom_, o_ in (("home", r.home_team, r.away_team), ("away", r.away_team, r.home_team)):
             for p_ in (1, 2, 3):
                 s_per.append((r.datums, _n(getattr(r, f"{k_}_p{p_}"))))
+                k_per.append(s_per[-1] + (kom_, o_, r.game_id))
         try:
             hm, am = int(r.home_sog_total), int(r.away_sog_total)
             s_met.append((r.datums, (am - hm) if r.uzvaretajs == r.home_team else (hm - am)))
+            k_met.append(s_met[-1] + (r.uzvaretajs, zaud_, r.game_id))
         except (TypeError, ValueError):
             pass
     if len(D["va"]):
@@ -3904,6 +3967,14 @@ def f_speles(D):
         x["d"] = x.groupby(["game_id", "komanda"])["s"].diff()
         dd_ = dict(zip(D["sg"]["game_id"], D["sg"]["datums"]))
         s_atri = [(dd_.get(g_), v_) for g_, v_ in x.dropna(subset=["d"]).groupby("game_id")["d"].min().items()]   # ātrākais pāris spēlē
+        try:
+            xa_ = x.dropna(subset=["d"])
+            xa_ = xa_.loc[xa_.groupby("game_id")["d"].idxmin()]
+            pr_ = {g_: (h_, a_) for g_, h_, a_ in zip(D["sg"]["game_id"], D["sg"]["home_team"], D["sg"]["away_team"])}
+            k_atri = [(dd_.get(g_), v_, kk_, (pr_.get(g_, ("", ""))[1] if kk_ == pr_.get(g_, ("", ""))[0] else pr_.get(g_, ("", ""))[0]), g_)
+                      for g_, v_, kk_ in zip(xa_["game_id"], xa_["d"], xa_["komanda"])]
+        except Exception:                                             # noqa: BLE001
+            k_atri = []
 
     def lidz_sim(sar, dat_, nosac):                  # cik reizes šajā sezonā līdz šai spēlei (ieskaitot)
         return max(1, sum(1 for d0, v in sar if d0 is not None and d0 <= dat_ and nosac(v)))
@@ -3946,7 +4017,10 @@ def f_speles(D):
                 "nakamais": None,
                 "runa": [f"The {kom_nos(uzv)} were down {d_} goals against the {kom_nos(zaud)}, and won.{cb_runa}",
                          f"Final score: {i.get('gf')} to {i.get('ga')}.",
-                         f"That's the {_kartas(lidz_sim(s_def, r.datums, lambda v: v >= d_))} comeback from {d_} down this season.", ""],
+                         f"That's the {_kartas(lidz_sim(s_def, r.datums, lambda v: v >= d_))} comeback from {d_} down this season."
+                         + _atkartojums_teik(atk_ := _atkartojums(k_def, r.datums, lambda v: v >= d_, uzv, r.game_id, no),
+                                             kom_nos(uzv)), ""],
+                "atkartojums": atk_,
                 "yt": f"Down {d_} goals… the {kom_nos(uzv)} came back and won 🤯",
                 "izcelt_rindas": cb_v["rindas"] if cb_v else None, "izcelt_txt": cb_txt,
             })
@@ -3991,7 +4065,10 @@ def f_speles(D):
                         "nakamais": None,
                         "runa": [f"The {kom_nos(kom)} scored {g_} goals in the {_kartas(p_)} period against the {kom_nos(io.get('o', ''))}.{per_runa}",
                                  f"Final score: {io.get('gf')} to {io.get('ga')}.",
-                                 f"That's the {_kartas(lidz_sim(s_per, r.datums, lambda v: v >= g_))} time this season.", ""],
+                                 f"That's the {_kartas(lidz_sim(s_per, r.datums, lambda v: v >= g_))} time this season."
+                                 + _atkartojums_teik(atk_ := _atkartojums(k_per, r.datums, lambda v: v >= g_, kom, r.game_id, no),
+                                                     kom_nos(kom)), ""],
+                        "atkartojums": atk_,
                         "yt": f"{g_} goals in ONE period – the {kom_nos(kom)} exploded 🔥",
                         "izcelt_txt": per_txt,
                     })
@@ -4027,7 +4104,10 @@ def f_speles(D):
                 "konteksts": [f"TIME THIS SEASON: TWO GOALS IN ≤ {sek} SECONDS", f"Same team · {n_sp} games played"], "nakamais": None,
                 "runa": [f"The {kom_nos(kom)} scored twice in {sek} seconds against the {kom_nos(io.get('o', ''))}.",
                          f"Final score: {io.get('gf')} to {io.get('ga')}.",
-                         f"That's the {_kartas(lidz_sim(s_atri, r.datums, lambda v: v <= sek))} time this season.", ""],
+                         f"That's the {_kartas(lidz_sim(s_atri, r.datums, lambda v: v <= sek))} time this season."
+                         + _atkartojums_teik(atk_ := _atkartojums(k_atri, r.datums, lambda v: v <= sek, kom, r.game_id, no),
+                                             kom_nos(kom)), ""],
+                "atkartojums": atk_,
                 "yt": f"2 goals in {sek} seconds 😳 {kom_nos(kom)}",
             })
             try:
@@ -4067,13 +4147,21 @@ def f_speles(D):
                 "runa": [f"The {kom_nos(uzv)} were outshot {z_met} to {u_met}, and still beat the {kom_nos(zaud)}.",
                          f"Final score: {i.get('gf')} to {i.get('ga')}.",
                          ("The biggest shot gap in any win this season." if pct >= 0.995 else
-                          f"That's a bigger shot gap than {pct * 100:.0f} percent of wins this season."), ""],
+                          f"That's a bigger shot gap than {pct * 100:.0f} percent of wins this season.")
+                         + _atkartojums_teik(atk_ := _atkartojums(k_met, r.datums, lambda v: v >= starp, uzv, r.game_id, no),
+                                             kom_nos(uzv)), ""],
+                "atkartojums": atk_,
                 "yt": f"Outshot {z_met}–{u_met}… and WON 🤯",
             })
             try:
                 _ip_pielikt(out[-1], *_ip_metieni(D, r.game_id, uzv, out[-1]["atsl"]))
             except Exception:                                         # noqa: BLE001
                 pass
+    for c in out:                                                     # komanda to jau darījusi agrāk šosezon → "· 2ND TIME"
+        a = c.get("atkartojums")
+        if a and a.get("pedeja") and c.get("hook"):
+            c["hook"] = list(c["hook"][:-1]) + [f"{c['hook'][-1]}  ·  {_kartas(a['k_kom']).upper()} TIME"]
+            c["teksts"] += f"  [{_atkartojums_marka(a)} šosezon]"
     return out
 
 
