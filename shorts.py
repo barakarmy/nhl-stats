@@ -2157,6 +2157,65 @@ def fantasy_drop_kandidati(nometami, cfg, aizs):
     return k if cfg.get("drop_min") is None else k[k["dscore"] > cfg["drop_min"]]
 
 
+FANTASY_IETEIKUMI = "fantasy_ieteikumi.json"   # video\: kurus spēlētājus fantasy / streameru video ieteica (ADD / STREAM)
+FANTASY_NEATKARTOT_DIENAS = 7                  # pēdējās N dienās ieteiktos neiesaka vēlreiz (--atkartot – atļaut)
+
+
+def _fantasy_ieteikumu_ieraksti(mape):
+    """fantasy_ieteikumi.json + fantasy video .json momentuzņēmumi (arī tiem, kas izveidoti pirms šī saraksta)."""
+    ieraksti = []
+    p = os.path.join(mape, FANTASY_IETEIKUMI)
+    if os.path.exists(p):
+        try:
+            with open(p, encoding="utf-8") as f:
+                ieraksti += json.load(f)
+        except (OSError, ValueError):
+            pass
+    mapes = [x for x in os.listdir(mape) if os.path.isdir(os.path.join(mape, x))] if os.path.isdir(mape) else []
+    for m_ in mapes:
+        for fn in os.listdir(os.path.join(mape, m_)):
+            if not (fn.startswith("fantasy_") and fn.endswith(".json")):
+                continue
+            try:
+                with open(os.path.join(mape, m_, fn), encoding="utf-8") as f:
+                    j = json.load(f)
+            except (OSError, ValueError):
+                continue
+            mz = (j.get("momentuzn") or {}) if isinstance(j, dict) else {}
+            if isinstance(j, dict) and j.get("veids") == "fantasy" and mz.get("add"):
+                ieraksti.append({"datums": str(j.get("izveidots", ""))[:10], "izveidots": str(j.get("izveidots", "")),
+                                 "_no_json": True, "veids": "fantasy", "nedela": mz.get("nedela"),
+                                 "add": {k: (v or {}).get("vards", "") for k, v in mz["add"].items()}})
+    return ieraksti
+
+
+def fantasy_nesen_ieteikti(mape, atsauce, veids, nedela, dienas=FANTASY_NEATKARTOT_DIENAS):
+    """{playerId: 'fantasy 2026-11-22'} – pickups no fantasy / streameru video pēdējās `dienas` dienās pirms `atsauce`.
+    Tā paša video atkārtota ģenerēšana (tas pats veids, tā pati nedēļas svētdiena) netiek skaitīta."""
+    no = (atsauce - timedelta(days=dienas)).strftime("%Y-%m-%d")
+    lidz_ = atsauce.strftime("%Y-%m-%d")
+    # viens video nedēļā katram veidam: ja ģenerēts vairākas reizes – skaitās tikai pēdējā versija (publicētā)
+    pedejie = {}
+    for x in _fantasy_ieteikumu_ieraksti(mape):
+        k = (x.get("veids"), str((x.get("nedela") or [None])[-1]))
+        sec = (str(x.get("izveidots", "")), not x.get("_no_json"))     # tam pašam brīdim – ieraksts no fantasy_ieteikumi.json
+        if k not in pedejie or sec >= pedejie[k][0]:
+            pedejie[k] = (sec, x)
+    out = {}
+    for _, x in pedejie.values():
+        d = str(x.get("datums", ""))[:10]
+        if not (no <= d <= lidz_):
+            continue
+        if x.get("veids") == veids and list(x.get("nedela") or [None, None])[-1:] == list(nedela)[-1:]:
+            continue                                                  # tas pats video ģenerēts vēlreiz (arī citā dienā)
+        for pid, v in (x.get("add") or {}).items():
+            try:
+                out[int(float(pid))] = f"{x.get('veids')} {d}"
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
 def fantasy_ar_limitu(df, kol, n):
     """Top n pēc kol, bet ne vairāk kā 1 aizsargs (fantasy līgās vairāk vajag uzbrucējus) un 1 spēlētājs no komandas."""
     out, d_, kom_ = [], 0, set()
@@ -2252,6 +2311,14 @@ def veids_fantasy(m, a):
     else:
         top = sp.groupby("playerId")["points"].sum().sort_values(ascending=False).index[:60]
         brivi, nometami = g[~g.index.isin(top) & (g["trauma"] != "IZSLEGTS")].copy(), g.iloc[0:0].copy()
+    # neatkārtot: pickups no fantasy / streameru video pēdējās 7 dienās (svētdienas ADD nav jāiesaka vēlreiz trešdienas streameros)
+    atsauce = pd.Timestamp(a.lidz) + timedelta(days=1) if a.lidz else pd.Timestamp.now().normalize()   # "šodiena" (ar --lidz – nākamā diena)
+    if not getattr(a, "atkartot", False):
+        jau = fantasy_nesen_ieteikti(a.mape, atsauce, a.veids, [start.strftime("%Y-%m-%d"), beigas.strftime("%Y-%m-%d")])
+        atk = [p_ for p_ in brivi.index if p_ in jau]
+        for p_ in atk:
+            print(f"  NEATKĀRTOJAM: {brivi.loc[p_, 'vards']} ({brivi.loc[p_, 'team']}) – jau ieteikts ({jau[p_]}); atļaut: --atkartot")
+        brivi = brivi.drop(atk)
     if stream and cfg.get("stream_min_sp"):                          # streamerim ar 1 spēli līdz svētdienai nav jēgas
         min_sp = max(2, max((len(v_) for v_ in grafiks.values()), default=0) - 1)
         if (brivi["sp_nak"] >= min_sp).sum() >= a.top:
@@ -2610,6 +2677,10 @@ def veids_fantasy(m, a):
                       "drop": {str(int(p_)): {"vards": r_["vards"], "team": r_["team"], "poz": r_["poz"], "veids": drop_veids[p_],
                                               "rostered": sk(r_["rostered"])} for p_, r_ in drop.iterrows()}},
         "atskats_datumi": (beigas + timedelta(days=1), beigas + timedelta(days=2), "otrdiena pēc fantasy nedēļas"),
+        # main() pieraksta video\fantasy_ieteikumi.json – nākamie fantasy / streameru video šos spēlētājus 7 dienas neatkārto
+        "fantasy_ieteikumi": {"veids": a.veids, "datums": atsauce.strftime("%Y-%m-%d"),
+                              "nedela": [start.strftime("%Y-%m-%d"), beigas.strftime("%Y-%m-%d")],
+                              "add": {str(int(p_)): str(r_["vards"]) for p_, r_ in izv.iterrows()}},
     }
     if stream:                                                        # nedēļas vidus "streameri" – citi teksti, bez atskata
         d1 = f"{DIENAS_EN[start.weekday()].title()} {dat(start)}"
@@ -5507,6 +5578,8 @@ def main():
     ap.add_argument("--nedela", default=None, help="fantasy: nedēļas pirmdiena YYYY-MM-DD (noklusējums: nākamā pirmdiena)")
     ap.add_argument("--max-rostered", type=float, default=40, help="fantasy: maks. %% rostered ESPN (noklusējums 40)")
     ap.add_argument("--izslegt", default="", help='fantasy: spēlētāji, kurus neiekļaut (piem. "Olofsson, Eklund") – savainoti u.c.')
+    ap.add_argument("--atkartot", action="store_true", help="fantasy / streameri: atļaut ieteikt spēlētājus, kas jau ieteikti "
+                                                            "fantasy / streameru video pēdējās 7 dienās")
     ap.add_argument("--drop", type=int, default=2, help="fantasy: cik 'drop' spēlētājus rādīt (0 = nerādīt)")
     ap.add_argument("--drop-min-rostered", type=float, default=50, help="fantasy drop: min. %% rostered (noklusējums 50)")
     ap.add_argument("--drop-max-rostered", type=float, default=90, help="fantasy drop: maks. %% rostered – zvaigznes neiesakām mest ārā (90)")
@@ -5710,6 +5783,16 @@ def main():
             json.dump(vest, f, ensure_ascii=False, indent=1)
     else:
         info += ["ATSKATS:      nav vajadzīgs"]
+    if s.get("fantasy_ieteikumi"):                                     # fantasy / streameri: ko ieteicām (neatkārtot 7 dienas)
+        p_ = os.path.join(a.mape, FANTASY_IETEIKUMI)
+        try:
+            vest = json.load(open(p_, encoding="utf-8")) if os.path.exists(p_) else []
+        except (OSError, ValueError):
+            vest = []
+        vest.append({"datums": tagad.strftime("%Y-%m-%d"), **s["fantasy_ieteikumi"], "izveidots": tagad.strftime("%Y-%m-%d %H:%M"),
+                     "mape": os.path.basename(mape)})
+        with open(p_, "w", encoding="utf-8") as f:
+            json.dump(vest[-80:], f, ensure_ascii=False, indent=1)
     if s.get("parbaudei"):
         info += ["", "IETEIKUMI (pirms publicēšanas pārbaudi traumas!):"] + s["parbaudei"] + [
             ("  Ja kāds savainots: papildini --izslegt sarakstu un ģenerē vēlreiz" if a.izslegt
